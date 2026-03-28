@@ -4,6 +4,9 @@
   import Rail from './components/Rail.svelte'
   import LaunchPanel from './components/LaunchPanel.svelte'
   import ServerPanel from './components/ServerPanel.svelte'
+  import EventsPanel from './components/EventsPanel.svelte'
+  import ConfigPanel from './components/ConfigPanel.svelte'
+  import OpsPanel from './components/OpsPanel.svelte'
   import AppPanel from './components/AppPanel.svelte'
   import { activeTab, loadConfig } from './lib/store'
 
@@ -21,7 +24,13 @@
         <LaunchPanel />
       {:else if $activeTab === 'server'}
         <ServerPanel />
-      {:else if $activeTab === 'app'}
+      {:else if $activeTab === 'events'}
+        <EventsPanel />
+      {:else if $activeTab === 'config'}
+        <ConfigPanel />
+      {:else if $activeTab === 'ops'}
+        <OpsPanel />
+      {:else if $activeTab === 'settings'}
         <AppPanel />
       {/if}
     </div>

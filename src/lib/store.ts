@@ -1,7 +1,7 @@
 import { writable } from 'svelte/store'
 import { invoke } from '@tauri-apps/api/core'
 
-export type Tab = 'launch' | 'server' | 'app'
+export type Tab = 'launch' | 'server' | 'events' | 'config' | 'ops' | 'settings'
 
 export const activeTab = writable<Tab>('launch')
 export const serverRunning = writable<boolean>(false)
