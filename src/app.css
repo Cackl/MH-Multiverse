@@ -1,0 +1,426 @@
+/* ══════════════════════════════════════════════════════════════════════════════
+   MH Manifold — Design Tokens & Shared Styles
+   Fonts: Chakra Petch (headings), IBM Plex Sans (body), IBM Plex Mono (code)
+   ══════════════════════════════════════════════════════════════════════════════ */
+
+@import url('https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@400;500;600;700&family=IBM+Plex+Sans:wght@300;400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap');
+
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+:root {
+  /* Surface layers */
+  --bg-0: #08090c;
+  --bg-1: #0e1015;
+  --bg-2: #14161d;
+  --bg-3: #1a1d27;
+  --bg-4: #222634;
+
+  /* Accent — teal */
+  --accent:             #3ea7c7;
+  --accent-bright:      #4adae4;
+  --accent-dim:         #247a7a;
+  --accent-glow:        rgba(62, 194, 199, 0.08);
+  --accent-glow-strong: rgba(62, 190, 199, 0.15);
+
+  /* Semantic */
+  --red:           #c0392b;
+  --red-dim:       rgba(192, 57, 43, 0.12);
+  --green:         #27ae60;
+  --green-bright:  #2ecc71;
+  --green-dim:     rgba(39, 174, 96, 0.12);
+  --blue:          #2e86c1;
+  --blue-dim:      rgba(46, 134, 193, 0.10);
+
+  /* Borders */
+  --border:     #252836;
+  --border-mid: #2f3347;
+  --border-lit: #3d4260;
+
+  /* Text */
+  --text-0: #edf1f5;
+  --text-1: #b0bac4;
+  --text-2: #7e8fa0;
+  --text-3: #455460;
+
+  /* Typography */
+  --font-head: 'Chakra Petch', sans-serif;
+  --font-body: 'IBM Plex Sans', sans-serif;
+  --font-mono: 'IBM Plex Mono', monospace;
+
+  /* Geometry */
+  --rail-w:     56px;
+  --radius-sm:  3px;
+  --radius-md:  6px;
+
+  /* Panel background gradient */
+  --panel-grad-top: rgba(62, 167, 199, 0.07);
+  --panel-grad-mid: 40%;
+
+  /* Sidebar background */
+  --sidebar-bg: rgba(8, 9, 12, 0.5);
+
+  /* Console */
+  --console-bg:      var(--bg-0);
+  --console-cmd-bg:  var(--bg-2);
+  --console-text:    var(--text-1);
+  --console-text-dim: var(--text-2);
+}
+
+html, body {
+  height: 100%;
+  background: var(--bg-0);
+  color: var(--text-0);
+  font-family: var(--font-body);
+  font-size: 13px;
+  overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+#app {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* ── Section title (reusable) ── */
+.section-title {
+  font-family: var(--font-head);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--text-2);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.section-title::before {
+  content: '';
+  width: 2px;
+  height: 10px;
+  background: var(--accent);
+  flex-shrink: 0;
+}
+
+/* ── Buttons ── */
+.btn {
+  font-family: var(--font-head);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  padding: 6px 14px;
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: all 0.14s;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  background: transparent;
+  border-radius: var(--radius-sm);
+  white-space: nowrap;
+}
+.btn:disabled { opacity: 0.35; cursor: not-allowed; }
+.btn svg { width: 14px; height: 14px; }
+
+.btn-sm { padding: 5px 12px; font-size: 10px; }
+
+.btn-accent {
+  border-color: var(--accent-dim);
+  color: var(--accent-bright);
+  background: var(--accent-glow);
+}
+.btn-accent:hover:not(:disabled) {
+  border-color: var(--accent);
+  background: var(--accent-glow-strong);
+}
+
+.btn-outline {
+  border-color: var(--border-lit);
+  color: var(--text-1);
+}
+.btn-outline:hover:not(:disabled) {
+  border-color: var(--text-2);
+  color: var(--text-0);
+  background: var(--bg-3);
+}
+
+.btn-red {
+  border-color: rgba(192, 57, 43, 0.3);
+  color: #e74c3c;
+  background: var(--red-dim);
+}
+.btn-red:hover:not(:disabled) {
+  border-color: var(--red);
+  background: rgba(192, 57, 43, 0.22);
+}
+
+.btn-green {
+  border-color: rgba(39, 174, 96, 0.3);
+  color: var(--green-bright);
+  background: var(--green-dim);
+}
+.btn-green:hover:not(:disabled) {
+  border-color: var(--green);
+  background: rgba(39, 174, 96, 0.2);
+}
+
+.btn-lg {
+  padding: 10px 24px;
+  font-size: 15px;
+  letter-spacing: 0.14em;
+  width: 100%;
+  justify-content: center;
+}
+
+/* ── Icon button ── */
+.btn-icon {
+  width: 26px;
+  height: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: 1px solid var(--border-mid);
+  color: var(--text-2);
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  transition: all 0.12s;
+}
+.btn-icon:hover {
+  border-color: var(--accent-dim);
+  color: var(--accent);
+  background: var(--accent-glow);
+}
+.btn-icon svg { width: 14px; height: 14px; }
+
+/* ── Inputs ── */
+input[type="text"],
+input[type="password"],
+input[type="number"] {
+  background: var(--bg-0);
+  border: 1px solid var(--border-mid);
+  color: var(--text-0);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  padding: 7px 10px;
+  outline: none;
+  width: 100%;
+  border-radius: var(--radius-sm);
+  transition: border-color 0.15s;
+}
+input:focus { border-color: var(--accent-dim); }
+input::placeholder {
+  color: var(--text-3);
+  font-family: var(--font-body);
+  font-size: 12px;
+}
+
+/* Remove number input spinners */
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
+
+/* ── Field display (read-only value boxes) ── */
+.field-value {
+  background: var(--bg-0);
+  border: 1px solid var(--border-mid);
+  padding: 8px 10px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-1);
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* ── Field label ── */
+.field-label {
+  font-family: var(--font-head);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-2);
+  margin-bottom: 5px;
+}
+
+/* ── Badge ── */
+.badge {
+  font-family: var(--font-head);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 2px 7px;
+  border-radius: 2px;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+.badge-enc {
+  background: var(--blue-dim);
+  color: #5dade2;
+  border: 1px solid rgba(46, 134, 193, 0.25);
+}
+
+/* ── Toggle switch ── */
+.toggle-switch {
+  width: 36px;
+  height: 20px;
+  background: var(--bg-0);
+  border: 1px solid var(--border-lit);
+  border-radius: 10px;
+  position: relative;
+  cursor: pointer;
+  transition: all 0.2s;
+  flex-shrink: 0;
+}
+.toggle-switch::after {
+  content: '';
+  width: 14px;
+  height: 14px;
+  background: var(--text-2);
+  border-radius: 50%;
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  transition: all 0.2s;
+}
+.toggle-switch.on {
+  background: var(--accent-glow-strong);
+  border-color: var(--accent-dim);
+}
+.toggle-switch.on::after {
+  left: 18px;
+  background: var(--accent-bright);
+}
+
+/* ── Scrollbars ── */
+::-webkit-scrollbar { width: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border-lit); border-radius: 2px; }
+
+/* ── Panel background gradient ── */
+.panel-bg {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(
+    to bottom,
+    var(--panel-grad-top) 0%,
+    transparent var(--panel-grad-mid)
+  );
+}
+
+[data-theme="blue"] {
+  --accent:             #10c3ff;
+  --accent-bright:      #62e2ff;
+  --accent-dim:         #0f78cc;
+  --accent-glow:        rgba(16, 195, 255, 0.14);
+  --accent-glow-strong: rgba(98, 226, 255, 0.28);
+}
+
+[data-theme="mh-itembase"] {
+  --bg-0: #04101a;
+  --bg-1: #081826;
+  --bg-2: #0f2336;
+  --bg-3: #17304a;
+  --bg-4: #214162;
+
+  --accent:             #10c3ff;
+  --accent-bright:      #62e2ff;
+  --accent-dim:         #0f78cc;
+  --accent-glow:        rgba(16, 195, 255, 0.14);
+  --accent-glow-strong: rgba(98, 226, 255, 0.28);
+
+  --red:           #ff6262;
+  --red-dim:       rgba(255, 98, 98, 0.14);
+  --green:         #2edf90;
+  --green-bright:  #67f5b5;
+  --green-dim:     rgba(46, 223, 144, 0.14);
+  --blue:          #38c2ff;
+  --blue-dim:      rgba(56, 194, 255, 0.18);
+
+  --border:     #184562;
+  --border-mid: #1f6f9d;
+  --border-lit: #2fbeee;
+
+  --text-0: #f7fcff;
+  --text-1: #cfe2f0;
+  --text-2: #95b2c6;
+  --text-3: #5d7990;
+
+  --font-head: 'Chakra Petch', sans-serif;
+  --font-body: 'IBM Plex Sans', sans-serif;
+  --font-mono: 'IBM Plex Mono', monospace;
+
+  --rail-w:     56px;
+  --radius-sm:  3px;
+  --radius-md:  6px;
+  --panel-grad-top: rgba(16, 195, 255, 0.06);
+  --sidebar-bg: rgba(4, 16, 26, 0.5);
+}
+
+[data-theme="itembase-v2"] {
+  /* Surface layers — near-neutral dark, minimal tint */
+  --bg-0: #080c10;
+  --bg-1: #0d1219;
+  --bg-2: #131a24;
+  --bg-3: #1a2332;
+  --bg-4: #222d3e;
+
+  /* Accent — vivid cyan, pure and saturated */
+  --accent:             #00c8ff;
+  --accent-bright:      #62dfff;
+  --accent-dim:         #007aaa;
+  --accent-glow:        rgba(0, 200, 255, 0.10);
+  --accent-glow-strong: rgba(0, 200, 255, 0.22);
+
+  /* Semantic — warm orange-red for contrast against cyan */
+  --red:           #ff5733;
+  --red-dim:       rgba(255, 87, 51, 0.14);
+  --green:         #00e676;
+  --green-bright:  #69ffa8;
+  --green-dim:     rgba(0, 230, 118, 0.14);
+  --blue:          #29b6f6;
+  --blue-dim:      rgba(41, 182, 246, 0.14);
+
+  /* Borders — cool grey-blue, not cyan-saturated */
+  --border:     #1c2535;
+  --border-mid: #253245;
+  --border-lit: #2f4060;
+
+  /* Text — cool white, minimal blue tint */
+  --text-0: #eef4f8;
+  --text-1: #b8c8d8;
+  --text-2: #7a90a4;
+  --text-3: #445566;
+
+  /* Typography */
+  --font-head: 'Chakra Petch', sans-serif;
+  --font-body: 'IBM Plex Sans', sans-serif;
+  --font-mono: 'IBM Plex Mono', monospace;
+
+  /* Geometry */
+  --rail-w: 56px;
+  --radius-sm: 3px;
+  --radius-md: 6px;
+
+  --panel-grad-top: rgba(0, 200, 255, 0.07);
+  --sidebar-bg: rgba(8, 12, 16, 0.6);
+
+  --console-bg:       #05080d;
+  --console-cmd-bg:   #0d1219;
+  --console-text:     #b8c8d8;
+  --console-text-dim: #4d6070;
+}
