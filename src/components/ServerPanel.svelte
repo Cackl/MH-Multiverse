@@ -23,6 +23,67 @@
   let dashboardPort = DASHBOARD_PORT_DEFAULT
   let showConfig = false
 
+  let countdownSec = 0
+  let countdownInterval: ReturnType<typeof setInterval> | null = null
+  $: countdownActive = countdownInterval !== null
+
+  $: countdownLabel = (() => {
+    if (!countdownActive) return ''
+    const m = Math.floor(countdownSec / 60)
+    const s = countdownSec % 60
+    if (m > 0) return `${m}m ${String(s).padStart(2, '0')}s`
+    return `${s}s`
+  })()
+
+  function clearCountdown() {
+    if (countdownInterval) clearInterval(countdownInterval)
+    countdownInterval = null
+    countdownSec = 0
+  }
+
+  async function initiateStop() {
+    const delay = $appConfig.shutdown.delay_minutes
+    if (!delay || delay <= 0) {
+      stopping = true
+      error = ''
+      try {
+        await invoke('stop_server')
+      } catch (e) {
+        error = String(e)
+        stopping = false
+      }
+      return
+    }
+
+    countdownSec = delay * 60
+    const initialMsg = $appConfig.shutdown.broadcast_message.replace('{minutes}', String(delay))
+    try { await invoke('send_command', { cmd: `!server broadcast ${initialMsg}` }) } catch {}
+
+    countdownInterval = setInterval(async () => {
+      countdownSec -= 1
+
+      if (countdownSec === 60) {
+        try { await invoke('send_command', { cmd: '!server broadcast Server is shutting down in 1 minute.' }) } catch {}
+      }
+
+      if (countdownSec <= 0) {
+        clearCountdown()
+        stopping = true
+        error = ''
+        try {
+          await invoke('stop_server')
+        } catch (e) {
+          error = String(e)
+          stopping = false
+        }
+      }
+    }, 1000)
+  }
+
+  async function cancelStop() {
+    clearCountdown()
+    try { await invoke('send_command', { cmd: '!server broadcast Server shutdown has been cancelled.' }) } catch {}
+  }
   let unlistenLog: UnlistenFn | null = null
   let unlistenStarted: UnlistenFn | null = null
   let unlistenStopped: UnlistenFn | null = null
@@ -85,6 +146,7 @@
       serverRunning.set(false)
       apacheRunning.set(false)
       stopping = false
+      clearCountdown()
       stopUptime()
       if (event.payload.exit_code !== null && event.payload.exit_code !== 0) {
         error = `Server exited unexpectedly (code ${event.payload.exit_code})`
@@ -100,6 +162,7 @@
     unlistenLog?.()
     unlistenStarted?.()
     unlistenStopped?.()
+    clearCountdown()
   })
 
   async function startServer() {
@@ -454,25 +517,32 @@
     <div class="header-content">
       <div class="header-row-1">
         <div class="section-title">Local Server</div>
+        {#if $serverRunning}
+          <span class="uptime-display">{uptimeFormatted}</span>
+        {/if}
         <div class="header-spacer"></div>
         {#if error}
           <div class="header-error" title={error}>{error}</div>
         {/if}
+        <!-- <button class="btn btn-sm btn-outline" on:click={() => showConfig = !showConfig}>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:12px;height:12px;">
+            <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/>
+            <circle cx="12" cy="12" r="3"/>
+          </svg>
+          {showConfig ? 'Console' : 'Configure'}
+        </button> -->
         {#if $serverRunning}
-          <div class="uptime-display">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <circle cx="12" cy="12" r="10"/>
-              <polyline points="12 6 12 12 16 14"/>
-            </svg>
-            {uptimeFormatted}
-          </div>
-          <div class="header-vsep"></div>
-        {/if}
-        {#if $serverRunning}
-          <button class="btn btn-sm btn-red" on:click={stopServer} disabled={stopping}>
-            <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" style="width:10px;height:10px;"><rect x="3" y="3" width="8" height="8" rx="1"/></svg>
-            {stopping ? 'Stopping...' : 'Server'}
-          </button>
+          {#if countdownActive}
+            <button class="btn btn-sm btn-countdown" on:click={cancelStop}>
+              <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" style="width:10px;height:10px;"><rect x="3" y="3" width="8" height="8" rx="1"/></svg>
+              {countdownLabel}
+            </button>
+          {:else}
+            <button class="btn btn-sm btn-red" on:click={initiateStop} disabled={stopping}>
+              <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" style="width:10px;height:10px;"><rect x="3" y="3" width="8" height="8" rx="1"/></svg>
+              {stopping ? 'Stopping...' : 'Server'}
+            </button>
+          {/if}
         {:else}
           <button class="btn btn-sm btn-green" on:click={startServer} disabled={starting || !$appConfig.server_exe} title={!$appConfig.server_exe ? 'Set server exe in App settings' : ''}>
             <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" style="width:10px;height:10px;"><polygon points="4,2 12,7 4,12"/></svg>
@@ -480,25 +550,25 @@
           </button>
         {/if}
 
-        {#if $apacheRunning}
-          <button class="btn btn-sm btn-red" on:click={stopApache} disabled={stoppingApache}>
-            <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" style="width:10px;height:10px;"><rect x="3" y="3" width="8" height="8" rx="1"/></svg>
-            Apache
-          </button>
-        {:else}
-          <button class="btn btn-sm btn-outline" on:click={startApache} disabled={startingApache || !$appConfig.server_exe}>
-            <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" style="width:10px;height:10px;"><polygon points="4,2 12,7 4,12"/></svg>
-            Apache
-          </button>
-        {/if}
+          {#if $apacheRunning}
+            <button class="btn btn-sm btn-red" on:click={stopApache} disabled={stoppingApache}>
+              <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" style="width:10px;height:10px;"><rect x="3" y="3" width="8" height="8" rx="1"/></svg>
+              Apache
+            </button>
+          {:else}
+            <button class="btn btn-sm btn-outline" on:click={startApache} disabled={startingApache || !$appConfig.server_exe}>
+              <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" style="width:10px;height:10px;"><polygon points="4,2 12,7 4,12"/></svg>
+              Apache
+            </button>
+          {/if}
 
-        <button class="btn btn-sm btn-outline" on:click={openDashboard} disabled={!$serverRunning}>
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:10px;height:10px;">
-            <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
-            <polyline points="15,3 21,3 21,9"/><line x1="10" y1="14" x2="21" y2="3"/>
-          </svg>
-          Dashboard
-        </button>
+          <button class="btn btn-sm btn-outline" on:click={openDashboard} disabled={!$serverRunning}>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:10px;height:10px;">
+              <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
+              <polyline points="15,3 21,3 21,9"/><line x1="10" y1="14" x2="21" y2="3"/>
+            </svg>
+            Dashboard
+          </button>
       </div>
       <div class="header-row-2">
         <!-- Process controls -->
@@ -714,25 +784,9 @@
   .header-spacer { flex: 1; }
 
   .uptime-display {
-    display: flex;
-    align-items: center;
-    gap: 5px;
     font-family: var(--font-mono);
     font-size: 12px;
     color: var(--text-2);
-  }
-  .uptime-display svg {
-    width: 12px;
-    height: 12px;
-    color: var(--text-3);
-    flex-shrink: 0;
-  }
-
-  .header-vsep {
-    width: 1px;
-    height: 16px;
-    background: var(--border-mid);
-    flex-shrink: 0;
   }
 
   .header-error {
@@ -792,6 +846,17 @@
     border-color: var(--accent-dim);
     color: var(--accent-bright);
     background: var(--accent-glow);
+  }
+
+  .btn-countdown {
+    border-color: rgba(200, 146, 10, 0.4);
+    color: #e6b820;
+    background: rgba(200, 146, 10, 0.1);
+    min-width: 100px;
+  }
+  .btn-countdown:hover {
+    border-color: rgba(200, 146, 10, 0.7);
+    background: rgba(200, 146, 10, 0.18);
   }
 
   /* -- Log view -- */

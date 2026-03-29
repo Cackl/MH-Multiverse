@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte'
   import { invoke } from '@tauri-apps/api/core'
-  import { appConfig, serverRunning } from '../lib/store'
+  import { appConfig, serverRunning, setShutdownConfig, type ShutdownConfig } from '../lib/store'
 
   export let embedded = false
   export let onBack: (() => void) | null = null
@@ -157,6 +157,10 @@
         { key: 'FileSplitOutput',         section: 'Logging', type: 'bool',   label: 'Split File Output',           description: 'Splits log file output into separate files based on message category.' },
       ],
     },
+    {
+      id: 'manifold',
+      label: 'Manifold',
+    }
   ]
 
   // -- State --
@@ -304,7 +308,7 @@
   <!-- Main content -->
   <div class="config-main">
 
-    {#if !canLoad}
+    {#if !canLoad && activeSection !== 'manifold'}
       <div class="config-notice">
         <div class="notice-icon">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:20px;height:20px;color:var(--text-3)">
@@ -314,6 +318,53 @@
         </div>
         <div class="notice-text">Set the server executable path in App settings to load configuration.</div>
       </div>
+    {:else if activeSection === 'manifold'}
+      <div class="config-content">
+        <div class="config-section-head">
+          <div class="section-title">Manifold</div>
+        </div>
+        <div class="config-body">
+          <div class="subsection-title">Shutdown</div>
+          <div class="manifold-note">
+            These settings are stored in Manifold, not in ConfigOverride.ini.
+          </div>
+          <div class="config-grid">
+            <div class="config-field">
+              <div class="config-field-head">
+                <span class="config-field-label">Delay (min)</span>
+              </div>
+              <input
+                type="number"
+                class="config-input"
+                min="0"
+                value={$appConfig.shutdown.delay_minutes}
+                on:change={(e) => setShutdownConfig({
+                  ...$appConfig.shutdown,
+                  delay_minutes: Math.max(0, parseInt(e.currentTarget.value) || 0)
+                })}
+              >
+              <span class="config-field-hint">0 = stop immediately with no broadcast</span>
+            </div>
+            <div class="config-field">
+              <div class="config-field-head">
+                <span class="config-field-label">Broadcast Message</span>
+              </div>
+              <input
+                type="text"
+                class="config-input"
+                value={$appConfig.shutdown.broadcast_message}
+                placeholder="Server is shutting down in {'{minutes}'} minute(s)."
+                on:change={(e) => setShutdownConfig({
+                  ...$appConfig.shutdown,
+                  broadcast_message: e.currentTarget.value
+                })}
+              >
+              <span class="config-field-hint">Use {'{minutes}'} as a placeholder for the remaining time.</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
     {:else if !loaded}
       <div class="config-notice">
         <div class="notice-text">Config not loaded yet.</div>
@@ -752,6 +803,20 @@
   .btn-pulse {
     border-color: var(--accent);
     background: rgba(62, 194, 199, 0.2);
+  }
+
+  .manifold-note {
+    font-size: 11px;
+    color: var(--text-3);
+    margin-bottom: 14px;
+    font-family: var(--font-body);
+  }
+
+  .config-field-hint {
+    font-size: 10px;
+    color: var(--text-3);
+    font-family: var(--font-body);
+    margin-top: 2px;
   }
 
   /* -- Tooltip -- */

@@ -14,6 +14,27 @@ const CONFIG_FILENAME: &str = "manifold.json";
 
 fn default_true() -> bool { true }
 
+fn default_shutdown_broadcast() -> String {
+    "Server is shutting down in {minutes} minute(s).".to_string()
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ShutdownConfig {
+    #[serde(default)]
+    pub delay_minutes: u32,
+    #[serde(default = "default_shutdown_broadcast")]
+    pub broadcast_message: String,
+}
+
+impl Default for ShutdownConfig {
+    fn default() -> Self {
+        Self {
+            delay_minutes: 0,
+            broadcast_message: default_shutdown_broadcast(),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LaunchOptions {
     #[serde(default = "default_true")]
@@ -77,6 +98,8 @@ pub struct AppConfig {
     pub theme: String,
     #[serde(default)]
     pub launch_options: LaunchOptions,
+    #[serde(default)]
+    pub shutdown: ShutdownConfig,
 }
 
 impl Default for AppConfig {
@@ -88,6 +111,7 @@ impl Default for AppConfig {
             servers: Vec::new(),
             theme: String::new(),
             launch_options: LaunchOptions::default(),
+            shutdown: ShutdownConfig::default(),
         }
     }
 }
@@ -281,5 +305,12 @@ pub fn set_theme(app: tauri::AppHandle, theme: String) -> Result<(), String> {
 pub fn set_launch_options(app: tauri::AppHandle, options: LaunchOptions) -> Result<(), String> {
     let mut config = load_config(&app);
     config.launch_options = options;
+    save_config(&app, &config)
+}
+
+#[tauri::command]
+pub fn set_shutdown_config(app: tauri::AppHandle, shutdown: ShutdownConfig) -> Result<(), String> {
+    let mut config = load_config(&app);
+    config.shutdown = shutdown;
     save_config(&app, &config)
 }

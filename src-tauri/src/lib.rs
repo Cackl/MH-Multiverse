@@ -61,6 +61,7 @@ pub fn run() {
             config::set_server_exe,
             config::set_theme,
             config::set_launch_options,
+            config::set_shutdown_config,
             launcher::launch_game,
             launcher::game_is_running,
             server::start_server,

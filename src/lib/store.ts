@@ -67,6 +67,11 @@ export interface LaunchOptions {
   resolution_height: number
 }
 
+export interface ShutdownConfig {
+  delay_minutes: number
+  broadcast_message: string
+}
+
 export interface Server {
   id: string
   name: string
@@ -81,6 +86,7 @@ export interface AppConfig {
   servers: Server[]
   theme: string
   launch_options: LaunchOptions
+  shutdown: ShutdownConfig
 }
 
 const defaultLaunchOptions: LaunchOptions = {
@@ -96,6 +102,11 @@ const defaultLaunchOptions: LaunchOptions = {
   resolution_height: 0,
 }
 
+const defaultShutdownConfig: ShutdownConfig = {
+  delay_minutes: 0,
+  broadcast_message: 'Server is shutting down in {minutes} minute(s).',
+}
+
 export const appConfig = writable<AppConfig>({
   game_exe: '',
   server_exe: '',
@@ -103,6 +114,7 @@ export const appConfig = writable<AppConfig>({
   servers: [],
   theme: '',
   launch_options: defaultLaunchOptions,
+  shutdown: defaultShutdownConfig,
 })
 
 export const activeTheme = writable<string>('')
@@ -172,4 +184,9 @@ export async function setTheme(theme: string): Promise<void> {
 export async function setLaunchOptions(options: LaunchOptions): Promise<void> {
   appConfig.update(c => ({ ...c, launch_options: options }))
   await invoke('set_launch_options', { options })
+}
+
+export async function setShutdownConfig(shutdown: ShutdownConfig): Promise<void> {
+  appConfig.update(c => ({ ...c, shutdown }))
+  await invoke('set_shutdown_config', { shutdown })
 }
