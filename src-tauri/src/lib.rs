@@ -2,6 +2,7 @@ mod config;
 mod ini;
 mod launcher;
 mod server;
+mod tuning;
 
 pub use config::*;
 
@@ -62,6 +63,7 @@ pub fn run() {
             config::set_theme,
             config::set_launch_options,
             config::set_shutdown_config,
+            config::set_tuning_tags,
             launcher::launch_game,
             launcher::game_is_running,
             server::start_server,
@@ -73,7 +75,11 @@ pub fn run() {
             server::apache_is_running,
             ini::read_config,
             ini::write_config,
-            ini::reset_config_section
+            ini::reset_config_section,
+            tuning::scan_tuning_files,
+            tuning::read_tuning_file,
+            tuning::write_tuning_file,
+            tuning::toggle_tuning_file,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -5,6 +5,7 @@ use aes_gcm::{
 use base64::{engine::general_purpose::STANDARD as B64, Engine};
 use keyring::Entry;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::path::PathBuf;
 use tauri::Manager;
 
@@ -100,6 +101,9 @@ pub struct AppConfig {
     pub launch_options: LaunchOptions,
     #[serde(default)]
     pub shutdown: ShutdownConfig,
+    /// Tag assignments keyed by canonical filename, e.g. "LiveTuningData_CosmicChaos.json" -> "event"
+    #[serde(default)]
+    pub tuning_tags: HashMap<String, String>,
 }
 
 impl Default for AppConfig {
@@ -112,6 +116,7 @@ impl Default for AppConfig {
             theme: String::new(),
             launch_options: LaunchOptions::default(),
             shutdown: ShutdownConfig::default(),
+            tuning_tags: HashMap::new(),
         }
     }
 }
@@ -312,5 +317,12 @@ pub fn set_launch_options(app: tauri::AppHandle, options: LaunchOptions) -> Resu
 pub fn set_shutdown_config(app: tauri::AppHandle, shutdown: ShutdownConfig) -> Result<(), String> {
     let mut config = load_config(&app);
     config.shutdown = shutdown;
+    save_config(&app, &config)
+}
+
+#[tauri::command]
+pub fn set_tuning_tags(app: tauri::AppHandle, tags: HashMap<String, String>) -> Result<(), String> {
+    let mut config = load_config(&app);
+    config.tuning_tags = tags;
     save_config(&app, &config)
 }

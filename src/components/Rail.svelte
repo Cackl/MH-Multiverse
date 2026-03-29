@@ -41,11 +41,11 @@
     <span class="rail-label">Config</span>
   </button>
 
-  <button class="rail-tab" class:active={$activeTab === 'events'} on:click={() => go('events')}>
+  <button class="rail-tab" class:active={$activeTab === 'tuning'} on:click={() => go('tuning')}>
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
       <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
     </svg>
-    <span class="rail-label">Events</span>
+    <span class="rail-label">Tuning</span>
   </button>
 
   <button class="rail-tab" class:active={$activeTab === 'ops'} on:click={() => go('ops')}>

@@ -1,7 +1,7 @@
 import { writable } from 'svelte/store'
 import { invoke } from '@tauri-apps/api/core'
 
-export type Tab = 'launch' | 'server' | 'events' | 'config' | 'ops' | 'settings'
+export type Tab = 'launch' | 'server' | 'tuning' | 'config' | 'ops' | 'settings'
 
 export const activeTab = writable<Tab>('launch')
 export const serverRunning = writable<boolean>(false)
@@ -87,6 +87,7 @@ export interface AppConfig {
   theme: string
   launch_options: LaunchOptions
   shutdown: ShutdownConfig
+  tuning_tags: Record<string, string>
 }
 
 const defaultLaunchOptions: LaunchOptions = {
@@ -115,6 +116,7 @@ export const appConfig = writable<AppConfig>({
   theme: '',
   launch_options: defaultLaunchOptions,
   shutdown: defaultShutdownConfig,
+  tuning_tags: {},
 })
 
 export const activeTheme = writable<string>('')
@@ -189,4 +191,9 @@ export async function setLaunchOptions(options: LaunchOptions): Promise<void> {
 export async function setShutdownConfig(shutdown: ShutdownConfig): Promise<void> {
   appConfig.update(c => ({ ...c, shutdown }))
   await invoke('set_shutdown_config', { shutdown })
+}
+
+export async function setTuningTags(tags: Record<string, string>): Promise<void> {
+  appConfig.update(c => ({ ...c, tuning_tags: tags }))
+  await invoke('set_tuning_tags', { tags })
 }
