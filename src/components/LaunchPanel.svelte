@@ -9,6 +9,7 @@
     type Server
   } from '../lib/store'
   import ServerModal from './ServerModal.svelte'
+  import PanelSidebar from './PanelSidebar.svelte'
 
   $: activeServer = $appConfig.servers.find(s => s.id === $activeServerId) ?? null
 
@@ -126,16 +127,16 @@
 
   <div class="launch-content">
     <!-- Server sidebar -->
-    <aside class="server-sidebar">
-      <div class="server-sidebar-head">
+    <PanelSidebar width="var(--sidebar-wide)">
+      <svelte:fragment slot="header">
         <div class="section-title">Servers</div>
-        <button class="btn-icon" title="Add server" on:click={openAdd}>
+        <button class="btn-icon" title="Add server" on:click={openAdd} style="margin-left:auto;">
           <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5">
             <line x1="7" y1="3" x2="7" y2="11"/>
             <line x1="3" y1="7" x2="11" y2="7"/>
           </svg>
         </button>
-      </div>
+      </svelte:fragment>
 
       <div class="server-list">
         {#each $appConfig.servers as server (server.id)}
@@ -156,7 +157,7 @@
           <div class="empty-list">No servers yet</div>
         {/if}
       </div>
-    </aside>
+    </PanelSidebar>
 
     <!-- Detail area -->
     {#if activeServer}
@@ -248,45 +249,21 @@
     overflow: hidden;
   }
 
-  .grid-overlay {
-    position: absolute;
-    inset: 0;
-    pointer-events: none;
-    opacity: 0.02;
-    background-image:
-      linear-gradient(var(--text-0) 1px, transparent 1px),
-      linear-gradient(90deg, var(--text-0) 1px, transparent 1px);
-    background-size: 40px 40px;
-  }
+
 
   .launch-content {
     position: relative;
     z-index: 1;
     flex: 1;
     display: grid;
-    grid-template-columns: 280px 1fr;
+    grid-template-columns: var(--sidebar-wide) 1fr;
     grid-template-rows: 1fr auto;
     overflow: hidden;
   }
 
   /* -- Server sidebar -- */
-  .server-sidebar {
+  :global(.launch-content > .panel-sidebar) {
     grid-row: 1 / -1;
-    border-right: 1px solid var(--border);
-    display: flex;
-    flex-direction: column;
-    background: var(--sidebar-bg);
-  }
-
-  .server-sidebar-head {
-    display: flex;
-    align-items: center;
-    padding: 14px 16px 12px;
-    border-bottom: 1px solid var(--border);
-    min-height: 52px;
-  }
-  .server-sidebar-head .btn-icon {
-    margin-left: auto;
   }
 
   .server-list {
@@ -363,7 +340,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    color: var(--accent);
+    color: var(--accent-dim);
     flex-shrink: 0;
   }
   .detail-icon svg { width: 24px; height: 24px; }
@@ -471,7 +448,7 @@
 
   .launch-error {
     font-size: 12px;
-    color: #e74c3c;
+    color: var(--text-error);
     padding: 6px 10px;
     border: 1px solid rgba(192, 57, 43, 0.4);
     background: var(--red-dim);

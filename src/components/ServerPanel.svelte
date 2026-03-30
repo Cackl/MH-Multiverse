@@ -616,13 +616,13 @@
 
         <!-- Filters -->
         <span class="filter-label">Filter</span>
-        <button class="log-filter" class:on={filter === 'all'} on:click={() => filter = 'all'}>All</button>
-        <button class="log-filter trace" class:on={filter === 'trace'} on:click={() => filter = 'trace'}>Trace</button>
-        <button class="log-filter debug" class:on={filter === 'debug'} on:click={() => filter = 'debug'}>Debug</button>
-        <button class="log-filter info" class:on={filter === 'info'} on:click={() => filter = 'info'}>Info</button>
-        <button class="log-filter warn" class:on={filter === 'warn'} on:click={() => filter = 'warn'}>Warn</button>
-        <button class="log-filter err" class:on={filter === 'err'} on:click={() => filter = 'err'}>Error</button>
-        <button class="log-filter fatal" class:on={filter === 'fatal'} on:click={() => filter = 'fatal'}>Fatal</button>
+        <button class="filter-chip" class:active={filter === 'all'} on:click={() => filter = 'all'}>All</button>
+        <button class="filter-chip chip-purple" class:active={filter === 'trace'} on:click={() => filter = 'trace'}>Trace</button>
+        <button class="filter-chip chip-purple" class:active={filter === 'debug'} on:click={() => filter = 'debug'}>Debug</button>
+        <button class="filter-chip chip-blue" class:active={filter === 'info'} on:click={() => filter = 'info'}>Info</button>
+        <button class="filter-chip chip-amber" class:active={filter === 'warn'} on:click={() => filter = 'warn'}>Warn</button>
+        <button class="filter-chip chip-red" class:active={filter === 'err'} on:click={() => filter = 'err'}>Error</button>
+        <button class="filter-chip chip-red" class:active={filter === 'fatal'} on:click={() => filter = 'fatal'}>Fatal</button>
       </div>
     </div>
   </div>
@@ -791,7 +791,7 @@
 
   .header-error {
     font-size: 11px;
-    color: #e74c3c;
+    color: var(--text-error);
     max-width: 260px;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -820,27 +820,28 @@
     margin-right: 2px;
   }
 
-  .log-filter {
+  /* filter-chip — self-contained so panel works before app.css update */
+  :global(.filter-chip) {
     font-family: var(--font-head);
     font-size: 10px;
+    font-weight: 600;
     letter-spacing: 0.08em;
     text-transform: uppercase;
-    padding: 3px 7px;
+    padding: 3px 9px;
     border-radius: 2px;
     border: 1px solid transparent;
     cursor: pointer;
     background: transparent;
     color: var(--text-3);
     transition: all 0.12s;
+    white-space: nowrap;
   }
-  .log-filter:hover { color: var(--text-1); }
-  .log-filter.on { border-color: var(--border-lit); color: var(--text-0); background: var(--bg-3); }
-  .log-filter.trace.on { border-color: rgba(120, 120, 140, 0.5); color: #8a8aa0; }
-  .log-filter.debug.on { border-color: rgba(130, 100, 180, 0.5); color: #a080d0; }
-  .log-filter.info.on  { border-color: rgba(46, 134, 193, 0.5); color: #5dade2; }
-  .log-filter.warn.on  { border-color: rgba(180, 100, 10, 0.5); color: #d4a017; }
-  .log-filter.err.on   { border-color: rgba(192, 57, 43, 0.5); color: #e74c3c; }
-  .log-filter.fatal.on { border-color: rgba(180, 30, 30, 0.6); color: #ff4444; }
+  :global(.filter-chip:hover:not(:disabled)) { color: var(--text-1); border-color: var(--border-lit); }
+  :global(.filter-chip.active)               { color: var(--text-0); border-color: var(--border-lit); background: var(--bg-3); }
+  :global(.filter-chip.chip-purple.active)   { color: var(--purple);       border-color: rgba(130,100,180,0.4); background: var(--purple-dim); }
+  :global(.filter-chip.chip-blue.active)     { color: var(--blue);         border-color: rgba(46,134,193,0.4);  background: var(--blue-dim); }
+  :global(.filter-chip.chip-amber.active)    { color: var(--amber-bright); border-color: rgba(200,146,10,0.4);  background: var(--amber-dim); }
+  :global(.filter-chip.chip-red.active)      { color: var(--text-error);   border-color: rgba(192,57,43,0.4);   background: var(--red-dim); }
 
   .btn.active {
     border-color: var(--accent-dim);
@@ -850,7 +851,7 @@
 
   .btn-countdown {
     border-color: rgba(200, 146, 10, 0.4);
-    color: #e6b820;
+    color: var(--amber-bright);
     background: rgba(200, 146, 10, 0.1);
     min-width: 100px;
   }
@@ -896,11 +897,11 @@
     text-align: center;
   }
   .log-lvl.trace { color: #8a8aa0; background: rgba(120, 120, 140, 0.1); border: 1px solid rgba(120, 120, 140, 0.2); }
-  .log-lvl.debug { color: #a080d0; background: rgba(130, 100, 180, 0.1); border: 1px solid rgba(130, 100, 180, 0.2); }
-  .log-lvl.info { color: #5dade2; background: var(--blue-dim); border: 1px solid rgba(46, 134, 193, 0.25); }
+  .log-lvl.debug { color: var(--purple); background: var(--purple-dim); border: 1px solid rgba(130, 100, 180, 0.2); }
+  .log-lvl.info { color: var(--blue); background: var(--blue-dim); border: 1px solid rgba(46, 134, 193, 0.25); }
   .log-lvl.ok   { color: var(--green-bright); background: var(--green-dim); border: 1px solid rgba(39, 174, 96, 0.25); }
-  .log-lvl.warn { color: #d4a017; background: rgba(212, 160, 23, 0.1); border: 1px solid rgba(212, 160, 23, 0.25); }
-  .log-lvl.err  { color: #e74c3c; background: var(--red-dim); border: 1px solid rgba(192, 57, 43, 0.25); }
+  .log-lvl.warn { color: var(--amber); background: rgba(212, 160, 23, 0.1); border: 1px solid rgba(212, 160, 23, 0.25); }
+  .log-lvl.err  { color: var(--text-error); background: var(--red-dim); border: 1px solid rgba(192, 57, 43, 0.25); }
   .log-lvl.fatal { color: #ff4444; background: rgba(180, 30, 30, 0.15); border: 1px solid rgba(180, 30, 30, 0.35); font-weight: 700; }
 
   .log-msg        { color: var(--console-text); word-break: break-word; min-width: 0; }
@@ -909,8 +910,8 @@
   .log-msg.log-raw { color: var(--console-text-dim); white-space: pre; }
   .log-msg.info   { color: var(--text-1); }
   .log-msg.ok     { color: var(--green-bright); }
-  .log-msg.warn   { color: var(--accent); }
-  .log-msg.err    { color: #e74c3c; }
+  .log-msg.warn   { color: var(--accent-dim); }
+  .log-msg.err    { color: var(--text-error); }
   .log-msg.fatal  { color: #ff4444; font-weight: 600; }
 
   .log-empty {
@@ -984,7 +985,7 @@
   }
   .cmd-chip:hover:not(:disabled) {
     border-color: var(--accent-dim);
-    color: var(--accent);
+    color: var(--accent-dim);
     background: var(--accent-glow);
   }
   .cmd-chip:disabled { opacity: 0.4; cursor: not-allowed; }
@@ -1001,7 +1002,7 @@
     border-radius: var(--radius-sm) var(--radius-sm) 0 0;
     max-height: 280px;
     overflow-y: auto;
-    z-index: 10;
+    z-index: var(--z-dropdown);
   }
 
   .ac-panel::-webkit-scrollbar { width: 4px; }
@@ -1040,7 +1041,7 @@
   }
   .ac-sugg:last-child { border-bottom: none; }
   .ac-sugg:hover { background: var(--accent-glow); }
-  .ac-sugg.sel { background: var(--accent-glow); border-left-color: var(--accent); }
+  .ac-sugg.sel { background: var(--accent-glow); border-left-color: var(--accent-dim); }
 
   .ac-sugg-top {
     display: flex;

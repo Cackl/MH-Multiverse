@@ -2,6 +2,7 @@
   import { onMount } from 'svelte'
   import { invoke } from '@tauri-apps/api/core'
   import { appConfig, serverRunning, setTuningTags } from '../lib/store'
+  import PanelSidebar from './PanelSidebar.svelte'
 
   // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -298,17 +299,16 @@
 <div class="tuning-panel">
 
   <!-- Left: file list -->
-  <div class="file-pane">
-
-    <div class="file-pane-head">
+  <PanelSidebar width="var(--sidebar-wide)">
+    <svelte:fragment slot="header">
       <div class="section-title">Live Tuning</div>
-      <button class="btn-icon" on:click={scan} title="Rescan" disabled={scanning}>
+      <button class="btn-icon" on:click={scan} title="Rescan" disabled={scanning} style="margin-left:auto;">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <polyline points="23 4 23 10 17 10"/>
           <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
         </svg>
       </button>
-    </div>
+    </svelte:fragment>
 
     <!-- Aggregate stats -->
     {#if files.length > 0}
@@ -328,10 +328,10 @@
     <!-- Tag filter chips -->
     {#if files.length > 0}
       <div class="tag-filters">
-        <button class="tag-chip" class:active={tagFilter === ''} on:click={() => tagFilter = ''}>All</button>
-        <button class="tag-chip tag-core"   class:active={tagFilter === 'core'}   on:click={() => tagFilter = tagFilter === 'core'   ? '' : 'core'  }>Core</button>
-        <button class="tag-chip tag-event"  class:active={tagFilter === 'event'}  on:click={() => tagFilter = tagFilter === 'event'  ? '' : 'event' }>Event</button>
-        <button class="tag-chip tag-custom" class:active={tagFilter === 'custom'} on:click={() => tagFilter = tagFilter === 'custom' ? '' : 'custom'}>Custom</button>
+        <button class="filter-chip" class:active={tagFilter === ''} on:click={() => tagFilter = ''}>All</button>
+        <button class="filter-chip chip-blue"   class:active={tagFilter === 'core'}   on:click={() => tagFilter = tagFilter === 'core'   ? '' : 'core'  }>Core</button>
+        <button class="filter-chip chip-accent"  class:active={tagFilter === 'event'}  on:click={() => tagFilter = tagFilter === 'event'  ? '' : 'event' }>Event</button>
+        <button class="filter-chip chip-purple" class:active={tagFilter === 'custom'} on:click={() => tagFilter = tagFilter === 'custom' ? '' : 'custom'}>Custom</button>
       </div>
     {/if}
 
@@ -401,27 +401,27 @@
       {/if}
     </div>
 
-  </div>
+  </PanelSidebar>
 
   <!-- Right: entry editor -->
   <div class="entry-pane">
 
     {#if !selectedFile}
       <!-- Empty state -->
-      <div class="entry-empty">
+      <div class="empty-state">
         {#if files.length > 0}
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
             <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
             <polyline points="14 2 14 8 20 8"/>
           </svg>
-          <span class="entry-empty-label">Select a file</span>
-          <span class="entry-empty-sub">{aggregates.total} file{aggregates.total !== 1 ? 's' : ''} found · {aggregates.active} active</span>
+          <span class="empty-state-label">Select a file</span>
+          <span class="empty-state-sub">{aggregates.total} file{aggregates.total !== 1 ? 's' : ''} found · {aggregates.active} active</span>
         {:else}
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
             <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
           </svg>
-          <span class="entry-empty-label">No files found</span>
-          <span class="entry-empty-sub">Check that server exe is set and LiveTuning directory exists</span>
+          <span class="empty-state-label">No files found</span>
+          <span class="empty-state-sub">Check that server exe is set and LiveTuning directory exists</span>
         {/if}
       </div>
 
@@ -434,18 +434,6 @@
           <span class="entry-filename">{selectedFile.canonical_name}</span>
         </div>
         <div class="entry-head-right">
-          {#if saveError}
-            <span class="foot-error">{saveError}</span>
-          {/if}
-          {#if saveSuccess}
-            <span class="foot-ok">Saved</span>
-          {/if}
-          {#if dirty}
-            <span class="dirty-indicator">
-              <span class="dirty-dot"></span>
-              Unsaved
-            </span>
-          {/if}
           <button
             class="btn btn-sm btn-outline"
             on:click={reloadLiveTuning}
@@ -457,9 +445,6 @@
               <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
             </svg>
             Reload
-          </button>
-          <button class="btn btn-sm btn-accent" class:btn-pulse={dirty} on:click={saveEntries} disabled={saving || loadingEntries}>
-            {saving ? 'Saving...' : 'Save'}
           </button>
         </div>
       </div>
@@ -543,6 +528,22 @@
         </div>
       {/if}
 
+      <!-- Footer -->
+      <div class="panel-footer">
+        {#if dirty}
+          <span class="dirty-badge">Unsaved changes</span>
+        {/if}
+        {#if saveError}
+          <span class="feedback-error">{saveError}</span>
+        {/if}
+        {#if saveSuccess}
+          <span class="feedback-ok">Saved</span>
+        {/if}
+        <button class="btn btn-sm btn-accent" style="margin-left:auto;" class:btn-pulse={dirty} on:click={saveEntries} disabled={saving || loadingEntries}>
+          {saving ? 'Saving...' : 'Save'}
+        </button>
+      </div>
+
     {/if}
   </div>
 
@@ -555,29 +556,6 @@
     overflow: hidden;
     min-height: 0;
   }
-
-  /* ── File pane ── */
-  .file-pane {
-    width: 220px;
-    flex-shrink: 0;
-    border-right: 1px solid var(--border);
-    display: flex;
-    flex-direction: column;
-    background: rgba(8, 9, 12, 0.3);
-    overflow: hidden;
-  }
-
-  .file-pane-head {
-    display: flex;
-    align-items: center;
-    padding: 12px 14px 10px;
-    border-bottom: 1px solid var(--border);
-    gap: 8px;
-    flex-shrink: 0;
-  }
-  .file-pane-head .section-title { font-size: 10px; }
-  .file-pane-head .btn-icon { margin-left: auto; width: 22px; height: 22px; }
-  .file-pane-head .btn-icon svg { width: 12px; height: 12px; }
 
   .stats-row {
     display: flex;
@@ -614,35 +592,6 @@
     background: var(--border-mid);
   }
 
-  /* Tag filter chips */
-  .tag-filters {
-    display: flex;
-    gap: 4px;
-    padding: 8px 10px;
-    border-bottom: 1px solid var(--border);
-    flex-shrink: 0;
-    flex-wrap: wrap;
-  }
-
-  .tag-chip {
-    font-family: var(--font-head);
-    font-size: 9px;
-    font-weight: 600;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    padding: 2px 7px;
-    border-radius: 2px;
-    border: 1px solid var(--border-mid);
-    background: transparent;
-    color: var(--text-3);
-    cursor: pointer;
-    transition: all 0.12s;
-  }
-  .tag-chip:hover { color: var(--text-1); border-color: var(--border-lit); }
-  .tag-chip.active { color: var(--text-0); background: var(--bg-3); border-color: var(--border-lit); }
-  .tag-chip.tag-core.active   { color: #5dade2; border-color: rgba(46,134,193,0.4); background: var(--blue-dim); }
-  .tag-chip.tag-event.active  { color: var(--accent-bright); border-color: var(--accent-dim); background: var(--accent-glow); }
-  .tag-chip.tag-custom.active { color: #a080d0; border-color: rgba(130,100,180,0.4); background: rgba(130,100,180,0.1); }
 
   /* File list */
   .file-list {
@@ -659,7 +608,7 @@
     text-transform: uppercase;
     color: var(--text-3);
   }
-  .file-notice.error { color: #e74c3c; text-transform: none; font-family: var(--font-body); }
+  .file-notice.error { color: var(--text-error); text-transform: none; font-family: var(--font-body); }
 
   .file-group-label {
     font-family: var(--font-head);
@@ -686,7 +635,7 @@
     transition: background 0.1s, border-color 0.1s;
   }
   .file-item:hover { background: var(--bg-2); }
-  .file-item.selected { background: var(--accent-glow); border-left-color: var(--accent); }
+  .file-item.selected { background: var(--accent-glow); border-left-color: var(--accent-dim); }
 
   .file-toggle {
     width: 28px;
@@ -785,7 +734,7 @@
   /* Tag colour classes shared by file-tag and tag-opt */
   .tag-core   { color: #5dade2; border-color: rgba(46,134,193,0.3); background: var(--blue-dim); }
   .tag-event  { color: var(--accent-bright); border-color: var(--accent-dim); background: var(--accent-glow); }
-  .tag-custom { color: #a080d0; border-color: rgba(130,100,180,0.35); background: rgba(130,100,180,0.1); }
+  .tag-custom { color: var(--purple); border-color: rgba(130,100,180,0.35); background: var(--purple-dim); }
   .tag-none   { color: var(--text-3); border-color: var(--border); }
 
   /* ── Entry pane ── */
@@ -797,25 +746,6 @@
     min-width: 0;
   }
 
-  .entry-empty {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 10px;
-    color: var(--text-3);
-  }
-  .entry-empty svg { width: 32px; height: 32px; opacity: 0.3; }
-  .entry-empty-label {
-    font-family: var(--font-head);
-    font-size: 12px;
-    font-weight: 600;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-    color: var(--text-2);
-  }
-  .entry-empty-sub { font-size: 11px; color: var(--text-3); }
 
   .entry-head {
     display: flex;
@@ -846,38 +776,6 @@
     align-items: center;
     gap: 8px;
     flex-shrink: 0;
-  }
-
-  .dirty-indicator {
-    display: flex;
-    align-items: center;
-    gap: 5px;
-    font-family: var(--font-head);
-    font-size: 10px;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-    color: var(--accent-bright);
-  }
-
-  .dirty-dot {
-    width: 5px;
-    height: 5px;
-    border-radius: 50%;
-    background: var(--accent-bright);
-    animation: dirty-pulse 2s ease-in-out infinite;
-  }
-
-  @keyframes dirty-pulse {
-    0%, 100% { opacity: 1; }
-    50%       { opacity: 0.3; }
-  }
-
-  .foot-error { font-size: 11px; color: #e74c3c; }
-  .foot-ok { font-size: 11px; color: var(--green-bright); font-family: var(--font-head); letter-spacing: 0.08em; }
-
-  .btn-pulse {
-    border-color: var(--accent);
-    background: rgba(62, 194, 199, 0.2);
   }
 
   /* Toolbar */
@@ -947,7 +845,7 @@
     text-transform: uppercase;
     color: var(--text-3);
   }
-  .entry-loading.error { color: #e74c3c; text-transform: none; font-family: var(--font-body); }
+  .entry-loading.error { color: var(--text-error); text-transform: none; font-family: var(--font-body); }
 
   /* Entry table */
   .entry-table-wrap {
@@ -1055,7 +953,7 @@
     cursor: pointer;
     transition: all 0.1s;
   }
-  .del-btn:hover { border-color: rgba(192,57,43,0.4); color: #e74c3c; background: var(--red-dim); }
+  .del-btn:hover { border-color: rgba(192,57,43,0.4); color: var(--text-error); background: var(--red-dim); }
   .del-btn svg { width: 10px; height: 10px; }
 
   /* Add entry row */

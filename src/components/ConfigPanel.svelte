@@ -2,6 +2,7 @@
   import { onMount } from 'svelte'
   import { invoke } from '@tauri-apps/api/core'
   import { appConfig, serverRunning, setShutdownConfig, type ShutdownConfig } from '../lib/store'
+  import PanelSidebar from './PanelSidebar.svelte'
 
   export let embedded = false
   export let onBack: (() => void) | null = null
@@ -284,26 +285,22 @@
 <div class="config-panel">
 
   <!-- Left nav -->
-  <nav class="config-nav">
-    {#if embedded && onBack}
-      <button class="config-nav-back" on:click={onBack}>
-        <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" style="width:12px;height:12px;">
-          <line x1="10" y1="7" x2="4" y2="7"/>
-          <polyline points="7,3 3,7 7,11"/>
-        </svg>
-        Back to Console
-      </button>
-    {/if}
-    {#each schema as section}
-      <button
-        class="config-nav-item"
-        class:active={activeSection === section.id}
-        on:click={() => activeSection = section.id}
-      >
-        {section.label}
-      </button>
-    {/each}
-  </nav>
+  <PanelSidebar width="var(--sidebar-narrow)">
+    <svelte:fragment slot="header">
+      <div class="section-title">Config</div>
+    </svelte:fragment>
+    <div class="config-nav-list">
+      {#each schema as section}
+        <button
+          class="config-nav-item"
+          class:active={activeSection === section.id}
+          on:click={() => activeSection = section.id}
+        >
+          {section.label}
+        </button>
+      {/each}
+    </div>
+  </PanelSidebar>
 
   <!-- Main content -->
   <div class="config-main">
@@ -384,7 +381,6 @@
 
         <div class="config-section-head">
           <div class="section-title">{activeSchema.label}</div>
-          <button class="btn btn-sm btn-outline" on:click={resetSection}>Reset Section</button>
         </div>
 
         <div class="config-body">
@@ -480,18 +476,15 @@
       </div>
 
       <!-- Footer -->
-      <div class="config-foot">
+      <div class="panel-footer">
         {#if dirty}
-          <span class="foot-dirty">
-            <span class="foot-dirty-dot"></span>
-            Unsaved changes
-          </span>
+          <span class="dirty-badge">Unsaved changes</span>
         {/if}
         {#if saveError}
-          <span class="foot-error">{saveError}</span>
+          <span class="feedback-error">{saveError}</span>
         {/if}
         {#if saveSuccess}
-          <span class="foot-ok">Saved</span>
+          <span class="feedback-ok">Saved</span>
         {/if}
         <button class="btn btn-sm btn-outline" style="margin-left:auto;" on:click={resetSection} disabled={!loaded}>Reset to Defaults</button>
         <button class="btn btn-sm btn-accent" class:btn-pulse={dirty} on:click={save} disabled={!loaded}>Save</button>
@@ -509,56 +502,29 @@
     min-height: 0;
   }
 
-  /* -- Nav sidebar -- */
-  .config-nav {
-    width: 180px;
-    border-right: 1px solid var(--border);
-    padding: 10px 6px;
-    overflow-y: auto;
-    background: rgba(8, 9, 12, 0.3);
-    flex-shrink: 0;
+  .config-nav-list {
+    padding: 6px;
   }
 
   .config-nav-item {
     display: block;
     width: 100%;
     text-align: left;
-    padding: 7px 12px;
+    padding: 10px 12px;
     font-family: var(--font-head);
-    font-size: 11px;
-    font-weight: 500;
-    letter-spacing: 0.06em;
-    color: var(--text-2);
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-1);
     background: none;
     border: 1px solid transparent;
     cursor: pointer;
     border-radius: var(--radius-sm);
     transition: all 0.12s;
+    margin-bottom: 2px;
   }
-  .config-nav-item:hover { color: var(--text-1); background: var(--bg-3); border-color: var(--border-mid); }
+  .config-nav-item:hover { color: var(--text-0); background: var(--bg-3); border-color: var(--border-mid); }
   .config-nav-item.active { color: var(--accent-bright); background: var(--accent-glow); border-color: var(--accent-dim); }
 
-  .config-nav-back {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    width: 100%;
-    text-align: left;
-    padding: 9px 12px;
-    margin-bottom: 6px;
-    font-family: var(--font-head);
-    font-size: 10px;
-    font-weight: 600;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-    color: var(--accent-bright);
-    background: none;
-    border: none;
-    border-bottom: 1px solid var(--border);
-    cursor: pointer;
-    transition: all 0.12s;
-  }
-  .config-nav-back:hover { color: var(--text-0); background: var(--bg-3); }
 
   /* -- Main area -- */
   .config-main {
@@ -592,18 +558,6 @@
     padding: 16px 20px;
   }
 
-  .subsection-title {
-    font-family: var(--font-head);
-    font-size: 11px;
-    font-weight: 600;
-    letter-spacing: 0.14em;
-    text-transform: uppercase;
-    color: var(--accent);
-    padding: 12px 0 8px;
-    border-bottom: 1px solid var(--border);
-    margin-bottom: 14px;
-  }
-  .subsection-title:first-child { padding-top: 0; }
 
   .config-grid {
     display: grid;
@@ -747,63 +701,22 @@
 
   .notice-error {
     font-size: 12px;
-    color: #e74c3c;
+    color: var(--text-error);
   }
 
   .running-warn {
     padding: 8px 20px;
-    background: rgba(200, 146, 10, 0.08);
+    background: var(--amber-dim);
     border-bottom: 1px solid rgba(200, 146, 10, 0.2);
     font-size: 12px;
-    color: #c89020;
+    color: var(--amber);
     font-family: var(--font-head);
     letter-spacing: 0.06em;
     flex-shrink: 0;
   }
 
   /* -- Footer -- */
-  .config-foot {
-    padding: 12px 20px;
-    border-top: 1px solid var(--border);
-    background: rgba(8, 9, 12, 0.3);
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    flex-shrink: 0;
-  }
 
-  .foot-error { font-size: 11px; color: #e74c3c; }
-  .foot-ok { font-size: 11px; color: var(--green-bright); font-family: var(--font-head); letter-spacing: 0.08em; }
-
-  .foot-dirty {
-    display: flex;
-    align-items: center;
-    gap: 7px;
-    font-family: var(--font-head);
-    font-size: 10px;
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
-    color: var(--accent-bright);
-  }
-
-  .foot-dirty-dot {
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-    background: var(--accent-bright);
-    flex-shrink: 0;
-    animation: dirty-pulse 2s ease-in-out infinite;
-  }
-
-  @keyframes dirty-pulse {
-    0%, 100% { opacity: 1; }
-    50%       { opacity: 0.35; }
-  }
-
-  .btn-pulse {
-    border-color: var(--accent);
-    background: rgba(62, 194, 199, 0.2);
-  }
 
   .manifold-note {
     font-size: 11px;
@@ -822,7 +735,7 @@
   /* -- Tooltip -- */
   .tooltip {
     position: fixed;
-    z-index: 200;
+    z-index: var(--z-tooltip);
     background: var(--bg-3);
     border: 1px solid var(--border-lit);
     border-radius: var(--radius-sm);

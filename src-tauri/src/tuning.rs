@@ -128,8 +128,13 @@ pub fn read_tuning_file(
         return Err(format!("File not found: {canonical_name}"));
     };
 
-    let contents = std::fs::read_to_string(&path)
-        .map_err(|e| format!("Cannot read {canonical_name}: {e}"))?;
+    let mut contents = std::fs::read_to_string(&path)
+    .map_err(|e| format!("Cannot read {canonical_name}: {e}"))?;
+
+    // Strip UTF-8 BOM if present
+    if contents.starts_with('\u{FEFF}') {
+        contents = contents.trim_start_matches('\u{FEFF}').to_string();
+    }
 
     let raw: Vec<RawEntryIn> = serde_json::from_str(&contents)
         .map_err(|e| format!("JSON parse error in {canonical_name}: {e}"))?;

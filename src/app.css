@@ -56,6 +56,31 @@
   --radius-sm:  3px;
   --radius-md:  6px;
 
+  /* Sidebar widths */
+  --sidebar-narrow: 200px;
+  --sidebar-wide:   280px;
+
+  /* Semantic text colours */
+  --text-error:   var(--red);
+  --text-success: var(--green-bright);
+  --text-warning: #e6b820;
+
+  /* Amber (countdown, warnings) */
+  --amber:        #d4a017;
+  --amber-bright: #e6b820;
+  --amber-dim:    rgba(200, 146, 10, 0.12);
+
+  /* Purple (debug log, custom tags) */
+  --purple:       #a080d0;
+  --purple-dim:   var(--purple-dim);
+
+  /* Z-index scale */
+  --z-panel:    1;
+  --z-dropdown: 10;
+  --z-tooltip:  100;
+  --z-modal:    200;
+  --z-titlebar: 300;
+
   /* Panel background gradient */
   --panel-grad-top: rgba(62, 167, 199, 0.07);
   --panel-grad-mid: 40%;
@@ -137,7 +162,7 @@ html, body {
   background: var(--accent-glow);
 }
 .btn-accent:hover:not(:disabled) {
-  border-color: var(--accent);
+  border-color: var(--accent-dim);
   background: var(--accent-glow-strong);
 }
 
@@ -153,7 +178,7 @@ html, body {
 
 .btn-red {
   border-color: rgba(192, 57, 43, 0.3);
-  color: #e74c3c;
+  color: var(--text-error);
   background: var(--red-dim);
 }
 .btn-red:hover:not(:disabled) {
@@ -195,7 +220,7 @@ html, body {
 }
 .btn-icon:hover {
   border-color: var(--accent-dim);
-  color: var(--accent);
+  color: var(--accent-dim);
   background: var(--accent-glow);
 }
 .btn-icon svg { width: 14px; height: 14px; }
@@ -309,6 +334,18 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 ::-webkit-scrollbar { width: 5px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--border-lit); border-radius: 2px; }
+
+/* ── Grid overlay (shared decorative background) ── */
+.grid-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.02;
+  background-image:
+    linear-gradient(var(--text-0) 1px, transparent 1px),
+    linear-gradient(90deg, var(--text-0) 1px, transparent 1px);
+  background-size: 40px 40px;
+}
 
 /* ── Panel background gradient ── */
 .panel-bg {
@@ -424,3 +461,142 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
   --console-text:     #b8c8d8;
   --console-text-dim: #4d6070;
 }
+/* ══════════════════════════════════════════════════════════════════════════════
+   Shared panel utilities
+   ══════════════════════════════════════════════════════════════════════════════ */
+
+/* ── Panel footer ── */
+.panel-footer {
+  padding: 12px 20px;
+  border-top: 1px solid var(--border);
+  background: rgba(8, 9, 12, 0.3);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+/* ── Dirty badge ── */
+.dirty-badge {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-head);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--accent-bright);
+}
+
+.dirty-badge::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent-bright);
+  flex-shrink: 0;
+  animation: pulse-fade 2s ease-in-out infinite;
+}
+
+@keyframes pulse-fade {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.3; }
+}
+
+/* ── Feedback text (save success / error) ── */
+.feedback-error {
+  font-size: 11px;
+  color: var(--text-error);
+}
+
+.feedback-ok {
+  font-size: 11px;
+  color: var(--text-success);
+  font-family: var(--font-head);
+  letter-spacing: 0.08em;
+}
+
+/* ── Save button pulse (when dirty) ── */
+.btn-pulse {
+  border-color: var(--accent) !important;
+  background: var(--accent-glow-strong) !important;
+}
+
+/* ── Empty state ── */
+.empty-state {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 24px;
+}
+
+.empty-state svg {
+  width: 36px;
+  height: 36px;
+  color: var(--text-3);
+  opacity: 0.35;
+}
+
+.empty-state-label {
+  font-family: var(--font-head);
+  font-size: 12px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-2);
+}
+
+.empty-state-sub {
+  font-size: 11px;
+  color: var(--text-3);
+  text-align: center;
+  max-width: 280px;
+  line-height: 1.5;
+}
+
+/* ── Subsection title ── */
+.subsection-title {
+  font-family: var(--font-head);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--accent-dim);
+  padding: 12px 0 8px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 14px;
+}
+.subsection-title:first-child { padding-top: 0; }
+
+/* ── Filter chip ── */
+.filter-chip {
+  font-family: var(--font-head);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 3px 9px;
+  border-radius: 2px;
+  border: 1px solid transparent;
+  cursor: pointer;
+  background: transparent;
+  color: var(--text-3);
+  transition: all 0.12s;
+  white-space: nowrap;
+}
+.filter-chip:hover:not(:disabled) { color: var(--text-1); border-color: var(--border-lit); }
+.filter-chip.active {
+  color: var(--text-0);
+  background: var(--bg-3);
+  border-color: var(--border-lit);
+}
+
+/* Colour variants */
+.filter-chip.chip-accent.active  { color: var(--accent-bright); border-color: var(--accent-dim);              background: var(--accent-glow); }
+.filter-chip.chip-blue.active    { color: var(--blue);              border-color: rgba(46,134,193,0.4);            background: var(--blue-dim); }
+.filter-chip.chip-purple.active  { color: var(--purple);        border-color: rgba(130,100,180,0.4);           background: var(--purple-dim); }
+.filter-chip.chip-green.active   { color: var(--green-bright);  border-color: rgba(39,174,96,0.4);             background: var(--green-dim); }
+.filter-chip.chip-amber.active   { color: var(--amber-bright);  border-color: rgba(200,146,10,0.4);            background: var(--amber-dim); }
+.filter-chip.chip-red.active     { color: var(--text-error);              border-color: rgba(192,57,43,0.4);             background: var(--red-dim); }

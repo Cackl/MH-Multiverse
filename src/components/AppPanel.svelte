@@ -1,6 +1,7 @@
 <script lang="ts">
   import { open } from '@tauri-apps/plugin-dialog'
   import { appConfig, setGameExe, setServerExe, activeTheme, setTheme, setLaunchOptions, type LaunchOptions } from '../lib/store'
+  import PanelSidebar from './PanelSidebar.svelte'
 
   type Section = 'client' | 'theme' | 'about'
   let activeSection: Section = 'client'
@@ -50,11 +51,10 @@
 
   <div class="app-layout">
 
-    <!-- Settings sidebar -->
-    <aside class="settings-sidebar">
-      <div class="settings-sidebar-head">
+    <PanelSidebar width="var(--sidebar-narrow)">
+      <svelte:fragment slot="header">
         <div class="section-title">Settings</div>
-      </div>
+      </svelte:fragment>
       <nav class="settings-nav">
         {#each navItems as item}
           <div
@@ -69,7 +69,7 @@
           </div>
         {/each}
       </nav>
-    </aside>
+    </PanelSidebar>
 
     <!-- Detail pane -->
     <div class="settings-detail">
@@ -320,41 +320,15 @@
     overflow: hidden;
   }
 
-  .grid-overlay {
-    position: absolute;
-    inset: 0;
-    pointer-events: none;
-    opacity: 0.02;
-    background-image:
-      linear-gradient(var(--text-0) 1px, transparent 1px),
-      linear-gradient(90deg, var(--text-0) 1px, transparent 1px);
-    background-size: 40px 40px;
-  }
+
 
   .app-layout {
     position: relative;
     z-index: 1;
     flex: 1;
     display: grid;
-    grid-template-columns: 280px 1fr;
+    grid-template-columns: var(--sidebar-narrow) 1fr;
     overflow: hidden;
-  }
-
-  /* -- Sidebar -- */
-  .settings-sidebar {
-    grid-row: 1 / -1;
-    border-right: 1px solid var(--border);
-    display: flex;
-    flex-direction: column;
-    background: var(--sidebar-bg);
-  }
-
-  .settings-sidebar-head {
-    display: flex;
-    align-items: center;
-    padding: 14px 16px 12px;
-    border-bottom: 1px solid var(--border);
-    min-height: 52px;
   }
 
   .settings-nav {
@@ -581,7 +555,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    color: var(--accent);
+    color: var(--accent-dim);
     flex-shrink: 0;
   }
 
