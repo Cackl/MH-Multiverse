@@ -1,7 +1,9 @@
 <script lang="ts">
   import { onMount } from 'svelte'
   import { invoke } from '@tauri-apps/api/core'
+  import { openPath } from '@tauri-apps/plugin-opener'
   import { appConfig, serverRunning, setTuningTags, setTuningFavourites } from '../lib/store'
+  import { categoryForSetting, KNOWN_CORE, KNOWN_EVENTS, CATEGORY_PREFIXES } from '../lib/tuningMeta'
   import PanelSidebar from './PanelSidebar.svelte'
   import TuningEditorModal from './TuningEditorModal.svelte'
 
@@ -22,27 +24,6 @@
     '':     'Untagged',
   }
 
-  const KNOWN_CORE = new Set([
-    'LiveTuningData.json',
-    'LiveTuningDataBugFixes.json',
-    'LiveTuningDataGlobal.json',
-    'LiveTuningDataPvP.json',
-  ])
-
-  const KNOWN_EVENTS = new Set([
-    'LiveTuningData_CosmicChaos.json',
-    'LiveTuningData_MidtownMadness.json',
-    'LiveTuningData_ArmorIncursion.json',
-    'LiveTuningData_OdinsBounty.json',
-    'LiveTuningData_Defenders&FriendsXP.json',
-    'LiveTuningData_AvengersXP.json',
-    'LiveTuningData_FantasticFourXP.json',
-    'LiveTuningData_Guardians&CosmicXP.json',
-    'LiveTuningData_Scoundrels&VillainsXP.json',
-    'LiveTuningData_XMenXP.json',
-    'LiveTuningData_PandemoniumProtocol.json',
-  ])
-
   // ── State ──────────────────────────────────────────────────────────────────
 
   let files: TuningFileInfo[] = []
@@ -50,6 +31,7 @@
   let scanning = false
 
   let editingFile: TuningFileInfo | null = null
+  let creatingNew = false
   let tagFilter: Tag | '' = ''
   let searchQuery = ''
   let editingTag: string | null = null
@@ -58,6 +40,7 @@
 
   $: tags = $appConfig.tuning_tags ?? {}
   $: favourites = $appConfig.tuning_favourites ?? []
+  $: existingNames = files.map(f => f.canonical_name)
 
   $: searchLower = searchQuery.toLowerCase()
 
@@ -161,6 +144,13 @@
     }
   }
 
+  async function handleCreated(canonicalName: string) {
+    creatingNew = false
+    await scan()
+    const created = files.find(f => f.canonical_name === canonicalName)
+    if (created) editingFile = created
+  }
+
   // ── Toggle file ────────────────────────────────────────────────────────────
 
   async function toggleFile(file: TuningFileInfo) {
@@ -188,6 +178,19 @@
     } catch {}
   }
 
+  let openDirError = ''
+
+  async function openLiveTuningDir() {
+    if (!$appConfig.server_exe) return
+    openDirError = ''
+    try {
+      const dir = await invoke<string>('get_live_tuning_dir', { serverExe: $appConfig.server_exe })
+      await openPath(dir)
+    } catch (e) {
+      openDirError = String(e)
+    }
+  }
+
   // ── Click outside (tag picker) ─────────────────────────────────────────────
 
   function handleClickOutside(e: MouseEvent) {
@@ -209,14 +212,35 @@
       <div class="section-title">Tuning Files</div>
       <button
         class="btn-icon"
+        on:click={() => { creatingNew = true; editingFile = null }}
+        title="Create new tuning file"
+        disabled={!$appConfig.server_exe}
+        style="margin-left:auto;"
+      >
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <line x1="12" y1="5" x2="12" y2="19"/>
+          <line x1="5" y1="12" x2="19" y2="12"/>
+        </svg>
+      </button>
+      <button
+        class="btn-icon"
         on:click={scan}
         title="Rescan LiveTuning directory"
         disabled={scanning}
-        style="margin-left:auto;"
       >
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <polyline points="23 4 23 10 17 10"/>
           <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+        </svg>
+      </button>
+      <button
+        class="btn-icon"
+        on:click={openLiveTuningDir}
+        title="Open LiveTuning folder"
+        disabled={!$appConfig.server_exe}
+      >
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
         </svg>
       </button>
     </svelte:fragment>
@@ -244,6 +268,8 @@
         <div class="file-notice">Scanning...</div>
       {:else if scanError}
         <div class="file-notice error">{scanError}</div>
+      {:else if openDirError}
+        <div class="file-notice error">{openDirError}</div>
       {:else if files.length === 0}
         <div class="file-notice">No LiveTuning files found.</div>
       {:else}
@@ -560,13 +586,26 @@
     </div>
   </div>
 
-  <!-- Editor modal -->
+  <!-- Editor modal (edit existing) -->
   {#if editingFile}
     <TuningEditorModal
       file={editingFile}
       serverExe={$appConfig.server_exe}
       serverRunning={$serverRunning}
+      existingNames={existingNames}
       onClose={() => editingFile = null}
+    />
+  {/if}
+
+  <!-- Create new file modal -->
+  {#if creatingNew}
+    <TuningEditorModal
+      file={null}
+      serverExe={$appConfig.server_exe}
+      serverRunning={$serverRunning}
+      existingNames={existingNames}
+      onClose={() => creatingNew = false}
+      onCreated={handleCreated}
     />
   {/if}
 

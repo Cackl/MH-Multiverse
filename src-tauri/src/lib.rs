@@ -80,6 +80,8 @@ pub fn run() {
             tuning::scan_tuning_files,
             tuning::read_tuning_file,
             tuning::write_tuning_file,
+            tuning::create_tuning_file,
+            tuning::get_live_tuning_dir,
             tuning::toggle_tuning_file,
         ])
         .run(tauri::generate_context!())

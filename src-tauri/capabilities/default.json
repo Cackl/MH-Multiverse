@@ -20,6 +20,10 @@
       "identifier": "opener:allow-open-url",
       "allow": [{ "url": "http://**" }, { "url": "https://**" }]
     },
+    {
+      "identifier": "opener:allow-open-path",
+      "allow": [{ "path": "**" }]
+    },
     "window-state:default"
   ]
 }

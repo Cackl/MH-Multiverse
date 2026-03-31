@@ -188,6 +188,60 @@ pub fn write_tuning_file(
 }
 
 #[tauri::command]
+pub fn get_live_tuning_dir(server_exe: String) -> Result<String, String> {
+    let dir = live_tuning_dir(&server_exe)?;
+    if !dir.exists() {
+        std::fs::create_dir_all(&dir)
+            .map_err(|e| format!("Cannot create LiveTuning directory: {e}"))?;
+    }
+    Ok(dir.to_string_lossy().to_string())
+}
+
+#[tauri::command]
+pub fn create_tuning_file(
+    server_exe: String,
+    canonical_name: String,
+    entries: Vec<TuningEntry>,
+) -> Result<(), String> {
+    // Validate name shape
+    if !canonical_name.starts_with("LiveTuningData") || !canonical_name.ends_with(".json") {
+        return Err(format!(
+            "Invalid filename '{canonical_name}': must start with 'LiveTuningData' and end with '.json'"
+        ));
+    }
+
+    let dir = live_tuning_dir(&server_exe)?;
+
+    // Ensure the LiveTuning directory exists
+    std::fs::create_dir_all(&dir)
+        .map_err(|e| format!("Cannot create LiveTuning directory: {e}"))?;
+
+    let active_path = dir.join(&canonical_name);
+    let inactive_path = dir.join(format!("OFF_{}", canonical_name));
+
+    if active_path.exists() || inactive_path.exists() {
+        return Err(format!("File already exists: {canonical_name}"));
+    }
+
+    let raw: Vec<RawEntryOut> = entries
+        .into_iter()
+        .map(|e| RawEntryOut {
+            prototype: e.prototype,
+            setting: e.setting,
+            value: e.value,
+        })
+        .collect();
+
+    let contents = serde_json::to_string_pretty(&raw)
+        .map_err(|e| format!("JSON serialisation error: {e}"))?;
+
+    std::fs::write(&active_path, contents)
+        .map_err(|e| format!("Cannot write {}: {e}", active_path.display()))?;
+
+    Ok(())
+}
+
+#[tauri::command]
 pub fn toggle_tuning_file(
     server_exe: String,
     canonical_name: String,

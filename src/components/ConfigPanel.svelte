@@ -287,7 +287,16 @@
   <!-- Left nav -->
   <PanelSidebar width="var(--sidebar-narrow)">
     <svelte:fragment slot="header">
-      <div class="section-title">Config</div>
+      {#if onBack}
+        <button class="btn-icon" on:click={onBack} title="Back" style="margin-right:4px;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="15 18 9 12 15 6"/>
+          </svg>
+        </button>
+      {/if}
+      {#if !embedded}
+        <div class="section-title">Config</div>
+      {/if}
     </svelte:fragment>
     <div class="config-nav-list">
       {#each schema as section}
