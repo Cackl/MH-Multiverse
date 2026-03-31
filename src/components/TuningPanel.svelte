@@ -100,7 +100,7 @@
   $: tags = $appConfig.tuning_tags
 
   $: filteredFiles = files.filter(f => {
-    const t = effectiveTag(f.canonical_name)
+    const t = tags[f.canonical_name] || (KNOWN_CORE.has(f.canonical_name) ? 'core' : KNOWN_EVENTS.has(f.canonical_name) ? 'event' : '')
     if (tagFilter !== '' && t !== tagFilter) return false
     return true
   })
@@ -128,7 +128,7 @@
   $: aggregates = (() => {
     const total = files.length
     const active = files.filter(f => f.enabled).length
-    const events = files.filter(f => effectiveTag(f.canonical_name) === 'event')
+    const events = files.filter(f => (tags[f.canonical_name] || (KNOWN_CORE.has(f.canonical_name) ? 'core' : KNOWN_EVENTS.has(f.canonical_name) ? 'event' : '')) === 'event')
     const activeEvents = events.filter(f => f.enabled).length
     return { total, active, events: events.length, activeEvents }
   })()
@@ -291,12 +291,18 @@
     entries = [...entries]
   }
 
+  function handleClickOutside(e: MouseEvent) {
+    if (editingTag && !(e.target as Element).closest('.head-tag-picker, .head-tag-add')) {
+      editingTag = null
+    }
+  }
+
   onMount(() => {
     if ($appConfig.server_exe) scan()
   })
 </script>
 
-<div class="tuning-panel">
+<div class="tuning-panel" role="presentation" on:click={handleClickOutside}>
 
   <!-- Left: file list -->
   <PanelSidebar width="var(--sidebar-wide)">
@@ -348,54 +354,54 @@
       {:else}
         {#each knownFiles as file (file.canonical_name)}
           {@const tag = effectiveTag(file.canonical_name)}
-          <button
+          <div
             class="file-item"
             class:selected={selectedFile?.canonical_name === file.canonical_name}
+            role="button"
+            tabindex="0"
+            aria-label={file.canonical_name}
             on:click={() => selectFile(file)}
+            on:keydown={(e) => e.key === 'Enter' && selectFile(file)}
           >
             <div
               class="file-toggle"
               class:on={file.enabled}
               role="switch"
               aria-checked={file.enabled}
-              tabindex="-1"
+              tabindex="0"
               on:click={(e) => toggleFile(file, e)}
               on:keydown={(e) => e.key === 'Enter' && toggleFile(file, e)}
             ></div>
             <div class="file-info">
               <span class="file-name">{file.canonical_name.replace(/^LiveTuningData_?/, '').replace(/\.json$/, '') || 'LiveTuningData'}</span>
-              {#if editingTag === file.canonical_name}
-                <div class="tag-picker" on:click|stopPropagation>
-                  {#each (['core', 'event', 'custom', ''] as Tag[]) as t}
-                    <button class="tag-opt tag-{t || 'none'}" class:active={tag === t} on:click={() => setTag(file.canonical_name, t)}>
-                      {TAG_LABELS[t]}
-                    </button>
-                  {/each}
-                </div>
-              {:else}
-                <button class="file-tag tag-{tag || 'none'}" on:click|stopPropagation={() => editingTag = file.canonical_name}>
-                  {TAG_LABELS[tag]}
-                </button>
+              {#if tag}
+                <span class="file-tag tag-{tag}">{TAG_LABELS[tag]}</span>
               {/if}
             </div>
-          </button>
+          </div>
         {/each}
 
         {#if unknownFiles.length > 0}
           <div class="file-group-label">Unknown prefix</div>
           {#each unknownFiles as file (file.canonical_name)}
             {@const tag = effectiveTag(file.canonical_name)}
-            <button
+            <div
               class="file-item"
               class:selected={selectedFile?.canonical_name === file.canonical_name}
+              role="button"
+              tabindex="0"
+              aria-label={file.canonical_name}
               on:click={() => selectFile(file)}
+              on:keydown={(e) => e.key === 'Enter' && selectFile(file)}
             >
               <div class="file-toggle locked" title="Unknown prefix — cannot toggle"></div>
               <div class="file-info">
                 <span class="file-name">{file.canonical_name}</span>
-                <span class="file-tag tag-{tag || 'none'}">{TAG_LABELS[tag]}</span>
+                {#if tag}
+                  <span class="file-tag tag-{tag}">{TAG_LABELS[tag]}</span>
+                {/if}
               </div>
-            </button>
+            </div>
           {/each}
         {/if}
       {/if}
@@ -432,6 +438,28 @@
         <div class="entry-head-left">
           <div class="section-title">{selectedFile.canonical_name.replace(/^LiveTuningData_?/, '').replace(/\.json$/, '') || 'LiveTuningData'}</div>
           <span class="entry-filename">{selectedFile.canonical_name}</span>
+          <div class="entry-head-tags">
+            {#if editingTag === selectedFile.canonical_name}
+              <div class="head-tag-picker">
+                {#each (['core', 'event', 'custom', ''] as Tag[]) as t}
+                  <button class="tag-opt tag-{t || 'none'}" class:active={($appConfig.tuning_tags[selectedFile.canonical_name] || (KNOWN_CORE.has(selectedFile.canonical_name) ? 'core' : KNOWN_EVENTS.has(selectedFile.canonical_name) ? 'event' : '')) === t}
+                    on:click|stopPropagation={() => setTag(selectedFile!.canonical_name, t)}>
+                    {TAG_LABELS[t]}
+                  </button>
+                {/each}
+              </div>
+            {:else if $appConfig.tuning_tags[selectedFile.canonical_name] || KNOWN_CORE.has(selectedFile.canonical_name) || KNOWN_EVENTS.has(selectedFile.canonical_name)}
+              {@const ct = $appConfig.tuning_tags[selectedFile.canonical_name] || (KNOWN_CORE.has(selectedFile.canonical_name) ? 'core' : 'event')}
+              <span class="head-tag tag-{ct}">{TAG_LABELS[ct as Tag]}
+                <button class="head-tag-remove" aria-label="Remove tag" on:click|stopPropagation={() => setTag(selectedFile!.canonical_name, '')}>
+                  <svg viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.5"><line x1="2" y1="2" x2="8" y2="8"/><line x1="8" y1="2" x2="2" y2="8"/></svg>
+                </button>
+              </span>
+              <button class="file-tag-add" on:click|stopPropagation={() => editingTag = selectedFile!.canonical_name}>Change</button>
+            {:else}
+              <button class="file-tag-add" on:click|stopPropagation={() => editingTag = selectedFile!.canonical_name}>+ Tag</button>
+            {/if}
+          </div>
         </div>
         <div class="entry-head-right">
           <button
@@ -597,7 +625,7 @@
   .file-list {
     flex: 1;
     overflow-y: auto;
-    padding: 6px 0;
+    padding: 6px;
   }
 
   .file-notice {
@@ -628,14 +656,14 @@
     padding: 7px 10px;
     width: 100%;
     background: none;
-    border: none;
-    border-left: 2px solid transparent;
+    border: 1px solid transparent;
+    border-radius: var(--radius-sm);
     cursor: pointer;
-    text-align: left;
-    transition: background 0.1s, border-color 0.1s;
+    transition: all 0.12s;
+    margin-bottom: 2px;
   }
-  .file-item:hover { background: var(--bg-2); }
-  .file-item.selected { background: var(--accent-glow); border-left-color: var(--accent-dim); }
+  .file-item:hover { background: var(--bg-3); border-color: var(--border-mid); }
+  .file-item.selected { background: var(--accent-glow); border-color: var(--accent-dim); }
 
   .file-toggle {
     width: 28px;
@@ -691,7 +719,7 @@
     text-overflow: ellipsis;
     max-width: 140px;
   }
-  .file-item.selected .file-name { color: var(--text-0); }
+  .file-item.selected .file-name { color: var(--accent-bright); }
 
   .file-tag {
     font-family: var(--font-head);
@@ -702,18 +730,41 @@
     padding: 1px 5px;
     border-radius: 2px;
     border: 1px solid transparent;
-    cursor: pointer;
     background: none;
-    transition: all 0.1s;
     align-self: flex-start;
   }
-  .file-tag:hover { opacity: 0.8; }
+
+  .file-tag-row {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex-wrap: wrap;
+    margin-top: 3px;
+  }
+
+  .file-tag-add {
+    font-family: var(--font-head);
+    font-size: 9px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    padding: 1px 5px;
+    border-radius: 2px;
+    border: 1px dashed var(--border-mid);
+    background: none;
+    color: var(--text-3);
+    cursor: pointer;
+    transition: all 0.12s;
+  }
+  .file-tag-add:hover { border-color: var(--accent-dim); color: var(--accent-bright); }
 
   .tag-picker {
     display: flex;
     gap: 3px;
     flex-wrap: wrap;
+    margin-top: 2px;
   }
+
   .tag-opt {
     font-family: var(--font-head);
     font-size: 9px;
@@ -731,8 +782,56 @@
   .tag-opt.active { color: var(--text-0); }
   .tag-opt:hover { border-color: var(--border-lit); color: var(--text-0); }
 
-  /* Tag colour classes shared by file-tag and tag-opt */
-  .tag-core   { color: #5dade2; border-color: rgba(46,134,193,0.3); background: var(--blue-dim); }
+  /* ── Entry head tag area ── */
+  .entry-head-tags {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    flex-shrink: 0;
+  }
+
+  .head-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-family: var(--font-head);
+    font-size: 9px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    padding: 2px 5px 2px 7px;
+    border-radius: 2px;
+    border: 1px solid transparent;
+  }
+
+  .head-tag-remove {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: none;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+    color: inherit;
+    opacity: 0.6;
+    transition: opacity 0.1s;
+  }
+  .head-tag-remove:hover { opacity: 1; }
+  .head-tag-remove svg { width: 8px; height: 8px; }
+
+  .head-tag-add {
+    width: 22px;
+    height: 22px;
+  }
+
+  .head-tag-picker {
+    display: flex;
+    gap: 4px;
+    align-items: center;
+  }
+
+  /* ── Tag colour classes ── */
+  .tag-core   { color: var(--blue); border-color: rgba(46,134,193,0.3); background: var(--blue-dim); }
   .tag-event  { color: var(--accent-bright); border-color: var(--accent-dim); background: var(--accent-glow); }
   .tag-custom { color: var(--purple); border-color: rgba(130,100,180,0.35); background: var(--purple-dim); }
   .tag-none   { color: var(--text-3); border-color: var(--border); }
@@ -749,8 +848,7 @@
 
   .entry-head {
     display: flex;
-    align-items: center;
-    justify-content: space-between;
+    align-items: flex-start;
     padding: 10px 16px;
     border-bottom: 1px solid var(--border);
     flex-shrink: 0;
@@ -776,6 +874,7 @@
     align-items: center;
     gap: 8px;
     flex-shrink: 0;
+    margin-left: auto;
   }
 
   /* Toolbar */
