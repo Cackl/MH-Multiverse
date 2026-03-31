@@ -88,6 +88,7 @@ export interface AppConfig {
   launch_options: LaunchOptions
   shutdown: ShutdownConfig
   tuning_tags: Record<string, string>
+  tuning_favourites: string[]
 }
 
 const defaultLaunchOptions: LaunchOptions = {
@@ -117,6 +118,7 @@ export const appConfig = writable<AppConfig>({
   launch_options: defaultLaunchOptions,
   shutdown: defaultShutdownConfig,
   tuning_tags: {},
+  tuning_favourites: [],
 })
 
 export const activeTheme = writable<string>('')
@@ -196,4 +198,9 @@ export async function setShutdownConfig(shutdown: ShutdownConfig): Promise<void>
 export async function setTuningTags(tags: Record<string, string>): Promise<void> {
   appConfig.update(c => ({ ...c, tuning_tags: tags }))
   await invoke('set_tuning_tags', { tags })
+}
+
+export async function setTuningFavourites(favourites: string[]): Promise<void> {
+  appConfig.update(c => ({ ...c, tuning_favourites: favourites }))
+  await invoke('set_tuning_favourites', { favourites })
 }

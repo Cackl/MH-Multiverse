@@ -72,7 +72,10 @@
 
   /* Purple (debug log, custom tags) */
   --purple:       #a080d0;
-  --purple-dim:   var(--purple-dim);
+  --purple-dim:   rgba(160, 128, 208, 0.12);
+
+  /* Favourite highlight */
+  --colour-favourite: var(--amber-bright);
 
   /* Z-index scale */
   --z-panel:    1;

@@ -64,6 +64,7 @@ pub fn run() {
             config::set_launch_options,
             config::set_shutdown_config,
             config::set_tuning_tags,
+            config::set_tuning_favourites,
             launcher::launch_game,
             launcher::game_is_running,
             server::start_server,

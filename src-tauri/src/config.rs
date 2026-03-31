@@ -104,6 +104,9 @@ pub struct AppConfig {
     /// Tag assignments keyed by canonical filename, e.g. "LiveTuningData_CosmicChaos.json" -> "event"
     #[serde(default)]
     pub tuning_tags: HashMap<String, String>,
+    /// Canonical filenames pinned to the top of the Tuning Files grid
+    #[serde(default)]
+    pub tuning_favourites: Vec<String>,
 }
 
 impl Default for AppConfig {
@@ -117,6 +120,7 @@ impl Default for AppConfig {
             launch_options: LaunchOptions::default(),
             shutdown: ShutdownConfig::default(),
             tuning_tags: HashMap::new(),
+            tuning_favourites: Vec::new(),
         }
     }
 }
@@ -324,5 +328,12 @@ pub fn set_shutdown_config(app: tauri::AppHandle, shutdown: ShutdownConfig) -> R
 pub fn set_tuning_tags(app: tauri::AppHandle, tags: HashMap<String, String>) -> Result<(), String> {
     let mut config = load_config(&app);
     config.tuning_tags = tags;
+    save_config(&app, &config)
+}
+
+#[tauri::command]
+pub fn set_tuning_favourites(app: tauri::AppHandle, favourites: Vec<String>) -> Result<(), String> {
+    let mut config = load_config(&app);
+    config.tuning_favourites = favourites;
     save_config(&app, &config)
 }
