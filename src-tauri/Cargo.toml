@@ -27,9 +27,13 @@ aes-gcm = "0.10"
 base64 = "0.22"
 keyring = "2"
 tauri-plugin-dialog = "2.6.0"
-tokio = { version = "1", features = ["process", "io-util", "rt"] }
+tokio = { version = "1", features = ["process", "io-util", "rt", "fs"] }
 windows = { version = "0.61", features = ["Win32_System_JobObjects", "Win32_Foundation", "Win32_Security"] }
 tauri-plugin-opener = "2.5.3"
 tauri-plugin-window-state = "2"
 sysinfo = "0.36.1"
 tauri-plugin-http = "2"
+reqwest = { version = "0.12", features = ["stream", "rustls-tls"], default-features = false }
+zip = "2"
+chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
+futures-util = "0.3"

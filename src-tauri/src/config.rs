@@ -19,6 +19,35 @@ fn default_shutdown_broadcast() -> String {
     "Server is shutting down in {minutes} minute(s).".to_string()
 }
 
+fn default_backup_targets() -> Vec<String> {
+    vec![
+        "Config.ini".to_string(),
+        "ConfigOverride.ini".to_string(),
+        "Data/Game/LiveTuning".to_string(),
+        "Data/Account.db".to_string(),
+    ]
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UpdateBackupOptions {
+    #[serde(default = "default_true")]
+    pub config_ini: bool,
+    #[serde(default = "default_true")]
+    pub live_tuning: bool,
+    #[serde(default = "default_true")]
+    pub billing_store: bool,
+}
+
+impl Default for UpdateBackupOptions {
+    fn default() -> Self {
+        Self {
+            config_ini: true,
+            live_tuning: true,
+            billing_store: true,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ShutdownConfig {
     #[serde(default)]
@@ -107,6 +136,12 @@ pub struct AppConfig {
     /// Canonical filenames pinned to the top of the Tuning Files grid
     #[serde(default)]
     pub tuning_favourites: Vec<String>,
+    /// Backup target paths selected in the Ops panel
+    #[serde(default = "default_backup_targets")]
+    pub backup_targets: Vec<String>,
+    /// Auto-backup options for the nightly updater
+    #[serde(default)]
+    pub update_backup_options: UpdateBackupOptions,
 }
 
 impl Default for AppConfig {
@@ -121,6 +156,8 @@ impl Default for AppConfig {
             shutdown: ShutdownConfig::default(),
             tuning_tags: HashMap::new(),
             tuning_favourites: Vec::new(),
+            backup_targets: default_backup_targets(),
+            update_backup_options: UpdateBackupOptions::default(),
         }
     }
 }
@@ -335,5 +372,19 @@ pub fn set_tuning_tags(app: tauri::AppHandle, tags: HashMap<String, String>) -> 
 pub fn set_tuning_favourites(app: tauri::AppHandle, favourites: Vec<String>) -> Result<(), String> {
     let mut config = load_config(&app);
     config.tuning_favourites = favourites;
+    save_config(&app, &config)
+}
+
+#[tauri::command]
+pub fn set_backup_targets(app: tauri::AppHandle, targets: Vec<String>) -> Result<(), String> {
+    let mut config = load_config(&app);
+    config.backup_targets = targets;
+    save_config(&app, &config)
+}
+
+#[tauri::command]
+pub fn set_update_backup_options(app: tauri::AppHandle, options: UpdateBackupOptions) -> Result<(), String> {
+    let mut config = load_config(&app);
+    config.update_backup_options = options;
     save_config(&app, &config)
 }

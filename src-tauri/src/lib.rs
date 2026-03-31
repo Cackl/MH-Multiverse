@@ -3,6 +3,7 @@ mod ini;
 mod launcher;
 mod server;
 mod tuning;
+mod updater;
 
 pub use config::*;
 
@@ -65,6 +66,8 @@ pub fn run() {
             config::set_shutdown_config,
             config::set_tuning_tags,
             config::set_tuning_favourites,
+            config::set_backup_targets,
+            config::set_update_backup_options,
             launcher::launch_game,
             launcher::game_is_running,
             server::start_server,
@@ -83,6 +86,12 @@ pub fn run() {
             tuning::create_tuning_file,
             tuning::get_live_tuning_dir,
             tuning::toggle_tuning_file,
+            updater::check_update_available,
+            updater::run_update,
+            updater::create_backup,
+            updater::list_backups,
+            updater::restore_backup,
+            updater::delete_backup,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
