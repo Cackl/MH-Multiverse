@@ -1,4 +1,4 @@
-use chrono::{Duration, Timelike, Utc};
+use chrono::{Duration, Local, Timelike, Utc};
 use futures_util::StreamExt;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
@@ -169,7 +169,7 @@ fn create_backup_inner(
     targets: Vec<String>,
     label: &str,
 ) -> Result<BackupManifest, String> {
-    let now = Utc::now();
+    let now = Local::now();
     let id = now.format("%Y%m%d-%H%M%S").to_string();
     let created_at = now.to_rfc3339();
 
@@ -516,4 +516,16 @@ pub fn delete_backup(server_exe: String, backup_id: String) -> Result<(), String
         .map_err(|e| format!("Cannot delete backup: {e}"))?;
 
     Ok(())
+}
+
+#[tauri::command]
+pub fn get_backups_dir(server_exe: String) -> Result<String, String> {
+    let server_dir = server_dir_from_exe(&server_exe)?;
+    let backups_dir = server_dir.join("Backups");
+    std::fs::create_dir_all(&backups_dir)
+        .map_err(|e| format!("Cannot create Backups directory: {e}"))?;
+    backups_dir
+        .to_str()
+        .ok_or_else(|| "Backups path contains invalid UTF-8".to_string())
+        .map(|s| s.to_string())
 }

@@ -240,6 +240,20 @@
     confirmingDelete = null
   }
 
+  let openDirError = ''
+
+  async function openBackupsDir() {
+    if (!hasServerExe) return
+    openDirError = ''
+    try {
+      const dir = await invoke<string>('get_backups_dir', { serverExe: $appConfig.server_exe })
+      const { openPath } = await import('@tauri-apps/plugin-opener')
+      await openPath(dir)
+    } catch (e) {
+      openDirError = String(e)
+    }
+  }
+
   // ── Lifecycle ──────────────────────────────────────────────────────────────
 
   onMount(async () => {
@@ -258,36 +272,36 @@
 </script>
 
 <div class="ops-panel">
+  <div class="panel-bg"></div>
+  <div class="grid-overlay"></div>
+  <div class="ops-layout">
   <PanelSidebar width="var(--sidebar-narrow)">
     <svelte:fragment slot="header">
       <div class="section-title">Ops</div>
     </svelte:fragment>
 
-    <div class="ops-nav-list">
-      <button
-        class="ops-nav-item"
-        class:active={section === 'update'}
+    <nav class="ops-nav-list">
+      <div
+        class="nav-item"
+        class:selected={section === 'update'}
         on:click={() => section = 'update'}
+        role="button"
+        tabindex="0"
+        on:keydown={(e) => e.key === 'Enter' && (section = 'update')}
       >
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <polyline points="23 4 23 10 17 10"/>
-          <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
-        </svg>
         Update
-      </button>
-      <button
-        class="ops-nav-item"
-        class:active={section === 'backups'}
+      </div>
+      <div
+        class="nav-item"
+        class:selected={section === 'backups'}
         on:click={() => section = 'backups'}
+        role="button"
+        tabindex="0"
+        on:keydown={(e) => e.key === 'Enter' && (section = 'backups')}
       >
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <ellipse cx="12" cy="5" rx="9" ry="3"/>
-          <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/>
-          <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/>
-        </svg>
         Backups
-      </button>
-    </div>
+      </div>
+    </nav>
   </PanelSidebar>
 
   <div class="ops-main">
@@ -392,7 +406,7 @@
 
         <!-- Update button -->
         <button
-          class="btn btn-accent btn-lg update-btn"
+          class="btn btn-accent btn-sm update-btn"
           on:click={runUpdate}
           disabled={updating || $serverRunning || !updateInfo?.available}
         >
@@ -429,52 +443,27 @@
       <!-- ── Backups section ── -->
       <div class="ops-section-head">
         <div class="section-title">Backups</div>
+        <button
+          class="btn btn-sm btn-outline"
+          on:click={createBackup}
+          disabled={creatingBackup || selectedTargets.size === 0}
+        >
+          {creatingBackup ? 'Creating...' : 'Create Backup'}
+        </button>
       </div>
-      <div class="ops-body">
+      <div class="backups-columns">
 
-        <!-- Target checklist -->
-        <div class="subsection-title">Targets</div>
-        <div class="target-list">
-          {#each TOP_TARGETS as target}
-            <label class="target-row">
-              <input
-                type="checkbox"
-                checked={selectedTargets.has(target.id)}
-                on:change={() => toggleTarget(target.id)}
-                disabled={creatingBackup}
-              >
-              <div class="target-info">
-                <span class="target-label">{target.label}</span>
-                <span class="target-desc">{target.description}</span>
-              </div>
-            </label>
-          {/each}
-
-          <div class="target-divider"></div>
-
-          <!-- Full Data — parent toggle -->
-          <label class="target-row">
-            <input
-              type="checkbox"
-              checked={fullDataSelected}
-              on:change={() => toggleTarget('Data')}
-              disabled={creatingBackup}
-            >
-            <div class="target-info">
-              <span class="target-label">{FULL_DATA_TARGET.label}</span>
-              <span class="target-desc">{FULL_DATA_TARGET.description}</span>
-            </div>
-          </label>
-
-          <!-- Data sub-targets — indented, disabled when full data is selected -->
-          <div class="target-children" class:muted={fullDataSelected}>
-            {#each DATA_TARGETS as target}
-              <label class="target-row child" class:disabled={fullDataSelected}>
+        <!-- Left: targets + create -->
+        <div class="backups-left">
+          <div class="subsection-title">Targets</div>
+          <div class="target-list">
+            {#each TOP_TARGETS as target}
+              <label class="target-row">
                 <input
                   type="checkbox"
-                  checked={fullDataSelected || selectedTargets.has(target.id)}
+                  checked={selectedTargets.has(target.id)}
                   on:change={() => toggleTarget(target.id)}
-                  disabled={creatingBackup || fullDataSelected}
+                  disabled={creatingBackup}
                 >
                 <div class="target-info">
                   <span class="target-label">{target.label}</span>
@@ -482,79 +471,131 @@
                 </div>
               </label>
             {/each}
-          </div>
-        </div>
 
-        <div class="backup-actions">
-          {#if backupSuccess}
-            <span class="feedback-ok">{backupSuccess}</span>
-          {/if}
-          {#if backupError}
-            <span class="feedback-error">{backupError}</span>
-          {/if}
-          <button
-            class="btn btn-accent btn-sm"
-            style="margin-left:auto;"
-            on:click={createBackup}
-            disabled={creatingBackup || selectedTargets.size === 0}
-          >
-            {creatingBackup ? 'Creating...' : 'Create Backup'}
-          </button>
-        </div>
+            <div class="target-divider"></div>
 
-        <!-- Backup history -->
-        <div class="subsection-title">History</div>
-
-        {#if loadingBackups}
-          <div class="backup-notice">Loading...</div>
-        {:else if backups.length === 0}
-          <div class="backup-notice">No backups yet.</div>
-        {:else}
-          <div class="backup-list">
-            {#each backups as backup (backup.id)}
-              <div class="backup-row" class:confirming={confirmingRestore === backup.id || confirmingDelete === backup.id}>
-                <div class="backup-meta">
-                  <span class="backup-date">{formatDate(backup.created_at)}</span>
-                  <span class="backup-label-badge" class:pre-update={backup.label === 'pre-update'}>
-                    {backup.label === 'pre-update' ? 'Pre-update' : 'Manual'}
-                  </span>
-                  <span class="backup-size">{formatBytes(backup.size_bytes)}</span>
-                </div>
-                <div class="backup-targets-line">
-                  {backup.targets.map(targetLabel).join(', ') || 'No files'}
-                </div>
-
-                {#if confirmingRestore === backup.id}
-                  <div class="confirm-row">
-                    <span class="confirm-text">This will overwrite current files.</span>
-                    <button class="btn btn-sm btn-outline" on:click={cancelConfirm}>Cancel</button>
-                    <button class="btn btn-sm btn-accent" on:click={() => restoreBackup(backup.id)}>Confirm Restore</button>
-                  </div>
-                {:else if confirmingDelete === backup.id}
-                  <div class="confirm-row">
-                    <span class="confirm-text">Delete this backup permanently?</span>
-                    <button class="btn btn-sm btn-outline" on:click={cancelConfirm}>Cancel</button>
-                    <button class="btn btn-sm btn-red" on:click={() => deleteBackup(backup.id)}>Delete</button>
-                  </div>
-                {:else}
-                  <div class="backup-row-actions">
-                    <button class="btn btn-sm btn-outline" on:click={() => restoreBackup(backup.id)}>Restore</button>
-                    <button class="btn btn-sm btn-red" on:click={() => deleteBackup(backup.id)}>Delete</button>
-                  </div>
-                {/if}
+            <!-- Full Data — parent toggle -->
+            <label class="target-row">
+              <input
+                type="checkbox"
+                checked={fullDataSelected}
+                on:change={() => toggleTarget('Data')}
+                disabled={creatingBackup}
+              >
+              <div class="target-info">
+                <span class="target-label">{FULL_DATA_TARGET.label}</span>
+                <span class="target-desc">{FULL_DATA_TARGET.description}</span>
               </div>
-            {/each}
+            </label>
+
+            <!-- Data sub-targets — indented, disabled when full data is selected -->
+            <div class="target-children" class:muted={fullDataSelected}>
+              {#each DATA_TARGETS as target}
+                <label class="target-row child" class:disabled={fullDataSelected}>
+                  <input
+                    type="checkbox"
+                    checked={fullDataSelected || selectedTargets.has(target.id)}
+                    on:change={() => toggleTarget(target.id)}
+                    disabled={creatingBackup || fullDataSelected}
+                  >
+                  <div class="target-info">
+                    <span class="target-label">{target.label}</span>
+                    <span class="target-desc">{target.description}</span>
+                  </div>
+                </label>
+              {/each}
+            </div>
           </div>
-        {/if}
+        </div>
+
+        <!-- Right: history -->
+        <div class="backups-right">
+          <div class="backups-right-head">
+            <span class="subsection-title" style="margin:0; flex:1;">History</span>
+            {#if backupSuccess}
+              <span class="feedback-ok" style="font-size:11px;">{backupSuccess}</span>
+            {/if}
+            {#if backupError}
+              <span class="feedback-error" style="font-size:11px;">{backupError}</span>
+            {/if}
+            {#if openDirError}
+              <span class="inline-error" style="font-size:10px;">{openDirError}</span>
+            {/if}
+            <button
+              class="btn-icon"
+              on:click={openBackupsDir}
+              title="Open Backups folder"
+              disabled={!hasServerExe}
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+              </svg>
+            </button>
+          </div>
+
+          {#if loadingBackups}
+            <div class="backup-notice">Loading...</div>
+          {:else if backups.length === 0}
+            <div class="backup-notice">No backups yet.</div>
+          {:else}
+            <div class="backup-list">
+              {#each backups as backup (backup.id)}
+                <div class="backup-row" class:confirming={confirmingRestore === backup.id || confirmingDelete === backup.id}>
+                  <div class="backup-meta">
+                    <span class="backup-date">{formatDate(backup.created_at)}</span>
+                    <span class="backup-label-badge" class:pre-update={backup.label === 'pre-update'}>
+                      {backup.label === 'pre-update' ? 'Pre-update' : 'Manual'}
+                    </span>
+                    <span class="backup-size">{formatBytes(backup.size_bytes)}</span>
+                  </div>
+                  <div class="backup-targets-line">
+                    {backup.targets.map(targetLabel).join(', ') || 'No files'}
+                  </div>
+
+                  {#if confirmingRestore === backup.id}
+                    <div class="confirm-row">
+                      <span class="confirm-text">This will overwrite current files.</span>
+                      <button class="btn btn-sm btn-outline" on:click={cancelConfirm}>Cancel</button>
+                      <button class="btn btn-sm btn-accent" on:click={() => restoreBackup(backup.id)}>Confirm Restore</button>
+                    </div>
+                  {:else if confirmingDelete === backup.id}
+                    <div class="confirm-row">
+                      <span class="confirm-text">Delete this backup permanently?</span>
+                      <button class="btn btn-sm btn-outline" on:click={cancelConfirm}>Cancel</button>
+                      <button class="btn btn-sm btn-red" on:click={() => deleteBackup(backup.id)}>Delete</button>
+                    </div>
+                  {:else}
+                    <div class="backup-row-actions">
+                      <button class="btn btn-sm btn-outline" on:click={() => restoreBackup(backup.id)}>Restore</button>
+                      <button class="btn btn-sm btn-red" on:click={() => deleteBackup(backup.id)}>Delete</button>
+                    </div>
+                  {/if}
+                </div>
+              {/each}
+            </div>
+          {/if}
+        </div>
 
       </div>
     {/if}
 
-  </div>
+  </div><!-- ops-layout -->
+</div>
 </div>
 
 <style>
   .ops-panel {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    overflow: hidden;
+    min-height: 0;
+  }
+
+  .ops-layout {
+    position: relative;
+    z-index: 1;
     flex: 1;
     display: flex;
     overflow: hidden;
@@ -563,33 +604,33 @@
 
   /* ── Sidebar nav ── */
   .ops-nav-list {
+    flex: 1;
+    overflow-y: auto;
     padding: 6px;
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
   }
 
-  .ops-nav-item {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 8px 12px;
-    background: none;
+  .nav-item {
+    padding: 10px 12px;
     border: 1px solid transparent;
     border-radius: var(--radius-sm);
     cursor: pointer;
+    transition: all 0.12s;
+    margin-bottom: 2px;
     font-family: var(--font-head);
-    font-size: 11px;
+    font-size: 13px;
     font-weight: 600;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    color: var(--text-2);
-    transition: all 0.1s;
-    text-align: left;
+    color: var(--text-1);
   }
-  .ops-nav-item:hover { color: var(--text-0); background: var(--bg-3); border-color: var(--border-mid); }
-  .ops-nav-item.active { color: var(--accent-bright); background: var(--accent-glow); border-color: var(--accent-dim); }
-  .ops-nav-item svg { width: 14px; height: 14px; flex-shrink: 0; }
+  .nav-item:hover {
+    background: var(--bg-3);
+    border-color: var(--border-mid);
+    color: var(--text-0);
+  }
+  .nav-item.selected {
+    background: var(--accent-glow);
+    border-color: var(--accent-dim);
+    color: var(--accent-bright);
+  }
 
   /* ── Main area ── */
   .ops-main {
@@ -598,6 +639,7 @@
     flex-direction: column;
     overflow: hidden;
     min-width: 0;
+    background: var(--bg-1);
   }
 
   .ops-section-head {
@@ -619,6 +661,42 @@
     display: flex;
     flex-direction: column;
     gap: 16px;
+  }
+
+  /* ── Backups two-column layout ── */
+  .backups-columns {
+    flex: 1;
+    display: flex;
+    overflow: hidden;
+    min-height: 0;
+  }
+
+  .backups-left {
+    width: 260px;
+    flex-shrink: 0;
+    border-right: 1px solid var(--border);
+    overflow-y: auto;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .backups-right {
+    flex: 1;
+    overflow-y: auto;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    min-width: 0;
+  }
+
+  .backups-right-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
   }
 
   /* ── Info block (update status) ── */
@@ -727,7 +805,6 @@
   /* ── Update button ── */
   .update-btn {
     align-self: flex-start;
-    min-width: 160px;
   }
 
   /* ── Progress ── */

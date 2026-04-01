@@ -283,6 +283,9 @@
 {/if}
 
 <div class="config-panel">
+  <div class="panel-bg"></div>
+  <div class="grid-overlay"></div>
+  <div class="config-layout">
 
   <!-- Left nav -->
   <PanelSidebar width="var(--sidebar-narrow)">
@@ -501,12 +504,24 @@
 
     {/if}
   </div>
+  </div><!-- config-layout -->
 </div>
 
 <style>
   .config-panel {
     display: flex;
     flex: 1;
+    flex-direction: column;
+    position: relative;
+    overflow: hidden;
+    min-height: 0;
+  }
+
+  .config-layout {
+    position: relative;
+    z-index: 1;
+    flex: 1;
+    display: flex;
     overflow: hidden;
     min-height: 0;
   }
@@ -542,6 +557,7 @@
     flex-direction: column;
     overflow: hidden;
     min-height: 0;
+    background: var(--bg-1);
   }
 
   .config-content {

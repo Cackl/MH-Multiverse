@@ -205,6 +205,9 @@
 </script>
 
 <div class="tuning-panel" role="presentation" on:click={handleClickOutside}>
+  <div class="panel-bg"></div>
+  <div class="grid-overlay"></div>
+  <div class="tuning-layout">
 
   <!-- Left: sidebar -->
   <PanelSidebar width="var(--sidebar-wide)">
@@ -609,12 +612,24 @@
     />
   {/if}
 
+  </div><!-- tuning-layout -->
 </div>
 
 <style>
   .tuning-panel {
     display: flex;
     flex: 1;
+    flex-direction: column;
+    position: relative;
+    overflow: hidden;
+    min-height: 0;
+  }
+
+  .tuning-layout {
+    position: relative;
+    z-index: 1;
+    flex: 1;
+    display: flex;
     overflow: hidden;
     min-height: 0;
   }
@@ -768,6 +783,7 @@
     flex-direction: column;
     overflow: hidden;
     min-width: 0;
+    background: var(--bg-1);
   }
 
   .grid-header {
