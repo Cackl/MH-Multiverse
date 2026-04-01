@@ -1,3 +1,4 @@
+mod calligraphy;
 mod config;
 mod ini;
 mod launcher;
@@ -22,6 +23,7 @@ const WINDOW_STATE_FLAGS: StateFlags = StateFlags::from_bits_truncate(
 pub fn run() {
     tauri::Builder::default()
         .manage(ServerState(Arc::new(Mutex::new(ServerProcess::empty()))))
+        .manage(calligraphy::CatalogueState(Mutex::new(None)))
         .setup(|app| {
             app.handle().plugin(tauri_plugin_dialog::init())?;
             app.handle().plugin(tauri_plugin_opener::init())?;
@@ -93,6 +95,7 @@ pub fn run() {
             updater::restore_backup,
             updater::delete_backup,
             updater::get_backups_dir,
+            calligraphy::search_prototypes,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

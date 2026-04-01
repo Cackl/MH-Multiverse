@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte'
   import { invoke } from '@tauri-apps/api/core'
-  import { categoryForSetting, KNOWN_CORE, KNOWN_EVENTS, KNOWN_SETTINGS, type KnownSetting } from '../lib/tuningMeta'
+  import { categoryForSetting, KNOWN_CORE, KNOWN_EVENTS, KNOWN_SETTINGS, blueprintHintForSetting, type KnownSetting } from '../lib/tuningMeta'
 
   // ── Props ──────────────────────────────────────────────────────────────────
 
@@ -55,6 +55,14 @@
   let settingSuggestOpen = false
   let settingInputEl: HTMLInputElement
 
+  // Prototype search
+  let protoSuggestOpen = false
+  let protoSearchResults: { path: string; blueprint: string }[] = []
+  let protoSearching = false
+  let protoSearchError = ''
+  let protoDebounceTimer: ReturnType<typeof setTimeout> | null = null
+  let protoInputEl: HTMLInputElement
+
   // ── Derived ────────────────────────────────────────────────────────────────
 
   $: displayName = file
@@ -80,16 +88,21 @@
         return !s || e.value !== s.value
       })
 
-  $: prototypeSuggestions = [...new Set(
-    entries.map(e => e.prototype).filter(Boolean)
-  )].sort()
-
   $: filteredSettings = newSetting.trim()
     ? KNOWN_SETTINGS.filter(s =>
         s.setting.toLowerCase().includes(newSetting.toLowerCase()) ||
         s.category.toLowerCase().includes(newSetting.toLowerCase())
       )
     : KNOWN_SETTINGS
+
+  // Whether the currently typed setting is Global (no prototype required)
+  $: isGlobalSetting = newSetting.startsWith('eGTV_') ||
+    (KNOWN_SETTINGS.find(s => s.setting === newSetting)?.requiresPrototype === false)
+
+  $: if (isGlobalSetting) {
+    newPrototype = ''
+    protoSuggestOpen = false
+  }
 
   $: copyFromOptions = [
     ...[...KNOWN_CORE].filter(n => existingNames.includes(n)),
@@ -188,6 +201,44 @@
     try { await invoke('send_command', { cmd: '!server reloadlivetuning' }) } catch {}
   }
 
+  async function searchPrototypes(query: string) {
+    if (isGlobalSetting || query.length < 2) {
+      protoSuggestOpen = false
+      protoSearchResults = []
+      return
+    }
+    protoSearching = true
+    protoSearchError = ''
+    try {
+      const hint = blueprintHintForSetting(newSetting) ?? undefined
+      protoSearchResults = await invoke<{ path: string; blueprint: string }[]>(
+        'search_prototypes',
+        { serverExe: serverExe, query, blueprintHint: hint }
+      )
+      protoSuggestOpen = protoSearchResults.length > 0
+    } catch (e) {
+      protoSearchError = String(e)
+      protoSuggestOpen = false
+    } finally {
+      protoSearching = false
+    }
+  }
+
+  function onProtoInput() {
+    if (protoDebounceTimer) clearTimeout(protoDebounceTimer)
+    if (newPrototype.length < 2) {
+      protoSuggestOpen = false
+      return
+    }
+    protoDebounceTimer = setTimeout(() => searchPrototypes(newPrototype), 200)
+  }
+
+  function selectPrototype(path: string) {
+    newPrototype = path
+    protoSuggestOpen = false
+    protoInputEl?.focus()
+  }
+
   // ── Entry management ───────────────────────────────────────────────────────
 
   function addEntry() {
@@ -229,6 +280,7 @@
 
   function onKeydown(e: KeyboardEvent) {
     if (e.key === 'Escape') {
+      if (protoSuggestOpen) { protoSuggestOpen = false; return }
       if (settingSuggestOpen) { settingSuggestOpen = false; return }
       tryClose()
     }
@@ -237,6 +289,9 @@
   function onWindowClick(e: MouseEvent) {
     if (settingSuggestOpen && !(e.target as Element).closest('.setting-suggest-wrap')) {
       settingSuggestOpen = false
+    }
+    if (protoSuggestOpen && !(e.target as Element).closest('.proto-suggest-wrap')) {
+      protoSuggestOpen = false
     }
   }
 
@@ -428,21 +483,40 @@
 
     <!-- ── Add entry row ── -->
     <div class="add-entry-row">
-      <!-- Prototype: free text with datalist suggestions from current entries -->
-      <div class="add-field proto">
+      <!-- Prototype: searchable dropdown backed by Calligraphy.sip -->
+      <div class="add-field proto proto-suggest-wrap">
         <input
           class="add-input"
+          class:input-dimmed={isGlobalSetting}
           type="text"
-          list="proto-suggestions"
-          placeholder="Prototype (empty for Global)"
+          bind:this={protoInputEl}
           bind:value={newPrototype}
+          on:input={onProtoInput}
+          on:focus={() => { if (newPrototype.length >= 2 && !isGlobalSetting) searchPrototypes(newPrototype) }}
+          placeholder={isGlobalSetting ? 'Not required (Global setting)' : 'Prototype path — type to search'}
+          disabled={isGlobalSetting}
           autocomplete="off"
+          spellcheck="false"
         >
-        <datalist id="proto-suggestions">
-          {#each prototypeSuggestions as p}
-            <option value={p}></option>
-          {/each}
-        </datalist>
+        {#if protoSearching}
+          <div class="proto-hint">Searching...</div>
+        {:else if protoSearchError}
+          <div class="proto-hint error">{protoSearchError}</div>
+        {/if}
+        {#if protoSuggestOpen}
+          <div class="proto-dropdown">
+            {#each protoSearchResults as result}
+              <button
+                class="proto-option"
+                type="button"
+                on:click={() => selectPrototype(result.path)}
+              >
+                <span class="proto-opt-path">{result.path}</span>
+                <span class="proto-opt-bp">{result.blueprint}</span>
+              </button>
+            {/each}
+          </div>
+        {/if}
       </div>
 
       <!-- Setting: combobox with filterable known-settings dropdown -->
@@ -819,13 +893,73 @@
 
   .value-field { flex: 1; }
 
+  /* ── Prototype autocomplete ── */
+  .proto-suggest-wrap { position: relative; flex: 2; display: flex; flex-direction: column; }
+
+  .input-dimmed { opacity: 0.45; cursor: not-allowed; }
+
+  .proto-hint {
+    font-size: 10px;
+    color: var(--text-3);
+    padding: 2px 2px 0;
+  }
+  .proto-hint.error { color: var(--text-error); }
+
+  .proto-dropdown {
+    position: absolute;
+    bottom: calc(100% + 3px);
+    left: 0;
+    min-width: max(100%, 460px);
+    background: var(--bg-2);
+    border: 1px solid var(--border-lit);
+    border-radius: var(--radius-sm);
+    z-index: var(--z-dropdown);
+    max-height: 280px;
+    overflow-y: auto;
+    box-shadow: 0 -8px 32px rgba(0,0,0,0.45);
+  }
+
+  .proto-option {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    width: 100%;
+    text-align: left;
+    background: none;
+    border: none;
+    border-bottom: 1px solid var(--border);
+    padding: 6px 10px;
+    cursor: pointer;
+    transition: background 0.08s;
+  }
+  .proto-option:last-child { border-bottom: none; }
+  .proto-option:hover { background: var(--bg-3); }
+
+  .proto-opt-path {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--text-0);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .proto-opt-bp {
+    font-family: var(--font-head);
+    font-size: 9px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--accent-dim);
+  }
+
   /* ── Setting autocomplete ── */
   .setting-suggest-wrap { position: relative; flex: 3; display: flex; flex-direction: column; }
 
   .setting-dropdown {
     position: absolute;
     bottom: calc(100% + 3px);
-    left: 0; right: 0;
+    right: 0;
+    min-width: max(100%, 460px);
     background: var(--bg-2);
     border: 1px solid var(--border-lit);
     border-radius: var(--radius-sm);

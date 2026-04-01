@@ -24,6 +24,26 @@ export function categoryForSetting(setting: string): string {
   return 'Other'
 }
 
+// Maps a setting prefix to a substring matched case-insensitively against
+// blueprint file paths in Calligraphy.sip. Used to scope prototype searches
+// to the correct blueprint category. Returns null for Global settings (no
+// prototype required) and for unknown prefixes (search across all blueprints).
+export function blueprintHintForSetting(setting: string): string | null {
+  if (setting.startsWith('eGTV_'))  return null              // Global — no prototype
+  if (setting.startsWith('eWETV_')) return 'WorldEntity'
+  if (setting.startsWith('ePTV_'))  return 'Power'
+  if (setting.startsWith('eRTV_'))  return 'Region'
+  if (setting.startsWith('eRT_'))   return 'Region'
+  if (setting.startsWith('eLTTV_')) return 'LootTable'
+  if (setting.startsWith('eMTV_'))  return 'Mission'
+  if (setting.startsWith('eCTV_'))  return 'Condition'
+  if (setting.startsWith('eAETV_')) return 'Avatar'
+  if (setting.startsWith('eATV_'))  return 'Area'
+  if (setting.startsWith('ePOTV_')) return 'PopulationObject'
+  if (setting.startsWith('ePETV_')) return 'PublicEvent'
+  return null
+}
+
 // ── Known file sets ────────────────────────────────────────────────────────────
 
 export const KNOWN_CORE = new Set([
