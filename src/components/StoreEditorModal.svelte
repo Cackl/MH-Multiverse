@@ -92,22 +92,6 @@
     }
   }
 
-  function normalizeCurrentFormForEdit(): EditableStoreState {
-    return {
-      title: formTitle,
-      description: formDesc,
-      price: formPrice,
-      releaseDate: initialState.releaseDate,
-      typeName: formTypeName,
-      typeOrder: formOrder,
-      infoUrl: formInfoUrl,
-      contentUrl: formContentUrl,
-      guidItems: cloneGuidItems(formGuidItems),
-      additionalGuidItems: cloneGuidItems(formAdditionalGuidItems),
-      modifiers: [...selectedModifiers].sort(),
-    }
-  }
-
   function serializeEditableState(state: EditableStoreState): string {
     return JSON.stringify(state)
   }
@@ -120,7 +104,7 @@
 
   const original: CatalogEntryWithMeta | null = entry ? deepClone(entry) : null
   const initialState = normalizeEntryForEdit(original)
-  const initialStateSerialized = serializeEditableState(initialState)
+  let initialStateSerialized = serializeEditableState(initialState)
 
   // ── Offer type ────────────────────────────────────────────────────────────
 
@@ -333,29 +317,17 @@
     pickerError   = ''
     pickerResults = []
     try {
-      const paths = selectedCategory.Path.split('|')
-      if (paths.length === 1) {
-        pickerResults = await invoke<PrototypePickerResult[]>(
-          'search_prototypes',
-          { serverExe, query, blueprintHint: paths[0] }
-        )
-      } else {
-        // Multi-path category (e.g. Test Gear) — run separate searches and merge.
-        const sets = await Promise.all(
-          paths.map(p =>
-            invoke<PrototypePickerResult[]>(
-              'search_prototypes',
-              { serverExe, query, blueprintHint: p }
-            ).catch(() => [] as PrototypePickerResult[])
-          )
-        )
-        const seen = new Set<string>()
-        pickerResults = sets.flat().filter(r => {
-          if (seen.has(r.path)) return false
-          seen.add(r.path)
-          return true
-        })
-      }
+      pickerResults = await invoke<PrototypePickerResult[]>(
+        'search_prototypes',
+        {
+          serverExe,
+          query,
+          categoryPath: selectedCategory.Path,
+          isInventoryType: selectedCategory.IsInventoryType,
+          // Legacy arg kept for backend compatibility with older builds.
+          blueprintHint: selectedCategory.Path,
+        }
+      )
     } catch (e) {
       pickerError = String(e)
     } finally {
@@ -465,7 +437,19 @@
 
   // ── Dirty detection ───────────────────────────────────────────────────────
 
-  $: currentStateSerialized = serializeEditableState(normalizeCurrentFormForEdit())
+  $: currentStateSerialized = serializeEditableState({
+    title: formTitle,
+    description: formDesc,
+    price: formPrice,
+    releaseDate: initialState.releaseDate,
+    typeName: formTypeName,
+    typeOrder: formOrder,
+    infoUrl: formInfoUrl,
+    contentUrl: formContentUrl,
+    guidItems: formGuidItems,
+    additionalGuidItems: formAdditionalGuidItems,
+    modifiers: [...selectedModifiers].sort(),
+  })
   $: dirty = isNew || currentStateSerialized !== initialStateSerialized
 
   // ── Save ──────────────────────────────────────────────────────────────────
@@ -484,6 +468,7 @@
       const target = isNew ? targetFile : entry!.source_file
       await invoke('save_catalog_entry', { serverExe, entry: built, targetFile: target })
       const meta: CatalogEntryWithMeta = { ...built, source_file: target, from_modified: true }
+      initialStateSerialized = currentStateSerialized
       saveSuccess = true
       setTimeout(() => (saveSuccess = false), 3000)
       onSaved(meta)
@@ -675,7 +660,7 @@
               <div class="field">
                 <label class="field-label" for="f-order">
                   Order
-                  <span class="label-hint" title="0=fully hidden, 1=hidden from store, 5=standard visible, 999=end of list">?</span>
+                  <span class="label-hint" title="1 = Top Priority, 2 = Alphabetical, 3->999 = After Alphabetical">?</span>
                 </label>
                 <input
                   id="f-order" class="field-input" type="number"

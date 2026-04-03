@@ -464,6 +464,182 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
   --console-text:     #b8c8d8;
   --console-text-dim: #4d6070;
 }
+
+/* Light theme — high-contrast, neutral/cool UI, dark console preserved */
+[data-theme="light"] {
+  /* Surface layers */
+  --bg-0: #f7fafc;
+  --bg-1: #f0f5f9;
+  --bg-2: #e6edf3;
+  --bg-3: #d8e2ec;
+  --bg-4: #c9d6e3;
+
+  /* Accent */
+  --accent:             #0f6f8d;
+  --accent-bright:      #1388ad;
+  --accent-dim:         #466f7b;
+  --accent-glow:        rgba(15, 111, 141, 0.08);
+  --accent-glow-strong: rgba(19, 136, 173, 0.14);
+
+  /* Semantic */
+  --red:           #a43b31;
+  --red-dim:       rgba(164, 59, 49, 0.12);
+  --green:         #1f7a49;
+  --green-bright:  #238454;
+  --green-dim:     rgba(31, 122, 73, 0.12);
+  --blue:          #1f5fae;
+  --blue-dim:      rgba(31, 95, 174, 0.10);
+
+  /* Borders */
+  --border:     #c3d0dc;
+  --border-mid: #aebecd;
+  --border-lit: #8fa3b7;
+
+  /* Text */
+  --text-0: #16212b;
+  --text-1: #334250;
+  --text-2: #5f7182;
+  --text-3: #7f90a0;
+
+  /* Typography */
+  --font-head: 'Chakra Petch', sans-serif;
+  --font-body: 'IBM Plex Sans', sans-serif;
+  --font-mono: 'IBM Plex Mono', monospace;
+
+  /* Geometry */
+  --rail-w:     56px;
+  --radius-sm:  3px;
+  --radius-md:  6px;
+
+  /* Sidebar widths */
+  --sidebar-narrow: 200px;
+  --sidebar-wide:   280px;
+
+  /* Semantic text colours */
+  --text-error:   #952f26;
+  --text-success: #1b6f43;
+  --text-warning: #865f00;
+
+  /* Amber (countdown, warnings) */
+  --amber:        #9c7300;
+  --amber-bright: #b88900;
+  --amber-dim:    rgba(156, 115, 0, 0.12);
+
+  /* Purple (debug log, custom tags) */
+  --purple:       #6f58a8;
+  --purple-dim:   rgba(111, 88, 168, 0.12);
+
+  /* Favourite highlight */
+  --colour-favourite: var(--amber-bright);
+
+  /* Z-index scale */
+  --z-panel:    1;
+  --z-dropdown: 10;
+  --z-tooltip:  100;
+  --z-modal:    200;
+  --z-titlebar: 300;
+
+  /* Panel background gradient */
+  --panel-grad-top: rgba(15, 111, 141, 0.05);
+  --panel-grad-mid: 40%;
+
+  /* Sidebar background */
+  --sidebar-bg: rgba(244, 248, 252, 0.62);
+
+  /* Console */
+  --console-bg:       #f1f5f9;
+  --console-cmd-bg:   #e2e8f0;
+  --console-text:     #1e2933;
+  --console-text-dim: #5b6b79;  
+}
+
+[data-theme="phoenix"] {
+  /* Surface layers */
+  --bg-0: #08090c;
+  --bg-1: #0e1015;
+  --bg-2: #14161d;
+  --bg-3: #1a1d27;
+  --bg-4: #222634;
+
+  /* Accent — fire/orange */
+  --accent:             #d66a1f;
+  --accent-bright:      #f28a2e;
+  --accent-dim:         #a94d16;
+  --accent-glow:        rgba(214, 106, 31, 0.08);
+  --accent-glow-strong: rgba(242, 138, 46, 0.16);
+
+  /* Semantic */
+  --red:           #c94a3a;
+  --red-dim:       rgba(201, 74, 58, 0.12);
+  --green:         #27ae60;
+  --green-bright:  #2ecc71;
+  --green-dim:     rgba(39, 174, 96, 0.12);
+  --blue:          #2e86c1;
+  --blue-dim:      rgba(46, 134, 193, 0.10);
+
+  /* Borders */
+  --border:     #252836;
+  --border-mid: #2f3347;
+  --border-lit: #3d4260;
+
+  /* Text */
+  --text-0: #edf1f5;
+  --text-1: #b0bac4;
+  --text-2: #7e8fa0;
+  --text-3: #455460;
+
+  /* Typography */
+  --font-head: 'Chakra Petch', sans-serif;
+  --font-body: 'IBM Plex Sans', sans-serif;
+  --font-mono: 'IBM Plex Mono', monospace;
+
+  /* Geometry */
+  --rail-w:     56px;
+  --radius-sm:  3px;
+  --radius-md:  6px;
+
+  /* Sidebar widths */
+  --sidebar-narrow: 200px;
+  --sidebar-wide:   280px;
+
+  /* Semantic text colours */
+  --text-error:   var(--red);
+  --text-success: var(--green-bright);
+  --text-warning: #e0ab2f;
+
+  /* Amber / orange */
+  --amber:        #c97a16;
+  --amber-bright: #f0a93a;
+  --amber-dim:    rgba(201, 122, 22, 0.12);
+
+  /* Purple (debug log, custom tags) */
+  --purple:       #a080d0;
+  --purple-dim:   rgba(160, 128, 208, 0.12);
+
+  /* Favourite highlight */
+  --colour-favourite: var(--amber-bright);
+
+  /* Z-index scale */
+  --z-panel:    1;
+  --z-dropdown: 10;
+  --z-tooltip:  100;
+  --z-modal:    200;
+  --z-titlebar: 300;
+
+  /* Panel background gradient */
+  --panel-grad-top: rgba(214, 106, 31, 0.07);
+  --panel-grad-mid: 40%;
+
+  /* Sidebar background */
+  --sidebar-bg: rgba(8, 9, 12, 0.5);
+
+  /* Console */
+  --console-bg:       var(--bg-0);
+  --console-cmd-bg:   var(--bg-2);
+  --console-text:     var(--text-1);
+  --console-text-dim: var(--text-2);
+}
+
 /* ══════════════════════════════════════════════════════════════════════════════
    Shared panel utilities
    ══════════════════════════════════════════════════════════════════════════════ */

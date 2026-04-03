@@ -284,16 +284,23 @@ pub(crate) fn id_for_path(catalogue: &PrototypeCatalogue, path: &str) -> Option<
 
 /// Search prototype paths in Calligraphy.sip.
 ///
-/// - `query`: substring to match against prototype file paths (case-insensitive).
-///   Must be at least 2 characters; returns an empty list otherwise.
-/// - `blueprint_hint`: optional case-insensitive substring matched against the
-///   blueprint path associated with each prototype. Use this to restrict results
-///   to a specific category (e.g. "LootTable", "Avatar", "Region").
-///   When None, all blueprint types are searched.
+/// Filtering supports the category model used by `categories.json`:
+/// - `category_path`: optional prototype-path prefix filter. May contain one or
+///   more prefixes separated by `|`.
+/// - `is_inventory_type`: carried through from the category config for parity
+///   with the source app. The current Rust picker still filters by path prefix,
+///   which is sufficient for stash categories because their prototype paths live
+///   under `Entity/Inventory/...` in the catalogue.
+/// - `blueprint_hint`: legacy parameter retained for compatibility with older
+///   frontend code. If `category_path` is omitted, this value is treated as a
+///   prototype-path prefix filter rather than a blueprint-path filter.
 ///
-/// Returns up to 100 matches. The catalogue is loaded lazily on first call and
-/// cached for subsequent calls. If server_exe changes, the sip path changes and
-/// the catalogue is rebuilt automatically.
+/// Search text is matched case-insensitively against both:
+/// - prototype path
+/// - resolved display name
+///
+/// Returns up to 500 matches for category browsing when `query` is empty, or up
+/// to 100 matches when searching.
 #[tauri::command]
 pub fn search_prototypes(
     state: tauri::State<CatalogueState>,
@@ -301,8 +308,14 @@ pub fn search_prototypes(
     server_exe: String,
     query: String,
     blueprint_hint: Option<String>,
+    category_path: Option<String>,
+    is_inventory_type: Option<bool>,
 ) -> Result<Vec<PrototypeMatch>, String> {
-    if query.len() < 2 && blueprint_hint.is_none() {
+    let effective_category = category_path
+        .or(blueprint_hint)
+        .unwrap_or_default();
+
+    if query.trim().len() < 2 && effective_category.trim().is_empty() {
         return Ok(vec![]);
     }
 
@@ -333,7 +346,6 @@ pub fn search_prototypes(
         .lock()
         .map_err(|_| "Catalogue state lock is poisoned".to_string())?;
 
-    // Build or rebuild if sip path has changed
     let needs_build = guard
         .as_ref()
         .map(|(cached_path, _)| cached_path != &sip_path_str)
@@ -345,42 +357,52 @@ pub fn search_prototypes(
 
     let (_, catalogue) = guard.as_ref().unwrap();
 
-    let query_lower = query.to_lowercase();
-    let hint_lower = blueprint_hint.as_deref().map(str::to_lowercase);
+    let query_lower = query.trim().to_lowercase();
+    let category_prefixes: Vec<String> = effective_category
+        .split('|')
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(|s| s.replace('\\', "/").to_lowercase())
+        .collect();
 
-    let max_results: usize = if query.is_empty() { 500 } else { 100 };
+    let _inventory_type = is_inventory_type.unwrap_or(false);
+    let max_results: usize = if query_lower.is_empty() { 500 } else { 100 };
 
-    let results = catalogue
-        .prototypes
-        .iter()
-        .filter(|p| !p.is_abstract)
-        .filter(|p| {
-            // Blueprint hint filter — substring match against blueprint path
-            if let Some(ref hint) = hint_lower {
-                let bp_path = catalogue
-                    .blueprints
-                    .get(&p.blueprint_id)
-                    .map(|s| s.to_lowercase())
-                    .unwrap_or_default();
-                if !bp_path.contains(hint.as_str()) {
-                    return false;
-                }
-            }
-            true
-        })
-        .filter(|p| p.path.to_lowercase().contains(&query_lower))
-        .take(max_results)
-        .map(|p| PrototypeMatch {
+    let mut results: Vec<PrototypeMatch> = Vec::new();
+    for p in catalogue.prototypes.iter().filter(|p| !p.is_abstract) {
+        let path_lower = p.path.to_lowercase();
+
+        if !category_prefixes.is_empty()
+            && !category_prefixes.iter().any(|prefix| path_lower.starts_with(prefix))
+        {
+            continue;
+        }
+
+        let display_name = dn_state.lookup(&server_dir, &p.path);
+        let display_name_lower = display_name.to_lowercase();
+
+        if !query_lower.is_empty()
+            && !path_lower.contains(&query_lower)
+            && !display_name_lower.contains(&query_lower)
+        {
+            continue;
+        }
+
+        results.push(PrototypeMatch {
             path: p.path.clone(),
             blueprint: catalogue
                 .blueprints
                 .get(&p.blueprint_id)
                 .cloned()
                 .unwrap_or_default(),
-            display_name: dn_state.lookup(&server_dir, &p.path),
+            display_name,
             leaf: p.path.rsplit('/').next().unwrap_or(&p.path).to_string(),
-        })
-        .collect();
+        });
+
+        if results.len() >= max_results {
+            break;
+        }
+    }
 
     Ok(results)
 }
