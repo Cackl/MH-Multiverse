@@ -3,6 +3,7 @@ mod config;
 mod ini;
 mod launcher;
 mod server;
+mod store;
 mod tuning;
 mod updater;
 
@@ -24,6 +25,7 @@ pub fn run() {
     tauri::Builder::default()
         .manage(ServerState(Arc::new(Mutex::new(ServerProcess::empty()))))
         .manage(calligraphy::CatalogueState(Mutex::new(None)))
+        .manage(store::DisplayNameState::new())
         .setup(|app| {
             app.handle().plugin(tauri_plugin_dialog::init())?;
             app.handle().plugin(tauri_plugin_opener::init())?;
@@ -70,6 +72,7 @@ pub fn run() {
             config::set_tuning_favourites,
             config::set_backup_targets,
             config::set_update_backup_options,
+            config::set_store_html_output_dir,
             launcher::launch_game,
             launcher::game_is_running,
             server::start_server,
@@ -96,6 +99,15 @@ pub fn run() {
             updater::delete_backup,
             updater::get_backups_dir,
             calligraphy::search_prototypes,
+            calligraphy::lookup_prototype_id,
+            store::get_mtxstore_dir,
+            store::list_catalog_files,
+            store::load_catalog_entries,
+            store::save_catalog_entry,
+            store::delete_catalog_entry,
+            store::get_next_sku_id,
+            store::resolve_display_name,
+            store::generate_bundle_html,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -51,7 +51,7 @@
     flex-shrink: 0;
     user-select: none;
     position: relative;
-    z-index: 10;
+    z-index: var(--z-titlebar);
   }
 
   .titlebar-brand {

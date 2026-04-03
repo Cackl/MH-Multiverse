@@ -142,6 +142,11 @@ pub struct AppConfig {
     /// Auto-backup options for the nightly updater
     #[serde(default)]
     pub update_backup_options: UpdateBackupOptions,
+    /// Output directory for generated bundle HTML and CSS files.
+    /// Empty string means the frontend uses its computed default
+    /// ({server_dir}/Data/Web/Bundles).
+    #[serde(default)]
+    pub store_html_output_dir: String,
 }
 
 impl Default for AppConfig {
@@ -158,6 +163,7 @@ impl Default for AppConfig {
             tuning_favourites: Vec::new(),
             backup_targets: default_backup_targets(),
             update_backup_options: UpdateBackupOptions::default(),
+            store_html_output_dir: String::new(),
         }
     }
 }
@@ -386,5 +392,12 @@ pub fn set_backup_targets(app: tauri::AppHandle, targets: Vec<String>) -> Result
 pub fn set_update_backup_options(app: tauri::AppHandle, options: UpdateBackupOptions) -> Result<(), String> {
     let mut config = load_config(&app);
     config.update_backup_options = options;
+    save_config(&app, &config)
+}
+
+#[tauri::command]
+pub fn set_store_html_output_dir(app: tauri::AppHandle, dir: String) -> Result<(), String> {
+    let mut config = load_config(&app);
+    config.store_html_output_dir = dir;
     save_config(&app, &config)
 }

@@ -1,7 +1,7 @@
 import { writable } from 'svelte/store'
 import { invoke } from '@tauri-apps/api/core'
 
-export type Tab = 'launch' | 'server' | 'tuning' | 'config' | 'ops' | 'settings'
+export type Tab = 'launch' | 'server' | 'tuning' | 'config' | 'ops' | 'store' | 'settings'
 
 export const activeTab = writable<Tab>('launch')
 export const serverRunning = writable<boolean>(false)
@@ -97,6 +97,7 @@ export interface AppConfig {
   tuning_favourites: string[]
   backup_targets: string[]
   update_backup_options: UpdateBackupOptions
+  store_html_output_dir: string
 }
 
 const defaultLaunchOptions: LaunchOptions = {
@@ -129,6 +130,7 @@ export const appConfig = writable<AppConfig>({
   tuning_favourites: [],
   backup_targets: ['Config.ini', 'ConfigOverride.ini', 'Data/Game/LiveTuning', 'Data/Account.db'],
   update_backup_options: { config_ini: true, live_tuning: true, billing_store: true },
+  store_html_output_dir: '',
 })
 
 export const activeTheme = writable<string>('')
@@ -223,4 +225,9 @@ export async function setBackupTargets(targets: string[]): Promise<void> {
 export async function setUpdateBackupOptions(options: UpdateBackupOptions): Promise<void> {
   appConfig.update(c => ({ ...c, update_backup_options: options }))
   await invoke('set_update_backup_options', { options })
+}
+
+export async function setStoreHtmlOutputDir(dir: string): Promise<void> {
+  appConfig.update(c => ({ ...c, store_html_output_dir: dir }))
+  await invoke('set_store_html_output_dir', { dir })
 }

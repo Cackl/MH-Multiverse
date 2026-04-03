@@ -17,6 +17,7 @@ pub struct PrototypeMatch {
 }
 
 struct PrototypeRecord {
+    prototype_id: u64, // runtime prototype ID; used to build the by_id index
     blueprint_id: u64,
     path: String,
     is_abstract: bool,
@@ -26,6 +27,10 @@ pub(crate) struct PrototypeCatalogue {
     /// blueprint id → blueprint file path (e.g. "Entity/Avatar.blueprint")
     blueprints: HashMap<u64, String>,
     prototypes: Vec<PrototypeRecord>,
+    /// prototype runtime id → prototype file path; built once in build_catalogue.
+    by_id: HashMap<u64, String>,
+    /// prototype file path → prototype runtime id; inverse of by_id.
+    by_path: HashMap<String, u64>,
 }
 
 /// Cached catalogue keyed by the sip path it was built from.
@@ -201,7 +206,7 @@ fn parse_prototype_directory(data: &[u8]) -> Result<Vec<PrototypeRecord>, String
     let mut prototypes = Vec::with_capacity(count);
 
     for _ in 0..count {
-        let _prototype_id = read_u64_le(data, &mut pos);
+        let prototype_id = read_u64_le(data, &mut pos); // stored; used to build by_id index
         let _prototype_guid = read_u64_le(data, &mut pos);
         let blueprint_id = read_u64_le(data, &mut pos);
         let flags = read_u8(data, &mut pos);
@@ -210,7 +215,7 @@ fn parse_prototype_directory(data: &[u8]) -> Result<Vec<PrototypeRecord>, String
         // PrototypeRecordFlags::Abstract = bit 0
         let is_abstract = flags & 0x01 != 0;
 
-        prototypes.push(PrototypeRecord { blueprint_id, path, is_abstract });
+        prototypes.push(PrototypeRecord { prototype_id, blueprint_id, path, is_abstract });
     }
 
     Ok(prototypes)
@@ -234,7 +239,41 @@ fn build_catalogue(sip_path: &str) -> Result<PrototypeCatalogue, String> {
     let blueprints = parse_blueprint_directory(&blueprint_data)?;
     let prototypes = parse_prototype_directory(&prototype_data)?;
 
-    Ok(PrototypeCatalogue { blueprints, prototypes })
+    // Build runtime-ID ↔ path indices; by_id for display name resolution,
+    // by_path for the inverse lookup needed when adding GuidItems from a path search.
+    let by_id: HashMap<u64, String> = prototypes
+        .iter()
+        .map(|p| (p.prototype_id, p.path.clone()))
+        .collect();
+
+    let by_path: HashMap<String, u64> = prototypes
+        .iter()
+        .map(|p| (p.path.clone(), p.prototype_id))
+        .collect();
+
+    Ok(PrototypeCatalogue { blueprints, prototypes, by_id, by_path })
+}
+
+// ── Public helpers ────────────────────────────────────────────────────────────
+
+/// Look up the prototype file path for a given runtime prototype ID.
+///
+/// Returns `None` if the ID is not present in the catalogue (catalogue not yet
+/// loaded, or the ID is from a file not present in `Calligraphy.sip`).
+///
+/// Used by `store.rs` for display name resolution without duplicating catalogue
+/// access logic.
+pub(crate) fn path_for_id(catalogue: &PrototypeCatalogue, id: u64) -> Option<&str> {
+    catalogue.by_id.get(&id).map(|s| s.as_str())
+}
+
+/// Look up the prototype runtime ID for a given prototype file path.
+///
+/// Returns `None` if the path is not in the catalogue.
+/// Used by `lookup_prototype_id` in `store.rs` to resolve a selected prototype
+/// path back to the `ItemPrototypeRuntimeIdForClient` needed by catalog entries.
+pub(crate) fn id_for_path(catalogue: &PrototypeCatalogue, path: &str) -> Option<u64> {
+    catalogue.by_path.get(path).copied()
 }
 
 // ── Tauri command ─────────────────────────────────────────────────────────────
@@ -258,7 +297,7 @@ pub fn search_prototypes(
     query: String,
     blueprint_hint: Option<String>,
 ) -> Result<Vec<PrototypeMatch>, String> {
-    if query.len() < 2 {
+    if query.len() < 2 && blueprint_hint.is_none() {
         return Ok(vec![]);
     }
 
@@ -298,7 +337,7 @@ pub fn search_prototypes(
     let query_lower = query.to_lowercase();
     let hint_lower = blueprint_hint.as_deref().map(str::to_lowercase);
 
-    const MAX_RESULTS: usize = 100;
+    let max_results: usize = if query.is_empty() { 500 } else { 100 };
 
     let results = catalogue
         .prototypes
@@ -319,7 +358,7 @@ pub fn search_prototypes(
             true
         })
         .filter(|p| p.path.to_lowercase().contains(&query_lower))
-        .take(MAX_RESULTS)
+        .take(max_results)
         .map(|p| PrototypeMatch {
             path: p.path.clone(),
             blueprint: catalogue
@@ -331,4 +370,55 @@ pub fn search_prototypes(
         .collect();
 
     Ok(results)
+}
+
+/// Resolve a prototype file path to its runtime ID (as a decimal string).
+///
+/// This is the inverse of `path_for_id` — given a path returned by
+/// `search_prototypes`, it returns the `ItemPrototypeRuntimeIdForClient`
+/// value needed to construct a `GuidItem` in a catalog entry.
+///
+/// Returns as a String to safely transport the full u64 range across the
+/// JS boundary without precision loss.
+#[tauri::command]
+pub fn lookup_prototype_id(
+    state: tauri::State<CatalogueState>,
+    server_exe: String,
+    prototype_path: String,
+) -> Result<String, String> {
+    let sip_path = Path::new(&server_exe)
+        .parent()
+        .ok_or_else(|| "Cannot determine server directory from exe path".to_string())?
+        .join("Data")
+        .join("Game")
+        .join("Calligraphy.sip");
+
+    let sip_path_str = sip_path
+        .to_str()
+        .ok_or_else(|| "Calligraphy.sip path contains invalid UTF-8".to_string())?
+        .to_string();
+
+    if !sip_path.exists() {
+        return Err(format!("Calligraphy.sip not found at {sip_path_str}"));
+    }
+
+    let mut guard = state
+        .0
+        .lock()
+        .map_err(|_| "Catalogue state lock is poisoned".to_string())?;
+
+    let needs_build = guard
+        .as_ref()
+        .map(|(cached_path, _)| cached_path != &sip_path_str)
+        .unwrap_or(true);
+
+    if needs_build {
+        *guard = Some((sip_path_str.clone(), build_catalogue(&sip_path_str)?));
+    }
+
+    let (_, catalogue) = guard.as_ref().unwrap();
+
+    id_for_path(catalogue, &prototype_path)
+        .map(|id| id.to_string())
+        .ok_or_else(|| format!("Prototype '{}' not found in catalogue", prototype_path))
 }

@@ -48,6 +48,15 @@
     <span class="rail-label">Tuning</span>
   </button>
 
+  <button class="rail-tab" class:active={$activeTab === 'store'} on:click={() => go('store')}>
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/>
+      <line x1="3" y1="6" x2="21" y2="6"/>
+      <path d="M16 10a4 4 0 0 1-8 0"/>
+    </svg>
+    <span class="rail-label">Store</span>
+  </button>
+
   <button class="rail-tab" class:active={$activeTab === 'ops'} on:click={() => go('ops')}>
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
       <polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/>

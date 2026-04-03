@@ -8,6 +8,7 @@
   import ConfigPanel from './components/ConfigPanel.svelte'
   import OpsPanel from './components/OpsPanel.svelte'
   import AppPanel from './components/AppPanel.svelte'
+  import StorePanel from './components/StorePanel.svelte'
   import { activeTab, loadConfig } from './lib/store'
 
   onMount(async () => {
@@ -28,6 +29,8 @@
         <TuningPanel />
       {:else if $activeTab === 'config'}
         <ConfigPanel />
+      {:else if $activeTab === 'store'}
+        <StorePanel />
       {:else if $activeTab === 'ops'}
         <OpsPanel />
       {:else if $activeTab === 'settings'}
