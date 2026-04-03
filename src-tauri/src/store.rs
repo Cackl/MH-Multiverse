@@ -39,7 +39,7 @@ impl DisplayNameState {
     /// 1. `display_names_custom.json` in `server_dir` (if present and non-empty)
     /// 2. Embedded `display_names.json`
     /// 3. The prototype path itself (verbatim fallback)
-    fn lookup(&self, server_dir: &str, path: &str) -> String {
+    pub(crate) fn lookup(&self, server_dir: &str, path: &str) -> String {
         if let Ok(mut guard) = self.custom.lock() {
             let needs_load = guard
                 .as_ref()

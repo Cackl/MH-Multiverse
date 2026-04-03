@@ -3,6 +3,8 @@ use std::collections::HashMap;
 use std::path::Path;
 use std::sync::Mutex;
 
+use crate::store::DisplayNameState;
+
 // ── Pak format ────────────────────────────────────────────────────────────────
 
 const PAK_SIGNATURE: u32 = 1196441931; // "KAPG" little-endian
@@ -14,6 +16,8 @@ const PAK_VERSION: u32 = 1;
 pub struct PrototypeMatch {
     pub path: String,
     pub blueprint: String,
+    pub display_name: String,
+    pub leaf: String,
 }
 
 struct PrototypeRecord {
@@ -293,6 +297,7 @@ pub(crate) fn id_for_path(catalogue: &PrototypeCatalogue, path: &str) -> Option<
 #[tauri::command]
 pub fn search_prototypes(
     state: tauri::State<CatalogueState>,
+    dn_state: tauri::State<DisplayNameState>,
     server_exe: String,
     query: String,
     blueprint_hint: Option<String>,
@@ -311,6 +316,12 @@ pub fn search_prototypes(
     let sip_path_str = sip_path
         .to_str()
         .ok_or_else(|| "Calligraphy.sip path contains invalid UTF-8".to_string())?
+        .to_string();
+
+    let server_dir = Path::new(&server_exe)
+        .parent()
+        .ok_or_else(|| "Cannot determine server directory from exe path".to_string())?
+        .to_string_lossy()
         .to_string();
 
     if !sip_path.exists() {
@@ -366,6 +377,8 @@ pub fn search_prototypes(
                 .get(&p.blueprint_id)
                 .cloned()
                 .unwrap_or_default(),
+            display_name: dn_state.lookup(&server_dir, &p.path),
+            leaf: p.path.rsplit('/').next().unwrap_or(&p.path).to_string(),
         })
         .collect();
 

@@ -15,6 +15,20 @@
     type GuidItem,
   } from '../lib/catalogMeta'
 
+  type EditableStoreState = {
+    title: string
+    description: string
+    price: number
+    releaseDate: string
+    typeName: string
+    typeOrder: number
+    infoUrl: string
+    contentUrl: string
+    guidItems: GuidItem[]
+    additionalGuidItems: GuidItem[]
+    modifiers: string[]
+  }
+
   // ── Props ─────────────────────────────────────────────────────────────────
 
   /** Existing entry to edit. Null when creating a new entry. */
@@ -33,9 +47,80 @@
   export let onSaved: (entry: CatalogEntryWithMeta) => void = () => {}
   export let onDeleted: (skuId: number) => void = () => {}
 
+  function deepClone<T>(value: T): T {
+    return JSON.parse(JSON.stringify(value))
+  }
+
+  function cloneGuidItems(items: GuidItem[] = []): GuidItem[] {
+    return items.map(item => ({ ...item }))
+  }
+
+  function pickLocalizedEntry(source: CatalogEntry | CatalogEntryWithMeta | null | undefined) {
+    return (
+      source?.LocalizedEntries.find(e => e.LanguageId === 'en_us') ??
+      source?.LocalizedEntries[0] ??
+      defaultLocalizedEntry()
+    )
+  }
+
+  function pickLocalizedUrl(
+    items: { LanguageId: string; Url: string }[] | undefined
+  ): string {
+    return (
+      items?.find(item => item.LanguageId === 'en_us')?.Url ??
+      items?.[0]?.Url ??
+      ''
+    )
+  }
+
+  function normalizeEntryForEdit(
+    source: CatalogEntry | CatalogEntryWithMeta | null | undefined
+  ): EditableStoreState {
+    const loc = pickLocalizedEntry(source)
+    return {
+      title: loc.Title ?? '',
+      description: loc.Description ?? '',
+      price: loc.ItemPrice ?? 1,
+      releaseDate: loc.ReleaseDate ?? '',
+      typeName: source?.Type.Name ?? 'Boost',
+      typeOrder: source?.Type.Order ?? 5,
+      infoUrl: pickLocalizedUrl(source?.InfoUrls),
+      contentUrl: pickLocalizedUrl(source?.ContentData),
+      guidItems: cloneGuidItems(source?.GuidItems ?? []),
+      additionalGuidItems: cloneGuidItems(source?.AdditionalGuidItems ?? []),
+      modifiers: (source?.TypeModifiers ?? []).map(m => m.Name).sort(),
+    }
+  }
+
+  function normalizeCurrentFormForEdit(): EditableStoreState {
+    return {
+      title: formTitle,
+      description: formDesc,
+      price: formPrice,
+      releaseDate: initialState.releaseDate,
+      typeName: formTypeName,
+      typeOrder: formOrder,
+      infoUrl: formInfoUrl,
+      contentUrl: formContentUrl,
+      guidItems: cloneGuidItems(formGuidItems),
+      additionalGuidItems: cloneGuidItems(formAdditionalGuidItems),
+      modifiers: [...selectedModifiers].sort(),
+    }
+  }
+
+  function serializeEditableState(state: EditableStoreState): string {
+    return JSON.stringify(state)
+  }
+
   // ── Mode ──────────────────────────────────────────────────────────────────
 
   $: isNew = entry === null
+
+  // ── Snapshot for initialization / dirty detection ─────────────────────────
+
+  const original: CatalogEntryWithMeta | null = entry ? deepClone(entry) : null
+  const initialState = normalizeEntryForEdit(original)
+  const initialStateSerialized = serializeEditableState(initialState)
 
   // ── Offer type ────────────────────────────────────────────────────────────
 
@@ -43,7 +128,7 @@
 
   // When switching back to single, restore the last non-Bundle type name.
   let prevSingleType: string =
-    entry && entry.Type.Name !== 'Bundle' ? entry.Type.Name : 'Boost'
+    initialState.typeName !== 'Bundle' ? initialState.typeName : 'Boost'
 
   function setOfferType(ot: OfferType) {
     offerType = ot
@@ -62,32 +147,21 @@
     }
   }
 
-  // ── Snapshot for dirty detection ──────────────────────────────────────────
-
-  const original: CatalogEntryWithMeta | null = entry
-    ? JSON.parse(JSON.stringify(entry))
-    : null
-
   // ── Working SKU ───────────────────────────────────────────────────────────
 
   let workingSku: number = entry?.SkuId ?? 0
 
   // ── Form fields ───────────────────────────────────────────────────────────
 
-  const initLoc =
-    entry?.LocalizedEntries.find(e => e.LanguageId === 'en_us') ??
-    entry?.LocalizedEntries[0] ??
-    defaultLocalizedEntry()
+  let formTitle = initialState.title
+  let formDesc  = initialState.description
+  let formPrice = initialState.price
 
-  let formTitle = initLoc.Title
-  let formDesc  = initLoc.Description
-  let formPrice = initLoc.ItemPrice
+  let formTypeName = initialState.typeName
+  let formOrder    = initialState.typeOrder
 
-  let formTypeName = entry?.Type.Name ?? 'Boost'
-  let formOrder    = entry?.Type.Order ?? 5
-
-  let formInfoUrl    = entry?.InfoUrls.find(u => u.LanguageId === 'en_us')?.Url ?? ''
-  let formContentUrl = entry?.ContentData.find(u => u.LanguageId === 'en_us')?.Url ?? ''
+  let formInfoUrl    = initialState.infoUrl
+  let formContentUrl = initialState.contentUrl
 
   // ── Target file (create mode) ─────────────────────────────────────────────
 
@@ -95,16 +169,11 @@
 
   // ── Modifier state ────────────────────────────────────────────────────────
 
-  let selectedModifiers = new Set<string>(entry?.TypeModifiers.map(m => m.Name) ?? [])
+  let selectedModifiers = new Set<string>(initialState.modifiers)
   $: availableModifiers = modifiersForType(formTypeName)
-
-  $: {
-    let pruned = false
-    for (const m of [...selectedModifiers]) {
-      if (!availableModifiers.includes(m)) { selectedModifiers.delete(m); pruned = true }
-    }
-    if (pruned) selectedModifiers = selectedModifiers
-  }
+  $: unsupportedSelectedModifiers = [...selectedModifiers]
+    .filter(mod => !availableModifiers.includes(mod))
+    .sort()
 
   function toggleModifier(mod: string) {
     if (selectedModifiers.has(mod)) selectedModifiers.delete(mod)
@@ -114,7 +183,7 @@
 
   // ── GuidItems: main (purchase) items ──────────────────────────────────────
 
-  let formGuidItems: GuidItem[] = entry ? [...entry.GuidItems] : []
+  let formGuidItems: GuidItem[] = cloneGuidItems(initialState.guidItems)
   /** Parallel display name array — kept in sync with formGuidItems. */
   let guidNames: string[] = formGuidItems.map(g => g.ItemPrototypeRuntimeIdForClient)
 
@@ -123,7 +192,7 @@
 
   // ── GuidItems: bonus (BOGO get) items ─────────────────────────────────────
 
-  let formAdditionalGuidItems: GuidItem[] = entry ? [...entry.AdditionalGuidItems] : []
+  let formAdditionalGuidItems: GuidItem[] = cloneGuidItems(initialState.additionalGuidItems)
   let additionalGuidNames: string[] = formAdditionalGuidItems.map(g => g.ItemPrototypeRuntimeIdForClient)
   let addedAdditionalPaths = new Set<string>()
 
@@ -184,7 +253,14 @@
 
   let selectedCategory: ItemCategory | null = null
   let pickerSearch = ''
-  let pickerResults: { path: string; blueprint: string }[] = []
+  type PrototypePickerResult = {
+    path: string
+    blueprint: string
+    display_name: string
+    leaf: string
+  }
+
+  let pickerResults: PrototypePickerResult[] = []
   let pickerLoading = false
   let pickerError   = ''
 
@@ -195,7 +271,7 @@
   let pickerQty          = 1
 
   let hideAddedItems = false
-  let hideProtoPaths = false
+  let hideProtoPaths = true
 
   let pickerDebounce: ReturnType<typeof setTimeout> | null = null
 
@@ -219,6 +295,30 @@
     ? pickerResults.filter(r => !allAddedPaths.has(r.path))
     : pickerResults
 
+  function hasFriendlyDisplayName(result: PrototypePickerResult): boolean {
+    return !!result.display_name && result.display_name !== result.path
+  }
+
+  function formatPickerResultLabel(result: PrototypePickerResult): string {
+    return hasFriendlyDisplayName(result)
+      ? `${result.display_name} (${result.path})`
+      : result.path
+  }
+
+  function formatPickerResultCompactLabel(result: PrototypePickerResult): string {
+    return hasFriendlyDisplayName(result)
+      ? result.display_name
+      : (result.leaf || result.path.split('/').pop() || result.path)
+  }
+
+  function selectedPickerLabel(): string {
+    const selected = pickerResults.find(r => r.path === pickerSelectedPath)
+    if (!selected) return pickerSelectedPath.split('/').pop() ?? pickerSelectedPath
+    return hideProtoPaths
+      ? formatPickerResultCompactLabel(selected)
+      : formatPickerResultLabel(selected)
+  }
+
   async function loadCategory(cat: ItemCategory) {
     selectedCategory = cat
     pickerSelectedPath = ''
@@ -235,7 +335,7 @@
     try {
       const paths = selectedCategory.Path.split('|')
       if (paths.length === 1) {
-        pickerResults = await invoke<{ path: string; blueprint: string }[]>(
+        pickerResults = await invoke<PrototypePickerResult[]>(
           'search_prototypes',
           { serverExe, query, blueprintHint: paths[0] }
         )
@@ -243,10 +343,10 @@
         // Multi-path category (e.g. Test Gear) — run separate searches and merge.
         const sets = await Promise.all(
           paths.map(p =>
-            invoke<{ path: string; blueprint: string }[]>(
+            invoke<PrototypePickerResult[]>(
               'search_prototypes',
               { serverExe, query, blueprintHint: p }
-            ).catch(() => [] as { path: string; blueprint: string }[])
+            ).catch(() => [] as PrototypePickerResult[])
           )
         )
         const seen = new Set<string>()
@@ -343,13 +443,13 @@
     const isBundle = offerType === 'bundle' || offerType === 'bogo'
     return {
       SkuId: workingSku,
-      GuidItems: formGuidItems,
-      AdditionalGuidItems: offerType === 'bogo' ? formAdditionalGuidItems : [],
+      GuidItems: cloneGuidItems(formGuidItems),
+      AdditionalGuidItems: offerType === 'bogo' ? cloneGuidItems(formAdditionalGuidItems) : [],
       LocalizedEntries: [{
         LanguageId:   'en_us',
         Description:  formDesc,
         Title:        formTitle,
-        ReleaseDate:  initLoc.ReleaseDate,
+        ReleaseDate:  initialState.releaseDate,
         ItemPrice:    formPrice,
       }],
       InfoUrls: isBundle && formInfoUrl
@@ -365,22 +465,8 @@
 
   // ── Dirty detection ───────────────────────────────────────────────────────
 
-  const origModStr     = (original?.TypeModifiers ?? []).map(m => m.Name).sort().join(',')
-  const origGuidStr    = JSON.stringify(original?.GuidItems ?? [])
-  const origAddGuidStr = JSON.stringify(original?.AdditionalGuidItems ?? [])
-
-  $: dirty = isNew || (
-    formTitle      !== (original?.LocalizedEntries[0]?.Title       ?? '') ||
-    formDesc       !== (original?.LocalizedEntries[0]?.Description ?? '') ||
-    formPrice      !== (original?.LocalizedEntries[0]?.ItemPrice   ?? 1)  ||
-    formTypeName   !== (original?.Type.Name  ?? '')                       ||
-    formOrder      !== (original?.Type.Order ?? 0)                        ||
-    formInfoUrl    !== (original?.InfoUrls[0]?.Url    ?? '')              ||
-    formContentUrl !== (original?.ContentData[0]?.Url ?? '')              ||
-    JSON.stringify(formGuidItems)           !== origGuidStr               ||
-    JSON.stringify(formAdditionalGuidItems) !== origAddGuidStr            ||
-    [...selectedModifiers].sort().join(',') !== origModStr
-  )
+  $: currentStateSerialized = serializeEditableState(normalizeCurrentFormForEdit())
+  $: dirty = isNew || currentStateSerialized !== initialStateSerialized
 
   // ── Save ──────────────────────────────────────────────────────────────────
 
@@ -625,7 +711,7 @@
         <!-- Type modifiers -->
         <div class="form-section">
           <div class="section-label">Type Modifiers</div>
-          {#if availableModifiers.length}
+          {#if availableModifiers.length || unsupportedSelectedModifiers.length}
             <div class="modifier-row">
               {#each availableModifiers as mod}
                 <label class="mod-chip">
@@ -637,7 +723,25 @@
                   <span>{mod}</span>
                 </label>
               {/each}
+
+              {#each unsupportedSelectedModifiers as mod}
+                <label class="mod-chip unsupported">
+                  <input
+                    type="checkbox"
+                    checked={selectedModifiers.has(mod)}
+                    on:change={() => toggleModifier(mod)}
+                  >
+                  <span>{mod}</span>
+                  <span class="mod-chip-tag">Existing</span>
+                </label>
+              {/each}
             </div>
+
+            {#if unsupportedSelectedModifiers.length}
+              <div class="modifier-note">
+                Existing modifiers that are not in the preset list for the current type are preserved unless you remove them.
+              </div>
+            {/if}
           {:else}
             <span class="empty-note">No predefined modifiers for this type.</span>
           {/if}
@@ -879,9 +983,12 @@
                     on:click={() => selectPickerItem(result.path)}
                   >
                     {#if hideProtoPaths}
-                      <span class="result-name">{result.path.split('/').pop() ?? result.path}</span>
+                      <span class="result-name">{formatPickerResultCompactLabel(result)}</span>
+                      {#if hasFriendlyDisplayName(result)}
+                        <span class="result-bp">{result.leaf}</span>
+                      {/if}
                     {:else}
-                      <span class="result-path">{result.path}</span>
+                      <span class="result-path">{formatPickerResultLabel(result)}</span>
                       <span class="result-bp">{result.blueprint}</span>
                     {/if}
                   </button>
@@ -903,7 +1010,7 @@
                       ? 'This prototype is already present in another catalog entry.'
                       : pickerSelectedId}
                   >
-                    {pickerSelectedPath.split('/').pop() ?? pickerSelectedPath}
+                    {selectedPickerLabel()}
                     {#if pickerSelectedIsExisting}
                       <span class="picker-status-flag">already in catalog</span>
                     {/if}
@@ -1550,6 +1657,29 @@
   }
   .mod-chip:hover { border-color: var(--border-lit); }
   .mod-chip input[type="checkbox"] { accent-color: var(--accent); cursor: pointer; }
+
+  .mod-chip.unsupported {
+    border-style: dashed;
+    border-color: rgba(200,146,10,0.35);
+    background: rgba(200,146,10,0.08);
+    color: var(--amber-bright);
+  }
+
+  .mod-chip-tag {
+    font-family: var(--font-head);
+    font-size: 9px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--amber-bright);
+    opacity: 0.9;
+  }
+
+  .modifier-note {
+    margin-top: 8px;
+    font-size: 11px;
+    color: var(--text-2);
+    line-height: 1.45;
+  }
 
   /* ── Items table (shared by both item lists) ── */
   .items-table {
