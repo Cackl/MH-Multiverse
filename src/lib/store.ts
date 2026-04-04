@@ -1,9 +1,11 @@
 import { writable } from 'svelte/store'
 import { invoke } from '@tauri-apps/api/core'
 
-export type Tab = 'launch' | 'server' | 'tuning' | 'config' | 'ops' | 'store' | 'settings'
+export type DataTab = 'tuning' | 'store' | 'patches'
+export type Tab = 'launch' | 'server' | 'config' | 'data' | 'ops' | 'settings'
 
 export const activeTab = writable<Tab>('launch')
+export const activeDataTab = writable<DataTab>('tuning')
 export const serverRunning = writable<boolean>(false)
 export const gameRunning = writable<boolean>(false)
 export const apacheRunning = writable<boolean>(false)

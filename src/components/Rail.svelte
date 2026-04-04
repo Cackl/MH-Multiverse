@@ -1,8 +1,14 @@
 <script lang="ts">
-  import { activeTab, serverRunning, apacheRunning, gameRunning, type Tab } from '../lib/store'
+  import { activeTab, activeDataTab, serverRunning, apacheRunning, gameRunning, type Tab, type DataTab } from '../lib/store'
 
   function go(tab: Tab) {
     activeTab.set(tab)
+  }
+
+  // Switches to the Data rail entry, restoring whichever sub-tab was last active.
+  function goData(sub: DataTab) {
+    activeTab.set('data')
+    activeDataTab.set(sub)
   }
 </script>
 
@@ -41,20 +47,16 @@
     <span class="rail-label">Config</span>
   </button>
 
-  <button class="rail-tab" class:active={$activeTab === 'tuning'} on:click={() => go('tuning')}>
+  <button class="rail-tab" class:active={$activeTab === 'data'} on:click={() => goData($activeDataTab)}>
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-      <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+      <line x1="4"  y1="6"  x2="20" y2="6"/>
+      <line x1="4"  y1="12" x2="14" y2="12"/>
+      <line x1="4"  y1="18" x2="17" y2="18"/>
+      <circle cx="18" cy="6"  r="2" fill="currentColor" stroke="none"/>
+      <circle cx="17" cy="12" r="2" fill="currentColor" stroke="none"/>
+      <circle cx="20" cy="18" r="2" fill="currentColor" stroke="none"/>
     </svg>
-    <span class="rail-label">Tuning</span>
-  </button>
-
-  <button class="rail-tab" class:active={$activeTab === 'store'} on:click={() => go('store')}>
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-      <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/>
-      <line x1="3" y1="6" x2="21" y2="6"/>
-      <path d="M16 10a4 4 0 0 1-8 0"/>
-    </svg>
-    <span class="rail-label">Store</span>
+    <span class="rail-label">Data</span>
   </button>
 
   <button class="rail-tab" class:active={$activeTab === 'ops'} on:click={() => go('ops')}>

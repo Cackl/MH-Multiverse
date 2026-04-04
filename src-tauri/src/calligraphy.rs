@@ -18,10 +18,17 @@ pub struct PrototypeMatch {
     pub blueprint: String,
     pub display_name: String,
     pub leaf: String,
+    /// Runtime prototype ID (PrototypeId / PrototypeDataRef in patch files).
+    /// Serialised as a decimal string to preserve full u64 precision across the JS boundary.
+    pub prototype_id: String,
+    /// Prototype GUID (PrototypeGuid in patch files).
+    /// Serialised as a decimal string for the same reason.
+    pub prototype_guid: String,
 }
 
 struct PrototypeRecord {
-    prototype_id: u64, // runtime prototype ID; used to build the by_id index
+    prototype_id: u64,
+    prototype_guid: u64,
     blueprint_id: u64,
     path: String,
     is_abstract: bool,
@@ -35,6 +42,8 @@ pub(crate) struct PrototypeCatalogue {
     by_id: HashMap<u64, String>,
     /// prototype file path → prototype runtime id; inverse of by_id.
     by_path: HashMap<String, u64>,
+    /// prototype guid → prototype file path; used for PrototypeGuid patch value lookups.
+    by_guid: HashMap<u64, String>,
 }
 
 /// Cached catalogue keyed by the sip path it was built from.
@@ -210,8 +219,8 @@ fn parse_prototype_directory(data: &[u8]) -> Result<Vec<PrototypeRecord>, String
     let mut prototypes = Vec::with_capacity(count);
 
     for _ in 0..count {
-        let prototype_id = read_u64_le(data, &mut pos); // stored; used to build by_id index
-        let _prototype_guid = read_u64_le(data, &mut pos);
+        let prototype_id = read_u64_le(data, &mut pos);
+        let prototype_guid = read_u64_le(data, &mut pos);
         let blueprint_id = read_u64_le(data, &mut pos);
         let flags = read_u8(data, &mut pos);
         let path = read_fixed_string16(data, &mut pos).replace('\\', "/");
@@ -219,7 +228,7 @@ fn parse_prototype_directory(data: &[u8]) -> Result<Vec<PrototypeRecord>, String
         // PrototypeRecordFlags::Abstract = bit 0
         let is_abstract = flags & 0x01 != 0;
 
-        prototypes.push(PrototypeRecord { prototype_id, blueprint_id, path, is_abstract });
+        prototypes.push(PrototypeRecord { prototype_id, prototype_guid, blueprint_id, path, is_abstract });
     }
 
     Ok(prototypes)
@@ -255,7 +264,13 @@ fn build_catalogue(sip_path: &str) -> Result<PrototypeCatalogue, String> {
         .map(|p| (p.path.clone(), p.prototype_id))
         .collect();
 
-    Ok(PrototypeCatalogue { blueprints, prototypes, by_id, by_path })
+    // by_guid supports PrototypeGuid patch value lookups (e.g. cell marker EntityGuid fields).
+    let by_guid: HashMap<u64, String> = prototypes
+        .iter()
+        .map(|p| (p.prototype_guid, p.path.clone()))
+        .collect();
+
+    Ok(PrototypeCatalogue { blueprints, prototypes, by_id, by_path, by_guid })
 }
 
 // ── Public helpers ────────────────────────────────────────────────────────────
@@ -278,6 +293,26 @@ pub(crate) fn path_for_id(catalogue: &PrototypeCatalogue, id: u64) -> Option<&st
 /// path back to the `ItemPrototypeRuntimeIdForClient` needed by catalog entries.
 pub(crate) fn id_for_path(catalogue: &PrototypeCatalogue, path: &str) -> Option<u64> {
     catalogue.by_path.get(path).copied()
+}
+
+/// Look up the prototype GUID for a given prototype file path.
+///
+/// Returns `None` if the path is not in the catalogue.
+/// Used when building patch entries with `ValueType: PrototypeGuid`
+/// (e.g. cell marker `EntityGuid` fields).
+pub(crate) fn guid_for_path(catalogue: &PrototypeCatalogue, path: &str) -> Option<u64> {
+    catalogue
+        .prototypes
+        .iter()
+        .find(|p| p.path == path)
+        .map(|p| p.prototype_guid)
+}
+
+/// Look up the prototype file path for a given prototype GUID.
+///
+/// Returns `None` if the GUID is not in the catalogue.
+pub(crate) fn path_for_guid(catalogue: &PrototypeCatalogue, guid: u64) -> Option<&str> {
+    catalogue.by_guid.get(&guid).map(|s| s.as_str())
 }
 
 // ── Tauri command ─────────────────────────────────────────────────────────────
@@ -397,6 +432,8 @@ pub fn search_prototypes(
                 .unwrap_or_default(),
             display_name,
             leaf: p.path.rsplit('/').next().unwrap_or(&p.path).to_string(),
+            prototype_id: p.prototype_id.to_string(),
+            prototype_guid: p.prototype_guid.to_string(),
         });
 
         if results.len() >= max_results {

@@ -10,6 +10,7 @@
   import AppPanel from './components/AppPanel.svelte'
   import StorePanel from './components/StorePanel.svelte'
   import { activeTab, loadConfig } from './lib/store'
+  import DataPanel from './components/DataPanel.svelte';
 
   onMount(async () => {
     await loadConfig()
@@ -25,12 +26,10 @@
         <LaunchPanel />
       {:else if $activeTab === 'server'}
         <ServerPanel />
-      {:else if $activeTab === 'tuning'}
-        <TuningPanel />
       {:else if $activeTab === 'config'}
         <ConfigPanel />
-      {:else if $activeTab === 'store'}
-        <StorePanel />
+      {:else if $activeTab === 'data'}
+        <DataPanel />
       {:else if $activeTab === 'ops'}
         <OpsPanel />
       {:else if $activeTab === 'settings'}
