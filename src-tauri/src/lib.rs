@@ -6,6 +6,7 @@ mod server;
 mod store;
 mod tuning;
 mod updater;
+mod patches;
 
 pub use config::*;
 
@@ -108,6 +109,12 @@ pub fn run() {
             store::get_next_sku_id,
             store::resolve_display_name,
             store::generate_bundle_html,
+            patches::scan_patch_files,
+            patches::load_patch_file,
+            patches::save_patch_file,
+            patches::create_patch_file,
+            patches::set_patch_file_enabled,
+            patches::get_patches_dir,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

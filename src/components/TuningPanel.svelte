@@ -67,6 +67,9 @@
     .filter(f => f.toggleable)
     .map(f => ({ ...f, starred: favourites.includes(f.canonical_name) }))
 
+  $: enabledSidebarFiles  = knownSidebarFiles.filter(f => f.enabled)
+  $: disabledSidebarFiles = knownSidebarFiles.filter(f => !f.enabled)
+
   $: unknownSidebarFiles = files
     .filter(f => !f.toggleable)
     .map(f => ({ ...f, starred: favourites.includes(f.canonical_name) }))
@@ -276,42 +279,84 @@
       {:else if files.length === 0}
         <div class="file-notice">No LiveTuning files found.</div>
       {:else}
-        {#each knownSidebarFiles as file (file.canonical_name)}
-          {@const tag = effectiveTag(file.canonical_name)}
-          <div
-            class="file-item"
-            class:editing={editingFile?.canonical_name === file.canonical_name}
-            role="button"
-            tabindex="0"
-            aria-label="Edit {file.canonical_name}"
-            on:click={() => editingFile = file}
-            on:keydown={e => e.key === 'Enter' && (editingFile = file)}
-          >
-            <button
-              class="star-btn"
-              class:starred={file.starred}
-              aria-label={file.starred ? 'Remove from favourites' : 'Add to favourites'}
-              title={file.starred ? 'Remove from favourites' : 'Add to favourites'}
-              on:click|stopPropagation={() => toggleFavourite(file)}
+        {#if enabledSidebarFiles.length > 0}
+          <div class="file-group-label">Active</div>
+          {#each enabledSidebarFiles as file (file.canonical_name)}
+            {@const tag = effectiveTag(file.canonical_name)}
+            <div
+              class="file-item"
+              class:editing={editingFile?.canonical_name === file.canonical_name}
+              role="button"
+              tabindex="0"
+              aria-label="Edit {file.canonical_name}"
+              on:click={() => editingFile = file}
+              on:keydown={e => e.key === 'Enter' && (editingFile = file)}
             >
-              {#if file.starred}
-                <svg viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="1.5">
-                  <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
-                </svg>
-              {:else}
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-                  <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
-                </svg>
-              {/if}
-            </button>
-            <div class="file-info">
-              <span class="file-name">{displayName(file)}</span>
-              {#if tag}
-                <span class="file-tag tag-{tag}">{TAG_LABELS[tag]}</span>
-              {/if}
+              <button
+                class="star-btn"
+                class:starred={file.starred}
+                aria-label={file.starred ? 'Remove from favourites' : 'Add to favourites'}
+                title={file.starred ? 'Remove from favourites' : 'Add to favourites'}
+                on:click|stopPropagation={() => toggleFavourite(file)}
+              >
+                {#if file.starred}
+                  <svg viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="1.5">
+                    <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+                  </svg>
+                {:else}
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                    <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+                  </svg>
+                {/if}
+              </button>
+              <div class="file-info">
+                <span class="file-name">{displayName(file)}</span>
+                {#if tag}
+                  <span class="file-tag tag-{tag}">{TAG_LABELS[tag]}</span>
+                {/if}
+              </div>
             </div>
-          </div>
-        {/each}
+          {/each}
+        {/if}
+
+        {#if disabledSidebarFiles.length > 0}
+          <div class="file-group-label">Disabled</div>
+          {#each disabledSidebarFiles as file (file.canonical_name)}
+            {@const tag = effectiveTag(file.canonical_name)}
+            <div
+              class="file-item file-item-off"
+              class:editing={editingFile?.canonical_name === file.canonical_name}
+              role="button"
+              tabindex="0"
+              aria-label="Edit {file.canonical_name}"
+              on:click={() => editingFile = file}
+              on:keydown={e => e.key === 'Enter' && (editingFile = file)}
+            >
+              <button
+                class="star-btn"
+                class:starred={file.starred}
+                aria-label={file.starred ? 'Remove from favourites' : 'Add to favourites'}
+                on:click|stopPropagation={() => toggleFavourite(file)}
+              >
+                {#if file.starred}
+                  <svg viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="1.5">
+                    <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+                  </svg>
+                {:else}
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                    <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+                  </svg>
+                {/if}
+              </button>
+              <div class="file-info">
+                <span class="file-name">{displayName(file)}</span>
+                {#if tag}
+                  <span class="file-tag tag-{tag}">{TAG_LABELS[tag]}</span>
+                {/if}
+              </div>
+            </div>
+          {/each}
+        {/if}
 
         {#if unknownSidebarFiles.length > 0}
           <div class="file-group-label">Unknown prefix</div>
@@ -707,6 +752,7 @@
     align-items: center;
     gap: 6px;
     padding: 6px 8px;
+    min-height: 42px;
     border: 1px solid transparent;
     border-radius: var(--radius-sm);
     cursor: pointer;
@@ -715,6 +761,7 @@
   }
   .file-item:hover { background: var(--bg-3); border-color: var(--border-mid); }
   .file-item.editing { background: var(--accent-glow); border-color: var(--accent-dim); }
+  .file-item-off { opacity: 0.55; }
 
   .file-info {
     display: flex;

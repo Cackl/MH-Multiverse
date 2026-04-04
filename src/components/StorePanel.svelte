@@ -861,6 +861,7 @@
     align-items: center;
     gap: 6px;
     padding: 7px 10px;
+    min-height: 42px;
     border: 1px solid transparent;
     border-radius: var(--radius-sm);
     cursor: pointer;

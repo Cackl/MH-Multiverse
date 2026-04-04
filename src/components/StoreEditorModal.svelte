@@ -1125,6 +1125,7 @@
     border-radius: var(--radius-md);
     width: min(1440px, 96vw);
     height: min(820px, 92vh);
+    margin-top: 38px;
     display: flex;
     flex-direction: column;
     overflow: hidden;

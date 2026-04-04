@@ -2,6 +2,7 @@
   import { activeDataTab, type DataTab } from '../lib/store'
   import TuningPanel from './TuningPanel.svelte'
   import StorePanel  from './StorePanel.svelte'
+  import PatchesPanel from './PatchesPanel.svelte'
 
   const TABS: { id: DataTab; label: string }[] = [
     { id: 'tuning',  label: 'Live Tuning' },
@@ -34,17 +35,7 @@
     {:else if $activeDataTab === 'store'}
       <StorePanel />
     {:else if $activeDataTab === 'patches'}
-      <!-- PatchesPanel goes here -->
-      <div class="placeholder">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-          <polyline points="14 2 14 8 20 8"/>
-          <line x1="12" y1="11" x2="12" y2="17"/>
-          <line x1="9"  y1="14" x2="15" y2="14"/>
-        </svg>
-        <span class="placeholder-label">Patches</span>
-        <span class="placeholder-sub">Data patch editor coming soon.</span>
-      </div>
+      <PatchesPanel />
     {/if}
   </div>
 
