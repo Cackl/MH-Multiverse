@@ -12,9 +12,8 @@
   <div class="titlebar-brand">
     <div class="titlebar-logo">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: var(--accent)">
-        <polygon points="12,2 22,8.5 22,15.5 12,22 2,15.5 2,8.5"/>
-        <line x1="12" y1="2" x2="12" y2="22" opacity="0.3"/>
-        <line x1="2" y1="8.5" x2="22" y2="8.5" opacity="0.3"/>
+        <polygon points="22,12 17,20.66 7,20.66 2,12 7,3.34 17,3.34" />
+        <polygon points="17,15 12,18 7,15 7,9 12,6 17,9" opacity="0.45" stroke-width="1.5" />
       </svg>
     </div>
     <div class="titlebar-name">MH <span>Manifold</span></div>

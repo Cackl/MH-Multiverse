@@ -19,12 +19,12 @@
   --bg-3: #1a1d27;
   --bg-4: #222634;
 
-  /* Accent — teal */
-  --accent:             #3ea7c7;
-  --accent-bright:      #4adae4;
-  --accent-dim:         #247a7a;
-  --accent-glow:        rgba(62, 194, 199, 0.08);
-  --accent-glow-strong: rgba(62, 190, 199, 0.15);
+  /* Accent — blue */
+  --accent:             #10c3ff;
+  --accent-bright:      #62e2ff;
+  --accent-dim:         #0f78cc;
+  --accent-glow:        rgba(16, 195, 255, 0.14);
+  --accent-glow-strong: rgba(98, 226, 255, 0.28);
 
   /* Semantic */
   --red:           #c0392b;
@@ -364,14 +364,6 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
     var(--panel-grad-top) 0%,
     transparent var(--panel-grad-mid)
   );
-}
-
-[data-theme="blue"] {
-  --accent:             #10c3ff;
-  --accent-bright:      #62e2ff;
-  --accent-dim:         #0f78cc;
-  --accent-glow:        rgba(16, 195, 255, 0.14);
-  --accent-glow-strong: rgba(98, 226, 255, 0.28);
 }
 
 [data-theme="mh-itembase"] {
