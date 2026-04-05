@@ -1190,7 +1190,7 @@
   /* Column widths (table-layout: fixed so these are authoritative) */
   .col-check   { width: 38px;  text-align: center; }
   .col-sku     { width: 82px;  }
-  .col-name    { /* takes remaining width */ }
+  /*.col-name    { /* takes remaining width }*/
   .col-type    { width: 100px; }
   .col-price   { width: 96px;  }
   .col-source  { width: 122px; }

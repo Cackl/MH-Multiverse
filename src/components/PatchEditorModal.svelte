@@ -213,6 +213,7 @@
       <div class="field-row">
         <span class="field-label">Enabled</span>
         <button
+          aria-label="Enabled"
           class="toggle-switch"
           class:on={draft.Enabled}
           on:click={() => draft.Enabled = !draft.Enabled}
@@ -551,7 +552,7 @@
     align-items: center;
     gap: 8px;
   }
-  .proto-input-row .field-input    { flex: 1; }
+  /* .proto-input-row .field-input    { flex: 1; } */
   .proto-input-row .field-textarea { flex: 1; }
 
   .proto-hint {

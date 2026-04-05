@@ -681,8 +681,9 @@
               </div>
 
               <div class="field">
-                <label class="field-label">SKU</label>
+                <label class="field-label" for="sku-input">SKU</label>
                 <input
+                  id="sku-input"
                   class="field-input readonly" type="text"
                   value={workingSku}
                   readonly tabindex="-1"

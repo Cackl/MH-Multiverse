@@ -626,7 +626,14 @@
       class="confirm-dialog"
       role="alertdialog"
       aria-modal="true"
+      tabindex="-100"
       on:click|stopPropagation
+      on:keydown={(e) => {
+      if (e.key === 'Escape' || e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        cancelDiscard();
+      }
+    }}
     >
       <div class="confirm-icon">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -643,7 +650,7 @@
         <p class="confirm-sub">This cannot be undone.</p>
       </div>
       <div class="confirm-actions">
-        <button class="btn btn-sm btn-outline" on:click={cancelDiscard}>Cancel</button>
+        <button class="btn btn-sm btn-outline" tabindex="-1" on:click={cancelDiscard}>Cancel</button>
         <button class="btn btn-sm btn-red" on:click={confirmDiscard}>Discard</button>
       </div>
     </div>
@@ -699,17 +706,17 @@
 
   .new-file-actions { display: flex; gap: 6px; }
 
-  .restart-notice {
+  /* .restart-notice {
     display: flex;
     align-items: flex-start;
     gap: 6px;
     padding: 8px 12px 10px;
     font-size: 10px;
     color: var(--text-3);
-    /* border-bottom: 1px solid var(--border); */
+    border-bottom: 1px solid var(--border);
     line-height: 1.4;
-  }
-  .restart-notice svg { width: 12px; height: 12px; flex-shrink: 0; margin-top: 1px; }
+  } */
+  /* .restart-notice svg { width: 12px; height: 12px; flex-shrink: 0; margin-top: 1px; } */
 
   /* ── Sidebar stats ── */
   .stats-row {

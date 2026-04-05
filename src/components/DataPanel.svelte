@@ -98,33 +98,4 @@
     min-height: 0;
   }
 
-  /* ── Placeholder (Patches not yet implemented) ── */
-  .placeholder {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 12px;
-    color: var(--text-3);
-  }
-
-  .placeholder svg {
-    width: 36px;
-    height: 36px;
-    opacity: 0.3;
-  }
-
-  .placeholder-label {
-    font-family: var(--font-head);
-    font-size: 12px;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-    color: var(--text-2);
-  }
-
-  .placeholder-sub {
-    font-size: 11px;
-    color: var(--text-3);
-  }
 </style>

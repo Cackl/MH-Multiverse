@@ -912,14 +912,14 @@
     color: var(--text-3);
   }
 
-  .backup-actions {
+  /* .backup-actions {
     display: flex;
     align-items: center;
     gap: 10px;
     padding: 8px 0;
     border-top: 1px solid var(--border);
     margin-top: 4px;
-  }
+  } */
 
   /* ── Backup history ── */
   .backup-notice {

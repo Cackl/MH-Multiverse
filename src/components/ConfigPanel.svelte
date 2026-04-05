@@ -575,7 +575,7 @@
     flex-shrink: 0;
   }
   .config-section-head .section-title { font-size: 11px; }
-  .config-section-head .btn { margin-left: auto; }
+  /* .config-section-head .btn { margin-left: auto; } */
 
   .config-body {
     flex: 1;
