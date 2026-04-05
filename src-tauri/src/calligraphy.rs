@@ -273,6 +273,52 @@ fn build_catalogue(sip_path: &str) -> Result<PrototypeCatalogue, String> {
     Ok(PrototypeCatalogue { blueprints, prototypes, by_id, by_path, by_guid })
 }
 
+fn sip_path_for_server_exe(server_exe: &str) -> Result<String, String> {
+    let sip_path = Path::new(server_exe)
+        .parent()
+        .ok_or_else(|| "Cannot determine server directory from exe path".to_string())?
+        .join("Data")
+        .join("Game")
+        .join("Calligraphy.sip");
+
+    let sip_path_str = sip_path
+        .to_str()
+        .ok_or_else(|| "Calligraphy.sip path contains invalid UTF-8".to_string())?
+        .to_string();
+
+    if !sip_path.exists() {
+        return Err(format!("Calligraphy.sip not found at {sip_path_str}"));
+    }
+
+    Ok(sip_path_str)
+}
+
+/// Ensure the cached prototype catalogue is loaded for the given server executable.
+///
+/// Rebuilds the cache automatically when the resolved `Calligraphy.sip` path changes.
+pub(crate) fn ensure_catalogue_loaded(
+    state: &CatalogueState,
+    server_exe: &str,
+) -> Result<(), String> {
+    let sip_path_str = sip_path_for_server_exe(server_exe)?;
+
+    let mut guard = state
+        .0
+        .lock()
+        .map_err(|_| "Catalogue state lock is poisoned".to_string())?;
+
+    let needs_build = guard
+        .as_ref()
+        .map(|(cached_path, _)| cached_path != &sip_path_str)
+        .unwrap_or(true);
+
+    if needs_build {
+        *guard = Some((sip_path_str.clone(), build_catalogue(&sip_path_str)?));
+    }
+
+    Ok(())
+}
+
 // ── Public helpers ────────────────────────────────────────────────────────────
 
 /// Look up the prototype file path for a given runtime prototype ID.
@@ -354,42 +400,18 @@ pub fn search_prototypes(
         return Ok(vec![]);
     }
 
-    let sip_path = Path::new(&server_exe)
-        .parent()
-        .ok_or_else(|| "Cannot determine server directory from exe path".to_string())?
-        .join("Data")
-        .join("Game")
-        .join("Calligraphy.sip");
-
-    let sip_path_str = sip_path
-        .to_str()
-        .ok_or_else(|| "Calligraphy.sip path contains invalid UTF-8".to_string())?
-        .to_string();
-
     let server_dir = Path::new(&server_exe)
         .parent()
         .ok_or_else(|| "Cannot determine server directory from exe path".to_string())?
         .to_string_lossy()
         .to_string();
 
-    if !sip_path.exists() {
-        return Err(format!("Calligraphy.sip not found at {sip_path_str}"));
-    }
+    ensure_catalogue_loaded(&state, &server_exe)?;
 
-    let mut guard = state
+    let guard = state
         .0
         .lock()
         .map_err(|_| "Catalogue state lock is poisoned".to_string())?;
-
-    let needs_build = guard
-        .as_ref()
-        .map(|(cached_path, _)| cached_path != &sip_path_str)
-        .unwrap_or(true);
-
-    if needs_build {
-        *guard = Some((sip_path_str.clone(), build_catalogue(&sip_path_str)?));
-    }
-
     let (_, catalogue) = guard.as_ref().unwrap();
 
     let query_lower = query.trim().to_lowercase();
@@ -458,36 +480,12 @@ pub fn lookup_prototype_id(
     server_exe: String,
     prototype_path: String,
 ) -> Result<String, String> {
-    let sip_path = Path::new(&server_exe)
-        .parent()
-        .ok_or_else(|| "Cannot determine server directory from exe path".to_string())?
-        .join("Data")
-        .join("Game")
-        .join("Calligraphy.sip");
+    ensure_catalogue_loaded(&state, &server_exe)?;
 
-    let sip_path_str = sip_path
-        .to_str()
-        .ok_or_else(|| "Calligraphy.sip path contains invalid UTF-8".to_string())?
-        .to_string();
-
-    if !sip_path.exists() {
-        return Err(format!("Calligraphy.sip not found at {sip_path_str}"));
-    }
-
-    let mut guard = state
+    let guard = state
         .0
         .lock()
         .map_err(|_| "Catalogue state lock is poisoned".to_string())?;
-
-    let needs_build = guard
-        .as_ref()
-        .map(|(cached_path, _)| cached_path != &sip_path_str)
-        .unwrap_or(true);
-
-    if needs_build {
-        *guard = Some((sip_path_str.clone(), build_catalogue(&sip_path_str)?));
-    }
-
     let (_, catalogue) = guard.as_ref().unwrap();
 
     id_for_path(catalogue, &prototype_path)

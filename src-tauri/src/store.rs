@@ -4,7 +4,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
-use crate::calligraphy::CatalogueState;
+use crate::calligraphy::{ensure_catalogue_loaded, CatalogueState};
 
 // ── Embedded display names ────────────────────────────────────────────────────
 
@@ -538,6 +538,8 @@ pub fn resolve_display_name(
     let server_dir = server_dir_of(&server_exe)
         .map(|p| p.to_string_lossy().to_string())
         .unwrap_or_default();
+
+    let _ = ensure_catalogue_loaded(&cat_state, &server_exe);
 
     name_for_id(&dn_state, &cat_state, &server_dir, &prototype_runtime_id)
 }
