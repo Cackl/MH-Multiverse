@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte'
+  import { openPath } from '@tauri-apps/plugin-opener'
   import { invoke } from '@tauri-apps/api/core'
   import { appConfig, serverRunning, setShutdownConfig, type ShutdownConfig } from '../lib/store'
   import PanelSidebar from './PanelSidebar.svelte'
@@ -34,6 +35,21 @@
   }
 
   type IniData = Record<string, Record<string, string>>
+
+  // -- Helper --
+
+  let openDirError = ''
+
+  async function openConfigDir() {
+    if (!$appConfig.server_exe) return
+    openDirError = ''
+    try {
+      const dir = await invoke<string>('get_config_dir', { serverExe: $appConfig.server_exe })
+      await openPath(dir)
+    } catch (e) {
+      openDirError = String(e)
+    }
+  }
 
   // -- Config schema --
 
@@ -300,6 +316,18 @@
       {#if !embedded}
         <div class="section-title">Config</div>
       {/if}
+
+      <button
+        class="btn-icon"
+        on:click={openConfigDir}
+        title="Open MHServerEmu folder"
+        disabled={!$appConfig.server_exe}
+        style="margin-left:auto;"
+      >
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+        </svg>
+      </button>
     </svelte:fragment>
     <div class="config-nav-list">
       {#each schema as section}

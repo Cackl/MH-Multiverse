@@ -204,3 +204,11 @@ pub fn reset_config_section(server_exe: String, section: String) -> Result<(), S
 
     Ok(())
 }
+
+#[tauri::command]
+pub fn get_config_dir(server_exe: String) -> Result<String, String> {
+    let dir = server_dir(&server_exe)
+        .ok_or("Could not determine server directory")?;
+
+    Ok(dir.to_string_lossy().to_string())
+}

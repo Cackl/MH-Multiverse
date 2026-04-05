@@ -86,6 +86,7 @@ pub fn run() {
             ini::read_config,
             ini::write_config,
             ini::reset_config_section,
+            ini::get_config_dir,
             tuning::scan_tuning_files,
             tuning::read_tuning_file,
             tuning::write_tuning_file,
