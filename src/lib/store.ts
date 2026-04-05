@@ -10,6 +10,7 @@ export const serverRunning = writable<boolean>(false)
 export const gameRunning = writable<boolean>(false)
 export const apacheRunning = writable<boolean>(false)
 export const uptimeSec = writable<number>(0)
+export const serverError = writable<string>('')
 
 let _uptimeTimer: ReturnType<typeof setInterval> | null = null
 
@@ -54,6 +55,14 @@ export function appendLogBatch(lines: Omit<LogLine, 'id'>[]) {
 
 export function clearLog() {
   serverLog.set([])
+}
+
+export function setServerError(message: string) {
+  serverError.set(message)
+}
+
+export function clearServerError() {
+  serverError.set('')
 }
 
 export interface LaunchOptions {

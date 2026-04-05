@@ -4,16 +4,18 @@
   import Rail from './components/Rail.svelte'
   import LaunchPanel from './components/LaunchPanel.svelte'
   import ServerPanel from './components/ServerPanel.svelte'
-  import TuningPanel from './components/TuningPanel.svelte'
   import ConfigPanel from './components/ConfigPanel.svelte'
   import OpsPanel from './components/OpsPanel.svelte'
   import AppPanel from './components/AppPanel.svelte'
-  import StorePanel from './components/StorePanel.svelte'
   import { activeTab, loadConfig } from './lib/store'
-  import DataPanel from './components/DataPanel.svelte';
+  import { initServerEventBridge } from './lib/serverEvents'
+  import DataPanel from './components/DataPanel.svelte'
 
   onMount(async () => {
-    await loadConfig()
+    await Promise.all([
+      loadConfig(),
+      initServerEventBridge(),
+    ])
   })
 </script>
 

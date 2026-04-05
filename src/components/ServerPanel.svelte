@@ -1,11 +1,20 @@
 <script lang="ts">
-  import { onMount, onDestroy, tick } from 'svelte'
+  import { tick, onMount } from 'svelte'
   import { invoke } from '@tauri-apps/api/core'
-  import { listen, type UnlistenFn } from '@tauri-apps/api/event'
   import { openUrl } from '@tauri-apps/plugin-opener'
   import { fetch as tauriFetch } from '@tauri-apps/plugin-http'
-  import { serverRunning, appConfig, serverLog, appendLog, appendLogBatch, clearLog, apacheRunning, uptimeSec, startUptime, stopUptime, type LogLine, type LogLevel } from '../lib/store'
-  import ConfigPanel from './ConfigPanel.svelte'
+  import {
+    serverRunning,
+    appConfig,
+    serverLog,
+    appendLog,
+    clearLog,
+    apacheRunning,
+    uptimeSec,
+    serverError,
+    clearServerError,
+    setServerError,
+  } from '../lib/store'
 
   type Filter = 'all' | 'trace' | 'debug' | 'info' | 'warn' | 'err' | 'fatal'
 
@@ -17,15 +26,17 @@
   let stopping = false
   let startingApache = false
   let stoppingApache = false
-  let error = ''
   let scrollLocked = false
   let logEl: HTMLDivElement
   let dashboardPort = DASHBOARD_PORT_DEFAULT
-  let showConfig = false
 
   let countdownSec = 0
   let countdownInterval: ReturnType<typeof setInterval> | null = null
   $: countdownActive = countdownInterval !== null
+
+  $: if ($serverRunning) starting = false
+  $: if (!$serverRunning) stopping = false
+  $: if (!$serverRunning && countdownActive) clearCountdown()
 
   $: countdownLabel = (() => {
     if (!countdownActive) return ''
@@ -45,11 +56,11 @@
     const delay = $appConfig.shutdown.delay_minutes
     if (!delay || delay <= 0) {
       stopping = true
-      error = ''
+      clearServerError()
       try {
         await invoke('stop_server')
       } catch (e) {
-        error = String(e)
+        setServerError(String(e))
         stopping = false
       }
       return
@@ -69,11 +80,11 @@
       if (countdownSec <= 0) {
         clearCountdown()
         stopping = true
-        error = ''
+        clearServerError()
         try {
           await invoke('stop_server')
         } catch (e) {
-          error = String(e)
+          setServerError(String(e))
           stopping = false
         }
       }
@@ -84,12 +95,10 @@
     clearCountdown()
     try { await invoke('send_command', { cmd: '!server broadcast Server shutdown has been cancelled.' }) } catch {}
   }
-  let unlistenLog: UnlistenFn | null = null
-  let unlistenStarted: UnlistenFn | null = null
-  let unlistenStopped: UnlistenFn | null = null
 
   $: filtered = filter === 'all' ? $serverLog : $serverLog.filter(l => l.level === filter)
   $: filter, scrollToEnd()
+  $: if (!scrollLocked) filtered.length, scrollToEnd()
 
   $: uptimeFormatted = [
     Math.floor($uptimeSec / 3600),
@@ -102,10 +111,6 @@
     if (logEl) logEl.scrollTop = logEl.scrollHeight
   }
 
-  function scrollToBottom() {
-    if (!scrollLocked) scrollToEnd()
-  }
-
   onMount(async () => {
     if ($appConfig.server_exe) {
       try {
@@ -115,86 +120,28 @@
         if (!isNaN(parsed) && parsed > 0) dashboardPort = parsed
       } catch {}
     }
-
-    const running = await invoke<boolean>('server_is_running')
-    serverRunning.set(running)
-    if (running) {
-      startUptime()
-      const apache = await invoke<boolean>('apache_is_running')
-      apacheRunning.set(apache)
-      // await loadServerCommands()
-    }
-
-    unlistenLog = await listen<Omit<LogLine, 'id'>[]>('server-log', (event) => {
-      appendLogBatch(event.payload)
-      scrollToBottom()
-    })
-
-    unlistenStarted = await listen('server-started', async () => {
-      serverRunning.set(true)
-      starting = false
-      error = ''
-      startUptime()
-      appendLog({ time: '', level: 'ok', msg: '-- Server started --' })
-      scrollToBottom()
-      const apache = await invoke<boolean>('apache_is_running')
-      apacheRunning.set(apache)
-      // await loadServerCommands(3000)
-    })
-
-    unlistenStopped = await listen<{ running: boolean; exit_code: number | null }>('server-stopped', (event) => {
-      serverRunning.set(false)
-      apacheRunning.set(false)
-      stopping = false
-      clearCountdown()
-      stopUptime()
-      if (event.payload.exit_code !== null && event.payload.exit_code !== 0) {
-        error = `Server exited unexpectedly (code ${event.payload.exit_code})`
-        appendLog({ time: '', level: 'err', msg: `-- Server exited unexpectedly (code ${event.payload.exit_code}) --` })
-      } else {
-        appendLog({ time: '', level: 'info', msg: '-- Server stopped --' })
-      }
-      scrollToBottom()
-    })
-  })
-
-  onDestroy(() => {
-    unlistenLog?.()
-    unlistenStarted?.()
-    unlistenStopped?.()
-    clearCountdown()
   })
 
   async function startServer() {
     starting = true
-    error = ''
+    clearServerError()
     try {
       await invoke('start_server', { serverExe: $appConfig.server_exe })
     } catch (e) {
-      error = String(e)
+      setServerError(String(e))
       starting = false
-    }
-  }
-
-  async function stopServer() {
-    stopping = true
-    error = ''
-    try {
-      await invoke('stop_server')
-    } catch (e) {
-      error = String(e)
-      stopping = false
     }
   }
 
   async function startApache() {
     startingApache = true
+    clearServerError()
     try {
       await invoke('start_apache', { serverExe: $appConfig.server_exe })
       const apache = await invoke<boolean>('apache_is_running')
       apacheRunning.set(apache)
     } catch (e) {
-      error = String(e)
+      setServerError(String(e))
     } finally {
       startingApache = false
     }
@@ -202,11 +149,12 @@
 
   async function stopApache() {
     stoppingApache = true
+    clearServerError()
     try {
       await invoke('stop_apache')
       apacheRunning.set(false)
     } catch (e) {
-      error = String(e)
+      setServerError(String(e))
     } finally {
       stoppingApache = false
     }
@@ -218,11 +166,10 @@
     try {
       await invoke('send_command', { cmd })
       appendLog({ time: '', level: 'info', msg: `> ${cmd}` })
-      scrollToBottom()
       command = ''
       acVisible = false; acResolved = null; acSuggs = []; acSel = -1
     } catch (e) {
-      error = String(e)
+      setServerError(String(e))
     }
   }
 
@@ -230,7 +177,7 @@
 
   interface Cmd { f: string; a: string; d: string; invokerType?: string }
 
-  // Fallback hardcoded list — replaced at runtime by /Commands endpoint when server starts
+  // Fallback hardcoded list — replaced at runtime by /Commands endpoint (if available) when server starts
   const FALLBACK_COMMANDS: Cmd[] = [
     {f:'!account ban',a:'[email]',d:'Bans the specified account.'},
     {f:'!account create',a:'[email] [playerName] [password]',d:'Creates a new account.'},
@@ -346,7 +293,6 @@
     {f:'!tp',a:'x:+offset | x y z',d:'Teleports to position.'},
     {f:'!gc collect',a:'',d:'Forces garbage collection.'},
   ]
-
   let commands: Cmd[] = FALLBACK_COMMANDS.map(c => ({ ...c, invokerType: 'Any' }))
 
   async function loadServerCommands(retryMs = 0) {
@@ -367,6 +313,17 @@
       console.warn('[Manifold] Failed to load commands from server, using fallback', e)
     }
   }
+
+  // let commandsLoadedForRunning = false
+
+  // $: if ($serverRunning && !commandsLoadedForRunning) {
+  //   commandsLoadedForRunning = true
+  //   loadServerCommands()
+  // }
+
+  // $: if (!$serverRunning) {
+  //   commandsLoadedForRunning = false
+  // }
 
   let acSel = -1
   let acSuggs: Cmd[] = []
@@ -521,16 +478,9 @@
           <span class="uptime-display">{uptimeFormatted}</span>
         {/if}
         <div class="header-spacer"></div>
-        {#if error}
-          <div class="header-error" title={error}>{error}</div>
+        {#if $serverError}
+          <div class="header-error" title={$serverError}>{$serverError}</div>
         {/if}
-        <!-- <button class="btn btn-sm btn-outline" on:click={() => showConfig = !showConfig}>
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:12px;height:12px;">
-            <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/>
-            <circle cx="12" cy="12" r="3"/>
-          </svg>
-          {showConfig ? 'Console' : 'Configure'}
-        </button> -->
         {#if $serverRunning}
           {#if countdownActive}
             <button class="btn btn-sm btn-countdown" on:click={cancelStop}>
@@ -571,42 +521,6 @@
           </button>
       </div>
       <div class="header-row-2">
-        <!-- Process controls -->
-        <!-- <div class="ctrl-group">
-          {#if $serverRunning}
-            <button class="btn btn-sm btn-red" on:click={stopServer} disabled={stopping}>
-              <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" style="width:10px;height:10px;"><rect x="3" y="3" width="8" height="8" rx="1"/></svg>
-              {stopping ? 'Stopping...' : 'Server'}
-            </button>
-          {:else}
-            <button class="btn btn-sm btn-green" on:click={startServer} disabled={starting || !$appConfig.server_exe} title={!$appConfig.server_exe ? 'Set server exe in App settings' : ''}>
-              <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" style="width:10px;height:10px;"><polygon points="4,2 12,7 4,12"/></svg>
-              {starting ? 'Starting...' : 'Server'}
-            </button>
-          {/if}
-
-          {#if $apacheRunning}
-            <button class="btn btn-sm btn-red" on:click={stopApache} disabled={stoppingApache}>
-              <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" style="width:10px;height:10px;"><rect x="3" y="3" width="8" height="8" rx="1"/></svg>
-              Apache
-            </button>
-          {:else}
-            <button class="btn btn-sm btn-outline" on:click={startApache} disabled={startingApache || !$appConfig.server_exe}>
-              <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" style="width:10px;height:10px;"><polygon points="4,2 12,7 4,12"/></svg>
-              Apache
-            </button>
-          {/if}
-
-          <button class="btn btn-sm btn-outline" on:click={openDashboard} disabled={!$serverRunning}>
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:10px;height:10px;">
-              <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
-              <polyline points="15,3 21,3 21,9"/><line x1="10" y1="14" x2="21" y2="3"/>
-            </svg>
-            Dashboard
-          </button>
-        </div>
-        <div class="toolbar-sep"></div> -->
-
         <button class="btn btn-sm btn-outline" on:click={clearLog}>Clear</button>
         <button class="btn btn-sm btn-outline" class:active={scrollLocked} on:click={() => scrollLocked = !scrollLocked}>
           {scrollLocked ? 'Lock ON' : 'Lock'}
@@ -627,12 +541,7 @@
     </div>
   </div>
 
-  <!-- Content: Console or Config -->
-  <!-- {#if showConfig}
-    <ConfigPanel embedded={true} onBack={() => showConfig = false} />
-  {:else} -->
-    <!-- Log view -->
-    <div class="log-view" bind:this={logEl}>
+  <div class="log-view" bind:this={logEl}>
       {#each filtered as line (line.id)}
         <div class="log-line">
           {#if line.time}
@@ -727,8 +636,6 @@
         {/each}
       </div>
     </div>
-  <!-- {/if} -->
-
 </div>
 
 <style>
