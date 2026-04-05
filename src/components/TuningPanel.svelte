@@ -909,7 +909,7 @@
     padding: 7px 16px;
     border-bottom: 1px solid var(--border);
     flex-shrink: 0;
-    background: rgba(8, 9, 12, 0.15);
+    background: var(--chrome-sunken-bg);
   }
 
   .card-grid {
@@ -978,7 +978,7 @@
     gap: 8px;
     padding: 8px 12px;
     border-top: 1px solid var(--border);
-    background: rgba(8, 9, 12, 0.15);
+    background: var(--chrome-sunken-bg);
   }
 
   .toggle-label {

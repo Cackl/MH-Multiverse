@@ -63,7 +63,7 @@
   let protoSearching = false
   let protoDropOpen  = false
   let protoDebounce: ReturnType<typeof setTimeout> | null = null
-  let protoInputEl:  HTMLInputElement
+  let protoInputEl:  HTMLTextAreaElement
 
   // Value is edited as a string regardless of underlying type.
   let valueStr = serializeValue(draft.Value, draft.ValueType)
@@ -116,6 +116,7 @@
   // ── Prototype search ───────────────────────────────────────────────────────
 
   function onProtoInput() {
+    protoQuery      = protoQuery.replace(/[\r\n]/g, '')
     draft.Prototype = protoQuery
     lastMatch       = null
     if (protoDebounce) clearTimeout(protoDebounce)
@@ -219,15 +220,17 @@
       </div>
 
       <!-- Description -->
-      <div class="field-row">
+      <div class="field-row field-row-top">
         <label class="field-label" for="pe-desc">Description</label>
-        <input
+        <textarea
           id="pe-desc"
-          type="text"
-          class="field-input"
+          class="field-textarea field-textarea-sm"
+          rows="2"
           placeholder="Human-readable note"
           bind:value={draft.Description}
-        />
+          on:input={() => { draft.Description = draft.Description.replace(/[\r\n]/g, '') }}
+          spellcheck="false"
+        ></textarea>
       </div>
 
       <!-- Prototype + search -->
@@ -235,17 +238,17 @@
         <label class="field-label" for="pe-proto">Prototype</label>
         <div class="proto-wrap">
           <div class="proto-input-row">
-            <input
+            <textarea
               id="pe-proto"
-              type="text"
-              class="field-input"
+              class="field-textarea field-textarea-sm"
+              rows="2"
               placeholder="Search or paste prototype path..."
               bind:value={protoQuery}
               bind:this={protoInputEl}
               on:input={onProtoInput}
               autocomplete="off"
               spellcheck="false"
-            />
+            ></textarea>
             {#if protoSearching}
               <span class="proto-hint">Searching...</span>
             {/if}
@@ -268,16 +271,17 @@
       </div>
 
       <!-- Path -->
-      <div class="field-row">
+      <div class="field-row field-row-top">
         <label class="field-label" for="pe-path">Path</label>
-        <input
+        <textarea
           id="pe-path"
-          type="text"
-          class="field-input"
+          class="field-textarea field-textarea-sm"
+          rows="2"
           placeholder="e.g. Choices[0].Weight"
           bind:value={draft.Path}
+          on:input={() => { draft.Path = draft.Path.replace(/[\r\n]/g, '') }}
           spellcheck="false"
-        />
+        ></textarea>
       </div>
 
       <!-- Value Type -->
@@ -382,7 +386,7 @@
     background: var(--bg-1);
     border: 1px solid var(--border-lit);
     border-radius: var(--radius-md);
-    width: min(700px, 92vw);
+    width: min(800px, 92vw);
     margin-top: 38px;
     display: flex;
     flex-direction: column;
@@ -516,6 +520,12 @@
   .field-textarea:focus { border-color: var(--accent-dim); }
   .field-textarea.input-error { border-color: var(--red); }
 
+  /* Single-logical-line textareas — wrap but don't allow manual resize */
+  .field-textarea-sm {
+    resize: none;
+    line-height: 1.5;
+  }
+
   /* ── Value wrapper ── */
   .value-wrap {
     display: flex;
@@ -541,7 +551,8 @@
     align-items: center;
     gap: 8px;
   }
-  .proto-input-row .field-input { flex: 1; }
+  .proto-input-row .field-input    { flex: 1; }
+  .proto-input-row .field-textarea { flex: 1; }
 
   .proto-hint {
     font-family: var(--font-head);
@@ -614,7 +625,7 @@
   .modal-footer {
     padding: 12px 16px;
     border-top: 1px solid var(--border);
-    background: rgba(8, 9, 12, 0.3);
+    background: var(--chrome-footer-bg);
     display: flex;
     align-items: center;
     gap: 10px;

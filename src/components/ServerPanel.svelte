@@ -122,7 +122,7 @@
       startUptime()
       const apache = await invoke<boolean>('apache_is_running')
       apacheRunning.set(apache)
-      await loadServerCommands()
+      // await loadServerCommands()
     }
 
     unlistenLog = await listen<Omit<LogLine, 'id'>[]>('server-log', (event) => {
@@ -139,7 +139,7 @@
       scrollToBottom()
       const apache = await invoke<boolean>('apache_is_running')
       apacheRunning.set(apache)
-      await loadServerCommands(3000)
+      // await loadServerCommands(3000)
     })
 
     unlistenStopped = await listen<{ running: boolean; exit_code: number | null }>('server-stopped', (event) => {

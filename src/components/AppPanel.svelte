@@ -38,10 +38,10 @@
   }
 
   const themes = [
-    { id: '',              label: 'Teal',            accent: '#3ea7c7' },
+    // { id: '',              label: 'Teal',            accent: '#3ea7c7' },
     { id: 'blue',          label: 'Blue',            accent: '#3ea7c7' },
     { id: 'mh-itembase',   label: 'Item Base',       accent: '#10c3ff' },
-    { id: 'itembase-v2',   label: 'Item Base v2',    accent: '#00c8ff' },
+    // { id: 'itembase-v2',   label: 'Item Base v2',    accent: '#00c8ff' },
     { id: 'light',         label: 'Light',           accent: '#f4f7fa' },
     { id: 'phoenix',       label: 'Phoenix',         accent: '#d96a1d' }
   ]
@@ -282,7 +282,7 @@
                 </div>
               {/each}
             </div>
-            <div class="theme-hint">Selection is saved and restored on next launch. Additional themes coming soon.</div>
+            <div class="theme-hint"></div>
           </div>
         </div>
 
@@ -481,7 +481,7 @@
     display: flex;
     flex-direction: column;
     gap: 2px;
-    max-height: 180px;
+    max-height: 600px;
     overflow-y: auto;
     border: 1px solid var(--border-mid);
     border-radius: var(--radius-sm);

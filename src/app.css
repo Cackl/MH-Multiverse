@@ -91,6 +91,10 @@
   /* Sidebar background */
   --sidebar-bg: rgba(8, 9, 12, 0.5);
 
+  /* Chrome surface overlays — semi-transparent darken layers for footers/toolbars */
+  --chrome-footer-bg: rgba(0, 0, 0, 0.25);
+  --chrome-sunken-bg: rgba(0, 0, 0, 0.15);
+
   /* Console */
   --console-bg:      var(--bg-0);
   --console-cmd-bg:  var(--bg-2);
@@ -546,6 +550,10 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
   /* Sidebar background */
   --sidebar-bg: rgba(244, 248, 252, 0.62);
 
+  /* Chrome surface overlays */
+  --chrome-footer-bg: rgba(0, 0, 0, 0.05);
+  --chrome-sunken-bg: rgba(0, 0, 0, 0.03);
+
   /* Console */
   --console-bg:       #f1f5f9;
   --console-cmd-bg:   #e2e8f0;
@@ -648,7 +656,7 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 .panel-footer {
   padding: 12px 20px;
   border-top: 1px solid var(--border);
-  background: rgba(8, 9, 12, 0.3);
+  background: var(--chrome-footer-bg);
   display: flex;
   align-items: center;
   gap: 10px;

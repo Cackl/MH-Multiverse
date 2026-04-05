@@ -272,6 +272,15 @@
     settingInputEl?.focus()
   }
 
+  // Prototype cell expand
+  let expandedProtoKey: string | null = null
+
+  function toggleProtoExpand(entry: TuningEntry) {
+    if (!entry.prototype) return
+    const key = entry.prototype + '|' + entry.setting
+    expandedProtoKey = expandedProtoKey === key ? null : key
+  }
+
   // ── Close guard ────────────────────────────────────────────────────────────
 
   function tryClose() {
@@ -448,9 +457,16 @@
               {@const originalIndex = entries.indexOf(entry)}
               {@const saved = savedEntries[originalIndex]}
               {@const modified = !isNew && saved !== undefined && entry.value !== saved.value}
+              {@const rowKey = entry.prototype + '|' + entry.setting}
+              {@const isExpanded = expandedProtoKey === rowKey}
               <tr class:modified>
                 <td class="col-cat"><span class="cat-badge">{categoryForSetting(entry.setting)}</span></td>
-                <td class="col-proto" title={entry.prototype}>
+                <td
+                  class="col-proto"
+                  class:proto-expandable={!!entry.prototype}
+                  class:proto-expanded={isExpanded}
+                  on:click={() => toggleProtoExpand(entry)}
+                >
                   <span class="proto-text">{entry.prototype || '—'}</span>
                 </td>
                 <td class="col-setting">
@@ -475,6 +491,13 @@
                   </button>
                 </td>
               </tr>
+              {#if isExpanded}
+                <tr class="proto-expand-row" class:modified>
+                  <td colspan="5">
+                    <div class="proto-expand-content">{entry.prototype}</div>
+                  </td>
+                </tr>
+              {/if}
             {/each}
           </tbody>
         </table>
@@ -687,7 +710,7 @@
     gap: 16px;
     padding: 10px 16px;
     border-bottom: 1px solid var(--border);
-    background: rgba(8, 9, 12, 0.2);
+    background: var(--chrome-sunken-bg);
     flex-shrink: 0;
     flex-wrap: wrap;
   }
@@ -770,7 +793,7 @@
     padding: 8px 16px;
     border-bottom: 1px solid var(--border);
     flex-shrink: 0;
-    background: rgba(8, 9, 12, 0.2);
+    background: var(--chrome-sunken-bg);
   }
 
   .filter-select {
@@ -818,25 +841,50 @@
   }
   .entry-status.error { color: var(--text-error); text-transform: none; font-family: var(--font-body); letter-spacing: 0; }
 
-  .entry-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  .entry-table { width: 100%; border-collapse: collapse; font-size: 12px; table-layout: fixed; }
 
   .entry-table thead th {
     font-family: var(--font-head); font-size: 9px; font-weight: 600;
     letter-spacing: 0.12em; text-transform: uppercase; color: var(--text-3);
     padding: 7px 14px; border-bottom: 1px solid var(--border);
     text-align: left; position: sticky; top: 0; background: var(--bg-1); white-space: nowrap;
+    overflow: hidden;
   }
 
   .entry-table tbody tr { border-bottom: 1px solid var(--border); transition: background 0.08s; }
   .entry-table tbody tr:hover { background: var(--bg-2); }
   .entry-table tbody tr.modified { background: var(--accent-glow); }
   .entry-table tbody tr.modified:hover { background: var(--accent-glow-strong); }
-  .entry-table td { padding: 7px 14px; vertical-align: middle; }
+  .entry-table td { padding: 7px 14px; vertical-align: middle; overflow: hidden; }
 
   .col-cat   { width: 120px; }
   .col-proto { width: 28%; }
   .col-value { width: 110px; }
   .col-del   { width: 36px; }
+
+  /* Clickable prototype cell */
+  .col-proto.proto-expandable { cursor: pointer; }
+  .col-proto.proto-expandable:hover .proto-text { color: var(--text-0); }
+  .col-proto.proto-expanded .proto-text { color: var(--accent-bright); }
+
+  /* Expanded prototype sub-row */
+  .proto-expand-row { border-bottom: 1px solid var(--border) !important; }
+  .proto-expand-row:hover { background: transparent !important; }
+  .proto-expand-row.modified { background: var(--accent-glow) !important; }
+  .proto-expand-row td { padding: 0; overflow: visible; }
+
+  .proto-expand-content {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--text-1);
+    line-height: 1.6;
+    padding: 7px 14px 8px;
+    border-top: 1px solid var(--border);
+    border-left: 2px solid var(--accent-dim);
+    word-break: break-all;
+    user-select: text;
+    background: var(--bg-0);
+  }
 
   .cat-badge {
     font-family: var(--font-head); font-size: 9px; font-weight: 600;
@@ -875,7 +923,7 @@
   .add-entry-row {
     display: flex; gap: 6px; padding: 8px 14px;
     border-top: 1px solid var(--border);
-    background: rgba(8, 9, 12, 0.25);
+    background: var(--chrome-footer-bg);
     flex-shrink: 0; align-items: flex-start;
   }
 
@@ -990,7 +1038,7 @@
   /* ── Footer ── */
   .modal-footer {
     padding: 10px 16px; border-top: 1px solid var(--border);
-    background: rgba(8, 9, 12, 0.3);
+    background: var(--chrome-footer-bg);
     display: flex; align-items: center; justify-content: space-between;
     gap: 10px; flex-shrink: 0; min-height: 50px;
   }

@@ -1747,7 +1747,7 @@
   .modal-footer {
     padding: 10px 16px;
     border-top: 1px solid var(--border);
-    background: rgba(8, 9, 12, 0.3);
+    background: var(--chrome-footer-bg);
     display: flex;
     align-items: center;
     justify-content: space-between;

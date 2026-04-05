@@ -277,7 +277,7 @@
   <div class="ops-layout">
   <PanelSidebar width="var(--sidebar-narrow)">
     <svelte:fragment slot="header">
-      <div class="section-title">Ops</div>
+      <div class="section-title">Update</div>
     </svelte:fragment>
 
     <nav class="ops-nav-list">
