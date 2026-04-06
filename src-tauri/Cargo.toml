@@ -1,7 +1,7 @@
 [package]
 name = "mh-multiverse"
 version = "0.1.0"
-description = "A desktop launcher and server management tool built for Marvel Heroes Omega and MHServerEmu"
+description = "A desktop launcher and server management tool built for MHServerEmu"
 authors = ["cackl"]
 license = ""
 repository = ""
