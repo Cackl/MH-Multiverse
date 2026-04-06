@@ -116,7 +116,7 @@
         backupOptions: {
           config_ini:    updateBackupOptions.config_ini,
           live_tuning:   updateBackupOptions.live_tuning,
-          billing_store: updateBackupOptions.billing_store,
+          account_db: updateBackupOptions.account_db,
         },
       })
       updateSuccess = true
@@ -386,10 +386,10 @@
           </label>
           <label class="checkbox-row">
             <input type="checkbox"
-              checked={updateBackupOptions.billing_store}
-              on:change={e => setUpdateBackupOptions({ ...updateBackupOptions, billing_store: (e.target as HTMLInputElement).checked })}
+              checked={updateBackupOptions.account_db}
+              on:change={e => setUpdateBackupOptions({ ...updateBackupOptions, account_db: (e.target as HTMLInputElement).checked })}
               disabled={updating}>
-            <span class="checkbox-label">Account Store</span>
+            <span class="checkbox-label">Account.db</span>
           </label>
         </div>
 

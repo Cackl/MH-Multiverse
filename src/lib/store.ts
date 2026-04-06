@@ -81,7 +81,7 @@ export interface LaunchOptions {
 export interface UpdateBackupOptions {
   config_ini: boolean
   live_tuning: boolean
-  billing_store: boolean
+  account_db: boolean
 }
 
 export interface ShutdownConfig {
@@ -140,7 +140,7 @@ export const appConfig = writable<AppConfig>({
   tuning_tags: {},
   tuning_favourites: [],
   backup_targets: ['Config.ini', 'ConfigOverride.ini', 'Data/Game/LiveTuning', 'Data/Account.db'],
-  update_backup_options: { config_ini: true, live_tuning: true, billing_store: true },
+  update_backup_options: { config_ini: true, live_tuning: true, account_db: true },
   store_html_output_dir: '',
 })
 

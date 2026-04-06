@@ -35,7 +35,7 @@ pub struct UpdateBackupOptions {
     #[serde(default = "default_true")]
     pub live_tuning: bool,
     #[serde(default = "default_true")]
-    pub billing_store: bool,
+    pub account_db: bool,
 }
 
 impl Default for UpdateBackupOptions {
@@ -43,7 +43,7 @@ impl Default for UpdateBackupOptions {
         Self {
             config_ini: true,
             live_tuning: true,
-            billing_store: true,
+            account_db: true,
         }
     }
 }

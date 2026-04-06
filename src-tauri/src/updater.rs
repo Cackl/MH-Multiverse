@@ -321,7 +321,7 @@ async fn run_update_inner(
         let mut targets: Vec<String> = Vec::new();
         if backup_options.config_ini    { targets.push("Config.ini".into()); }
         if backup_options.live_tuning   { targets.push("Data/Game/LiveTuning".into()); }
-        if backup_options.billing_store { targets.push("Data/Account".into()); }
+        if backup_options.account_db { targets.push("Data/Account.db".into()); }
 
         if !targets.is_empty() {
             emit_progress(app, "backing_up", 0.0, None);
