@@ -115,7 +115,7 @@ npm run check
 
 ## Planned Updates
 
-Aside from some upfront bug fixes and issue mitigation, I'll be looking at updating the Live Tuning feature in response to the Event system update coming soon to MHServerEmu.
+Aside from some upfront bug fixes and issue mitigation, I'll first be looking at updating the Live Tuning feature in response to the Event system update coming soon to MHServerEmu. I'm also looking to make the calligraphy.sip parsing smoother (and in particular less reliant on `display_names.json` for prototype ID -> display name replacement).
 If there's enough interest, I'll also look into Linux support.
 
 ---
