@@ -1,207 +1,122 @@
-# MH Manifold — Developer Handover
+# MH Manifold
 
-Custom launcher and local server controller for Marvel Heroes (MHServerEmu).
-Built with Tauri 2, Svelte 5, and Rust.
-
----
-
-## Stack
-
-| Layer | Choice |
-|---|---|
-| App framework | Tauri 2 |
-| Frontend | Svelte 5 + Vite 8 |
-| Backend | Rust (stable, 1.93+) |
-| Encryption | `aes-gcm` 0.10 via OS keychain (`keyring` 2) |
-| Process detection | `sysinfo` |
+A desktop launcher and server management tool for [MHServerEmu](https://github.com/Crypto137/MHServerEmu), the Marvel Heroes Omega server emulator. Built with Tauri 2, Svelte 5, and Rust.
 
 ---
 
-## Project Structure
+## Overview
 
-```
-mh-manifold/
-├── src/
-│   ├── App.svelte              Root component — tab router, loads config on mount
-│   ├── app.css                 All design tokens and shared styles (CSS variables), data-themes.
-│   ├── main.ts                 Svelte 5 entry point (uses mount(), not new App())
-│   ├── lib/
-│   │   └── store.ts            Global Svelte stores — config, server/game/apache
-│   │                           state, log, uptime timer
-│   └── components/
-│       ├── Titlebar.svelte     App header with hex logo and server status pill
-│       ├── TabBar.svelte       Tab navigation (Launch / Local Server / Config) [not in use, see Rail]
-│       ├── LaunchPanel.svelte  Server list, credentials display, game exe, launch button
-│       ├── Rail.svelte         Side panel for navigation (Launch / Local Server / App)
-│       ├── ServerModal.svelte  Add/edit server dialog
-│       ├── ServerPanel.svelte  Local server start/stop, log view, command input, config component access
-│       └── ConfigPanel.svelte  ConfigOverride.ini editor with schema, tooltips, toggles
-|
-├── src-tauri/
-│   ├── src/
-│   │   ├── main.rs             Entry point — calls app_lib::run()
-│   │   ├── lib.rs              Tauri builder — plugins, managed state, window close hook,
-│   │   │                       all command registrations
-│   │   ├── config.rs           AppConfig/Server structs, AES-256-GCM encryption,
-│   │   │                       keychain key management, manifold.json persistence
-│   │   ├── launcher.rs         launch_game command, game_is_running (sysinfo poll)
-│   │   ├── server.rs           ServerProcess/ServerState, start/stop MHServerEmu + Apache,
-│   │   │                       stdout streaming, Job Object cleanup, apache_is_running
-│   │   └── ini.rs              Config.ini/ConfigOverride.ini read/write with diff-only saving
-│   ├── capabilities/
-│   │   └── default.json        Tauri capability grants (dialog, opener)
-│   ├── Cargo.toml
-│   └── tauri.conf.json         Window config — title, min size, native decorations
-```
+MH Manifold provides a single interface for launching Marvel Heroes Omega, managing a local MHServerEmu instance, and editing the server's data files. It handles process lifecycle, credential storage, config editing, live tuning, data patching, MTX store catalog editing, server updates, and backups.
+
+The app is currently Windows-only and communicates with the server via stdin/stdout piping and direct file I/O against MHServerEmu's data directories.
 
 ---
 
-## Data Flow
+## Features
 
-### Config persistence
-- `manifold.json` stored in OS app data dir via `tauri::path::app_data_dir()`
-- Passwords AES-256-GCM encrypted; key stored in OS keychain (Windows Credential Manager)
-- Frontend `Server` type never includes `password_enc`/`password_nonce` — encryption
-  happens entirely in Rust
-- `upsert_server` command takes a plaintext password and encrypts before saving
-- Empty password string = keep existing (for edits)
+### Game Launching
+- Multi-server profile management with per-server credentials
+- AES-256-GCM encrypted password storage via OS keychain (Windows Credential Manager)
+- Auto-login support — email and password passed as command-line arguments
+- Configurable launch flags: skip startup movies, skip motion comics, no sound, client logging, custom resolution, robocopy, no-Steam mode
 
-### Server lifecycle
-- `start_server` spawns Apache (`../Apache24/bin/httpd.exe` relative to MHServerEmu dir)
-  with `APACHE_SERVER_ROOT` env var set, then spawns MHServerEmu with piped stdout/stderr
-- Both processes assigned to a Windows Job Object with `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`
-  — hard-killing Manifold kills both child processes automatically
-- `server-log` Tauri events streamed from stdout to frontend
-- `server-stopped` event fired when MHServerEmu exits (planned or crash)
-- Window close hook in `lib.rs` calls `kill_child()` before `app.exit(0)`
+### Local Server Management
+- Start and stop MHServerEmu with stdout/stderr log streaming to an in-app console
+- Structured log parsing (timestamp, level, category, message) with level-based colouring and filtering
+- Interactive command input with autocomplete drawn from the MHServerEmu command list
+- Timed shutdown with configurable delay and broadcast message
+- Independent Apache start/stop for players running in offline mode without the reverse proxy
+- Windows Job Object integration — child processes are killed automatically if Manifold crashes or is force-closed
 
-### Config editor
-- `read_config` reads `Config.ini` (defaults) + `ConfigOverride.ini` (overrides), merges them
-- `write_config` diffs new values against defaults — only writes keys that differ
-- `reset_config_section` removes all overrides for a given INI section
-- Frontend schema in `ConfigPanel.svelte` maps UI fields to INI section/key pairs
+### Server Configuration (INI Editor)
+- Visual editor for MHServerEmu's `Config.ini` / `ConfigOverride.ini` with grouped sections, tooltips, and type-appropriate controls (toggles, dropdowns, numeric inputs)
+- Diff-only saving — only values that differ from `Config.ini` defaults are written to `ConfigOverride.ini`
+- Per-section reset to defaults
+- Currently displays a subset of the full `Config.ini` options for simplicity, though more may be added in future
+
+### Live Tuning Editor
+- Scan, create, edit, and toggle `LiveTuningData*.json` files in `Data/Game/LiveTuning`
+- Enable/disable tuning files via `OFF_` filename prefix convention
+- Tag-based organisation (Core, Event, Custom) with favourites pinning
+- Category-aware setting enum validation (Global, World Entity, Power, Region, Loot, etc.)
+- Prototype path picker backed by Calligraphy.sip for prototype-scoped tuning entries
+
+### Data Patching Editor
+- Scan, create, edit, and toggle `PatchData*.json` files in `Data/Game/Patches`
+- Enable/disable patch files by moving between `Patches/` and `Patches/Off/`
+- Per-entry enable/disable, prototype path, field path, value type, and value editing
+- Prototype picker and value type dropdown matching MHServerEmu's supported patch value types
+
+### MTX Store Catalog Editor
+- Load, create, edit, and delete catalog entries across `Catalog*.json` files in `Data/Game/MTXStore`
+- Non-destructive editing — saves always write to `*MODIFIED.json` sidecar files; base catalog files are never modified
+- Automatic `.bak` snapshots before every write
+- Prototype item picker with display name resolution (embedded + custom override maps)
+- Type and modifier assignment matching MHServerEmu's catalog type system
+- Bundle HTML page generation for in-game store display, with customisable CSS
+
+### Server Updates & Backups
+- One-click update from MHServerEmu nightly builds (download, extract, install)
+- Configurable backup targets (INI files, LiveTuning directory, account database, full Data directory)
+- Automatic pre-update backup with post-update restore of user-modified files
+- Manual backup creation, restore, and deletion with manifest tracking
+
+### Application Settings
+- Game and server executable path configuration with file browser
+- Five colour themes
+
+### Calligraphy.sip Integration
+- Binary pak reader for `Calligraphy.sip` — parses blueprint and prototype directory records
+- Prototype search by path and display name, filtered by category/blueprint
+- Runtime prototype ID and GUID resolution for tuning, patching, and store editors
+- Cached per server executable path, automatically rebuilds when the server changes
 
 ---
 
-## Rust Crates
+## Installation
 
-```toml
-tauri = "2.10.3"
-tauri-plugin-dialog = "2"
-tauri-plugin-log = "2"
-tauri-plugin-opener = "2"
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
-aes-gcm = "0.10"
-base64 = "0.22"
-keyring = "2"
-tokio = { version = "1", features = ["process", "io-util", "rt"] }
-windows = { version = "0.61", features = ["Win32_System_JobObjects", "Win32_Foundation", "Win32_Security"] }
-sysinfo = "..."
-```
+### Prerequisites
+- [Node.js](https://nodejs.org/) (LTS)
+- [Rust](https://rustup.rs/) (stable, 1.77.2+)
+- [Tauri CLI](https://v2.tauri.app/start/prerequisites/) prerequisites for your platform
 
----
-
-## Known Issues & Outstanding Work
-
-### Apache / local server
-- Apache is spawned with `Stdio::null()` so its errors are not captured. Consider piping
-  `stderr` to the log view for diagnostics.
-- No reverse proxy setup guidance in-app — users need Apache running for `localhost/SiteConfig.xml`
-  to resolve. An alternative is the MH exe patcher at `crypto137.github.io/mh-exe-patcher/`
-  which allows connecting directly on port 8080 (disables credential encryption, local use only).
-
-### Features not yet implemented
-- **Phase 6 polish items** (from plan):
-  - First-run onboarding flow (currently silently shows empty state)
-  - Build & distribution (`npm run tauri build`)
-
----
-
-## Development Commands
-
+### Setup
 ```cmd
-# Dev server
+npm install
+```
+
+### Development
+```cmd
 npm run tauri dev
+```
 
-# Type check
-npm run check
-
-# Production build
+### Production Build
+```cmd
 npm run tauri build
 ```
 
-Config file location (runtime): `%APPDATA%\com.mhmanifold.app\manifold.json`
-
----
-
-## MHServerEmu Directory Structure Expected
-
-```
-<root>/
-├── Apache24/
-│   ├── bin/
-│   │   └── httpd.exe
-│   ├── conf/
-│   │   └── httpd.conf            (uses ${APACHE_SERVER_ROOT})
-│   └── logs/
-│       └── error.log
-├── MHServerEmu/
-│   ├── Data/Game/LiveTuning/     ← directory for Live Tuning JSON files
-│   ├── MHServerEmu.exe           ← this is what you point server_exe at
-│   ├── Config.ini
-│   └── ConfigOverride.ini        (created/managed by Manifold)
-└── StartServer.bat
+### Type Checking
+```cmd
+npm run check
 ```
 
-The `server_exe` config field should point to `MHServerEmu/MHServerEmu.exe`.
-Apache path is derived as `../../Apache24/bin/httpd.exe` relative to the exe.
+### Config File Location
+```
+%APPDATA%\com.mhmanifold.app\manifold.json
+```
+
+### NOTE
+*MH Manifold is an unsigned executable that starts other processes (e.g Marvel Heroes Omega, MHServerEmu) and creates, writes and reads files (e.g ConfigOverride.ini, Data Patching, Live Tuning). Like Bifrost, this may cause false positive detections from antivirus software. If this causes issues, with the prerequisites installed the source code can be built with just two commands.* 
 
 ---
 
-## Tauri Commands Reference
+## Acknowledgements
 
-| Command | Module | Description |
-|---|---|---|
-| `get_config` | config | Load full AppConfig from manifold.json |
-| `cmd_save_config` | config | Save AppConfig directly |
-| `upsert_server` | config | Add/edit server, encrypts password |
-| `delete_server` | config | Remove server by ID |
-| `set_active_server` | config | Update active_server_id |
-| `set_game_exe` | config | Update game_exe path |
-| `set_server_exe` | config | Update server_exe path |
-| `launch_game` | launcher | Spawn MarvelHeroesOmega.exe with args |
-| `game_is_running` | launcher | Poll sysinfo for MarvelHeroesOmega.exe |
-| `start_server` | server | Spawn Apache + MHServerEmu |
-| `stop_server` | server | Kill both processes |
-| `send_command` | server | Write line to MHServerEmu stdin |
-| `server_is_running` | server | Check MHServerEmu child process |
-| `apache_is_running` | server | Check Apache child process |
-| `read_config` | ini | Parse Config.ini + ConfigOverride.ini |
-| `write_config` | ini | Diff-write to ConfigOverride.ini |
-| `reset_config_section` | ini | Remove section from ConfigOverride.ini |
+A special thanks to all contributors of the [MHServerEmu](https://github.com/Crypto137/MHServerEmu) project their tireless work in bringing Marvel Heroes Omega back to life.
 
----
-
-## Svelte Store Reference (`src/lib/store.ts`)
-
-| Export | Type | Description |
-|---|---|---|
-| `activeTab` | `writable<Tab>` | Current tab: launch / server / config |
-| `serverRunning` | `writable<boolean>` | MHServerEmu process state |
-| `gameRunning` | `writable<boolean>` | MarvelHeroesOmega.exe process state |
-| `apacheRunning` | `writable<boolean>` | Apache process state |
-| `uptimeSec` | `writable<number>` | Server uptime counter (seconds) |
-| `appConfig` | `writable<AppConfig>` | Full config including server list |
-| `activeServerId` | `writable<string>` | Currently selected server UUID |
-| `serverLog` | `writable<LogLine[]>` | Log lines (capped at 2000) |
-| `startUptime()` | function | Start uptime timer (no-op if already running) |
-| `stopUptime()` | function | Stop and reset uptime timer |
-| `appendLog()` | function | Append a line to serverLog with auto-ID |
-| `clearLog()` | function | Clear serverLog |
-| `loadConfig()` | async function | invoke get_config and populate stores |
-| `upsertServer()` | async function | invoke upsert_server |
-| `deleteServer()` | async function | invoke delete_server |
-| `selectServer()` | async function | Set active server and persist |
-| `setGameExe()` | async function | Update game exe path |
-| `setServerExe()` | async function | Update server exe path |
+Additionally, this project was inspired by the great work done in the following projects
+- Crypto137: [Bifrost](https://github.com/Crypto137/Bifrost)
+- Crypto137: [MHServerEmu.Gui](https://github.com/Crypto137/MHServerEmu.Gui)
+- Crypto137: [OpenCalligraphy](https://github.com/Crypto137/OpenCalligraphy)
+- mtzimas92: [MHServerEmu-CatalogManager](https://github.com/mtzimas92/MHServerEmu-CatalogManager)
+- Pyrox37: [MHServerEmuUI](https://github.com/Pyrox37/MHServerEmuUI)
