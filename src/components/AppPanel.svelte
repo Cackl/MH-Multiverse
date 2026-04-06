@@ -12,6 +12,8 @@
     { id: 'about',  label: 'About' },
   ]
 
+  const version = __APP_VERSION__
+
   async function browseGameExe() {
     const selected = await open({
       filters: [{ name: 'Executable', extensions: ['exe'] }],
@@ -299,7 +301,7 @@
               </div>
               <div class="about-text">
                 <h3>MH Manifold</h3>
-                <p>v0.1.0 -- Tauri 2 + Svelte 5 + Rust</p>
+                <p>{version} -- Tauri 2 + Svelte 5 + Rust</p>
               </div>
             </div>
           </div>
@@ -371,8 +373,12 @@
   }
 
   .detail-head {
-    padding: 14px 20px 12px;
+    display: flex;
+    align-items: center;
+    padding: 12px 20px;
     border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+    min-height: 53px;
   }
 
   .detail-body {

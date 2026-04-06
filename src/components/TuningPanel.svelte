@@ -840,7 +840,7 @@
     padding: 10px 16px;
     border-bottom: 1px solid var(--border);
     flex-shrink: 0;
-    min-height: 52px;
+    min-height: 53px;
   }
 
   .search-wrap {

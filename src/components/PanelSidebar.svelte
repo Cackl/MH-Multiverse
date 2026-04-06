@@ -26,7 +26,7 @@
     align-items: center;
     padding: 14px 16px 12px;
     border-bottom: 1px solid var(--border);
-    min-height: 52px;
+    min-height: 53px;
     flex-shrink: 0;
     gap: 8px;
   }

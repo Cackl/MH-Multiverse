@@ -649,9 +649,9 @@
     padding: 10px 20px;
     border-bottom: 1px solid var(--border);
     flex-shrink: 0;
-    min-height: 52px;
+    min-height: 53px;
   }
-  .ops-section-head .section-title { font-size: 11px; }
+  /* .ops-section-head .section-title { font-size: 11px; } */
   .ops-section-head .btn { margin-left: auto; }
 
   .ops-body {

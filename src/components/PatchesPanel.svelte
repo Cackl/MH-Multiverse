@@ -822,7 +822,7 @@
     padding: 8px 14px;
     border-bottom: 1px solid var(--border);
     flex-shrink: 0;
-    min-height: 48px;
+    min-height: 53px;
   }
 
   .toolbar-filename {

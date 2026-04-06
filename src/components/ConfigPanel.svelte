@@ -601,8 +601,9 @@
     padding: 12px 20px;
     border-bottom: 1px solid var(--border);
     flex-shrink: 0;
+    min-height: 53px;
   }
-  .config-section-head .section-title { font-size: 11px; }
+  /* .config-section-head .section-title { font-size: 11px; } */
   /* .config-section-head .btn { margin-left: auto; } */
 
   .config-body {
