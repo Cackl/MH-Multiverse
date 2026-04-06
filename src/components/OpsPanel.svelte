@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte'
   import { invoke } from '@tauri-apps/api/core'
+  import { openPath } from '@tauri-apps/plugin-opener'
   import { listen, type UnlistenFn } from '@tauri-apps/api/event'
   import { appConfig, serverRunning, setBackupTargets } from '../lib/store'
   import PanelSidebar from './PanelSidebar.svelte'
@@ -242,7 +243,6 @@
     openDirError = ''
     try {
       const dir = await invoke<string>('get_backups_dir', { serverExe: $appConfig.server_exe })
-      const { openPath } = await import('@tauri-apps/plugin-opener')
       await openPath(dir)
     } catch (e) {
       openDirError = String(e)

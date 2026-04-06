@@ -122,7 +122,7 @@ If there's enough interest, I'll also look into Linux support.
 
 ## Acknowledgements
 
-A special thanks to all contributors of the [MHServerEmu](https://github.com/Crypto137/MHServerEmu) project their tireless work in bringing Marvel Heroes Omega back to life.
+A special thanks to all contributors of the [MHServerEmu](https://github.com/Crypto137/MHServerEmu) project for their tireless work in bringing Marvel Heroes Omega back to life.
 
 Additionally, this project was inspired by the great work done in the following projects
 - Crypto137: [Bifrost](https://github.com/Crypto137/Bifrost)
