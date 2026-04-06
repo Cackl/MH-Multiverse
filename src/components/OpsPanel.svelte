@@ -2,7 +2,7 @@
   import { onMount, onDestroy } from 'svelte'
   import { invoke } from '@tauri-apps/api/core'
   import { listen, type UnlistenFn } from '@tauri-apps/api/event'
-  import { appConfig, serverRunning, setBackupTargets, setUpdateBackupOptions } from '../lib/store'
+  import { appConfig, serverRunning, setBackupTargets } from '../lib/store'
   import PanelSidebar from './PanelSidebar.svelte'
 
   // ── Types ──────────────────────────────────────────────────────────────────
@@ -85,7 +85,6 @@
   // ── Derived ────────────────────────────────────────────────────────────────
 
   $: hasServerExe = !!$appConfig.server_exe
-  $: updateBackupOptions = $appConfig.update_backup_options
   $: selectedTargets = new Set($appConfig.backup_targets)
   $: fullDataSelected = selectedTargets.has('Data')
 
@@ -113,11 +112,7 @@
     try {
       await invoke('run_update', {
         serverExe: $appConfig.server_exe,
-        backupOptions: {
-          config_ini:    updateBackupOptions.config_ini,
-          live_tuning:   updateBackupOptions.live_tuning,
-          account_db: updateBackupOptions.account_db,
-        },
+        backupTargets: [...selectedTargets],
       })
       updateSuccess = true
       updateProgress = null
@@ -367,32 +362,6 @@
           {/if}
         </div>
 
-        <!-- Auto-backup options -->
-        <div class="subsection-title">Auto-backup before update</div>
-        <div class="checkbox-list">
-          <label class="checkbox-row">
-            <input type="checkbox"
-              checked={updateBackupOptions.config_ini}
-              on:change={e => setUpdateBackupOptions({ ...updateBackupOptions, config_ini: (e.target as HTMLInputElement).checked })}
-              disabled={updating}>
-            <span class="checkbox-label">Config.ini</span>
-          </label>
-          <label class="checkbox-row">
-            <input type="checkbox"
-              checked={updateBackupOptions.live_tuning}
-              on:change={e => setUpdateBackupOptions({ ...updateBackupOptions, live_tuning: (e.target as HTMLInputElement).checked })}
-              disabled={updating}>
-            <span class="checkbox-label">Live Tuning</span>
-          </label>
-          <label class="checkbox-row">
-            <input type="checkbox"
-              checked={updateBackupOptions.account_db}
-              on:change={e => setUpdateBackupOptions({ ...updateBackupOptions, account_db: (e.target as HTMLInputElement).checked })}
-              disabled={updating}>
-            <span class="checkbox-label">Account.db</span>
-          </label>
-        </div>
-
         <!-- Server running warning -->
         {#if $serverRunning}
           <div class="warning-notice">
@@ -436,6 +405,10 @@
         {#if updateError}
           <div class="feedback-error">{updateError}</div>
         {/if}
+
+        <div class="restart-notice">
+          Before updating, a backup is automatically created with the Targets selected on the Backups page
+        </div>
 
       </div>
 
@@ -762,33 +735,6 @@
     color: var(--text-error);
   }
 
-  /* ── Checkbox list (update backup options) ── */
-  .checkbox-list {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-  }
-
-  .checkbox-row {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    cursor: pointer;
-  }
-
-  .checkbox-row input[type="checkbox"] {
-    width: 14px;
-    height: 14px;
-    accent-color: var(--accent);
-    flex-shrink: 0;
-    cursor: pointer;
-  }
-
-  .checkbox-label {
-    font-size: 12px;
-    color: var(--text-1);
-  }
-
   /* ── Warning notice ── */
   .warning-notice {
     display: flex;
@@ -902,7 +848,7 @@
   }
 
   .target-label {
-    font-family: var(--font-mono);
+    font-family: var(--font-body);
     font-size: 12px;
     color: var(--text-1);
   }
@@ -1010,4 +956,17 @@
     flex: 1;
     min-width: 160px;
   }
+
+
+  .restart-notice {
+    display: flex;
+    align-items: flex-start;
+    gap: 6px;
+    padding: 8px 12px 10px;
+    font-size: 10px;
+    color: var(--text-3);
+    border-top: 1px solid var(--border);
+    line-height: 1.4;
+  }
+
 </style>

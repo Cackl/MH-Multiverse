@@ -14,7 +14,6 @@ pub struct UpdateInfo {
     pub available: bool,
 }
 
-use crate::config::UpdateBackupOptions;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BackupManifest {
@@ -299,7 +298,7 @@ async fn run_update_inner(
     server_dir: &Path,
     zip_path: &Path,
     staging_dir: &Path,
-    backup_options: UpdateBackupOptions,
+    backup_targets: Vec<String>,
 ) -> Result<(), String> {
     // Guard: server must not be running
     {
@@ -318,10 +317,7 @@ async fn run_update_inner(
 
     // Pre-update backup
     let backup_manifest: Option<BackupManifest> = {
-        let mut targets: Vec<String> = Vec::new();
-        if backup_options.config_ini    { targets.push("Config.ini".into()); }
-        if backup_options.live_tuning   { targets.push("Data/Game/LiveTuning".into()); }
-        if backup_options.account_db { targets.push("Data/Account.db".into()); }
+        let targets = backup_targets;
 
         if !targets.is_empty() {
             emit_progress(app, "backing_up", 0.0, None);
@@ -414,13 +410,13 @@ pub async fn check_update_available() -> Result<UpdateInfo, String> {
 pub async fn run_update(
     app: AppHandle,
     server_exe: String,
-    backup_options: UpdateBackupOptions,
+    backup_targets: Vec<String>,
 ) -> Result<(), String> {
     let server_dir = server_dir_from_exe(&server_exe)?;
     let zip_path = server_dir.join("_update.zip");
     let staging_dir = server_dir.join("_update_staging");
 
-    let result = run_update_inner(&app, &server_dir, &zip_path, &staging_dir, backup_options).await;
+    let result = run_update_inner(&app, &server_dir, &zip_path, &staging_dir, backup_targets).await;
 
     // Always clean up temp files regardless of outcome
     let _ = std::fs::remove_file(&zip_path);

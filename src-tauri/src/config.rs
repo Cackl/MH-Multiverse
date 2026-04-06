@@ -28,25 +28,6 @@ fn default_backup_targets() -> Vec<String> {
     ]
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct UpdateBackupOptions {
-    #[serde(default = "default_true")]
-    pub config_ini: bool,
-    #[serde(default = "default_true")]
-    pub live_tuning: bool,
-    #[serde(default = "default_true")]
-    pub account_db: bool,
-}
-
-impl Default for UpdateBackupOptions {
-    fn default() -> Self {
-        Self {
-            config_ini: true,
-            live_tuning: true,
-            account_db: true,
-        }
-    }
-}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ShutdownConfig {
@@ -139,9 +120,6 @@ pub struct AppConfig {
     /// Backup target paths selected in the Ops panel
     #[serde(default = "default_backup_targets")]
     pub backup_targets: Vec<String>,
-    /// Auto-backup options for the nightly updater
-    #[serde(default)]
-    pub update_backup_options: UpdateBackupOptions,
     /// Output directory for generated bundle HTML and CSS files.
     /// Empty string means the frontend uses its computed default
     /// ({server_dir}/Data/Web/Bundles).
@@ -162,7 +140,6 @@ impl Default for AppConfig {
             tuning_tags: HashMap::new(),
             tuning_favourites: Vec::new(),
             backup_targets: default_backup_targets(),
-            update_backup_options: UpdateBackupOptions::default(),
             store_html_output_dir: String::new(),
         }
     }
@@ -388,12 +365,6 @@ pub fn set_backup_targets(app: tauri::AppHandle, targets: Vec<String>) -> Result
     save_config(&app, &config)
 }
 
-#[tauri::command]
-pub fn set_update_backup_options(app: tauri::AppHandle, options: UpdateBackupOptions) -> Result<(), String> {
-    let mut config = load_config(&app);
-    config.update_backup_options = options;
-    save_config(&app, &config)
-}
 
 #[tauri::command]
 pub fn set_store_html_output_dir(app: tauri::AppHandle, dir: String) -> Result<(), String> {

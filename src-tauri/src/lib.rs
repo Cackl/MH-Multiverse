@@ -72,7 +72,6 @@ pub fn run() {
             config::set_tuning_tags,
             config::set_tuning_favourites,
             config::set_backup_targets,
-            config::set_update_backup_options,
             config::set_store_html_output_dir,
             launcher::launch_game,
             launcher::game_is_running,

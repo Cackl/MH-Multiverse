@@ -78,11 +78,6 @@ export interface LaunchOptions {
   resolution_height: number
 }
 
-export interface UpdateBackupOptions {
-  config_ini: boolean
-  live_tuning: boolean
-  account_db: boolean
-}
 
 export interface ShutdownConfig {
   delay_minutes: number
@@ -107,7 +102,6 @@ export interface AppConfig {
   tuning_tags: Record<string, string>
   tuning_favourites: string[]
   backup_targets: string[]
-  update_backup_options: UpdateBackupOptions
   store_html_output_dir: string
 }
 
@@ -140,7 +134,6 @@ export const appConfig = writable<AppConfig>({
   tuning_tags: {},
   tuning_favourites: [],
   backup_targets: ['Config.ini', 'ConfigOverride.ini', 'Data/Game/LiveTuning', 'Data/Account.db'],
-  update_backup_options: { config_ini: true, live_tuning: true, account_db: true },
   store_html_output_dir: '',
 })
 
@@ -233,10 +226,6 @@ export async function setBackupTargets(targets: string[]): Promise<void> {
   await invoke('set_backup_targets', { targets })
 }
 
-export async function setUpdateBackupOptions(options: UpdateBackupOptions): Promise<void> {
-  appConfig.update(c => ({ ...c, update_backup_options: options }))
-  await invoke('set_update_backup_options', { options })
-}
 
 export async function setStoreHtmlOutputDir(dir: string): Promise<void> {
   appConfig.update(c => ({ ...c, store_html_output_dir: dir }))
