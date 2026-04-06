@@ -43,7 +43,8 @@
     { id: '',              label: 'Blue',            accent: '#3ea7c7' },
     { id: 'mh-itembase',   label: 'Item Base',       accent: '#10c3ff' },
     { id: 'light',         label: 'Light',           accent: '#f4f7fa' },
-    { id: 'phoenix',       label: 'Phoenix',         accent: '#d96a1d' }
+    { id: 'phoenix',       label: 'Phoenix',         accent: '#d96a1d' },
+    { id: 'tahiti',        label: 'Tahiti',          accent: '#b31618' }
   ]
 </script>
 

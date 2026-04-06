@@ -87,11 +87,11 @@
   <div class="rail-status">
     <div class="status-dot-wrap" title="MHServerEmu">
       <div class="status-dot" class:on={$serverRunning}></div>
-      <span class="status-dot-label">Srv</span>
+      <span class="status-dot-label">Server</span>
     </div>
     <div class="status-dot-wrap" title="Apache">
       <div class="status-dot" class:on={$apacheRunning}></div>
-      <span class="status-dot-label">Web</span>
+      <span class="status-dot-label">Apache</span>
     </div>
     <div class="status-dot-wrap" title="Game">
       <div class="status-dot" class:on={$gameRunning}></div>

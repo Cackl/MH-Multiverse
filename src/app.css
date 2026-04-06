@@ -408,21 +408,21 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 }
 
 [data-theme="itembase-v2"] {
-  /* Surface layers — near-neutral dark, minimal tint */
+  /* Surface layers */
   --bg-0: #080c10;
   --bg-1: #0d1219;
   --bg-2: #131a24;
   --bg-3: #1a2332;
   --bg-4: #222d3e;
 
-  /* Accent — vivid cyan, pure and saturated */
+  /* Accent */
   --accent:             #00c8ff;
   --accent-bright:      #62dfff;
   --accent-dim:         #007aaa;
   --accent-glow:        rgba(0, 200, 255, 0.10);
   --accent-glow-strong: rgba(0, 200, 255, 0.22);
 
-  /* Semantic — warm orange-red for contrast against cyan */
+  /* Semantic */
   --red:           #ff5733;
   --red-dim:       rgba(255, 87, 51, 0.14);
   --green:         #00e676;
@@ -431,12 +431,12 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
   --blue:          #29b6f6;
   --blue-dim:      rgba(41, 182, 246, 0.14);
 
-  /* Borders — cool grey-blue, not cyan-saturated */
+  /* Borders */
   --border:     #1c2535;
   --border-mid: #253245;
   --border-lit: #2f4060;
 
-  /* Text — cool white, minimal blue tint */
+  /* Text */
   --text-0: #eef4f8;
   --text-1: #b8c8d8;
   --text-2: #7a90a4;
@@ -461,7 +461,7 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
   --console-text-dim: #4d6070;
 }
 
-/* Light theme — high-contrast, neutral/cool UI, dark console preserved */
+/* Light theme */
 [data-theme="light"] {
   /* Surface layers */
   --bg-0: #f7fafc;
@@ -561,7 +561,7 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
   --bg-3: #1a1d27;
   --bg-4: #222634;
 
-  /* Accent — fire/orange */
+  /* Accent */
   --accent:             #d66a1f;
   --accent-bright:      #f28a2e;
   --accent-dim:         #a94d16;
@@ -628,6 +628,93 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 
   /* Panel background gradient */
   --panel-grad-top: rgba(214, 106, 31, 0.07);
+  --panel-grad-mid: 40%;
+
+  /* Sidebar background */
+  --sidebar-bg: rgba(8, 9, 12, 0.5);
+
+  /* Console */
+  --console-bg:       var(--bg-0);
+  --console-cmd-bg:   var(--bg-2);
+  --console-text:     var(--text-1);
+  --console-text-dim: var(--text-2);
+}
+
+[data-theme="tahiti"] {
+  /* Surface layers */
+  --bg-0: #08090c;
+  --bg-1: #0e1015;
+  --bg-2: #14161d;
+  --bg-3: #1a1d27;
+  --bg-4: #222634;
+
+  /* Accent */
+  --accent:         #b31618;
+  --accent-bright:  #e03a3d;
+  --accent-dim:     #7e0f11;
+  --accent-glow:        rgba(214, 106, 31, 0.08);
+  --accent-glow-strong: rgba(242, 138, 46, 0.16);
+
+  /* Semantic */
+  --red:           #c94a3a;
+  --red-dim:       rgba(201, 74, 58, 0.12);
+  --green:         #27ae60;
+  --green-bright:  #2ecc71;
+  --green-dim:     rgba(39, 174, 96, 0.12);
+  --blue:          #2e86c1;
+  --blue-dim:      rgba(46, 134, 193, 0.10);
+
+  /* Borders */
+  --border:     #252836;
+  --border-mid: #2f3347;
+  --border-lit: #3d4260;
+
+  /* Text */
+  --text-0: #edf1f5;
+  --text-1: #b0bac4;
+  --text-2: #7e8fa0;
+  --text-3: #455460;
+
+  /* Typography */
+  --font-head: 'Chakra Petch', sans-serif;
+  --font-body: 'IBM Plex Sans', sans-serif;
+  --font-mono: 'IBM Plex Mono', monospace;
+
+  /* Geometry */
+  --rail-w:     56px;
+  --radius-sm:  3px;
+  --radius-md:  6px;
+
+  /* Sidebar widths */
+  --sidebar-narrow: 200px;
+  --sidebar-wide:   280px;
+
+  /* Semantic text colours */
+  --text-error:   var(--red);
+  --text-success: var(--green-bright);
+  --text-warning: #e0ab2f;
+
+  /* Amber / orange */
+  --amber:        #c97a16;
+  --amber-bright: #f0a93a;
+  --amber-dim:    rgba(201, 122, 22, 0.12);
+
+  /* Purple (debug log, custom tags) */
+  --purple:       #a080d0;
+  --purple-dim:   rgba(160, 128, 208, 0.12);
+
+  /* Favourite highlight */
+  --colour-favourite: var(--amber-bright);
+
+  /* Z-index scale */
+  --z-panel:    1;
+  --z-dropdown: 10;
+  --z-tooltip:  100;
+  --z-modal:    200;
+  --z-titlebar: 300;
+
+  /* Panel background gradient */
+  --panel-grad-top: rgba(214, 31, 31, 0.07);
   --panel-grad-mid: 40%;
 
   /* Sidebar background */
