@@ -13,6 +13,11 @@ use windows::{
     },
 };
 
+#[cfg(target_os = "windows")]
+use std::os::windows::process::CommandExt;
+#[cfg(target_os = "windows")]
+const CREATE_NO_WINDOW: u32 = 0x08000000;
+
 // -- Payload types emitted to the frontend --
 
 #[derive(Clone, serde::Serialize)]
@@ -200,6 +205,7 @@ pub async fn start_server(
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .stdin(Stdio::piped())
+        .creation_flags(CREATE_NO_WINDOW)
         .spawn()
         .map_err(|e| format!("Failed to spawn server: {e}"))?;
 
@@ -444,6 +450,7 @@ pub async fn start_apache(app: AppHandle, server_exe: String) -> Result<(), Stri
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .stdin(Stdio::null())
+        .creation_flags(CREATE_NO_WINDOW)
         .spawn()
         .map_err(|e| format!("Failed to start Apache: {e}"))?;
 
