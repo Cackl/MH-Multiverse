@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "MH Manifold",
+  "productName": "MH Multiverse",
   "version": "0.1.0",
-  "identifier": "com.mhmanifold.app",
+  "identifier": "com.mhmultiverse.app",
   "build": {
     "frontendDist": "../dist",
     "devUrl": "http://localhost:1420",
@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "MH Manifold",
+        "title": "MH Multiverse",
         "width": 1100,
         "height": 700,
         "minWidth": 900,

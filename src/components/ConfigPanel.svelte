@@ -163,7 +163,7 @@
       fields: [
         { key: 'EnableLogging',           section: 'Logging', type: 'bool',   label: 'Enable Logging',              description: 'Master switch for the logging system.' },
         { key: 'HideSensitiveInformation',section: 'Logging', type: 'bool',   label: 'Hide Sensitive Info',         description: 'Masks email addresses and IP addresses in log output.' },
-        { key: 'EnableConsole',           section: 'Logging', type: 'bool',   label: 'Console Output',              description: 'Outputs log messages to the console (captured here in Manifold).' },
+        { key: 'EnableConsole',           section: 'Logging', type: 'bool',   label: 'Console Output',              description: 'Outputs log messages to the console (captured here in MH Multiverse).' },
         { key: 'ConsoleIncludeTimestamps',section: 'Logging', type: 'bool',   label: 'Console Timestamps',          description: 'Includes message timestamps in console output.' },
         { key: 'ConsoleMinLevel',         section: 'Logging', type: 'number', label: 'Console Min Level',           description: 'Minimum log level for console output. 0=trace 1=debug 2=info 3=warn 4=error 5=fatal.', min: 0, max: 5 },
         { key: 'ConsoleMaxLevel',         section: 'Logging', type: 'number', label: 'Console Max Level',           description: 'Maximum log level for console output.', min: 0, max: 5 },
@@ -175,8 +175,8 @@
       ],
     },
     {
-      id: 'manifold',
-      label: 'Manifold',
+      id: 'multiverse',
+      label: 'MH Multiverse',
     }
   ]
 
@@ -345,7 +345,7 @@
   <!-- Main content -->
   <div class="config-main">
 
-    {#if !canLoad && activeSection !== 'manifold'}
+    {#if !canLoad && activeSection !== 'multiverse'}
       <div class="config-notice">
         <div class="notice-icon">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:20px;height:20px;color:var(--text-3)">
@@ -355,15 +355,15 @@
         </div>
         <div class="notice-text">Set the server executable path in App settings to load configuration.</div>
       </div>
-    {:else if activeSection === 'manifold'}
+    {:else if activeSection === 'multiverse'}
       <div class="config-content">
         <div class="config-section-head">
-          <div class="section-title">Manifold</div>
+          <div class="section-title">MH Multiverse</div>
         </div>
         <div class="config-body">
           <div class="subsection-title">Shutdown</div>
-          <div class="manifold-note">
-            These settings are stored in Manifold, not in ConfigOverride.ini.
+          <div class="multiverse-note">
+            These settings are stored in MH Multiverse, not in ConfigOverride.ini.
           </div>
           <div class="config-grid">
             <div class="config-field">
@@ -772,7 +772,7 @@
   /* -- Footer -- */
 
 
-  .manifold-note {
+  .multiverse-note {
     font-size: 11px;
     color: var(--text-3);
     margin-bottom: 14px;

@@ -16,7 +16,7 @@
         <polygon points="17,15 12,18 7,15 7,9 12,6 17,9" opacity="0.45" stroke-width="1.5" />
       </svg>
     </div>
-    <div class="titlebar-name">MH <span>Manifold</span></div>
+    <div class="titlebar-name">MH <span>Multiverse</span></div>
   </div>
 
   <div class="titlebar-controls">

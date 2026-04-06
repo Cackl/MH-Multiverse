@@ -9,9 +9,9 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use tauri::Manager;
 
-const KEYRING_SERVICE: &str = "mh-manifold";
+const KEYRING_SERVICE: &str = "mh-multiverse";
 const KEYRING_USER: &str = "encryption-key";
-const CONFIG_FILENAME: &str = "manifold.json";
+const CONFIG_FILENAME: &str = "multiverse.json";
 
 fn default_true() -> bool { true }
 

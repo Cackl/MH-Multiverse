@@ -180,6 +180,7 @@
 
   let commands: Cmd[] = FALLBACK_COMMANDS.map(c => ({ ...c, invokerType: 'Any' }))
 
+  /* Will be made available when /Commands (or similar) endpoint is made available */
   // async function loadServerCommands(retryMs = 0) {
   //   if (retryMs > 0) await new Promise(r => setTimeout(r, retryMs))
   //   try {
@@ -193,9 +194,9 @@
   //       const base = args ? full.slice(0, full.length - args.length).trimEnd() : full
   //       return { f: base.toLowerCase(), a: args, d: entry.description, invokerType: entry.invokerType }
   //     })
-  //     console.log(`[Manifold] Loaded ${commands.length} commands from server`)
+  //     console.log(`[MH Multiverse] Loaded ${commands.length} commands from server`)
   //   } catch (e) {
-  //     console.warn('[Manifold] Failed to load commands from server, using fallback', e)
+  //     console.warn('[MH Multiverse] Failed to load commands from server, using fallback', e)
   //   }
   // }
 

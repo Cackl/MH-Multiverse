@@ -301,7 +301,7 @@
                 </svg>
               </div>
               <div class="about-text">
-                <h3>MH Manifold</h3>
+                <h3>MH Multiverse</h3>
                 <p>{version} -- Tauri 2 + Svelte 5 + Rust</p>
               </div>
             </div>

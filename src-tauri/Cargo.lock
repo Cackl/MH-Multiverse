@@ -111,33 +111,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7f202df86484c868dbad7eaa557ef785d5c66295e41b460ef922eca0723b842c"
 
 [[package]]
-name = "app"
-version = "0.1.0"
-dependencies = [
- "aes-gcm",
- "base64 0.22.1",
- "chrono",
- "futures-util",
- "keyring",
- "log",
- "lz4_flex",
- "reqwest 0.12.28",
- "serde",
- "serde_json",
- "sysinfo",
- "tauri",
- "tauri-build",
- "tauri-plugin-dialog",
- "tauri-plugin-http",
- "tauri-plugin-log",
- "tauri-plugin-opener",
- "tauri-plugin-window-state",
- "tokio",
- "windows",
- "zip",
-]
-
-[[package]]
 name = "arbitrary"
 version = "1.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2771,6 +2744,33 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "488016bfae457b036d996092f6cb448677611ce4449e970ceaf42695203f218a"
 dependencies = [
  "autocfg",
+]
+
+[[package]]
+name = "mh-multiverse"
+version = "0.1.0"
+dependencies = [
+ "aes-gcm",
+ "base64 0.22.1",
+ "chrono",
+ "futures-util",
+ "keyring",
+ "log",
+ "lz4_flex",
+ "reqwest 0.12.28",
+ "serde",
+ "serde_json",
+ "sysinfo",
+ "tauri",
+ "tauri-build",
+ "tauri-plugin-dialog",
+ "tauri-plugin-http",
+ "tauri-plugin-log",
+ "tauri-plugin-opener",
+ "tauri-plugin-window-state",
+ "tokio",
+ "windows",
+ "zip",
 ]
 
 [[package]]

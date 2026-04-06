@@ -1,4 +1,4 @@
-# MH Manifold
+# MH Multiverse
 
 A desktop launcher and server management tool for [MHServerEmu](https://github.com/Crypto137/MHServerEmu), the Marvel Heroes Omega server emulator. Built with Tauri 2, Svelte 5, and Rust.
 
@@ -6,7 +6,7 @@ A desktop launcher and server management tool for [MHServerEmu](https://github.c
 
 ## Overview
 
-MH Manifold provides a single interface for launching Marvel Heroes Omega, managing a local MHServerEmu instance, and editing the server's data files. It handles process lifecycle, credential storage, config editing, live tuning, data patching, MTX store catalog editing, server updates, and backups.
+MH Multiverse provides a single interface for launching Marvel Heroes Omega, managing a local MHServerEmu instance, and editing the server's data files. It handles process lifecycle, credential storage, config editing, live tuning, data patching, MTX store catalog editing, server updates, and backups.
 
 The app is currently Windows-only and communicates with the server via stdin/stdout piping and direct file I/O against MHServerEmu's data directories.
 
@@ -26,7 +26,7 @@ The app is currently Windows-only and communicates with the server via stdin/std
 - Interactive command input with autocomplete drawn from the MHServerEmu command list
 - Timed shutdown with configurable delay and broadcast message
 - Independent Apache start/stop for players running in offline mode without the reverse proxy
-- Windows Job Object integration — child processes are killed automatically if Manifold crashes or is force-closed
+- Windows Job Object integration — child processes are killed automatically if MH Multiverse crashes or is force-closed
 
 ### Server Configuration (INI Editor)
 - Visual editor for MHServerEmu's `Config.ini` / `ConfigOverride.ini` with grouped sections, tooltips, and type-appropriate controls (toggles, dropdowns, numeric inputs)
@@ -71,6 +71,9 @@ The app is currently Windows-only and communicates with the server via stdin/std
 - Runtime prototype ID and GUID resolution for tuning, patching, and store editors
 - Cached per server executable path, automatically rebuilds when the server changes
 
+![Theme Showcase](./docs/images/theme-showcase.png)
+![Server Showcase](./docs/images/server-showcase.png)
+
 ---
 
 ## Installation
@@ -102,11 +105,18 @@ npm run check
 
 ### Config File Location
 ```
-%APPDATA%\com.mhmanifold.app\manifold.json
+%APPDATA%\com.mhmultiverse.app\multiverse.json
 ```
 
 ### NOTE
-*MH Manifold is an unsigned executable that starts other processes (e.g Marvel Heroes Omega, MHServerEmu) and creates, writes and reads files (e.g ConfigOverride.ini, Data Patching, Live Tuning). Like Bifrost, this may cause false positive detections from antivirus software. If this causes issues, with the prerequisites installed the source code can be built with just two commands.* 
+*MH Multiverse is an unsigned executable that starts other processes (e.g Marvel Heroes Omega, MHServerEmu) and creates, writes and reads files (e.g ConfigOverride.ini, Data Patching, Live Tuning). Like Bifrost, this may cause false positive detections from antivirus software. If this causes issues, with the prerequisites installed the source code can be built with just two commands.* 
+
+---
+
+## Planned Updates
+
+Aside from some upfront bug fixes and issue mitigation, I'll be looking at updating the Live Tuning feature in response to the Event system update coming soon to MHServerEmu.
+If there's enough interest, I'll also look into Linux support.
 
 ---
 

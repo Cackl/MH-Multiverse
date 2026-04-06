@@ -5,6 +5,10 @@ use std::path::{Path, PathBuf};
 use tauri::{AppHandle, Emitter, Manager};
 use tokio::io::AsyncWriteExt;
 
+// ── App Version ───────────────────────────────────────────────────────────────
+
+const APP_VERSION: &str = env!("CARGO_PKG_VERSION");
+
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -209,7 +213,7 @@ fn create_backup_inner(
 
 async fn download_with_progress(app: &AppHandle, url: &str, dest: &Path) -> Result<(), String> {
     let client = reqwest::Client::builder()
-        .user_agent("mh-manifold/1.0")
+        .user_agent(format!("mh-multiverse/{APP_VERSION}"))
         .build()
         .map_err(|e| format!("Cannot create HTTP client: {e}"))?;
 
@@ -391,7 +395,7 @@ pub async fn check_update_available() -> Result<UpdateInfo, String> {
     let download_url = build_download_url(&build_date);
 
     let client = reqwest::Client::builder()
-        .user_agent("mh-manifold/1.0")
+        .user_agent(format!("mh-multiverse/{APP_VERSION}"))
         .build()
         .map_err(|e| format!("Cannot create HTTP client: {e}"))?;
 

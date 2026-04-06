@@ -1,4 +1,4 @@
-# MH Manifold — Architecture
+# MH Multiverse — Architecture
 
 ## Tech Stack
 
@@ -18,7 +18,7 @@
 ## Project Structure
 
 ```
-mh-manifold/
+mh-multiverse/
 ├── src/
 │   ├── App.svelte                Root — tab router, mounts config + event bridge
 │   ├── app.css                   Design tokens, CSS variables, data-theme variants
@@ -56,7 +56,7 @@ mh-manifold/
 │   │   │                         window close hook, window state persistence
 │   │   ├── config.rs             AppConfig, Server, LaunchOptions, ShutdownConfig structs;
 │   │   │                         AES-256-GCM encryption; keychain key management;
-│   │   │                         manifold.json persistence; all config Tauri commands
+│   │   │                         multiverse.json persistence; all config Tauri commands
 │   │   ├── server.rs             ServerProcess/ServerState, start/stop MHServerEmu + Apache,
 │   │   │                         stdout/stderr log streaming with batched emission,
 │   │   │                         Job Object lifecycle, process exit watcher
@@ -160,7 +160,7 @@ Three state objects are registered via `.manage()` in `lib.rs`:
 
 ### Rust Modules
 
-**`config.rs`** — `AppConfig` is the root persisted configuration. Stored as `manifold.json` in the OS app data directory (`%APPDATA%\com.mhmanifold.app\`). Passwords are encrypted with AES-256-GCM; the 256-bit key is stored in and retrieved from the OS keychain via `keyring`. Each config-mutating command loads the full config from disk, modifies the relevant field, and writes back — there is no in-process config cache on the Rust side.
+**`config.rs`** — `AppConfig` is the root persisted configuration. Stored as `multiverse.json` in the OS app data directory (`%APPDATA%\com.mhmultiverse.app\`). Passwords are encrypted with AES-256-GCM; the 256-bit key is stored in and retrieved from the OS keychain via `keyring`. Each config-mutating command loads the full config from disk, modifies the relevant field, and writes back — there is no in-process config cache on the Rust side.
 
 **`server.rs`** — Server lifecycle management. `start_server` spawns MHServerEmu with piped stdin/stdout/stderr and assigns it to a Windows Job Object (`JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`). Three background threads are spawned per server start: stdout reader, stderr reader, and a batcher that collects log lines and emits them to the frontend in batches (up to 50 lines per 50ms flush interval). A fourth watcher thread polls `try_wait()` every 150ms to detect process exit. `stop_server` writes `!server shutdown\n` to stdin and falls back to a hard kill after 10 seconds. Apache is managed independently via `start_apache`/`stop_apache`.
 
@@ -172,7 +172,7 @@ Three state objects are registered via `.manage()` in `lib.rs`:
 
 **`patches.rs`** — File I/O for `PatchData*.json` files in `Data/Game/Patches`. Enable/disable works by moving files between `Patches/` and `Patches/Off/`. Patch entries use `serde_json::Value` for the `Value` field to support arbitrary JSON value types.
 
-**`store.rs`** — Catalog entry management for `Catalog*.json` in `Data/Game/MTXStore`. Uses a base/MODIFIED file separation: base files are read-only from Manifold's perspective, and all edits go to `*MODIFIED.json` sidecar files. MODIFIED entries override base entries with the same `SkuId`. The module handles u64 precision by using a dual type system: `CatalogEntryDisk` (raw u64 for on-disk JSON) and `CatalogEntry` (String for the JS boundary). Display name resolution chains through: custom override file → embedded `display_names.json` → prototype path → raw ID. Also generates HTML/CSS bundle pages for in-game store display.
+**`store.rs`** — Catalog entry management for `Catalog*.json` in `Data/Game/MTXStore`. Uses a base/MODIFIED file separation: base files are read-only from MH Multiverse's perspective, and all edits go to `*MODIFIED.json` sidecar files. MODIFIED entries override base entries with the same `SkuId`. The module handles u64 precision by using a dual type system: `CatalogEntryDisk` (raw u64 for on-disk JSON) and `CatalogEntry` (String for the JS boundary). Display name resolution chains through: custom override file → embedded `display_names.json` → prototype path → raw ID. Also generates HTML/CSS bundle pages for in-game store display.
 
 **`calligraphy.rs`** — Reads MHServerEmu's `Calligraphy.sip` pak file (LZ4-compressed entries with a `KAPG` signature). Parses the `Blueprint.directory` and `Prototype.directory` files within the pak to build a `PrototypeCatalogue` with indices by runtime ID, path, and GUID. The catalogue is cached per sip file path and rebuilt automatically if the server executable changes. Prototype search supports multi-prefix category filtering and case-insensitive matching against both path and display name.
 
@@ -190,7 +190,7 @@ Three state objects are registered via `.manage()` in `lib.rs`:
 
 | Command | Parameters | Returns | Description |
 |---|---|---|---|
-| `get_config` | — | `AppConfig` | Load config from `manifold.json` |
+| `get_config` | — | `AppConfig` | Load config from `multiverse.json` |
 | `cmd_save_config` | `config: AppConfig` | `()` | Write full config to disk |
 | `upsert_server` | `server: Server, password: String` | `AppConfig` | Add/update server, encrypts password |
 | `delete_server` | `server_id: String` | `AppConfig` | Remove server by ID |
@@ -352,9 +352,9 @@ Three state objects are registered via `.manage()` in `lib.rs`:
 ### Config Persistence
 
 ```
-Frontend store ──invoke──→ Rust command ──→ load manifold.json from disk
+Frontend store ──invoke──→ Rust command ──→ load multiverse.json from disk
                                           ──→ modify field
-                                          ──→ write manifold.json to disk
+                                          ──→ write multiverse.json to disk
 ```
 
 Every config mutation loads from disk, modifies, and writes back. There is no in-memory cache on the Rust side. This is simple and correct but means rapid successive mutations each do a full read-write cycle. The frontend's optimistic store update keeps the UI responsive regardless.
@@ -426,7 +426,7 @@ Patch entries use `serde_json::Value` for the `Value` field, allowing arbitrary 
 The catalog editor uses a base/MODIFIED file separation pattern:
 
 ```
-CatalogBundle.json           ← base file (read-only from Manifold)
+CatalogBundle.json           ← base file (read-only from MH Multiverse)
 CatalogBundleMODIFIED.json   ← sidecar with user edits
 ```
 
@@ -500,11 +500,11 @@ Patch files use a different toggle convention from tuning: disabled files are mo
 
 ### Job Object Lifecycle (Windows)
 
-The Windows Job Object is created with `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`. Since the Job Object handle is stored in `ServerProcess` (which is behind `Arc<Mutex<>>`), it is dropped when the server process is cleaned up. If Manifold crashes, the handle is closed by the OS, which kills the child processes. This provides defense-in-depth beyond the explicit cleanup in the window close hook.
+The Windows Job Object is created with `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`. Since the Job Object handle is stored in `ServerProcess` (which is behind `Arc<Mutex<>>`), it is dropped when the server process is cleaned up. If MH Multiverse crashes, the handle is closed by the OS, which kills the child processes. This provides defense-in-depth beyond the explicit cleanup in the window close hook.
 
 ### Config Read-Write-on-Every-Mutation
 
-Each Rust config command loads `manifold.json` from disk, mutates, and writes back. There is no in-process config singleton. This avoids stale-state bugs at the cost of extra I/O — acceptable given the low mutation frequency and small file size.
+Each Rust config command loads `multiverse.json` from disk, mutates, and writes back. There is no in-process config singleton. This avoids stale-state bugs at the cost of extra I/O — acceptable given the low mutation frequency and small file size.
 
 ---
 
@@ -522,7 +522,7 @@ Each Rust config command loads `manifold.json` from disk, mutates, and writes ba
 ├── MHServerEmu/
 │   ├── MHServerEmu.exe           ← server_exe points here
 │   ├── Config.ini
-│   ├── ConfigOverride.ini        (created/managed by Manifold)
+│   ├── ConfigOverride.ini        (created/managed by MH Multiverse)
 │   ├── Data/
 │   │   ├── Game/
 │   │   │   ├── Calligraphy.sip
@@ -533,7 +533,7 @@ Each Rust config command loads `manifold.json` from disk, mutates, and writes ba
 │   │   │   └── MTXStore/         ← Catalog*.json + *MODIFIED.json files
 │   │   └── Web/
 │   │       └── Bundles/          ← Generated HTML/CSS (default output)
-│   ├── Backups/                  ← Created by Manifold's backup system
+│   ├── Backups/                  ← Created by MH Multiverse's backup system
 │   │   └── {timestamp}/
 │   │       ├── manifest.json
 │   │       └── {backed up files}

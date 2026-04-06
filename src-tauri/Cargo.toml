@@ -1,8 +1,8 @@
 [package]
-name = "app"
+name = "mh-multiverse"
 version = "0.1.0"
-description = "A Tauri App"
-authors = ["you"]
+description = "A desktop launcher and server management tool built for Marvel Heroes Omega and MHServerEmu"
+authors = ["cackl"]
 license = ""
 repository = ""
 edition = "2021"

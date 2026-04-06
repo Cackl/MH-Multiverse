@@ -28,7 +28,7 @@
         <line x1="2" y1="8.5" x2="22" y2="8.5" opacity="0.3"/>
       </svg>
     </div>
-    <div class="titlebar-name">MH <span>Manifold</span></div>
+    <div class="titlebar-name">MH <span>Multiverse</span></div>
   </div>
 
   <div class="titlebar-controls">
