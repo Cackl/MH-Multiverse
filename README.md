@@ -16,8 +16,8 @@ The app is currently Windows-only and communicates with the server via stdin/std
 
 ### Game Launching
 - Multi-server profile management with per-server credentials
-- AES-256-GCM encrypted password storage via OS keychain (Windows Credential Manager)
-- Auto-login support — email and password passed as command-line arguments
+- Encrypted password storage via OS keychain (Windows Credential Manager)
+- Auto-login support - email and password passed as command-line arguments
 - Configurable launch flags: skip startup movies, skip motion comics, no sound, client logging, custom resolution, robocopy, no-Steam mode
 
 ### Local Server Management
@@ -26,11 +26,11 @@ The app is currently Windows-only and communicates with the server via stdin/std
 - Interactive command input with autocomplete drawn from the MHServerEmu command list
 - Timed shutdown with configurable delay and broadcast message
 - Independent Apache start/stop for players running in offline mode without the reverse proxy
-- Windows Job Object integration — child processes are killed automatically if MH Multiverse crashes or is force-closed
+- Windows Job Object integration - child processes are killed automatically if MH Multiverse crashes or is force-closed
 
 ### Server Configuration (INI Editor)
 - Visual editor for MHServerEmu's `Config.ini` / `ConfigOverride.ini` with grouped sections, tooltips, and type-appropriate controls (toggles, dropdowns, numeric inputs)
-- Diff-only saving — only values that differ from `Config.ini` defaults are written to `ConfigOverride.ini`
+- Diff-only saving - only values that differ from `Config.ini` defaults are written to `ConfigOverride.ini`
 - Per-section reset to defaults
 - Currently displays a subset of the full `Config.ini` options for simplicity, though more may be added in future
 
@@ -49,7 +49,7 @@ The app is currently Windows-only and communicates with the server via stdin/std
 
 ### MTX Store Catalog Editor
 - Load, create, edit, and delete catalog entries across `Catalog*.json` files in `Data/Game/MTXStore`
-- Non-destructive editing — saves always write to `*MODIFIED.json` sidecar files; base catalog files are never modified
+- Non-destructive editing - saves always write to `*MODIFIED.json` sidecar files; base catalog files are never modified
 - Automatic `.bak` snapshots before every write
 - Prototype item picker with display name resolution (embedded + custom override maps)
 - Type and modifier assignment matching MHServerEmu's catalog type system
@@ -66,7 +66,7 @@ The app is currently Windows-only and communicates with the server via stdin/std
 - Five colour themes
 
 ### Calligraphy.sip Integration
-- Binary pak reader for `Calligraphy.sip` — parses blueprint and prototype directory records
+- Binary pak reader for `Calligraphy.sip` - parses blueprint and prototype directory records
 - Prototype search by path and display name, filtered by category/blueprint
 - Runtime prototype ID and GUID resolution for tuning, patching, and store editors
 - Cached per server executable path, automatically rebuilds when the server changes
