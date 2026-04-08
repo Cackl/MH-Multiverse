@@ -108,7 +108,7 @@
             <div class="opt-row">
               <div class="opt-label">
                 <span class="opt-name">Auto Login</span>
-                <span class="opt-desc">Passes credentials as launch arguments</span>
+                <span class="opt-desc">Passes credentials as launch arguments. Does not work if launching through Steam</span>
               </div>
               <div
                 class="toggle-switch"
