@@ -756,7 +756,7 @@
     font-size: 10px;
     letter-spacing: 0.08em;
     text-transform: uppercase;
-    color: var(--text-3);
+    color: var(--text-2);
   }
   .file-notice.error { color: var(--text-error); text-transform: none; font-family: var(--font-body); letter-spacing: 0; }
 

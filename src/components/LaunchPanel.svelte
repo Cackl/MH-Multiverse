@@ -154,7 +154,7 @@
         {/each}
 
         {#if $appConfig.servers.length === 0}
-          <div class="empty-list">No servers yet</div>
+          <div class="empty-list">No servers</div>
         {/if}
       </div>
     </PanelSidebar>
@@ -233,7 +233,11 @@
           </svg>
         </div>
         <div class="empty-state-text">
-          {$appConfig.servers.length === 0 ? 'Add a server to get started' : 'Select a server'}
+          {#if $appConfig.servers.length === 0}
+           <button class="empty-state-button" type="button" aria-label="Add Server" on:click={openAdd}>Add a server</button> to get started
+          {:else} 
+          'Select a server'
+          {/if}
         </div>
       </div>
     {/if}
@@ -481,5 +485,16 @@
     letter-spacing: 0.1em;
     text-transform: uppercase;
     color: var(--text-3);
+  }
+
+  .empty-state-button {
+    font-family: var(--font-head);
+    font-size: 13px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--accent-dim) !important;
+    background: none;
+    all:unset;
+    cursor:pointer;
   }
 </style>

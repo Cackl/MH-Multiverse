@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from 'svelte'
+  import { onMount, tick } from 'svelte'
   import { openPath } from '@tauri-apps/plugin-opener'
   import { invoke } from '@tauri-apps/api/core'
   import { appConfig, serverRunning, setShutdownConfig, type ShutdownConfig } from '../lib/store'
@@ -278,16 +278,50 @@
 
   // -- Tooltip --
 
-  function showTooltip(e: MouseEvent, text: string) {
+  let tooltipEl: HTMLDivElement | null = null
+
+  const TOOLTIP_OFFSET = 12
+  const VIEWPORT_PAD = 10
+
+  async function showTooltip(e: MouseEvent, text: string) {
     tooltip = text
-    tooltipX = e.clientX + 12
-    tooltipY = e.clientY - 8
     tooltipVisible = true
+
+    await tick()
+    if (!tooltipEl) return
+
+    const rect = tooltipEl.getBoundingClientRect()
+    const vw = window.innerWidth
+    const vh = window.innerHeight
+
+    let x = e.clientX + TOOLTIP_OFFSET
+    let y = e.clientY - 8
+
+    // Flip horizontally if it would overflow right
+    if (x + rect.width + VIEWPORT_PAD > vw) {
+      x = e.clientX - rect.width - TOOLTIP_OFFSET
+    }
+
+    // Clamp back inside viewport if still out of bounds
+    x = Math.max(VIEWPORT_PAD, Math.min(x, vw - rect.width - VIEWPORT_PAD))
+
+    // Prefer above cursor, but move below if it would overflow top
+    if (y < VIEWPORT_PAD) {
+      y = e.clientY + TOOLTIP_OFFSET
+    }
+
+    // If it would overflow bottom, clamp it
+    y = Math.max(VIEWPORT_PAD, Math.min(y, vh - rect.height - VIEWPORT_PAD))
+
+    tooltipX = x
+    tooltipY = y
   }
 
   function hideTooltip() {
     tooltipVisible = false
   }
+
+  // --
 
   onMount(() => {
     if (canLoad) load()
@@ -295,7 +329,13 @@
 </script>
 
 {#if tooltipVisible}
-  <div class="tooltip" style="left:{tooltipX}px;top:{tooltipY}px">{tooltip}</div>
+  <div
+    bind:this={tooltipEl}
+    class="tooltip"
+    style="left:{tooltipX}px; top:{tooltipY}px"
+  >
+    {tooltip}
+  </div>
 {/if}
 
 <div class="config-panel">
