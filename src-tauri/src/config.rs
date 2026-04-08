@@ -28,6 +28,18 @@ fn default_backup_targets() -> Vec<String> {
     ]
 }
 
+fn default_console_presets() -> Vec<String> {
+    vec![
+        "!commands".to_string(),
+        "!account userlevel".to_string(),
+        "!server status".to_string(),
+        "!server broadcast".to_string(),
+        "!server shutdown".to_string(),
+        "!server reloadcatalog".to_string(),
+        "!server reloadlivetuning".to_string()
+    ]
+}
+
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ShutdownConfig {
@@ -121,10 +133,11 @@ pub struct AppConfig {
     #[serde(default = "default_backup_targets")]
     pub backup_targets: Vec<String>,
     /// Output directory for generated bundle HTML and CSS files.
-    /// Empty string means the frontend uses its computed default
-    /// ({server_dir}/Data/Web/Bundles).
+    /// Empty string means the frontend uses its computed default ({server_dir}/Data/Web/Bundles).
     #[serde(default)]
     pub store_html_output_dir: String,
+    #[serde(default = "default_console_presets")]
+    pub console_presets: Vec<String>
 }
 
 impl Default for AppConfig {
@@ -137,6 +150,7 @@ impl Default for AppConfig {
             theme: String::new(),
             launch_options: LaunchOptions::default(),
             shutdown: ShutdownConfig::default(),
+            console_presets: default_console_presets(),
             tuning_tags: HashMap::new(),
             tuning_favourites: Vec::new(),
             backup_targets: default_backup_targets(),
@@ -370,5 +384,12 @@ pub fn set_backup_targets(app: tauri::AppHandle, targets: Vec<String>) -> Result
 pub fn set_store_html_output_dir(app: tauri::AppHandle, dir: String) -> Result<(), String> {
     let mut config = load_config(&app);
     config.store_html_output_dir = dir;
+    save_config(&app, &config)
+}
+
+#[tauri::command]
+pub fn set_console_presets(app: tauri::AppHandle, presets: Vec<String>) -> Result<(), String> {
+    let mut config = load_config(&app);
+    config.console_presets = presets;
     save_config(&app, &config)
 }

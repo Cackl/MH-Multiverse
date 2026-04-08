@@ -310,15 +310,15 @@
     await openUrl(`http://localhost:${dashboardPort}/Dashboard/`)
   }
 
-  const presets = [
-    '!commands',
-    '!account userlevel',
-    '!server status',
-    '!server broadcast',
-    '!server shutdown',
-    '!lookup item',
-    '!lookup costume',
-  ]
+  // const presets = [
+  //   '!commands',
+  //   '!account userlevel',
+  //   '!server status',
+  //   '!server broadcast',
+  //   '!server shutdown',
+  //   '!lookup item',
+  //   '!lookup costume',
+  // ]
 
   function applyPreset(cmd: string) {
     command = cmd
@@ -515,7 +515,7 @@
       </div>
 
       <div class="cmd-chips">
-        {#each presets as p}
+        {#each $appConfig.console_presets as p}
           <button class="cmd-chip" on:click={() => applyPreset(p)} disabled={!$serverRunning}>{p}</button>
         {/each}
       </div>

@@ -125,6 +125,7 @@ export interface AppConfig {
   theme: string
   launch_options: LaunchOptions
   shutdown: ShutdownConfig
+  console_presets: string[]
   tuning_tags: Record<string, string>
   tuning_favourites: string[]
   backup_targets: string[]
@@ -157,10 +158,11 @@ export const appConfig = writable<AppConfig>({
   theme: '',
   launch_options: defaultLaunchOptions,
   shutdown: defaultShutdownConfig,
+  console_presets: ["!commands","!account userlevel","!server status","!server broadcast","!server shutdown","!server reloadcatalog","!server reloadlivetuning"],
   tuning_tags: {},
   tuning_favourites: [],
   backup_targets: ['Config.ini', 'ConfigOverride.ini', 'Data/Game/LiveTuning', 'Data/Account.db'],
-  store_html_output_dir: '',
+  store_html_output_dir: ''
 })
 
 export const activeTheme = writable<string>('')
@@ -252,8 +254,12 @@ export async function setBackupTargets(targets: string[]): Promise<void> {
   await invoke('set_backup_targets', { targets })
 }
 
-
 export async function setStoreHtmlOutputDir(dir: string): Promise<void> {
   appConfig.update(c => ({ ...c, store_html_output_dir: dir }))
   await invoke('set_store_html_output_dir', { dir })
+}
+
+export async function setConsolePresets(presets: string[]): Promise<void> {
+  appConfig.update(c => ({ ...c, console_presets: presets }))
+  await invoke('set_console_presets', { presets })
 }

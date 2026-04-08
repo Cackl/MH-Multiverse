@@ -492,7 +492,8 @@
     font-size: 13px;
     letter-spacing: 0.1em;
     text-transform: uppercase;
-    color: var(--accent-dim) !important;
+    color: var(--accent) !important;
+    text-decoration: underline !important;
     background: none;
     all:unset;
     cursor:pointer;
