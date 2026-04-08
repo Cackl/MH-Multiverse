@@ -684,7 +684,7 @@
     border-radius: 2px;
     flex-shrink: 0;
     align-self: baseline;
-    min-width: 32px;
+    min-width: 8ch !important;
     text-align: center;
   }
   .log-lvl.trace { color: #8a8aa0; background: rgba(120, 120, 140, 0.1); border: 1px solid rgba(120, 120, 140, 0.2); }
