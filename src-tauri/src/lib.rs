@@ -15,10 +15,11 @@ use tauri::Manager;
 use tauri_plugin_window_state::{AppHandleExt, StateFlags, WindowExt};
 use server::{ServerProcess, ServerState};
 
-/// Only persist/restore size and position — not decoration or other flags
-/// that would conflict with our custom titlebar (decorations: false).
+/// Restore size, position and maximised state of window
 const WINDOW_STATE_FLAGS: StateFlags = StateFlags::from_bits_truncate(
-    StateFlags::SIZE.bits() | StateFlags::POSITION.bits()
+    StateFlags::SIZE.bits()
+        | StateFlags::POSITION.bits()
+        | StateFlags::MAXIMIZED.bits()
 );
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -73,6 +74,7 @@ pub fn run() {
             config::set_tuning_favourites,
             config::set_backup_targets,
             config::set_store_html_output_dir,
+            config::set_console_presets,
             launcher::launch_game,
             launcher::game_is_running,
             server::start_server,

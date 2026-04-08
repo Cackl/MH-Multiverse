@@ -1,8 +1,9 @@
 <script lang="ts">
-  import { onMount } from 'svelte'
+  import { onMount, tick } from 'svelte'
   import { openPath } from '@tauri-apps/plugin-opener'
   import { invoke } from '@tauri-apps/api/core'
-  import { appConfig, serverRunning, setShutdownConfig, type ShutdownConfig } from '../lib/store'
+  import { appConfig, setConsolePresets, serverRunning, setShutdownConfig, type ShutdownConfig } from '../lib/store'
+  import { FALLBACK_COMMANDS } from '../lib/serverCommands'
   import PanelSidebar from './PanelSidebar.svelte'
 
   export let embedded = false
@@ -194,6 +195,7 @@
   let tooltipX = 0
   let tooltipY = 0
   let tooltipVisible = false
+  let presets: string[] = []
 
   $: canLoad = !!$appConfig.server_exe
   $: activeSchema = schema.find(s => s.id === activeSection)!
@@ -206,6 +208,7 @@
   $: dirty = loaded && allFields.some(f =>
     (values[f.section]?.[f.key] ?? '') !== (savedValues[f.section]?.[f.key] ?? '')
   )
+  $: presets = [...($appConfig.console_presets ?? [])]
 
   // -- Load / save --
 
@@ -278,16 +281,258 @@
 
   // -- Tooltip --
 
-  function showTooltip(e: MouseEvent, text: string) {
+  let tooltipEl: HTMLDivElement | null = null
+
+  const TOOLTIP_OFFSET = 12
+  const VIEWPORT_PAD = 10
+
+  async function showTooltip(e: MouseEvent, text: string) {
     tooltip = text
-    tooltipX = e.clientX + 12
-    tooltipY = e.clientY - 8
     tooltipVisible = true
+
+    await tick()
+    if (!tooltipEl) return
+
+    const rect = tooltipEl.getBoundingClientRect()
+    const vw = window.innerWidth
+    const vh = window.innerHeight
+
+    let x = e.clientX + TOOLTIP_OFFSET
+    let y = e.clientY - 8
+
+    if (x + rect.width + VIEWPORT_PAD > vw) {
+      x = e.clientX - rect.width - TOOLTIP_OFFSET
+    }
+    x = Math.max(VIEWPORT_PAD, Math.min(x, vw - rect.width - VIEWPORT_PAD))
+
+    if (y < VIEWPORT_PAD) {
+      y = e.clientY + TOOLTIP_OFFSET
+    }
+    y = Math.max(VIEWPORT_PAD, Math.min(y, vh - rect.height - VIEWPORT_PAD))
+
+    tooltipX = x
+    tooltipY = y
   }
 
   function hideTooltip() {
     tooltipVisible = false
   }
+
+  // -- Console presets --
+
+  function syncPresets() {
+    setConsolePresets(presets)
+  }
+
+  function removePreset(i: number) {
+    presets = presets.filter((_, idx) => idx !== i)
+    syncPresets()
+  }
+
+  function movePresetUp(i: number) {
+    if (i === 0) return
+    const next = [...presets]
+    ;[next[i - 1], next[i]] = [next[i], next[i - 1]]
+    presets = next
+    syncPresets()
+  }
+
+  function movePresetDown(i: number) {
+    if (i === presets.length - 1) return
+    const next = [...presets]
+    ;[next[i], next[i + 1]] = [next[i + 1], next[i]]
+    presets = next
+    syncPresets()
+  }
+
+  // -- Preset autocomplete --
+
+  interface Cmd { f: string; a: string; d: string; invokerType?: string }
+  const presetCommands: Cmd[] = FALLBACK_COMMANDS.map(c => ({ ...c, invokerType: 'Any' }))
+
+  let presetInput = ''
+  let presetInputEl: HTMLInputElement | null = null
+  let pacVisible = false
+  let pacSuggs: Cmd[] = []
+  let pacResolved: Cmd | null = null
+  let pacSel = -1
+  let pacFocused = false
+  let pacPanelEl: HTMLElement | null = null
+
+  $: if (pacSel >= 0 && pacPanelEl) {
+    const selected = pacPanelEl.querySelector<HTMLElement>('.pac-sugg.sel')
+    selected?.scrollIntoView({ block: 'nearest' })
+  }
+
+  function pacLcp(strs: string[]): string {
+    if (!strs.length) return ''
+    let p = strs[0]
+    for (let i = 1; i < strs.length; i++) {
+      while (!strs[i].startsWith(p)) p = p.slice(0, -1)
+      if (!p) return ''
+    }
+    return p
+  }
+
+  function pacGetSuggs(v: string): Cmd[] {
+    if (!v || v === '!') return []
+    const lo = v.toLowerCase()
+    return presetCommands.filter(c => c.f.startsWith(lo))
+  }
+
+  function pacFindResolved(v: string): Cmd | null {
+    const lo = v.toLowerCase()
+    return presetCommands.find(c => lo === c.f || lo.startsWith(c.f + ' ')) ?? null
+  }
+
+  function pacUpdate(v: string) {
+    if (!v || v === '!') {
+      pacVisible = false; pacSuggs = []; pacResolved = null; pacSel = -1
+      return
+    }
+    const r = pacFindResolved(v)
+    if (r) {
+      pacResolved = r; pacSuggs = []; pacSel = -1; pacVisible = true
+    } else {
+      pacResolved = null; pacSel = -1; pacSuggs = pacGetSuggs(v); pacVisible = pacSuggs.length > 0
+    }
+  }
+
+  function pacCompleteToCmd(c: Cmd) {
+    presetInput = c.f + (c.a ? ' ' : '')
+    pacSel = -1
+    pacUpdate(presetInput)
+  }
+
+  function pacDoTab() {
+    if (pacResolved) return
+    if (!pacSuggs.length) return
+    const prefix = pacLcp(pacSuggs.map(c => c.f))
+    if (prefix.length > presetInput.length) {
+      if (pacSuggs.length === 1) {
+        pacCompleteToCmd(pacSuggs[0])
+      } else {
+        presetInput = prefix
+        pacSel = -1
+        pacUpdate(prefix)
+      }
+      return
+    }
+    if (pacSel === -1) {
+      pacSel = 0
+    } else {
+      pacCompleteToCmd(pacSuggs[pacSel])
+    }
+  }
+
+  function onPresetInputKeydown(e: KeyboardEvent) {
+    if (e.key === 'Tab') {
+      e.preventDefault()
+      pacDoTab()
+      return
+    }
+    if (e.key === 'Escape') {
+      pacVisible = false; pacSel = -1; pacResolved = null
+      return
+    }
+    if (e.key === 'Enter') {
+      if (pacSel >= 0 && !pacResolved) {
+        e.preventDefault()
+        pacCompleteToCmd(pacSuggs[pacSel])
+        return
+      }
+      addPreset()
+      return
+    }
+    if (pacResolved || !pacVisible) return
+    if (e.key === 'ArrowDown') { e.preventDefault(); pacSel = Math.min(pacSel + 1, pacSuggs.length - 1) }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); pacSel = Math.max(pacSel - 1, -1) }
+  }
+
+  function addPreset() {
+    const v = presetInput.trim()
+    if (!v) return
+    presets = [...presets, v]
+    presetInput = ''
+    pacVisible = false; pacSuggs = []; pacResolved = null; pacSel = -1
+    syncPresets()
+  }
+
+  // -- Preset drag reorder (pointer events) --
+  //
+  // HTML5 drag-and-drop is unreliable in Tauri WebViews. Instead we use pointer
+  // events on the drag handle only: pointerdown starts the drag, pointermove and
+  // pointerup are registered on window for the duration, and elementFromPoint
+  // identifies the target chip under the cursor.
+
+  let dragIndex: number | null = null
+  let dragOverIndex: number | null = null
+
+  function onHandlePointerDown(e: PointerEvent, i: number) {
+    e.preventDefault()
+    ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
+    dragIndex = i
+    dragOverIndex = i
+
+    function onPointerMove(me: PointerEvent) {
+      const el = document.elementFromPoint(me.clientX, me.clientY)
+      const chip = el?.closest<HTMLElement>('[data-chip-index]')
+      if (chip) {
+        const idx = parseInt(chip.dataset.chipIndex ?? '', 10)
+        if (!isNaN(idx)) dragOverIndex = idx
+      }
+    }
+
+    function onPointerUp() {
+      if (dragIndex !== null && dragOverIndex !== null && dragIndex !== dragOverIndex) {
+        const next = [...presets]
+        const [item] = next.splice(dragIndex, 1)
+        next.splice(dragOverIndex, 0, item)
+        presets = next
+        syncPresets()
+      }
+      dragIndex = null
+      dragOverIndex = null
+      window.removeEventListener('pointermove', onPointerMove)
+      window.removeEventListener('pointerup', onPointerUp)
+    }
+
+    window.addEventListener('pointermove', onPointerMove)
+    window.addEventListener('pointerup', onPointerUp)
+  }
+
+  // -- Preset chip keyboard reorder --
+
+  function onChipKeydown(e: KeyboardEvent, i: number) {
+    if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+      e.preventDefault()
+      if (i === 0) return
+      movePresetUp(i)
+      tick().then(() => {
+        document.querySelectorAll<HTMLElement>('[data-chip-index]')[i - 1]?.focus()
+      })
+    } else if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+      e.preventDefault()
+      if (i === presets.length - 1) return
+      movePresetDown(i)
+      tick().then(() => {
+        document.querySelectorAll<HTMLElement>('[data-chip-index]')[i + 1]?.focus()
+      })
+    } else if (e.key === 'Delete' || e.key === 'Backspace') {
+      e.preventDefault()
+      removePreset(i)
+      tick().then(() => {
+        const chips = document.querySelectorAll<HTMLElement>('[data-chip-index]')
+        if (chips.length) {
+          chips[Math.min(i, chips.length - 1)]?.focus()
+        } else {
+          presetInputEl?.focus()
+        }
+      })
+    }
+  }
+
+  // --
 
   onMount(() => {
     if (canLoad) load()
@@ -295,7 +540,13 @@
 </script>
 
 {#if tooltipVisible}
-  <div class="tooltip" style="left:{tooltipX}px;top:{tooltipY}px">{tooltip}</div>
+  <div
+    bind:this={tooltipEl}
+    class="tooltip"
+    style="left:{tooltipX}px; top:{tooltipY}px"
+  >
+    {tooltip}
+  </div>
 {/if}
 
 <div class="config-panel">
@@ -361,10 +612,11 @@
           <div class="section-title">MH Multiverse</div>
         </div>
         <div class="config-body">
-          <div class="subsection-title">Shutdown</div>
           <div class="multiverse-note">
             These settings are stored in MH Multiverse, not in ConfigOverride.ini.
           </div>
+
+          <div class="subsection-title">Shutdown</div>
           <div class="config-grid">
             <div class="config-field">
               <div class="config-field-head">
@@ -399,6 +651,115 @@
               <span class="config-field-hint">Use {'{minutes}'} as a placeholder for the remaining time.</span>
             </div>
           </div>
+
+          <div class="subsection-title">Console</div>
+          <p class="subsection-desc">
+            Saved commands shown as quick-access chips in the console.
+            Drag by the handle or use arrow keys on a focused chip to reorder. Delete or Backspace removes it.
+          </p>
+
+          {#if presets.length > 0}
+            <div class="preset-chips" role="list" aria-label="Console presets">
+              {#each presets as preset, i}
+                <div
+                  class="preset-chip"
+                  class:is-dragging={dragIndex === i}
+                  class:is-drag-over={dragOverIndex === i && dragIndex !== null && dragIndex !== i}
+                  data-chip-index={i}
+                  tabindex="0"
+                  role="button"
+                  aria-label="{preset}, position {i + 1} of {presets.length}. Arrow keys to reorder, Delete to remove."
+                  on:keydown={(e) => onChipKeydown(e, i)}
+                >
+                  <svg
+                    class="preset-chip-handle"
+                    viewBox="0 0 8 14"
+                    fill="currentColor"
+                    aria-hidden="true"
+                    on:pointerdown={(e) => onHandlePointerDown(e, i)}
+                  >
+                    <circle cx="2" cy="2"  r="1.2"/>
+                    <circle cx="6" cy="2"  r="1.2"/>
+                    <circle cx="2" cy="7"  r="1.2"/>
+                    <circle cx="6" cy="7"  r="1.2"/>
+                    <circle cx="2" cy="12" r="1.2"/>
+                    <circle cx="6" cy="12" r="1.2"/>
+                  </svg>
+                  <span class="preset-chip-text">{preset}</span>
+                  <button
+                    class="preset-chip-remove"
+                    tabindex="-1"
+                    aria-label="Remove {preset}"
+                    on:click|stopPropagation={() => removePreset(i)}
+                  >
+                    <svg viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
+                      <line x1="2" y1="2" x2="8" y2="8"/>
+                      <line x1="8" y1="2" x2="2" y2="8"/>
+                    </svg>
+                  </button>
+                </div>
+              {/each}
+            </div>
+          {:else}
+            <div class="preset-empty">No presets yet</div>
+          {/if}
+
+          <div class="preset-add-wrap">
+            {#if pacVisible && pacFocused}
+              <div class="pac-panel" bind:this={pacPanelEl}>
+                <div class="pac-header">
+                  <span class="pac-hint">TAB to complete &nbsp;|&nbsp; ↑↓ navigate &nbsp;|&nbsp; ESC dismiss</span>
+                  {#if !pacResolved}
+                    <span class="pac-count">{pacSuggs.length} match{pacSuggs.length !== 1 ? 'es' : ''}</span>
+                  {/if}
+                </div>
+                {#if pacResolved}
+                  <div class="pac-resolved">
+                    <div class="pac-resolved-cmd">
+                      <span class="pac-resolved-base">{pacResolved.f}</span>
+                      {#if pacResolved.a}<span class="pac-resolved-args"> {pacResolved.a}</span>{/if}
+                    </div>
+                    <div class="pac-resolved-desc">{pacResolved.d}</div>
+                  </div>
+                {:else}
+                  {#each pacSuggs as c, i (c.f)}
+                    <div
+                      class="pac-sugg"
+                      class:sel={i === pacSel}
+                      on:mousedown|preventDefault={() => pacCompleteToCmd(c)}
+                      role="option"
+                      tabindex="-1"
+                      aria-selected={i === pacSel}
+                    >
+                      <div class="pac-sugg-top">
+                        <span class="pac-sugg-cmd">
+                          <span class="pac-typed">{c.f.slice(0, presetInput.length)}</span>{c.f.slice(presetInput.length)}
+                        </span>
+                        {#if c.a}<span class="pac-sugg-args"> {c.a}</span>{/if}
+                      </div>
+                      <div class="pac-sugg-desc">{c.d}</div>
+                    </div>
+                  {/each}
+                {/if}
+              </div>
+            {/if}
+            <div class="preset-add-row">
+              <span class="preset-add-prefix">&gt;</span>
+              <input
+                type="text"
+                class="preset-add-input"
+                bind:value={presetInput}
+                bind:this={presetInputEl}
+                placeholder="Type a command..."
+                on:input={() => pacUpdate(presetInput)}
+                on:keydown={onPresetInputKeydown}
+                on:focus={() => { pacFocused = true; if (presetInput) pacUpdate(presetInput) }}
+                on:blur={() => setTimeout(() => { pacFocused = false; pacVisible = false }, 150)}
+              >
+              <button class="btn btn-sm btn-accent" on:click={addPreset}>Add</button>
+            </div>
+          </div>
+
         </div>
       </div>
 
@@ -577,7 +938,6 @@
   .config-nav-item:hover { color: var(--text-0); background: var(--bg-3); border-color: var(--border-mid); }
   .config-nav-item.active { color: var(--accent-bright); background: var(--accent-glow); border-color: var(--accent-dim); }
 
-
   /* -- Main area -- */
   .config-main {
     flex: 1;
@@ -603,15 +963,12 @@
     flex-shrink: 0;
     min-height: 53px;
   }
-  /* .config-section-head .section-title { font-size: 11px; } */
-  /* .config-section-head .btn { margin-left: auto; } */
 
   .config-body {
     flex: 1;
     overflow-y: auto;
     padding: 16px 20px;
   }
-
 
   .config-grid {
     display: grid;
@@ -769,9 +1126,6 @@
     flex-shrink: 0;
   }
 
-  /* -- Footer -- */
-
-
   .multiverse-note {
     font-size: 11px;
     color: var(--text-3);
@@ -802,4 +1156,205 @@
     pointer-events: none;
     box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
   }
+
+  /* -- Subsection description -- */
+  .subsection-desc {
+    font-size: 11px;
+    color: var(--text-3);
+    line-height: 1.5;
+    margin: -8px 0 14px;
+    font-family: var(--font-body);
+  }
+
+  /* -- Preset chips -- */
+  .preset-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 12px;
+  }
+
+  .preset-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 4px 6px 4px 5px;
+    background: var(--bg-3);
+    border: 1px solid var(--border-mid);
+    border-radius: var(--radius-sm);
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--text-1);
+    user-select: none;
+    transition: border-color 0.12s, background 0.12s, opacity 0.12s;
+    outline: none;
+  }
+  .preset-chip:focus {
+    border-color: var(--accent-dim);
+    background: var(--accent-glow);
+    box-shadow: 0 0 0 2px var(--accent-glow);
+  }
+  .preset-chip.is-dragging {
+    opacity: 0.4;
+  }
+  .preset-chip.is-drag-over {
+    border-color: var(--accent-dim);
+    background: var(--accent-glow);
+  }
+
+  .preset-chip-handle {
+    width: 8px;
+    height: 14px;
+    color: var(--text-3);
+    flex-shrink: 0;
+    cursor: grab;
+    touch-action: none;
+  }
+  .preset-chip-handle:active {
+    cursor: grabbing;
+  }
+
+  .preset-chip-text {
+    line-height: 1;
+  }
+
+  .preset-chip-remove {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 14px;
+    height: 14px;
+    padding: 0;
+    background: none;
+    border: none;
+    color: var(--text-3);
+    cursor: pointer;
+    border-radius: 2px;
+    flex-shrink: 0;
+    transition: color 0.1s, background 0.1s;
+  }
+  .preset-chip-remove:hover {
+    color: var(--text-error);
+    background: var(--red-dim);
+  }
+  .preset-chip-remove svg {
+    width: 10px;
+    height: 10px;
+  }
+
+  .preset-empty {
+    font-size: 11px;
+    color: var(--text-3);
+    font-family: var(--font-head);
+    letter-spacing: 0.06em;
+    margin-bottom: 12px;
+    padding: 10px 0;
+  }
+
+  /* -- Preset add row -- */
+  .preset-add-wrap {
+    position: relative;
+  }
+
+  .preset-add-row {
+    display: flex;
+    align-items: center;
+    border: 1px solid var(--border-mid);
+    border-radius: var(--radius-sm);
+    background: var(--bg-0);
+    overflow: hidden;
+    transition: border-color 0.15s;
+  }
+  .preset-add-wrap:focus-within .preset-add-row {
+    border-color: var(--accent-dim);
+  }
+
+  .preset-add-prefix {
+    padding: 0 0 0 10px;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--accent-dim);
+    user-select: none;
+    flex-shrink: 0;
+  }
+
+  .preset-add-input {
+    flex: 1;
+    background: none;
+    border: none;
+    color: var(--text-0);
+    font-family: var(--font-mono);
+    font-size: 12px;
+    padding: 7px 8px;
+    outline: none;
+  }
+  .preset-add-input::placeholder { color: var(--text-3); }
+
+  .preset-add-row .btn {
+    margin: 4px;
+    flex-shrink: 0;
+  }
+
+  /* -- Preset autocomplete panel -- */
+  .pac-panel {
+    position: absolute;
+    bottom: 100%;
+    left: 0;
+    right: 0;
+    margin-bottom: 4px;
+    background: var(--bg-2);
+    border: 1px solid var(--border-lit);
+    border-radius: var(--radius-sm);
+    max-height: 240px;
+    overflow-y: auto;
+    z-index: var(--z-dropdown);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+  }
+  .pac-panel::-webkit-scrollbar { width: 4px; }
+  .pac-panel::-webkit-scrollbar-thumb { background: var(--border-lit); }
+
+  .pac-header {
+    padding: 5px 12px;
+    background: var(--bg-0);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-shrink: 0;
+  }
+  .pac-hint {
+    font-family: var(--font-head);
+    font-size: 9px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--text-3);
+  }
+  .pac-count {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--text-3);
+  }
+
+  .pac-sugg {
+    padding: 7px 12px;
+    cursor: pointer;
+    border-bottom: 1px solid var(--border);
+    border-left: 2px solid transparent;
+    transition: background 0.08s;
+  }
+  .pac-sugg:last-child { border-bottom: none; }
+  .pac-sugg:hover { background: var(--accent-glow); }
+  .pac-sugg.sel { background: var(--accent-glow); border-left-color: var(--accent-dim); }
+
+  .pac-sugg-top { display: flex; align-items: baseline; gap: 6px; }
+  .pac-sugg-cmd { font-family: var(--font-mono); font-size: 12px; color: var(--text-1); }
+  .pac-typed { color: var(--accent-bright); }
+  .pac-sugg-args { font-family: var(--font-mono); font-size: 12px; color: var(--text-3); }
+  .pac-sugg-desc { font-size: 11px; color: var(--text-3); margin-top: 3px; line-height: 1.4; }
+
+  .pac-resolved { padding: 8px 12px; }
+  .pac-resolved-cmd { font-family: var(--font-mono); font-size: 12px; }
+  .pac-resolved-base { color: var(--green-bright); }
+  .pac-resolved-args { color: var(--text-3); }
+  .pac-resolved-desc { font-size: 11px; color: var(--text-3); margin-top: 3px; }
 </style>

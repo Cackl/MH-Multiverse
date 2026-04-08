@@ -1456,7 +1456,7 @@
     font-weight: 600;
     letter-spacing: 0.12em;
     text-transform: uppercase;
-    color: var(--text-3);
+    color: var(--accent);
   }
 
   /* ── Item picker section ── */
@@ -1482,7 +1482,7 @@
     font-weight: 600;
     letter-spacing: 0.12em;
     text-transform: uppercase;
-    color: var(--text-3);
+    color: var(--accent);
     padding: 8px 10px 6px;
     border-bottom: 1px solid var(--border);
     flex-shrink: 0;
@@ -1671,7 +1671,7 @@
     font-weight: 600;
     letter-spacing: 0.14em;
     text-transform: uppercase;
-    color: var(--text-3);
+    color: var(--accent);
     margin-bottom: 10px;
     display: flex;
     align-items: center;
