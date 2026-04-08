@@ -167,7 +167,7 @@
 
   // Auto-generated storecdn URLs — recomputed whenever title or SKU changes.
   $: autoInfoUrl  = `${STORECDN_HTML_BASE}${slugify(formTitle)}_${workingSku}_en_bundle.html`
-  $: autoThumbUrl = `${STORECDN_HTML_BASE}images/${slugify(formTitle)}_${workingSku}.png`
+  $: autoThumbUrl = `${STORECDN_HTML_BASE}images/MTXStore_${slugify(formTitle)}_${workingSku}.png`
 
   // ── Target file (create mode) ─────────────────────────────────────────────
 
@@ -540,6 +540,76 @@
   let generatePath  = ''
   let generateError = ''
 
+  // Renders a 344×128 PNG thumbnail onto a temporary canvas element and returns
+  // the image as a standard Base64 string (no data-URL prefix).
+  async function generateThumbnailBase64(): Promise<string> {
+    const W = 344, H = 128, PAD = 20
+    const HEX_R = 12
+    // Flat-top hexagons: col spacing = 1.5r, row spacing = r√3
+    const colSpacing = HEX_R * 1.5
+    const rowSpacing = HEX_R * Math.sqrt(3)
+
+    const canvas = document.createElement('canvas')
+    canvas.width  = W
+    canvas.height = H
+    const ctx = canvas.getContext('2d')!
+
+    // Background
+    ctx.fillStyle = '#08090c'
+    ctx.fillRect(0, 0, W, H)
+
+    // Honeycomb hex grid — stroke only, no fill
+    ctx.strokeStyle = '#252836'
+    ctx.lineWidth = 1
+    const cols = Math.ceil(W / colSpacing) + 2
+    const rows = Math.ceil(H / rowSpacing) + 2
+    for (let col = -1; col < cols; col++) {
+      for (let row = -1; row < rows; row++) {
+        const cx = col * colSpacing
+        const cy = row * rowSpacing + (col % 2 !== 0 ? rowSpacing / 2 : 0)
+        ctx.beginPath()
+        for (let i = 0; i < 6; i++) {
+          const angle = (Math.PI / 3) * i
+          const x = cx + HEX_R * Math.cos(angle)
+          const y = cy + HEX_R * Math.sin(angle)
+          i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y)
+        }
+        ctx.closePath()
+        ctx.stroke()
+      }
+    }
+
+    // Subtle top gradient veil using accent colour
+    const veil = ctx.createLinearGradient(0, 0, 0, H)
+    veil.addColorStop(0, 'rgba(16,195,255,0.3)')
+    veil.addColorStop(1, 'rgba(16,195,255,0)')
+    ctx.fillStyle = veil
+    ctx.fillRect(0, 0, W, H)
+
+    // Title text — auto-shrink font to keep within canvas width
+    const maxTextW = W - PAD * 2 - 8
+    let fontSize = 28
+    ctx.font = `bold ${fontSize}px "Chakra Petch", "Trebuchet MS", sans-serif`
+    while (fontSize > 12 && ctx.measureText(formTitle).width > maxTextW) {
+      fontSize -= 2
+      ctx.font = `bold ${fontSize}px "Chakra Petch", "Trebuchet MS", sans-serif`
+    }
+
+    ctx.shadowColor   = 'rgba(0,0,0,0.85)'
+    ctx.shadowBlur    = 6
+    ctx.shadowOffsetX = 1
+    ctx.shadowOffsetY = 2
+    ctx.fillStyle     = '#ffffff'
+    ctx.textAlign     = 'center'
+    ctx.textBaseline  = 'middle'
+    // // Shift centre slightly right to visually clear the left accent bar
+    ctx.fillText(formTitle, W / 2, H / 2)
+
+    // canvas.toDataURL returns "data:image/png;base64,{data}" — strip the prefix
+    const dataUrl = canvas.toDataURL('image/png')
+    return dataUrl.slice(dataUrl.indexOf(',') + 1)
+  }
+
   async function generateHtml() {
     if (!formTitle.trim()) { generateError = 'Title is required.'; return }
     generating    = true
@@ -555,7 +625,17 @@
       initialStateSerialized = currentStateSerialized
       onSaved({ ...built, source_file: target, from_modified: true })
 
-      // Then generate.
+      // Generate and save thumbnail.
+      const pngBase64 = await generateThumbnailBase64()
+      await invoke('save_thumbnail', {
+        serverExe,
+        slug:        slugify(formTitle),
+        skuId:       workingSku,
+        pngBase64,
+        saveToApache: !overrideApache,
+      })
+
+      // Generate and save HTML.
       generatePath = await invoke<string>('generate_bundle_html', {
         serverExe,
         entry:        built,
@@ -790,7 +870,7 @@
                       }
                       if (!formContentUrl) {
                         const s = slugify(formTitle)
-                        formContentUrl = `${STORECDN_HTML_BASE}images/${s}_${workingSku}.png`
+                        formContentUrl = `${STORECDN_HTML_BASE}images/MTXStore_${s}_${workingSku}.png`
                       }
                     }
                     overrideApache = val

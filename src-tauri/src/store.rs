@@ -783,3 +783,71 @@ static HTML_TEMPLATE: &str = r#"<!DOCTYPE html>
 </body>
 </html>
 "#;
+/// Generate a 344×128 PNG thumbnail for a bundle store page and write it to disk.
+///
+/// Always writes a backup to:
+///   `{server_dir}/Data/Web/MH Multiverse Bundles/images/{title_slug}_{sku}.png`
+///
+/// If `save_to_apache` is true, additionally writes to:
+///   `{server_dir}/../Apache24/htdocs/bundles/images/{title_slug}_{sku}.png`
+///   Returns an error if that directory does not exist.
+///
+/// `png_base64` is a standard Base64-encoded PNG produced by the frontend canvas.
+///
+/// Returns the absolute path of the backup image file.
+#[tauri::command]
+pub fn save_thumbnail(
+    server_exe: String,
+    slug: String,
+    sku_id: u64,
+    png_base64: String,
+    save_to_apache: bool,
+) -> Result<String, String> {
+    use base64::{engine::general_purpose::STANDARD, Engine};
+
+    let png_bytes = STANDARD
+        .decode(&png_base64)
+        .map_err(|e| format!("Invalid base64 thumbnail data: {e}"))?;
+
+    let filename = format!("MTXStore_{slug}_{sku_id}.png");
+
+    // ── Unconditional backup ──────────────────────────────────────────────────
+
+    let backup_dir = server_dir_of(&server_exe)?
+        .join("Data")
+        .join("Web")
+        .join("MH Multiverse Bundles")
+        .join("images");
+
+    fs::create_dir_all(&backup_dir)
+        .map_err(|e| format!("Cannot create backup images directory: {e}"))?;
+
+    let backup_path = backup_dir.join(&filename);
+    fs::write(&backup_path, &png_bytes)
+        .map_err(|e| format!("Cannot write backup thumbnail: {e}"))?;
+
+    // ── Optional Apache htdocs write ──────────────────────────────────────────
+
+    if save_to_apache {
+        let apache_images_dir = server_dir_of(&server_exe)?
+            .parent()
+            .ok_or_else(|| "Cannot determine root directory from server exe path".to_string())?
+            .join("Apache24")
+            .join("htdocs")
+            .join("bundles")
+            .join("images");
+
+        if !apache_images_dir.exists() {
+            return Err(format!(
+                "Apache images directory not found: {}",
+                apache_images_dir.display()
+            ));
+        }
+
+        let apache_path = apache_images_dir.join(&filename);
+        fs::write(&apache_path, &png_bytes)
+            .map_err(|e| format!("Cannot write Apache thumbnail: {e}"))?;
+    }
+
+    Ok(backup_path.to_string_lossy().to_string())
+}
