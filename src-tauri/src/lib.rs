@@ -109,6 +109,7 @@ pub fn run() {
             store::get_next_sku_id,
             store::resolve_display_name,
             store::generate_bundle_html,
+            store::save_thumbnail,
             patches::scan_patch_files,
             patches::load_patch_file,
             patches::save_patch_file,

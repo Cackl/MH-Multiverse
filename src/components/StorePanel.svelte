@@ -768,7 +768,6 @@
     entry={editingEntry}
     serverExe={$appConfig.server_exe}
     catalogFiles={catalogFiles}
-    htmlOutputDir={$appConfig.store_html_output_dir ?? ''}
     onClose={() => editingEntry = null}
     onSaved={handleSaved}
     onDeleted={handleDeleted}
@@ -781,7 +780,6 @@
     entry={null}
     serverExe={$appConfig.server_exe}
     catalogFiles={catalogFiles}
-    htmlOutputDir={$appConfig.store_html_output_dir ?? ''}
     onClose={() => creatingNew = false}
     onSaved={handleCreated}
     onDeleted={() => {}}
