@@ -7,6 +7,7 @@
     serverRunning,
     appConfig,
     serverLog,
+    serverLogFilter,
     appendLog,
     clearLog,
     apacheRunning,
@@ -17,11 +18,8 @@
   } from '../lib/store'
   import { FALLBACK_COMMANDS } from '../lib/serverCommands'
 
-  type Filter = 'all' | 'trace' | 'debug' | 'info' | 'warn' | 'err' | 'fatal'
-
   const DASHBOARD_PORT_DEFAULT = 8080
 
-  let filter: Filter = 'all'
   let command = ''
   let starting = false
   let stopping = false
@@ -97,8 +95,8 @@
     try { await invoke('send_command', { cmd: '!server broadcast Server shutdown has been cancelled.' }) } catch {}
   }
 
-  $: filtered = filter === 'all' ? $serverLog : $serverLog.filter(l => l.level === filter)
-  $: filter, scrollToEnd()
+  $: filtered = $serverLogFilter === 'all' ? $serverLog : $serverLog.filter(l => l.level === $serverLogFilter)
+  $: filtered, scrollToEnd()
   $: if (!scrollLocked) filtered.length, scrollToEnd()
 
   $: uptimeFormatted = [
@@ -416,13 +414,13 @@
 
         <!-- Filters -->
         <span class="filter-label">Filter</span>
-        <button class="filter-chip" class:active={filter === 'all'} on:click={() => filter = 'all'}>All</button>
-        <button class="filter-chip chip-purple" class:active={filter === 'trace'} on:click={() => filter = 'trace'}>Trace</button>
-        <button class="filter-chip chip-purple" class:active={filter === 'debug'} on:click={() => filter = 'debug'}>Debug</button>
-        <button class="filter-chip chip-blue" class:active={filter === 'info'} on:click={() => filter = 'info'}>Info</button>
-        <button class="filter-chip chip-amber" class:active={filter === 'warn'} on:click={() => filter = 'warn'}>Warn</button>
-        <button class="filter-chip chip-red" class:active={filter === 'err'} on:click={() => filter = 'err'}>Error</button>
-        <button class="filter-chip chip-red" class:active={filter === 'fatal'} on:click={() => filter = 'fatal'}>Fatal</button>
+        <button class="filter-chip" class:active={$serverLogFilter === 'all'} on:click={() => serverLogFilter.set('all')}>All</button>
+        <button class="filter-chip chip-purple" class:active={$serverLogFilter === 'trace'} on:click={() => serverLogFilter.set('trace')}>Trace</button>
+        <button class="filter-chip chip-purple" class:active={$serverLogFilter === 'debug'} on:click={() => serverLogFilter.set('debug')}>Debug</button>
+        <button class="filter-chip chip-blue" class:active={$serverLogFilter === 'info'} on:click={() => serverLogFilter.set('info')}>Info</button>
+        <button class="filter-chip chip-amber" class:active={$serverLogFilter === 'warn'} on:click={() => serverLogFilter.set('warn')}>Warn</button>
+        <button class="filter-chip chip-red" class:active={$serverLogFilter === 'err'} on:click={() => serverLogFilter.set('err')}>Error</button>
+        <button class="filter-chip chip-red" class:active={$serverLogFilter === 'fatal'} on:click={() => serverLogFilter.set('fatal')}>Fatal</button>
       </div>
     </div>
   </div>

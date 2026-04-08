@@ -3,6 +3,7 @@ import { invoke } from '@tauri-apps/api/core'
 
 export type DataTab = 'tuning' | 'store' | 'patches'
 export type Tab = 'launch' | 'server' | 'config' | 'data' | 'ops' | 'settings'
+export type LogLevel = 'all' | 'trace' | 'debug' | 'info' | 'warn' | 'err' | 'fatal'
 
 export const activeTab = writable<Tab>('launch')
 export const activeDataTab = writable<DataTab>('tuning')
@@ -28,7 +29,32 @@ export function stopUptime() {
 
 // -- Log state (persists across tab switches) --
 
-export type LogLevel = 'trace' | 'debug' | 'info' | 'ok' | 'warn' | 'err' | 'fatal'
+const SERVER_LOG_FILTER_KEY = 'server-log-filter'
+
+function loadServerLogFilter(): LogLevel {
+  if (typeof localStorage === 'undefined') return 'all'
+  const value = localStorage.getItem(SERVER_LOG_FILTER_KEY)
+  switch (value) {
+    case 'trace':
+    case 'debug':
+    case 'info':
+    case 'warn':
+    case 'err':
+    case 'fatal':
+    case 'all':
+      return value
+    default:
+      return 'all'
+  }
+}
+
+export const serverLogFilter = writable<LogLevel>(loadServerLogFilter())
+
+serverLogFilter.subscribe(value => {
+  if (typeof localStorage !== 'undefined') {
+    localStorage.setItem(SERVER_LOG_FILTER_KEY, value)
+  }
+})
 
 export interface LogLine {
   id: number
