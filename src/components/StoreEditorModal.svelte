@@ -1671,7 +1671,7 @@
     font-weight: 600;
     letter-spacing: 0.14em;
     text-transform: uppercase;
-    color: var(--text-3);
+    color: var(--text-2);
     margin-bottom: 10px;
     display: flex;
     align-items: center;
