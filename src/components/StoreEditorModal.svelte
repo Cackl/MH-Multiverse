@@ -22,6 +22,7 @@
     releaseDate: string
     typeName: string
     typeOrder: number
+    overrideApache: boolean
     infoUrl: string
     contentUrl: string
     guidItems: GuidItem[]
@@ -36,8 +37,6 @@
   export let serverExe: string
   /** Base `Catalog*.json` filenames present in MTXStore — for the target-file dropdown. */
   export let catalogFiles: string[]
-  /** Output directory for generated bundle HTML. Empty string uses the Rust default. */
-  export let htmlOutputDir: string = ''
   /**
    * All currently loaded catalog entries. Used by the item picker to identify
    * items already present in any entry across the catalog.
@@ -73,6 +72,23 @@
     )
   }
 
+  const STORECDN_HTML_BASE = 'http://storecdn.marvelheroes.com/cdn/en_us/bundles/'
+
+  function inferOverrideMode(
+    source: CatalogEntry | CatalogEntryWithMeta | null | undefined
+  ): boolean {
+    const existing =
+      source?.InfoUrls?.find(u => u.LanguageId === 'en_us')?.Url ??
+      source?.InfoUrls?.[0]?.Url ??
+      ''
+    if (!existing) return false
+    return !existing.startsWith(STORECDN_HTML_BASE)
+  }
+
+  function slugify(s: string): string {
+    return s.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '')
+  }
+
   function normalizeEntryForEdit(
     source: CatalogEntry | CatalogEntryWithMeta | null | undefined
   ): EditableStoreState {
@@ -84,6 +100,7 @@
       releaseDate: loc.ReleaseDate ?? '',
       typeName: source?.Type.Name ?? 'Boost',
       typeOrder: source?.Type.Order ?? 5,
+      overrideApache: inferOverrideMode(source),
       infoUrl: pickLocalizedUrl(source?.InfoUrls),
       contentUrl: pickLocalizedUrl(source?.ContentData),
       guidItems: cloneGuidItems(source?.GuidItems ?? []),
@@ -146,6 +163,11 @@
 
   let formInfoUrl    = initialState.infoUrl
   let formContentUrl = initialState.contentUrl
+  let overrideApache = initialState.overrideApache
+
+  // Auto-generated storecdn URLs — recomputed whenever title or SKU changes.
+  $: autoInfoUrl  = `${STORECDN_HTML_BASE}${slugify(formTitle)}_${workingSku}_en_bundle.html`
+  $: autoThumbUrl = `${STORECDN_HTML_BASE}images/${slugify(formTitle)}_${workingSku}.png`
 
   // ── Target file (create mode) ─────────────────────────────────────────────
 
@@ -424,11 +446,15 @@
         ReleaseDate:  initialState.releaseDate,
         ItemPrice:    formPrice,
       }],
-      InfoUrls: isBundle && formInfoUrl
-        ? [{ LanguageId: 'en_us', Url: formInfoUrl, ImageData: '' }]
+      InfoUrls: isBundle
+        ? overrideApache
+          ? (formInfoUrl ? [{ LanguageId: 'en_us', Url: formInfoUrl, ImageData: '' }] : (entry?.InfoUrls ?? []))
+          : [{ LanguageId: 'en_us', Url: autoInfoUrl, ImageData: '' }]
         : (entry?.InfoUrls ?? []),
-      ContentData: isBundle && formContentUrl
-        ? [{ LanguageId: 'en_us', Url: formContentUrl, ImageData: '' }]
+      ContentData: isBundle
+        ? overrideApache
+          ? (formContentUrl ? [{ LanguageId: 'en_us', Url: formContentUrl, ImageData: '' }] : (entry?.ContentData ?? []))
+          : [{ LanguageId: 'en_us', Url: autoThumbUrl, ImageData: '' }]
         : (entry?.ContentData ?? []),
       Type: { Name: formTypeName, Order: order },
       TypeModifiers: buildModifiers([...selectedModifiers], order),
@@ -444,6 +470,7 @@
     releaseDate: initialState.releaseDate,
     typeName: formTypeName,
     typeOrder: formOrder,
+    overrideApache,
     infoUrl: formInfoUrl,
     contentUrl: formContentUrl,
     guidItems: formGuidItems,
@@ -514,14 +541,25 @@
   let generateError = ''
 
   async function generateHtml() {
+    if (!formTitle.trim()) { generateError = 'Title is required.'; return }
     generating    = true
     generatePath  = ''
     generateError = ''
+    saveError     = ''
+    saveSuccess   = false
     try {
+      // Save first so catalog JSON is always in sync with the generated HTML.
+      const built  = buildEntry()
+      const target = entry!.source_file
+      await invoke('save_catalog_entry', { serverExe, entry: built, targetFile: target })
+      initialStateSerialized = currentStateSerialized
+      onSaved({ ...built, source_file: target, from_modified: true })
+
+      // Then generate.
       generatePath = await invoke<string>('generate_bundle_html', {
         serverExe,
-        entry:     buildEntry(),
-        outputDir: htmlOutputDir,
+        entry:        built,
+        saveToApache: !overrideApache,
       })
     } catch (e) {
       generateError = String(e)
@@ -738,24 +776,83 @@
           <div class="form-section">
             <div class="section-label">Store Page URLs</div>
             <div class="form-stack">
-              <div class="field">
-                <label class="field-label" for="f-info-url">Info Page URL</label>
+
+              <label class="override-toggle">
                 <input
-                  id="f-info-url" class="field-input" type="text"
-                  bind:value={formInfoUrl}
-                  placeholder="http://storecdn.marvelheroes.com/cdn/en_us/bundles/..."
-                  spellcheck="false" autocomplete="off"
+                  type="checkbox"
+                  checked={overrideApache}
+                  on:change={(e) => {
+                    const val = (e.target as HTMLInputElement).checked
+                    if (val) {
+                      if (!formInfoUrl) {
+                        const s = slugify(formTitle)
+                        formInfoUrl = `${STORECDN_HTML_BASE}${s}_${workingSku}_en_bundle.html`
+                      }
+                      if (!formContentUrl) {
+                        const s = slugify(formTitle)
+                        formContentUrl = `${STORECDN_HTML_BASE}images/${s}_${workingSku}.png`
+                      }
+                    }
+                    overrideApache = val
+                  }}
                 >
-              </div>
-              <div class="field">
-                <label class="field-label" for="f-thumb-url">Thumbnail URL</label>
-                <input
-                  id="f-thumb-url" class="field-input" type="text"
-                  bind:value={formContentUrl}
-                  placeholder="http://storecdn.marvelheroes.com/bundles/MTX_Store_Bundle_..."
-                  spellcheck="false" autocomplete="off"
-                >
-              </div>
+                <span>Override Store CDN URLs</span>
+              </label>
+
+              {#if overrideApache}
+                <div class="field">
+                  <label class="field-label" for="f-info-url">Info Page URL</label>
+                  <input
+                    id="f-info-url" class="field-input" type="text"
+                    bind:value={formInfoUrl}
+                    placeholder="http://storecdn.marvelheroes.com/cdn/en_us/bundles/..."
+                    spellcheck="false" autocomplete="off"
+                  >
+                </div>
+                <div class="field">
+                  <label class="field-label" for="f-thumb-url">Thumbnail URL</label>
+                  <input
+                    id="f-thumb-url" class="field-input" type="text"
+                    bind:value={formContentUrl}
+                    placeholder="http://storecdn.marvelheroes.com/cdn/en_us/bundles/images/..."
+                    spellcheck="false" autocomplete="off"
+                  >
+                </div>
+              {:else}
+                <div class="field">
+                  <label class="field-label" for="f-info-url-auto">Info Page URL</label>
+                  <input
+                    id="f-info-url-auto" class="field-input readonly" type="text"
+                    value={autoInfoUrl}
+                    readonly tabindex="-1"
+                  >
+                </div>
+                <div class="field">
+                  <label class="field-label" for="f-thumb-url-auto">Thumbnail URL</label>
+                  <input
+                    id="f-thumb-url-auto" class="field-input readonly" type="text"
+                    value={autoThumbUrl}
+                    readonly tabindex="-1"
+                  >
+                </div>
+              {/if}
+
+              {#if !isNew}
+                <div class="generate-row">
+                  <button
+                    class="btn btn-sm btn-outline"
+                    on:click={generateHtml}
+                    disabled={generating}
+                    title="Generate HTML store page"
+                  >{generating ? 'Generating…' : 'Generate HTML'}</button>
+                  {#if generatePath}
+                    <span class="feedback-ok url-feedback" title={generatePath}>HTML written</span>
+                  {:else if generateError}
+                    <span class="feedback-error url-feedback">{generateError}</span>
+                  {/if}
+                </div>
+              {/if}
+
             </div>
           </div>
         {/if}
@@ -1052,10 +1149,6 @@
             <span class="feedback-error">{deleteError}</span>
           {:else if saveError}
             <span class="feedback-error">{saveError}</span>
-          {:else if generateError}
-            <span class="feedback-error">{generateError}</span>
-          {:else if generatePath}
-            <span class="feedback-ok" title={generatePath}>HTML written</span>
           {:else if saveSuccess}
             <span class="feedback-ok">Saved</span>
           {:else if dirty && !isNew}
@@ -1064,15 +1157,6 @@
         </div>
 
         <div class="footer-actions">
-          {#if !isNew && (offerType === 'bundle' || offerType === 'bogo')}
-            <button
-              class="btn btn-sm btn-outline"
-              on:click={generateHtml}
-              disabled={generating}
-              title="Generate HTML store page and write store.css"
-            >{generating ? 'Generating…' : 'Generate HTML'}</button>
-          {/if}
-
           {#if !isNew}
             {#if deleteConfirming}
               <button class="btn btn-sm btn-outline" on:click={() => deleteConfirming = false}>Cancel</button>
@@ -1769,5 +1853,39 @@
     letter-spacing: 0.08em;
     text-transform: uppercase;
     color: var(--text-3);
+  }
+
+  /* ── Store Page URLs section additions ── */
+  .override-toggle {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    cursor: pointer;
+    font-family: var(--font-body);
+    font-size: 12px;
+    color: var(--text-2);
+    user-select: none;
+  }
+  .override-toggle input[type="checkbox"] {
+    accent-color: var(--accent);
+    cursor: pointer;
+    width: 13px;
+    height: 13px;
+    flex-shrink: 0;
+  }
+
+  .generate-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding-top: 2px;
+  }
+
+  .url-feedback {
+    font-size: 11px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 0;
   }
 </style>

@@ -546,19 +546,25 @@ pub fn resolve_display_name(
 
 /// Generate the HTML page for a bundle catalog entry and write it to disk.
 ///
-/// Produces:
-/// - `{output_dir}/html/{title_slug}_en_bundle.html`
-/// - `{output_dir}/css/store.css` (only if the file does not already exist,
-///   so user CSS edits are preserved across regenerations)
+/// Always writes a backup to:
+///   `{server_dir}/Data/Web/MH Multiverse Bundles/html/{title_slug}_{sku}_en_bundle.html`
 ///
-/// Returns the absolute path of the generated HTML file.
+/// Also writes a backup CSS seed to:
+///   `{server_dir}/Data/Web/MH Multiverse Bundles/css/style.css`
+///   (only if the file does not already exist, preserving manual edits)
+///
+/// If `save_to_apache` is true, additionally writes the HTML to:
+///   `{server_dir}/../Apache24/htdocs/bundles/{title_slug}_{sku}_en_bundle.html`
+///   Returns an error if that `bundles/` subdirectory does not exist.
+///
+/// Returns the absolute path of the backup HTML file.
 #[tauri::command]
 pub fn generate_bundle_html(
     dn_state: tauri::State<DisplayNameState>,
     cat_state: tauri::State<CatalogueState>,
     server_exe: String,
     entry: CatalogEntry,
-    output_dir: String,
+    save_to_apache: bool,
 ) -> Result<String, String> {
     let server_dir = server_dir_of(&server_exe)
         .map(|p| p.to_string_lossy().to_string())
@@ -584,11 +590,10 @@ pub fn generate_bundle_html(
             &item.item_prototype_runtime_id_for_client,
         );
         if item.quantity == 1 {
-            items_html.push_str(&format!("                <li>{name}</li>\n"));
+            items_html.push_str(&format!("            <li>{name}</li>\n"));
         } else {
-            // × = multiplication sign (U+00D7), distinct from letter x
             items_html.push_str(&format!(
-                "                <li>{name} \u{d7}{}</li>\n",
+                "            <li>{name} x{}</li>\n",
                 item.quantity
             ));
         }
@@ -600,152 +605,154 @@ pub fn generate_bundle_html(
         .replace("{price}", &price.to_string())
         .replace("{sku_hex}", &sku_hex);
 
-    // Default to {server_dir}/Data/Web/Bundles if no output dir was specified
-    let resolved_dir = if output_dir.is_empty() {
-        server_dir_of(&server_exe)?
-            .join("Data")
-            .join("Web")
-            .join("Bundles")
-            .to_string_lossy()
-            .to_string()
-    } else {
-        output_dir
-    };
+    let slug = title.to_lowercase().replace(' ', "_");
+    let filename = format!("{slug}_{}_en_bundle.html", entry.sku_id);
 
-    let html_dir = Path::new(&resolved_dir).join("html");
-    let css_dir = Path::new(&resolved_dir).join("css");
-    fs::create_dir_all(&html_dir).map_err(|e| format!("Cannot create html directory: {e}"))?;
-    fs::create_dir_all(&css_dir).map_err(|e| format!("Cannot create css directory: {e}"))?;
+    // ── Unconditional backup ──────────────────────────────────────────────────
 
-    // Only write CSS if absent — preserves user customisation made after first generation
-    let css_path = css_dir.join("store.css");
-    if !css_path.exists() {
-        fs::write(&css_path, STORE_CSS)
-            .map_err(|e| format!("Cannot write store.css: {e}"))?;
+    let backup_root = server_dir_of(&server_exe)?
+        .join("Data")
+        .join("Web")
+        .join("MH Multiverse Bundles");
+
+    let backup_html_dir = backup_root.join("html");
+    let backup_css_dir  = backup_root.join("css");
+
+    fs::create_dir_all(&backup_html_dir)
+        .map_err(|e| format!("Cannot create backup html directory: {e}"))?;
+    fs::create_dir_all(&backup_css_dir)
+        .map_err(|e| format!("Cannot create backup css directory: {e}"))?;
+
+    // Only seed CSS if absent — preserves user edits made after first generation
+    let backup_css_path = backup_css_dir.join("style.css");
+    if !backup_css_path.exists() {
+        fs::write(&backup_css_path, STORE_CSS)
+            .map_err(|e| format!("Cannot write backup style.css: {e}"))?;
     }
 
-    let slug = title.to_lowercase().replace(' ', "_");
-    let html_path = html_dir.join(format!("{slug}_en_bundle.html"));
-    fs::write(&html_path, &html).map_err(|e| format!("Cannot write HTML: {e}"))?;
+    let backup_html_path = backup_html_dir.join(&filename);
+    fs::write(&backup_html_path, &html)
+        .map_err(|e| format!("Cannot write backup HTML: {e}"))?;
 
-    Ok(html_path.to_string_lossy().to_string())
+    // ── Optional Apache htdocs write ──────────────────────────────────────────
+
+    if save_to_apache {
+        let apache_bundles_dir = server_dir_of(&server_exe)?
+            .parent()
+            .ok_or_else(|| "Cannot determine root directory from server exe path".to_string())?
+            .join("Apache24")
+            .join("htdocs")
+            .join("bundles");
+        if !apache_bundles_dir.exists() {
+            return Err(format!(
+                "Apache bundles directory not found: {}",
+                apache_bundles_dir.display()
+            ));
+        }
+        let apache_html_path = apache_bundles_dir.join(&filename);
+        fs::write(&apache_html_path, &html)
+            .map_err(|e| format!("Cannot write Apache HTML: {e}"))?;
+    }
+
+    Ok(backup_html_path.to_string_lossy().to_string())
 }
 
 // ── CSS template ──────────────────────────────────────────────────────────────
 
-static STORE_CSS: &str = r#":root {
-    --store-bg:        #0a0a0f;
-    --store-surface:   #10101a;
-    --store-border:    #1e3a5f;
-    --store-accent:    #4d9fff;
-    --store-text:      #d0d0e0;
-    --store-text-dim:  #7080a0;
-    --store-price:     #f0c040;
-    --store-btn-bg:    #1a3a6a;
-    --store-btn-hover: #2a5aa0;
-    --store-font:      'Rajdhani', 'Trebuchet MS', sans-serif;
-}
-
-*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+static STORE_CSS: &str = r#"/* MH Multiverse — bundle store page */
 
 html {
-    background-color: var(--store-bg);
-    color: var(--store-text);
-    font-family: var(--store-font);
-    font-size: 17px;
-    line-height: 1.6;
+    background: #0d0d0b;
+    color: #d7d7d7;
+    font: 18px/1.385 Verdana, sans-serif;
 }
 
-.store-page {
-    max-width: 680px;
-    margin: 2rem auto;
-    padding: 0 1.25rem;
-    display: flex;
-    flex-direction: column;
-    gap: 1.25rem;
+*:focus { outline-color: #00e8ff; }
+
+h1, h2, h3, h4, h5, h6 {
+    color: #00aaff;
+    font-family: "Bebas Neue", "Trebuchet MS", Verdana, sans-serif;
+    font-weight: normal;
 }
 
-.store-header {
-    border-bottom: 1px solid var(--store-border);
-    padding-bottom: 1rem;
+button, input {
+    box-sizing: border-box;
+    background: #1c1c1c;
+    border: 1px solid #000;
+    box-shadow: 0 0 1px 1px #00aaff;
+    color: inherit;
+    font: inherit;
 }
 
-.bundle-title {
-    font-size: 2.2rem;
-    font-weight: 700;
-    letter-spacing: 0.04em;
-    color: var(--store-accent);
-    text-transform: uppercase;
-}
+button { padding: 8px; }
+button:hover { box-shadow: 0 0 1px 1px #fff; }
 
-.bundle-contents {
-    background: var(--store-surface);
-    border: 1px solid var(--store-border);
-    border-radius: 4px;
-    padding: 1.25rem 1.5rem;
-}
-
-.bundle-contents h2 {
-    font-size: 0.85rem;
-    font-weight: 500;
-    color: var(--store-text-dim);
-    text-transform: uppercase;
-    letter-spacing: 0.1em;
-    margin-bottom: 0.85rem;
-}
-
-.item-list {
-    list-style: none;
-    display: flex;
-    flex-direction: column;
-    gap: 0.4rem;
-}
-
-.item-list li {
-    padding-left: 1.1rem;
-    position: relative;
-}
-
-.item-list li::before {
-    content: '—';
+div.content {
     position: absolute;
-    left: 0;
-    color: var(--store-accent);
+    inset: 10px 10px 80px;
+    padding: 20px;
+    border: 1px solid #00717c;
+    background: #00090e;
+    overflow-y: auto;
 }
 
-.store-footer {
+div.buttons {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 1rem 1.5rem;
-    background: var(--store-surface);
-    border: 1px solid var(--store-border);
-    border-radius: 4px;
+    padding: 10px 20px;
+    top: auto;
+    bottom: 10px;
 }
 
-.bundle-price {
-    font-size: 2rem;
-    font-weight: 700;
-    color: var(--store-price);
-    letter-spacing: 0.02em;
+.content::-webkit-scrollbar { width: 8px; }
+.content::-webkit-scrollbar-track { background: transparent; }
+.content::-webkit-scrollbar-thumb {
+    background: #13aaf4;
+    border: 1px solid #46ddf0;
+    border-radius: 10px;
 }
 
-.btn-purchase {
-    padding: 0.55rem 1.6rem;
-    font-family: var(--store-font);
-    font-size: 0.95rem;
-    font-weight: 700;
-    letter-spacing: 0.06em;
+div.buttons button {
+    padding: 8px 40px 6px;
+    font: normal 23px/20px "Bebas Neue", "Trebuchet MS", Verdana, sans-serif;
+    color: #fff;
     text-transform: uppercase;
-    background: var(--store-btn-bg);
-    color: var(--store-text);
-    border: 1px solid var(--store-accent);
-    border-radius: 3px;
-    cursor: pointer;
-    transition: background 0.15s ease;
+    text-shadow: 1px 1px 2px #000;
+    border: 1px solid #65e872;
+    border-radius: 4px;
+    background: linear-gradient(337deg, #087a10 49%, #299f2c 51%, #0d7d16 70%, #087a10 100%);
+    box-shadow: inset 0 0 8px #39cb42, 0 0 4px #39cb42;
 }
 
-.btn-purchase:hover { background: var(--store-btn-hover); }
+div.buttons button:hover {
+    background: linear-gradient(337deg, #009e08 49%, #30df39 51%, #24992b 70%, #009e08 100%);
+    box-shadow: inset 0 0 8px #03ff0d, 0 0 4px #08cf10;
+}
+
+span.price {
+    display: inline-block;
+    position: relative;
+    padding: 5px 25px 0 0;
+    color: #fff;
+    font: normal 32px/32px "Bebas Neue", "Trebuchet MS", Verdana, sans-serif;
+}
+
+.g {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    vertical-align: middle;
+    width: 24px;
+    height: 24px;
+    margin-left: 6px;
+    color: #00090e;
+    font: bold 18px/1 Arial, sans-serif;
+    text-shadow: 1px 2px 1px #00b2fe;
+    background: linear-gradient(-35deg, #007fff 45%, #03c2f7 54%, #00b2fe 70%, #007fff 100%);
+    border: 1px solid #00b2fe;
+    border-radius: 50%;
+}
 "#;
 
 // ── HTML template ─────────────────────────────────────────────────────────────
@@ -758,25 +765,21 @@ static HTML_TEMPLATE: &str = r#"<!DOCTYPE html>
     <title>{title}</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="css/store.css">
+    <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
-    <main class="store-page">
-        <header class="store-header">
-            <h1 class="bundle-title">{title}</h1>
-        </header>
-        <section class="bundle-contents">
-            <h2>Included Items</h2>
-            <ul class="item-list">
+    <div class="content">
+        <h1>{title}</h1>
+        <p>What's included:</p>
+        <ul>
 {items}
-            </ul>
-        </section>
-        <footer class="store-footer">
-            <span class="bundle-price">{price} G</span>
-            <button class="btn-purchase" onclick="myApi.BuyBundleFromJS('{sku_hex}')">Purchase</button>
-        </footer>
-    </main>
+        </ul>
+    </div>
+    <div class="buttons content">
+        <span class="price">{price} <span class="g">G</span></span>
+        <button onclick="myApi.BuyBundleFromJS('{sku_hex}')">Buy Now</button>
+    </div>
 </body>
 </html>
 "#;
