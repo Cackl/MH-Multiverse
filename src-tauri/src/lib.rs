@@ -26,6 +26,8 @@ const WINDOW_STATE_FLAGS: StateFlags = StateFlags::from_bits_truncate(
 pub fn run() {
     tauri::Builder::default()
         .manage(ServerState(Arc::new(Mutex::new(ServerProcess::empty()))))
+        .manage(server::PlayerState::empty())
+        .manage(server::DbPath::empty())
         .manage(calligraphy::CatalogueState(Mutex::new(None)))
         .manage(store::DisplayNameState::new())
         .setup(|app| {
@@ -84,6 +86,7 @@ pub fn run() {
             server::send_command,
             server::server_is_running,
             server::apache_is_running,
+            server::get_players,
             ini::read_config,
             ini::write_config,
             ini::reset_config_section,
