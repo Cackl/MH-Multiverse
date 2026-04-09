@@ -1,5 +1,6 @@
 mod calligraphy;
 mod config;
+mod events;
 mod ini;
 mod launcher;
 mod server;
@@ -121,6 +122,14 @@ pub fn run() {
             patches::create_patch_file,
             patches::set_patch_file_enabled,
             patches::get_patches_dir,
+            events::load_events,
+            events::load_event_schedule,
+            events::save_events_override,
+            events::save_schedule_override,
+            events::reset_events_override,
+            events::reset_schedule_override,
+            events::merge_events_override,
+            events::merge_schedule_override,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
