@@ -1,7 +1,7 @@
 import { writable } from 'svelte/store'
 import { invoke } from '@tauri-apps/api/core'
 
-export type DataTab = 'tuning' | 'store' | 'patches'
+export type DataTab = 'events' | 'tuning' | 'store' | 'patches'
 export type Tab = 'launch' | 'server' | 'config' | 'data' | 'ops' | 'settings'
 export type LogLevel = 'all' | 'trace' | 'debug' | 'info' | 'warn' | 'err' | 'fatal'
 

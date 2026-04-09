@@ -3,11 +3,13 @@
   import TuningPanel from './TuningPanel.svelte'
   import StorePanel  from './StorePanel.svelte'
   import PatchesPanel from './PatchesPanel.svelte'
+  import EventsPanel from './EventsPanel.svelte';
 
   const TABS: { id: DataTab; label: string }[] = [
-    { id: 'tuning',  label: 'Live Tuning' },
+    { id: 'events',  label: 'Events'       },
+    { id: 'tuning',  label: 'Live Tuning'  },
     { id: 'store',   label: 'Store'        },
-    { id: 'patches', label: 'Patches'      },
+    { id: 'patches', label: 'Patches'      }
   ]
 </script>
 
@@ -30,7 +32,9 @@
 
   <!-- ── Active panel ── -->
   <div class="data-content">
-    {#if $activeDataTab === 'tuning'}
+    {#if $activeDataTab === 'events'}
+      <EventsPanel />
+    {:else if $activeDataTab === 'tuning'}
       <TuningPanel />
     {:else if $activeDataTab === 'store'}
       <StorePanel />
