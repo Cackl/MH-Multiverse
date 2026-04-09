@@ -9,6 +9,8 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use tauri::Manager;
 
+use crate::server;
+
 const KEYRING_SERVICE: &str = "mh-multiverse";
 const KEYRING_USER: &str = "encryption-key";
 const CONFIG_FILENAME: &str = "multiverse.json";
@@ -333,8 +335,10 @@ pub fn set_game_exe(app: tauri::AppHandle, path: String) -> Result<(), String> {
 #[tauri::command]
 pub fn set_server_exe(app: tauri::AppHandle, path: String) -> Result<(), String> {
     let mut config = load_config(&app);
-    config.server_exe = path;
-    save_config(&app, &config)
+    config.server_exe = path.clone();
+    save_config(&app, &config)?;
+    app.state::<server::DbPath>().set_from_server_exe(&path);
+    Ok(())
 }
 
 #[tauri::command]

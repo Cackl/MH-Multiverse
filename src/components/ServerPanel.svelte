@@ -17,8 +17,12 @@
     setServerError,
   } from '../lib/store'
   import { FALLBACK_COMMANDS } from '../lib/serverCommands'
+  import PlayersBlade from './PlayersBlade.svelte'
 
   const DASHBOARD_PORT_DEFAULT = 8080
+
+  let playersOpen = false
+  let playerCount = 0
 
   let command = ''
   let starting = false
@@ -403,6 +407,12 @@
             </svg>
             Dashboard
           </button>
+
+          <div class="toolbar-sep"></div>
+
+          <button class="btn btn-sm btn-outline" class:active={playersOpen} on:click={() => (playersOpen = !playersOpen)}>
+            Players ({playerCount})
+          </button>
       </div>
       <div class="header-row-2">
         <button class="btn btn-sm btn-outline" on:click={clearLog}>Clear</button>
@@ -425,7 +435,8 @@
     </div>
   </div>
 
-  <div class="log-view" bind:this={logEl}>
+  <div class="console-area">
+    <div class="log-view" bind:this={logEl}>
       {#each filtered as line (line.id)}
         <div class="log-line">
           {#if line.time}
@@ -441,6 +452,9 @@
         <div class="log-empty">No log output yet -- start the server to see output here</div>
       {/if}
     </div>
+
+    <PlayersBlade bind:open={playersOpen} bind:playerCount />
+  </div>
 
     <!-- Command bar -->
     <div class="cmd-bar">
@@ -649,6 +663,16 @@
   .btn-countdown:hover {
     border-color: rgba(200, 146, 10, 0.7);
     background: rgba(200, 146, 10, 0.18);
+  }
+
+  /* -- Console area (log + blade overlay container) -- */
+  .console-area {
+    flex: 1;
+    min-height: 0;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
   }
 
   /* -- Log view -- */

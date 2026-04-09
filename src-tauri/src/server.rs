@@ -1,4 +1,8 @@
+use regex::Regex;
+use rusqlite::{params, Connection};
+use std::collections::HashMap;
 use std::io::{BufRead, BufReader};
+use std::path::PathBuf;
 use std::process::{Child, Command, Stdio};
 use std::sync::{Arc, Mutex};
 use tauri::{AppHandle, Emitter, Manager};
@@ -31,6 +35,35 @@ pub struct LogLinePayload {
 pub struct ServerStatusPayload {
     pub running: bool,
     pub exit_code: Option<i32>,
+}
+
+#[derive(Clone, serde::Serialize)]
+pub struct PlayerSession {
+    pub session_id: String,
+    pub username: String,
+    // Fields populated from Account.db at login time.
+    // All optional — the DB lookup is best-effort and falls back gracefully.
+    pub email: Option<String>,
+    pub user_level: Option<i64>,
+    pub flags: Option<i64>,
+    pub gazillionite_balance: Option<i64>,
+    pub last_logout_time: Option<i64>,
+    pub avatar_count: Option<i64>,
+    pub guild_name: Option<String>,
+}
+
+#[derive(Clone, serde::Serialize)]
+pub struct PlayerEventPayload {
+    pub kind: String, // "login" | "logout" | "clear"
+    pub session_id: Option<String>,
+    pub username: Option<String>,
+    pub count: usize,
+}
+
+#[derive(Debug, Clone)]
+enum PlayerLogEvent {
+    Login { username: String, session_id: String },
+    Logout { username: String, session_id: String },
 }
 
 // -- Job Object wrapper (Windows-only) --
@@ -103,6 +136,34 @@ impl Drop for ServerProcess {
 }
 
 pub struct ServerState(pub Arc<Mutex<ServerProcess>>);
+pub struct PlayerState(pub Arc<Mutex<HashMap<String, PlayerSession>>>);
+
+/// Stores the path to Account.db, derived from server_exe when it is set.
+/// Wrapped in Mutex<Option<...>> so it can be updated without restarting.
+pub struct DbPath(pub Arc<Mutex<Option<PathBuf>>>);
+
+impl PlayerState {
+    pub fn empty() -> Self {
+        Self(Arc::new(Mutex::new(HashMap::new())))
+    }
+}
+
+impl DbPath {
+    pub fn empty() -> Self {
+        Self(Arc::new(Mutex::new(None)))
+    }
+
+    /// Derive and store the Account.db path from a server_exe path.
+    /// Layout: <server_exe_dir>/Data/Account.db
+    pub fn set_from_server_exe(&self, server_exe: &str) {
+        let path = std::path::Path::new(server_exe)
+            .parent()
+            .map(|dir| dir.join("Data").join("Account.db"));
+        if let Ok(mut guard) = self.0.lock() {
+            *guard = path;
+        }
+    }
+}
 
 /// Kill both server and Apache processes. Called from the window close handler.
 pub fn kill_child(proc: &mut ServerProcess) {
@@ -170,6 +231,200 @@ fn parse_log_line(raw: &str) -> LogLinePayload {
     }
 }
 
+// -- Account.db lookup --
+
+/// Extra account fields fetched from Account.db at login time.
+struct AccountInfo {
+    email: String,
+    user_level: i64,
+    flags: i64,
+    gazillionite_balance: Option<i64>,
+    last_logout_time: Option<i64>,
+    avatar_count: Option<i64>,
+    guild_name: Option<String>,
+}
+
+/// Look up account info by PlayerName. Opens the DB read-only on every call
+/// (SQLite handles concurrent readers fine; the server holds its own connection).
+/// Returns None on any error so the caller always gets a valid PlayerSession.
+fn lookup_account(db_path: &PathBuf, username: &str) -> Option<AccountInfo> {
+    let conn = Connection::open(db_path).ok()?;
+
+    let info = conn.query_row(
+        "SELECT
+             a.Email,
+             a.UserLevel,
+             a.Flags,
+             p.GazillioniteBalance,
+             p.LastLogoutTime,
+             g.Name
+         FROM Account a
+         LEFT JOIN Player      p  ON p.DbGuid    = a.Id
+         LEFT JOIN GuildMember gm ON gm.PlayerDbGuid = a.Id
+         LEFT JOIN Guild       g  ON g.Id         = gm.GuildId
+         WHERE a.PlayerName = ?1",
+        params![username],
+        |row| {
+            Ok(AccountInfo {
+                email:                 row.get(0)?,
+                user_level:            row.get(1)?,
+                flags:                 row.get(2)?,
+                gazillionite_balance:  row.get(3)?,
+                last_logout_time:      row.get(4)?,
+                avatar_count:          None, // filled in below
+                guild_name:            row.get(5)?,
+            })
+        },
+    ).ok()?;
+
+    // Count avatars separately — cleaner than a subquery in the join above.
+    let avatar_count: Option<i64> = conn.query_row(
+        "SELECT COUNT(*) FROM Avatar
+         JOIN Account a ON a.Id = Avatar.ContainerDbGuid
+         WHERE a.PlayerName = ?1",
+        params![username],
+        |row| row.get(0),
+    ).ok();
+
+    Some(AccountInfo { avatar_count, ..info })
+}
+
+// -- Player log event parsing --
+
+fn parse_player_log_event(raw: &str) -> Option<PlayerLogEvent> {
+    if raw.contains("Accepted and registered client") {
+        if !raw.contains("SessionId=") || !raw.contains("Account=") {
+            return None;
+        }
+
+        let re = Regex::new(
+            r"\[Account=(.+?)\s+\(.*?\),\s+SessionId=(0x[0-9A-Fa-f]+)\]"
+        ).ok()?;
+
+        let caps = re.captures(raw)?;
+        let username = caps.get(1)?.as_str().trim().to_string();
+        let session_id = caps.get(2)?.as_str().trim().to_string();
+
+        return Some(PlayerLogEvent::Login { username, session_id });
+    }
+
+    if raw.contains("Removed client") {
+        let session_re = Regex::new(r"SessionId=(0x[0-9A-Fa-f]+)").ok()?;
+        let session_caps = session_re.captures(raw)?;
+        let session_id = session_caps.get(1)?.as_str().trim().to_string();
+
+        let username_re = Regex::new(r"Account=(.+?)\s+\(").ok()?;
+        let username = username_re
+            .captures(raw)
+            .and_then(|caps| caps.get(1).map(|m| m.as_str().trim().to_string()))
+            .unwrap_or_default();
+
+        return Some(PlayerLogEvent::Logout { username, session_id });
+    }
+
+    None
+}
+
+fn emit_player_event(
+    app: &AppHandle,
+    player_state: &Arc<Mutex<HashMap<String, PlayerSession>>>,
+    kind: &str,
+    session_id: Option<String>,
+    username: Option<String>,
+) {
+    let count = match player_state.lock() {
+        Ok(sessions) => sessions.len(),
+        Err(_) => return,
+    };
+
+    let _ = app.emit(
+        "player-event",
+        PlayerEventPayload {
+            kind: kind.to_string(),
+            session_id,
+            username,
+            count,
+        },
+    );
+}
+
+fn handle_player_log_event(
+    app: &AppHandle,
+    player_state: &Arc<Mutex<HashMap<String, PlayerSession>>>,
+    db_path: &Arc<Mutex<Option<PathBuf>>>,
+    event: PlayerLogEvent,
+) {
+    match player_state.lock() {
+        Ok(mut sessions) => match &event {
+            PlayerLogEvent::Login { username, session_id } => {
+                // Best-effort DB lookup — runs on the stdout reader thread, which
+                // is fine because rusqlite opens a separate read-only connection.
+                let db_opt = db_path.lock().ok().and_then(|g| g.clone());
+                let account = db_opt.as_ref().and_then(|p| lookup_account(p, username));
+
+                sessions.insert(
+                    session_id.clone(),
+                    PlayerSession {
+                        session_id: session_id.clone(),
+                        username: username.clone(),
+                        email:                account.as_ref().map(|a| a.email.clone()),
+                        user_level:           account.as_ref().map(|a| a.user_level),
+                        flags:                account.as_ref().map(|a| a.flags),
+                        gazillionite_balance: account.as_ref().and_then(|a| a.gazillionite_balance),
+                        last_logout_time:     account.as_ref().and_then(|a| a.last_logout_time),
+                        avatar_count:         account.as_ref().and_then(|a| a.avatar_count),
+                        guild_name:           account.as_ref().and_then(|a| a.guild_name.clone()),
+                    },
+                );
+            }
+            PlayerLogEvent::Logout { username, session_id } => {
+                let fallback_username = sessions
+                    .get(session_id)
+                    .map(|s| s.username.clone())
+                    .unwrap_or_default();
+
+                sessions.remove(session_id);
+
+                let username = if username.is_empty() {
+                    fallback_username
+                } else {
+                    username.clone()
+                };
+
+                drop(sessions);
+
+                emit_player_event(
+                    app,
+                    player_state,
+                    "logout",
+                    Some(session_id.clone()),
+                    Some(username),
+                );
+                return;
+            }
+        },
+        Err(_) => return,
+    }
+
+    match event {
+        PlayerLogEvent::Login { username, session_id } => {
+            emit_player_event(app, player_state, "login", Some(session_id), Some(username));
+        }
+        PlayerLogEvent::Logout { .. } => {}
+    }
+}
+
+fn clear_player_state(
+    app: &AppHandle,
+    player_state: &Arc<Mutex<HashMap<String, PlayerSession>>>,
+) {
+    if let Ok(mut sessions) = player_state.lock() {
+        sessions.clear();
+    }
+
+    emit_player_event(app, player_state, "clear", None, None);
+}
+
 // -- Commands --
 
 #[tauri::command]
@@ -178,6 +433,8 @@ pub async fn start_server(
     server_exe: String,
 ) -> Result<(), String> {
     let state = app.state::<ServerState>();
+    let player_state = app.state::<PlayerState>().0.clone();
+    let db_path = app.state::<DbPath>().0.clone();
     let mut proc = state.0.lock().map_err(|e| e.to_string())?;
 
     if proc.child.is_some() {
@@ -196,6 +453,9 @@ pub async fn start_server(
     let mhserver_dir = exe_path.parent()
         .ok_or("Could not determine server directory")?;
     let working_dir = mhserver_dir;
+
+    // Keep DbPath in sync with the exe we're actually launching.
+    app.state::<DbPath>().set_from_server_exe(&server_exe);
 
     // Apache is no longer auto-started with the server.
     // Use the separate start_apache command instead.
@@ -229,11 +489,26 @@ pub async fn start_server(
 
     if let Some(stdout) = child.stdout.take() {
         let tx = log_tx.clone();
+        let app_for_players = app.clone();
+        let player_state_for_thread = player_state.clone();
+        let db_path_for_thread = db_path.clone();
+
         std::thread::spawn(move || {
             let reader = BufReader::new(stdout);
             for line in reader.lines() {
                 match line {
-                    Ok(raw) => { let _ = tx.send(parse_log_line(&raw)); }
+                    Ok(raw) => {
+                        let _ = tx.send(parse_log_line(&raw));
+
+                        if let Some(event) = parse_player_log_event(&raw) {
+                            handle_player_log_event(
+                                &app_for_players,
+                                &player_state_for_thread,
+                                &db_path_for_thread,
+                                event,
+                            );
+                        }
+                    }
                     Err(_) => break,
                 }
             }
@@ -297,6 +572,7 @@ pub async fn start_server(
     {
         let state_arc = state.0.clone();
         let app_clone = app.clone();
+        let player_state_for_watcher = player_state.clone();
         let child_id = child.id();
         std::thread::spawn(move || {
             loop {
@@ -326,6 +602,8 @@ pub async fn start_server(
 
                             // Drop the lock before emitting
                             drop(proc);
+
+                            clear_player_state(&app_clone, &player_state_for_watcher);
 
                             let _ = app_clone.emit("server-stopped", ServerStatusPayload {
                                 running: false,
@@ -359,6 +637,7 @@ pub async fn stop_server(app: AppHandle) -> Result<(), String> {
 
     let state = app.state::<ServerState>();
     let state_arc = state.0.clone();
+    let player_state = app.state::<PlayerState>().0.clone();
 
     // Send "!server shutdown" via stdin, holding the lock only briefly.
     {
@@ -408,6 +687,9 @@ pub async fn stop_server(app: AppHandle) -> Result<(), String> {
         // Watcher thread may have exited its loop when it saw child = None
         // from the kill above, so emit ourselves as a fallback.
         drop(proc);
+
+        clear_player_state(&app_clone, &player_state);
+
         let _ = app_clone.emit("server-stopped", ServerStatusPayload {
             running: false,
             exit_code: None,
@@ -537,4 +819,20 @@ pub fn apache_is_running(app: AppHandle) -> bool {
     } else {
         false
     }
+}
+
+#[tauri::command]
+pub fn get_players(app: AppHandle) -> Result<Vec<PlayerSession>, String> {
+    let state = app.state::<PlayerState>();
+    let sessions = state.0.lock().map_err(|e| e.to_string())?;
+
+    let mut players: Vec<PlayerSession> = sessions.values().cloned().collect();
+    players.sort_by(|a, b| {
+        a.username
+            .to_lowercase()
+            .cmp(&b.username.to_lowercase())
+            .then_with(|| a.session_id.cmp(&b.session_id))
+    });
+
+    Ok(players)
 }
