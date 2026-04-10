@@ -72,6 +72,9 @@
   let creatingDefinition  = false
   let allEventsExpanded   = true
 
+  type PendingAction = 'resetEvents' | 'mergeEvents' | 'resetSchedule' | 'mergeSchedule'
+  let pendingAction: PendingAction | null = null
+
   // ── Derived ─────────────────────────────────────────────────────────────────
 
   $: definitions        = eventsData?.definitions   ?? []
@@ -382,42 +385,87 @@
           <div class="override-section">
             <div class="override-title">Override status</div>
 
+            {#if pendingAction}
+            <div class="confirm-prompt">
+                {pendingAction === 'resetEvents'   ? 'Reset Events to default?' :
+                pendingAction === 'mergeEvents'   ? 'Merge defaults into Events?' :
+                pendingAction === 'resetSchedule' ? 'Reset Schedule to default?' :
+                                                    'Merge defaults into Schedule?'}
+            </div>
+            {/if}
+
             <div class="override-row">
-              <span class="override-label">Events</span>
-              <span class="override-badge" class:is-override={eventsUsingOverride}>
+            <span class="override-label">Events</span>
+            <span class="override-badge" class:is-override={eventsUsingOverride}>
                 {eventsUsingOverride ? 'Override' : 'Default'}
-              </span>
-              <button
+            </span>
+            {#if pendingAction === 'resetEvents' || pendingAction === 'mergeEvents'}
+                <button
+                class="btn btn-sm btn-accent override-btn"
+                disabled={saving}
+                on:click={async () => {
+                    const action = pendingAction
+                    pendingAction = null
+                    if (action === 'resetEvents') await resetEvents()
+                    else await mergeEvents()
+                }}
+                >Yes</button>
+                <button
                 class="btn btn-sm btn-outline override-btn"
                 disabled={saving}
+                on:click={() => pendingAction = null}
+                >Cancel</button>
+            {:else}
+                <button
+                class="btn btn-sm btn-outline override-btn"
+                disabled={saving || !!pendingAction}
                 title="Overwrite EventsOverride.json with default Events.json"
-                on:click={resetEvents}
-              >Reset</button>
-              <button
+                on:click={() => pendingAction = 'resetEvents'}
+                >Reset</button>
+                <button
                 class="btn btn-sm btn-outline override-btn"
-                disabled={saving}
+                disabled={saving || !!pendingAction}
                 title="Add any missing default events to the override"
-                on:click={mergeEvents}
-              >Merge</button>
+                on:click={() => pendingAction = 'mergeEvents'}
+                >Merge</button>
+            {/if}
             </div>
 
             <div class="override-row">
-              <span class="override-label">Schedule</span>
-              <span class="override-badge" class:is-override={scheduleUsingOverride}>
+            <span class="override-label">Schedule</span>
+            <span class="override-badge" class:is-override={scheduleUsingOverride}>
                 {scheduleUsingOverride ? 'Override' : 'Default'}
-              </span>
-              <button
+            </span>
+            {#if pendingAction === 'resetSchedule' || pendingAction === 'mergeSchedule'}
+                <button
+                class="btn btn-sm btn-accent override-btn"
+                disabled={saving}
+                on:click={async () => {
+                    const action = pendingAction
+                    pendingAction = null
+                    if (action === 'resetSchedule') await resetSchedule()
+                    else await mergeSchedule()
+                }}
+                >Yes</button>
+                <button
                 class="btn btn-sm btn-outline override-btn"
                 disabled={saving}
+                on:click={() => pendingAction = null}
+                >Cancel</button>
+            {:else}
+                <button
+                class="btn btn-sm btn-outline override-btn"
+                disabled={saving || !!pendingAction}
                 title="Overwrite EventScheduleOverride.json with default"
-                on:click={resetSchedule}
-              >Reset</button>
-              <button
+                on:click={() => pendingAction = 'resetSchedule'}
+                >Reset</button>
+                <button
                 class="btn btn-sm btn-outline override-btn"
-                disabled={saving}
+                disabled={saving || !!pendingAction}
                 title="Add any missing default rules to the override"
-                on:click={mergeSchedule}
-              >Merge</button>
+                on:click={() => pendingAction = 'mergeSchedule'}
+                >Merge</button>
+            {/if}
             </div>
 
             {#if opError}
@@ -826,6 +874,13 @@
     font-size: 10px;
     color: var(--green-bright);
     padding-top: 2px;
+  }
+
+  .confirm-prompt {
+    font-family: var(--font-head);
+    font-size: 9px;
+    letter-spacing: 0.04em;
+    color: var(--text-1);
   }
 
   /* ── Content pane ── */
