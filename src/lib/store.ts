@@ -3,7 +3,7 @@ import { invoke } from '@tauri-apps/api/core'
 
 export type DataTab = 'events' | 'tuning' | 'store' | 'patches'
 export type Tab = 'launch' | 'server' | 'config' | 'data' | 'ops' | 'settings'
-export type LogLevel = 'all' | 'trace' | 'debug' | 'info' | 'warn' | 'err' | 'fatal'
+export type LogLevel = 'all' | 'trace' | 'debug' | 'info' | 'ok' | 'warn' | 'err' | 'fatal'
 
 export const activeTab = writable<Tab>('launch')
 export const activeDataTab = writable<DataTab>('events')
@@ -13,6 +13,9 @@ export const apacheRunning = writable<boolean>(false)
 export const uptimeSec = writable<number>(0)
 export const serverError = writable<string>('')
 export const tuningFocusFile = writable<string | null>(null)
+export const schedulerNow = writable<Date | null>(null)
+export const eventTimezoneOffset = writable<number>(-8)
+
 
 let _uptimeTimer: ReturnType<typeof setInterval> | null = null
 
@@ -36,6 +39,7 @@ function loadServerLogFilter(): LogLevel {
   if (typeof localStorage === 'undefined') return 'all'
   const value = localStorage.getItem(SERVER_LOG_FILTER_KEY)
   switch (value) {
+    case 'ok':
     case 'trace':
     case 'debug':
     case 'info':
@@ -263,4 +267,15 @@ export async function setStoreHtmlOutputDir(dir: string): Promise<void> {
 export async function setConsolePresets(presets: string[]): Promise<void> {
   appConfig.update(c => ({ ...c, console_presets: presets }))
   await invoke('set_console_presets', { presets })
+}
+
+export function setSchedulerNow(dt: Date) {
+  schedulerNow.set(dt)
+
+  const utcNow = new Date()
+  const offsetHours = Math.round(
+    (dt.getTime() - utcNow.getTime()) / (1000 * 60 * 60)
+  )
+
+  eventTimezoneOffset.set(offsetHours)
 }

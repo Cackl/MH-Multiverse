@@ -9,6 +9,7 @@ import {
   serverRunning,
   startUptime,
   stopUptime,
+  setSchedulerNow,
   type LogLevel,
   type LogLine,
 } from './store'
@@ -72,6 +73,16 @@ function normalizeLogBatch(lines: RawLogEventPayload): Omit<LogLine, 'id'>[] {
   }))
 }
 
+const NOW_REGEX = /Checking Live Tuning events \(now=\[(.*?)\]\)/
+
+function extractSchedulerNow(msg: string): Date | null {
+  const match = msg.match(NOW_REGEX)
+  if (!match) return null
+
+  const parsed = new Date(match[1])
+  return Number.isNaN(parsed.getTime()) ? null : parsed
+}
+
 async function syncInitialState() {
   const running = await invoke<boolean>('server_is_running')
   serverRunning.set(running)
@@ -95,7 +106,16 @@ export async function initServerEventBridge(): Promise<void> {
   await syncInitialState()
 
   bridge.unlistenLog = await listen<RawLogEventPayload>('server-log', (event) => {
-    appendLogBatch(normalizeLogBatch(event.payload))
+    const batch = normalizeLogBatch(event.payload)
+
+    for (const line of batch) {
+      const dt = extractSchedulerNow(line.msg)
+      if (dt) {
+        setSchedulerNow(dt)
+      }
+    }
+
+    appendLogBatch(batch)
   })
 
   bridge.unlistenStarted = await listen('server-started', async () => {

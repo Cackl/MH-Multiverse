@@ -25,6 +25,7 @@
 
   export let rule: ScheduleRule | null
   export let allEvents: EventDefinition[]
+  export let activeEventIds: string[] = []
   export let onSave: (rule: ScheduleRule) => void
   export let onDiscard: () => void
   export let saving = false
@@ -72,6 +73,10 @@
 
   function definitionFor(id: string): EventDefinition | undefined {
     return allEvents.find(e => e.id === id)
+  }
+
+  function eventIsActive(id: string): boolean {
+    return activeEventIds.includes(id)
   }
 
   function addEvent() {
@@ -226,6 +231,7 @@
         <div class="events-list">
           {#each events as eventId, i (eventId)}
             <div class="event-row">
+              <span class="status-dot" class:dot-active={eventIsActive(eventId)} class:dot-disabled={!eventIsActive(eventId)}></span>
               <div class="event-info">
                 <span class="event-name">{eventLabel(eventId)}</span>
                 <span class="event-id">{eventId}</span>
@@ -532,6 +538,22 @@
     align-items: center;
     gap: 4px;
     flex-shrink: 0;
+  }
+
+  .status-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  .dot-active {
+    background: var(--green-bright);
+    box-shadow: 0 0 5px var(--green-bright);
+  }
+
+  .dot-disabled {
+    background: var(--border-lit);
   }
 
   .move-btn {
