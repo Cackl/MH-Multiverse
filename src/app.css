@@ -799,14 +799,14 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 }
 
 [data-theme="grey"] {
-  /* Surface layers — VS Code-like neutral greys */
+  /* Surface layers */
   --bg-0: #1e1e1e;
   --bg-1: #232323;
   --bg-2: #252526;
   --bg-3: #2d2d30;
   --bg-4: #333337;
 
-  /* Accent — keep blue, slightly VS Code aligned */
+  /* Accent */
   --accent:             #3794ff;
   --accent-bright:      #6cb6ff;
   --accent-dim:         #1f6fbe;
@@ -822,12 +822,12 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
   --blue:          #4da3ff;
   --blue-dim:      rgba(77, 163, 255, 0.14);
 
-  /* Borders — more visible than current muted set */
+  /* Borders */
   --border:     #3c3c3c;
   --border-mid: #4a4a4a;
   --border-lit: #5e5e5e;
 
-  /* Text — lifted for readability */
+  /* Text */
   --text-0: #f3f3f3;
   --text-1: #d4d4d4;
   --text-2: #b3b3b3;
