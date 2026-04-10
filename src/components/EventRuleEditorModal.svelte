@@ -46,14 +46,26 @@
 
   // ── Local editing state (initialised from prop on mount) ────────────────────
 
-  let name:          string  = rule?.name             ?? ''
-  let is_enabled:    boolean = rule?.is_enabled        ?? true
-  let rule_type:     string  = rule?.rule_type         ?? 'AlwaysOn'
-  let start_dow:     string  = rule?.start_day_of_week ?? 'Monday'
-  let start_month:   number  = rule?.start_month       ?? 1
-  let start_day:     number  = rule?.start_day         ?? 1
-  let duration_days: number  = rule?.duration_days     ?? 7
-  let events:        string[] = [...(rule?.events      ?? [])]
+  let name:          string   = rule?.name             ?? ''
+  let is_enabled:    boolean  = rule?.is_enabled        ?? true
+  let rule_type:     string   = rule?.rule_type         ?? 'AlwaysOn'
+  let start_dow:     string   = rule?.start_day_of_week ?? 'Friday'
+  let start_month:   number   = rule?.start_month       ?? 1
+  let start_day:     number   = rule?.start_day         ?? 1
+  let duration_days: number   = rule?.duration_days     ?? 7
+  let events:        string[] = [...(rule?.events       ?? [])]
+
+  // Snapshot of values at open-time — used for dirty detection
+  const _orig = {
+    name:          rule?.name             ?? '',
+    is_enabled:    rule?.is_enabled        ?? true,
+    rule_type:     rule?.rule_type         ?? 'AlwaysOn',
+    start_dow:     rule?.start_day_of_week ?? 'Friday',
+    start_month:   rule?.start_month       ?? 1,
+    start_day:     rule?.start_day         ?? 1,
+    duration_days: rule?.duration_days     ?? 7,
+    events:        JSON.stringify(rule?.events ?? []),
+  }
 
   let addEventId = ''
   let nameError  = ''
@@ -64,6 +76,16 @@
   $: needsDate      = rule_type === 'SpecialDate'    || rule_type === 'SpecialDateLunar'
   $: isRotation     = rule_type === 'WeeklyRotation'
   $: availableToAdd = allEvents.filter(e => !events.includes(e.id))
+
+  $: isDirty =
+    name          !== _orig.name          ||
+    is_enabled    !== _orig.is_enabled    ||
+    rule_type     !== _orig.rule_type     ||
+    start_dow     !== _orig.start_dow     ||
+    start_month   !== _orig.start_month   ||
+    start_day     !== _orig.start_day     ||
+    duration_days !== _orig.duration_days ||
+    JSON.stringify(events) !== _orig.events
 
   // ── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -318,12 +340,17 @@
 
   <!-- Footer -->
   <div class="editor-footer">
+    {#if isDirty}
+      <span class="dirty-badge">Unsaved changes</span>
+    {/if}
     <button class="btn btn-sm btn-outline" disabled={saving} on:click={onDiscard}>
-      Discard
+      {isDirty ? 'Discard' : 'Close'}
     </button>
-    <button class="btn btn-sm btn-accent" disabled={saving} on:click={handleSave}>
-      {saving ? 'Saving…' : 'Save to override'}
-    </button>
+    {#if isDirty}
+      <button class="btn btn-sm btn-accent" class:btn-pulse={isDirty} disabled={saving} on:click={handleSave}>
+        {saving ? 'Saving…' : 'Save to override'}
+      </button>
+    {/if}
   </div>
 </div>
 
@@ -613,5 +640,14 @@
     border-top: 1px solid var(--border);
     flex-shrink: 0;
     background: var(--chrome-sunken-bg);
+  }
+
+  .dirty-badge {
+    font-family: var(--font-head);
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    color: var(--accent-bright);
+    margin-right: auto;
   }
 </style>
