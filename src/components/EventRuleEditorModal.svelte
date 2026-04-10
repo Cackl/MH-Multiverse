@@ -304,7 +304,7 @@
             {/each}
           </select>
           <button
-            class="btn btn-sm btn-outline"
+            class="btn btn-sm btn-accent"
             disabled={saving || !addEventId}
             on:click={addEvent}
           >Add</button>
