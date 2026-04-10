@@ -759,7 +759,7 @@
     font-size: 9px;
     letter-spacing: 0.12em;
     text-transform: uppercase;
-    color: var(--text-3);
+    color: var(--text-2);
     padding: 10px 14px 4px;
     border-top: 1px solid var(--border);
     margin-top: 4px;
