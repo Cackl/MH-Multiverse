@@ -505,7 +505,12 @@
               <div class="active-grid">
                 {#each activeItems as item}
                   {#if item.kind === 'rotation'}
-                    <div class="active-card rotation-card">
+                    <div class="active-card rotation-card event-card"
+                        role="button"
+                        tabindex="0"
+                        title="Edit schedule rule"
+                        on:click={() => selectRule(item.rule)}
+                        on:keydown={e => e.key === 'Enter' && selectRule(item.rule)}>
                       <div class="active-card-top">
                         <span class="status-dot dot-active"></span>
                         <span class="active-card-name">{item.rule.name}</span>
@@ -992,6 +997,7 @@
     cursor: pointer;
   }
   .event-card:hover { border-color: var(--border-lit); }
+  .rotation-card.event-card:hover { border-color: var(--accent-bright); }
 
   .rotation-card {
     border-color: var(--accent-dim);
