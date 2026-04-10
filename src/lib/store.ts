@@ -14,7 +14,7 @@ export const uptimeSec = writable<number>(0)
 export const serverError = writable<string>('')
 export const tuningFocusFile = writable<string | null>(null)
 export const schedulerNow = writable<Date | null>(null)
-export const eventTimezoneOffset = writable<number>(-8)
+export const eventTimezoneOffset = writable<number>(0)
 
 
 let _uptimeTimer: ReturnType<typeof setInterval> | null = null

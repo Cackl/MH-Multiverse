@@ -151,13 +151,13 @@
         return true
       case 'DayOfWeek':
         return rule.start_day_of_week != null
-          && now.getDay() === dayIndex(rule.start_day_of_week)
+          && now.getUTCDay() === dayIndex(rule.start_day_of_week)  // was getDay()
       case 'SpecialDate':
       case 'SpecialDateLunar': {
         if (rule.start_month == null || rule.start_day == null || rule.duration_days == null) return false
-        const y = now.getFullYear()
+        const y = now.getUTCFullYear()  // was getFullYear()
         for (const yr of [y - 1, y]) {
-          const start = new Date(yr, rule.start_month - 1, rule.start_day)
+          const start = new Date(Date.UTC(yr, rule.start_month - 1, rule.start_day))  // was new Date(yr, ...)
           const end   = new Date(start.getTime() + rule.duration_days * 86400000)
           if (now >= start && now < end) return true
         }
@@ -193,7 +193,7 @@
   function getWeeklyRotationEvent(events: string[], startDayOfWeek: number, now: Date): string | null {
     if (!events.length) return null
 
-    const epoch = new Date(2000, 0, 2 + startDayOfWeek)
+    const epoch = new Date(Date.UTC(2000, 0, 2 + startDayOfWeek))  // was new Date(2000, 0, ...)
     const diffDays = Math.floor((now.getTime() - epoch.getTime()) / 86400000)
     const weekNumber = Math.floor(diffDays / 7)
     const index = ((weekNumber % events.length) + events.length) % events.length
