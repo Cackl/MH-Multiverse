@@ -2,6 +2,7 @@
   import { onMount } from 'svelte'
   import { invoke } from '@tauri-apps/api/core'
   import { appConfig } from '../lib/store'
+  import { activeDataTab, tuningFocusFile } from '../lib/store'
   import PanelSidebar from './PanelSidebar.svelte'
   import EventRuleEditorModal from './EventRuleEditorModal.svelte'
   import EventDefinitionEditorModal from './EventDefinitionEditorModal.svelte'
@@ -301,6 +302,12 @@
   }
 
   onMount(() => { if ($appConfig.server_exe) loadData() })
+
+  function openInTuning(filePath: string) {
+    if (!filePath) return
+    tuningFocusFile.set(filePath)
+    activeDataTab.set('tuning')
+  }
 </script>
 
 <div class="events-panel">
@@ -587,6 +594,13 @@
                       </div>
                       {#if def.is_hidden}
                         <span class="def-badge">Hidden</span>
+                      {/if}
+                      {#if def.file_path}
+                        <button
+                          class="btn btn-sm btn-outline def-edit-btn"
+                          title="Open in Live Tuning editor"
+                          on:click={() => openInTuning(def.file_path)}
+                        >Tuning</button>
                       {/if}
                       <button
                         class="btn btn-sm btn-outline def-edit-btn"

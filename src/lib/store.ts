@@ -12,6 +12,7 @@ export const gameRunning = writable<boolean>(false)
 export const apacheRunning = writable<boolean>(false)
 export const uptimeSec = writable<number>(0)
 export const serverError = writable<string>('')
+export const tuningFocusFile = writable<string | null>(null)
 
 let _uptimeTimer: ReturnType<typeof setInterval> | null = null
 
