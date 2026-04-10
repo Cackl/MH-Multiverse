@@ -1169,7 +1169,7 @@
     font-family: var(--font-head);
     font-size: 9px;
     letter-spacing: 0.06em;
-    color: var(--text-3);
+    color: var(--text-1);
   }
 
   /* ── All events list ── */
