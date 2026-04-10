@@ -682,6 +682,7 @@
     definition={creatingDefinition ? null : editingDefinition}
     {tuningFiles}
     onSave={(def) => saveDefinition(def)}
+    serverExe={$appConfig.server_exe}
     onClose={() => { editingDefinition = null; creatingDefinition = false }}
   />
 {/if}
