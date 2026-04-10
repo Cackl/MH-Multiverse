@@ -798,6 +798,188 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
   --console-text-dim: var(--text-2);
 }
 
+[data-theme="grey"] {
+  /* Surface layers */
+  --bg-0: #1e1e1e;
+  --bg-1: #232323;
+  --bg-2: #252526;
+  --bg-3: #2d2d30;
+  --bg-4: #333337;
+
+  /* Accent */
+  --accent:             #3794ff;
+  --accent-bright:      #6cb6ff;
+  --accent-dim:         #1f6fbe;
+  --accent-glow:        rgba(55, 148, 255, 0.16);
+  --accent-glow-strong: rgba(108, 182, 255, 0.30);
+
+  /* Semantic */
+  --red:           #f14c4c;
+  --red-dim:       rgba(241, 76, 76, 0.14);
+  --green:         #4ec9b0;
+  --green-bright:  #6ee7c8;
+  --green-dim:     rgba(78, 201, 176, 0.14);
+  --blue:          #4da3ff;
+  --blue-dim:      rgba(77, 163, 255, 0.14);
+
+  /* Borders */
+  --border:     #3c3c3c;
+  --border-mid: #4a4a4a;
+  --border-lit: #5e5e5e;
+
+  /* Text */
+  --text-0: #f3f3f3;
+  --text-1: #d4d4d4;
+  --text-2: #b3b3b3;
+  --text-3: #8f8f8f;
+
+  /* Typography */
+  --font-head: 'Chakra Petch', sans-serif;
+  --font-body: 'IBM Plex Sans', sans-serif;
+  --font-mono: 'IBM Plex Mono', monospace;
+
+  /* Geometry */
+  --rail-w:     56px;
+  --radius-sm:  3px;
+  --radius-md:  6px;
+
+  /* Sidebar widths */
+  --sidebar-narrow: 200px;
+  --sidebar-wide:   280px;
+
+  /* Semantic text colours */
+  --text-error:   var(--red);
+  --text-success: var(--green-bright);
+  --text-warning: #f0c674;
+
+  /* Amber */
+  --amber:        #d7ba7d;
+  --amber-bright: #f0c674;
+  --amber-dim:    rgba(215, 186, 125, 0.14);
+
+  /* Purple */
+  --purple:       #c586c0;
+  --purple-dim:   rgba(197, 134, 192, 0.14);
+
+  /* Favourite highlight */
+  --colour-favourite: var(--amber-bright);
+
+  /* Z-index scale */
+  --z-panel:    1;
+  --z-dropdown: 10;
+  --z-tooltip:  100;
+  --z-modal:    200;
+  --z-titlebar: 300;
+
+  /* Panel background gradient */
+  --panel-grad-top: rgba(86, 156, 214, 0.08);
+  --panel-grad-mid: 40%;
+
+  /* Sidebar background */
+  --sidebar-bg: rgba(30, 30, 30, 0.82);
+
+  /* Chrome surface overlays */
+  --chrome-footer-bg: rgba(0, 0, 0, 0.24);
+  --chrome-sunken-bg: rgba(0, 0, 0, 0.18);
+
+  /* Console */
+  --console-bg:       #181818;
+  --console-cmd-bg:   #252526;
+  --console-text:     #d4d4d4;
+  --console-text-dim: #a6a6a6;
+}
+
+[data-theme="blue-grey"] {
+  /* Surface layers */
+  --bg-0: #0f1218;
+  --bg-1: #141924;
+  --bg-2: #1a2030;
+  --bg-3: #21283a;
+  --bg-4: #283049;
+
+  /* Accent */
+  --accent:             #3794ff;
+  --accent-bright:      #6cb6ff;
+  --accent-dim:         #1f6fbe;
+  --accent-glow:        rgba(55, 148, 255, 0.16);
+  --accent-glow-strong: rgba(108, 182, 255, 0.30);
+
+  /* Semantic */
+  --red:           #f14c4c;
+  --red-dim:       rgba(241, 76, 76, 0.14);
+  --green:         #4ec9b0;
+  --green-bright:  #6ee7c8;
+  --green-dim:     rgba(78, 201, 176, 0.14);
+  --blue:          #4da3ff;
+  --blue-dim:      rgba(77, 163, 255, 0.14);
+
+  /* Borders */
+  --border:     #2f3a52;
+  --border-mid: #3a4763;
+  --border-lit: #4a5a7a;
+
+  /* Text */
+  --text-0: #f3f6fb;
+  --text-1: #d6deeb;
+  --text-2: #b6c2d4;
+  --text-3: #8f9bb0;
+
+  /* Typography */
+  --font-head: 'Chakra Petch', sans-serif;
+  --font-body: 'IBM Plex Sans', sans-serif;
+  --font-mono: 'IBM Plex Mono', monospace;
+
+  /* Geometry */
+  --rail-w:     56px;
+  --radius-sm:  3px;
+  --radius-md:  6px;
+
+  /* Sidebar widths */
+  --sidebar-narrow: 200px;
+  --sidebar-wide:   280px;
+
+  /* Semantic text */
+  --text-error:   var(--red);
+  --text-success: var(--green-bright);
+  --text-warning: #f0c674;
+
+  /* Amber */
+  --amber:        #d7ba7d;
+  --amber-bright: #f0c674;
+  --amber-dim:    rgba(215, 186, 125, 0.14);
+
+  /* Purple */
+  --purple:       #c586c0;
+  --purple-dim:   rgba(197, 134, 192, 0.14);
+
+  /* Favourite */
+  --colour-favourite: var(--amber-bright);
+
+  /* Z-index */
+  --z-panel:    1;
+  --z-dropdown: 10;
+  --z-tooltip:  100;
+  --z-modal:    200;
+  --z-titlebar: 300;
+
+  /* Panel gradient */
+  --panel-grad-top: rgba(86, 156, 214, 0.10);
+  --panel-grad-mid: 40%;
+
+  /* Sidebar */
+  --sidebar-bg: rgba(15, 18, 24, 0.75);
+
+  /* Chrome */
+  --chrome-footer-bg: rgba(0, 0, 0, 0.28);
+  --chrome-sunken-bg: rgba(0, 0, 0, 0.20);
+
+  /* Console */
+  --console-bg:       #0c0f14;
+  --console-cmd-bg:   #1a2030;
+  --console-text:     #d6deeb;
+  --console-text-dim: #aab4c5;
+}
+
 /* ══════════════════════════════════════════════════════════════════════════════
    Shared panel utilities
    ══════════════════════════════════════════════════════════════════════════════ */

@@ -6,7 +6,7 @@
   // ── Props ──────────────────────────────────────────────────────────────────
 
   /** Existing file to edit. Null when creating a new file. */
-  export let file: { canonical_name: string; enabled: boolean; toggleable: boolean } | null = null
+  export let file: { canonical_name: string; enabled: boolean; toggleable: boolean; relative_path: string } | null = null
   export let serverExe: string
   export let serverRunning: boolean
   /** All canonical names currently on disk — used to validate new filenames. */
@@ -118,7 +118,7 @@
     try {
       const loaded = await invoke<TuningEntry[]>('read_tuning_file', {
         serverExe,
-        canonicalName: file.canonical_name,
+        relativePath: file.relative_path,
       })
       entries = loaded
       savedEntries = JSON.parse(JSON.stringify(loaded))
@@ -136,7 +136,7 @@
     copyFromLoading = true
     saveError = ''
     try {
-      entries = await invoke<TuningEntry[]>('read_tuning_file', { serverExe, canonicalName: name })
+      entries = await invoke<TuningEntry[]>('read_tuning_file', { serverExe, relativePath: name })
     } catch (e) {
       saveError = `Could not load ${name}: ${String(e)}`
     } finally {
@@ -167,7 +167,7 @@
       if (newFileError) return
       saving = true
       try {
-        await invoke('create_tuning_file', { serverExe, canonicalName: assembledName(), entries })
+        await invoke('create_tuning_file', { serverExe, relativePath: assembledName(), entries })
         onCreated(assembledName())
       } catch (e) {
         saveError = String(e)
@@ -181,7 +181,7 @@
     try {
       await invoke('write_tuning_file', {
         serverExe,
-        canonicalName: file!.canonical_name,
+        relativePath: file!.relative_path,
         entries,
       })
       savedEntries = JSON.parse(JSON.stringify(entries))

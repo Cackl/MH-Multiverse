@@ -9,6 +9,7 @@ import {
   serverRunning,
   startUptime,
   stopUptime,
+  setSchedulerNow,
   type LogLevel,
   type LogLine,
 } from './store'
@@ -72,6 +73,22 @@ function normalizeLogBatch(lines: RawLogEventPayload): Omit<LogLine, 'id'>[] {
   }))
 }
 
+const NOW_REGEX = /Checking Live Tuning events \(now=\[(.*?)\]\)/
+
+function parseServerNowAsUtc(raw: string): Date | null {
+  // Input format: "04/10/2026 03:28:24"
+  const m = raw.match(/^(\d{2})\/(\d{2})\/(\d{4}) (\d{2}:\d{2}:\d{2})$/)
+  if (!m) return null
+  // Reformat to ISO 8601 with Z suffix so JS treats it as UTC, not local
+  return new Date(`${m[3]}-${m[1]}-${m[2]}T${m[4]}Z`)
+}
+
+function extractSchedulerNow(msg: string): Date | null {
+  const match = msg.match(NOW_REGEX)
+  if (!match) return null
+  return parseServerNowAsUtc(match[1])
+}
+
 async function syncInitialState() {
   const running = await invoke<boolean>('server_is_running')
   serverRunning.set(running)
@@ -95,7 +112,16 @@ export async function initServerEventBridge(): Promise<void> {
   await syncInitialState()
 
   bridge.unlistenLog = await listen<RawLogEventPayload>('server-log', (event) => {
-    appendLogBatch(normalizeLogBatch(event.payload))
+    const batch = normalizeLogBatch(event.payload)
+
+    for (const line of batch) {
+      const dt = extractSchedulerNow(line.msg)
+      if (dt) {
+        setSchedulerNow(dt)
+      }
+    }
+
+    appendLogBatch(batch)
   })
 
   bridge.unlistenStarted = await listen('server-started', async () => {

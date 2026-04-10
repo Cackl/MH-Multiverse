@@ -1,5 +1,5 @@
 # MH Multiverse — Architecture
-
+v1.2.0
 ## Tech Stack
 
 | Layer | Technology |
@@ -12,6 +12,8 @@
 | Calligraphy parsing | `lz4_flex` (LZ4 block decompression) |
 | Server updates | `reqwest` (HTTP streaming), `zip` (extraction) |
 | Timestamps | `chrono` |
+| SQLite | `rusqlite` (Account.db read-only access) |
+| Log parsing | `regex` (player login/logout extraction) |
 
 ---
 
@@ -26,19 +28,24 @@ mh-multiverse/
 │   ├── vite-env.d.ts             TypeScript ambient declarations
 │   ├── lib/
 │   │   ├── store.ts              Global stores, types, Tauri invoke wrappers
-│   │   ├── serverEvents.ts       Tauri event listeners (log, start, stop)
+│   │   ├── serverEvents.ts       Tauri event listeners (log, start, stop, player-event)
 │   │   ├── serverCommands.ts     Fallback command list for autocomplete
+│   │   ├── playerMeta.ts         PlayerSession type, user level labels, ban/whitelist flag helpers
 │   │   ├── tuningMeta.ts         Tuning enum prefixes, category maps, known file sets
 │   │   └── catalogMeta.ts        Catalog type interfaces, type/modifier metadata, categories
 │   └── components/
 │       ├── TitleBar.svelte        Custom window chrome (drag region, min/max/close)
 │       ├── Rail.svelte            Left nav rail (MHO / Local / App groups)
-│       ├── TabBar.svelte          Horizontal tab bar (unused, superseded by Rail)
 │       ├── PanelSidebar.svelte    Reusable sidebar layout wrapper
 │       ├── LaunchPanel.svelte     Server profiles, credentials, game launch
-│       ├── ServerPanel.svelte     Server start/stop, log viewer, command input
+│       ├── ServerPanel.svelte     Server start/stop, log viewer, command input, online players
+│       ├── PlayersBlade.svelte    Searchable list of players connected to the server
+│       ├── PlayerCard.svelte      Per-player moderation/admin card (kick, ban, user level, info)
 │       ├── ConfigPanel.svelte     INI editor (Config.ini / ConfigOverride.ini)
-│       ├── DataPanel.svelte       Sub-tab container for Tuning / Store / Patches
+│       ├── DataPanel.svelte       Sub-tab container for Events / Tuning / Store / Patches
+│       ├── EventsPanel.svelte     Event schedule dashboard, rule list, definition list
+│       ├── EventRuleEditorModal.svelte   Schedule rule editor (type, days, events list)
+│       ├── EventDefinitionEditorModal.svelte  Event definition editor (id, display name, file path, etc.)
 │       ├── TuningPanel.svelte     LiveTuning file list, tags, favourites
 │       ├── TuningEditorModal.svelte  Per-file tuning entry editor
 │       ├── StorePanel.svelte      Catalog entry list, filters, bulk operations
@@ -57,9 +64,14 @@ mh-multiverse/
 │   │   ├── config.rs             AppConfig, Server, LaunchOptions, ShutdownConfig structs;
 │   │   │                         AES-256-GCM encryption; keychain key management;
 │   │   │                         multiverse.json persistence; all config Tauri commands
-│   │   ├── server.rs             ServerProcess/ServerState, start/stop MHServerEmu + Apache,
-│   │   │                         stdout/stderr log streaming with batched emission,
-│   │   │                         Job Object lifecycle, process exit watcher
+│   │   ├── server.rs             ServerProcess/ServerState, PlayerState, DbPath managed state;
+│   │   │                         start/stop MHServerEmu + Apache; stdout/stderr log streaming
+│   │   │                         with batched emission; player login/logout parsing from stdout;
+│   │   │                         Account.db SQLite lookup at login time; Job Object lifecycle;
+│   │   │                         process exit watcher
+│   │   ├── events.rs             Events.json / EventSchedule.json read/write; override file
+│   │   │                         management (load, save, reset, merge) for both definitions
+│   │   │                         and schedule rules
 │   │   ├── launcher.rs           launch_game (spawn with args), game_is_running (sysinfo poll)
 │   │   ├── ini.rs                Config.ini / ConfigOverride.ini read/write with diff-only saving
 │   │   ├── tuning.rs             LiveTuningData*.json scan/read/write/create/toggle
@@ -94,9 +106,9 @@ mh-multiverse/
 The app uses a flat conditional routing model driven by two stores:
 
 - `activeTab` (`Tab`): selects the top-level panel — `launch`, `server`, `config`, `data`, `ops`, `settings`
-- `activeDataTab` (`DataTab`): selects within the Data panel — `tuning`, `store`, `patches`
+- `activeDataTab` (`DataTab`): selects within the Data panel — `events`, `tuning`, `store`, `patches`
 
-`App.svelte` renders the active panel inside a fixed layout of `TitleBar` + `Rail` + content area. `DataPanel.svelte` is a sub-router that renders a secondary tab bar and conditionally mounts `TuningPanel`, `StorePanel`, or `PatchesPanel`.
+`App.svelte` renders the active panel inside a fixed layout of `TitleBar` + `Rail` + content area. `DataPanel.svelte` is a sub-router that renders a secondary tab bar and conditionally mounts `EventsPanel`, `TuningPanel`, `StorePanel`, or `PatchesPanel`.
 
 There is no URL-based routing. Tab state is in-memory only and resets to `launch` on app restart.
 
@@ -114,23 +126,28 @@ All shared frontend state lives in Svelte writable stores. The store module also
 setTheme(theme)  →  activeTheme.set(theme)  →  invoke('set_theme', { theme })
 ```
 
-This pattern is consistent across `setGameExe`, `setServerExe`, `setLaunchOptions`, `setShutdownConfig`, `setTuningTags`, `setTuningFavourites`, `setBackupTargets`, and `setStoreHtmlOutputDir`.
+This pattern is consistent across `setGameExe`, `setServerExe`, `setLaunchOptions`, `setShutdownConfig`, `setTuningTags`, `setTuningFavourites`, `setBackupTargets`, `setStoreHtmlOutputDir`, and `setConsolePresets`.
 
 `loadConfig()` is called once on mount. It invokes `get_config`, populates `appConfig`, applies the saved theme to the DOM, and sets `activeServerId`.
+
+`setSchedulerNow(dt)` accepts a UTC `Date` parsed from server log output, stores it in `schedulerNow`, and computes `eventTimezoneOffset` (integer hours) as the difference between the parsed server time and the local `Date.now()`. This offset is consumed by `EventsPanel` to evaluate schedule rules against server time rather than client local time.
 
 ### Event Bridge (`src/lib/serverEvents.ts`)
 
 Server process events are received via Tauri's event system, not polling. The bridge is initialised once on mount and guards against duplicate initialisation using a `window.__mhmServerBridge` state object.
 
-Three listeners are registered:
+Four listeners are registered:
 
 | Event | Source | Effect |
 |---|---|---|
-| `server-log` | Batched stdout/stderr from `server.rs` | Normalised and appended to `serverLog` store |
+| `server-log` | Batched stdout/stderr from `server.rs` | Normalised and appended to `serverLog` store; each line is also checked for the scheduler-now pattern |
 | `server-started` | Emitted after successful spawn | Sets `serverRunning`, starts uptime timer |
 | `server-stopped` | Emitted on process exit (normal or crash) | Clears `serverRunning`/`apacheRunning`, stops uptime, logs exit code |
+| `player-event` | Emitted by `server.rs` on player login/logout/clear | Consumed by `ServerPanel` to update the online player list |
 
 On bridge init, `syncInitialState()` polls `server_is_running` and `apache_is_running` to recover state if the frontend reloads while the server is running.
+
+**Scheduler-now extraction**: each incoming log line is matched against the regex `Checking Live Tuning events (now=[...])`. When matched, the timestamp string (format `MM/DD/YYYY HH:MM:SS`, server-local time) is parsed as UTC and passed to `setSchedulerNow()`. This keeps `schedulerNow` and `eventTimezoneOffset` continuously up to date while the server is running.
 
 ### Metadata Modules
 
@@ -138,11 +155,17 @@ On bridge init, `syncInitialState()` polls `server_is_running` and `apache_is_ru
 
 **`catalogMeta.ts`** — defines TypeScript interfaces mirroring the Rust catalog types (PascalCase field names matching `serde(rename_all = "PascalCase")`). Contains the catalog type/modifier taxonomy, item category definitions with prototype path prefixes for the item picker, and helper functions for type inference and modifier construction.
 
+**`playerMeta.ts`** — defines the `PlayerSession` type (mirroring the Rust struct serialised from `server.rs`), user level label maps and option arrays, and helper functions: `userLevelLabel(level)`, `isBanned(flags)` (flag value 2), `isWhitelisted(flags)` (flag value 16), `formatLastSeen(ts)` (handles .NET ticks, Unix ms, and Unix seconds).
+
 **`serverCommands.ts`** — hardcoded fallback command list used for autocomplete in the command input. The `ServerPanel` has commented-out code for fetching commands from the server's `/Commands` endpoint at runtime, which is not yet implemented on the MHServerEmu side.
 
 ### Component Patterns
 
-Panels follow a consistent layout: `PanelSidebar` on the left (file/item list with search and filters), detail/editor area on the right. Modal editors (`TuningEditorModal`, `StoreEditorModal`, `PatchEditorModal`) are mounted conditionally when editing state is set, and communicate back to their parent via `onClose`/`onSaved`/`onDeleted` callback props.
+Panels follow a consistent layout: `PanelSidebar` on the left (file/item list with search and filters), detail/editor area on the right. Modal editors (`TuningEditorModal`, `StoreEditorModal`, `PatchEditorModal`, `EventRuleEditorModal`, `EventDefinitionEditorModal`) are mounted conditionally when editing state is set, and communicate back to their parent via `onClose`/`onSaved`/`onDeleted` callback props.
+
+**`EventsPanel.svelte`** deviates from the standard sidebar/editor split. The sidebar lists schedule rules grouped by type (`AlwaysOn`, `DayOfWeek`, `WeeklyRotation`, `SpecialDate`), and the main area is a dashboard showing currently active events and a collapsible full event definition list. Selecting a rule or definition opens an inline editor area (not a separate modal) in place of the dashboard. Override status controls (Reset / Merge) for both Events and Schedule are rendered at the bottom of the sidebar.
+
+**`PlayerCard.svelte`** is a self-contained card rendered per online player in `PlayersPanel.svelte` (accessed via a button in `ServerPanel`). It issues moderation commands (`!client kick`, `!account ban/unban`, `!account whitelist/unwhitelist`, `!client info`) and admin commands (`!account userlevel`) directly via `invoke('send_command', { cmd })`. Actions requiring an email address check `player.email` before proceeding and display inline feedback. Destructive actions (kick, ban) require a two-step confirmation UI within the card.
 
 ---
 
@@ -150,19 +173,23 @@ Panels follow a consistent layout: `PanelSidebar` on the left (file/item list wi
 
 ### Managed State
 
-Three state objects are registered via `.manage()` in `lib.rs`:
+Five state objects are registered via `.manage()` in `lib.rs`:
 
 | State | Type | Purpose |
 |---|---|---|
 | `ServerState` | `Arc<Mutex<ServerProcess>>` | Owns child process handles for MHServerEmu and Apache, plus the Job Object handle |
+| `PlayerState` | `Arc<Mutex<HashMap<String, PlayerSession>>>` | In-memory map of active player sessions, keyed by hex session ID |
+| `DbPath` | `Arc<Mutex<Option<PathBuf>>>` | Path to `Account.db`, derived from `server_exe` and updated whenever `set_server_exe` is called |
 | `CatalogueState` | `Mutex<Option<(String, PrototypeCatalogue)>>` | Cached Calligraphy.sip parse result, keyed by sip file path |
 | `DisplayNameState` | Embedded + lazy-loaded maps | Prototype path → display name resolution (embedded JSON + optional per-server override file) |
 
 ### Rust Modules
 
-**`config.rs`** — `AppConfig` is the root persisted configuration. Stored as `multiverse.json` in the OS app data directory (`%APPDATA%\com.mhmultiverse.app\`). Passwords are encrypted with AES-256-GCM; the 256-bit key is stored in and retrieved from the OS keychain via `keyring`. Each config-mutating command loads the full config from disk, modifies the relevant field, and writes back — there is no in-process config cache on the Rust side.
+**`config.rs`** — `AppConfig` is the root persisted configuration. Stored as `multiverse.json` in the OS app data directory (`%APPDATA%\com.mhmultiverse.app\`). Passwords are encrypted with AES-256-GCM; the 256-bit key is stored in and retrieved from the OS keychain via `keyring`. Each config-mutating command loads the full config from disk, modifies the relevant field, and writes back — there is no in-process config cache on the Rust side. `AppConfig` includes a `console_presets` field (`Vec<String>`) for persisted command shortcut strings shown in the server panel.
 
-**`server.rs`** — Server lifecycle management. `start_server` spawns MHServerEmu with piped stdin/stdout/stderr and assigns it to a Windows Job Object (`JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`). Three background threads are spawned per server start: stdout reader, stderr reader, and a batcher that collects log lines and emits them to the frontend in batches (up to 50 lines per 50ms flush interval). A fourth watcher thread polls `try_wait()` every 150ms to detect process exit. `stop_server` writes `!server shutdown\n` to stdin and falls back to a hard kill after 10 seconds. Apache is managed independently via `start_apache`/`stop_apache`.
+**`server.rs`** — Server lifecycle management and player session tracking. `start_server` spawns MHServerEmu with piped stdin/stdout/stderr and assigns it to a Windows Job Object (`JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`). Five background threads are spawned per server start: stdout reader, stderr reader, a batcher that collects log lines and emits them to the frontend in batches (up to 50 lines per 50ms flush interval), and a watcher thread that polls `try_wait()` every 150ms to detect process exit. The stdout reader additionally calls `parse_player_log_event` on every line; matches trigger `handle_player_log_event` which updates `PlayerState` and emits `player-event` to the frontend. On login, `lookup_account` opens a read-only SQLite connection to `Account.db` and queries the `Account`, `Player`, `Guild`, `GuildMember`, and `Avatar` tables to populate the full `PlayerSession`. On server stop, `clear_player_state` empties `PlayerState` and emits a `player-event` with `kind: "clear"`. `stop_server` writes `!server shutdown\n` to stdin and falls back to a hard kill after 10 seconds. Apache is managed independently via `start_apache`/`stop_apache`. `DbPath.set_from_server_exe` derives `<server_exe_dir>/Data/Account.db` and is called both when `set_server_exe` is invoked from config and when `start_server` is called.
+
+**`events.rs`** — File I/O for `Events.json` / `EventsOverride.json` and `EventSchedule.json` / `EventScheduleOverride.json` in `Data/Game/LiveTuning/`. Both file pairs follow the same override pattern: the override file takes precedence if it exists, otherwise the default file is read. `Events.json` is a JSON object keyed by event ID; `EventSchedule.json` is a JSON array. Read functions deserialise into `EventDefinition` and `ScheduleRule` structs respectively. Write functions always target the override file. `reset_*_override` copies the default file over the override; `merge_*_override` adds any entries present in the default but missing from the override (by ID for events, by name for rules), without overwriting existing override entries.
 
 **`launcher.rs`** — Spawns the game client as a detached process with command-line arguments derived from the active server profile and launch options. Credentials are decrypted from the config at launch time. `game_is_running` uses `sysinfo` to check for a `MarvelHeroesOmega.exe` process.
 
@@ -196,7 +223,7 @@ Three state objects are registered via `.manage()` in `lib.rs`:
 | `delete_server` | `server_id: String` | `AppConfig` | Remove server by ID |
 | `set_active_server` | `server_id: String` | `()` | Update active server selection |
 | `set_game_exe` | `path: String` | `()` | Set game executable path |
-| `set_server_exe` | `path: String` | `()` | Set server executable path |
+| `set_server_exe` | `path: String` | `()` | Set server executable path, updates DbPath |
 | `set_theme` | `theme: String` | `()` | Set UI theme |
 | `set_launch_options` | `options: LaunchOptions` | `()` | Set game launch flags |
 | `set_shutdown_config` | `shutdown: ShutdownConfig` | `()` | Set shutdown delay and broadcast message |
@@ -204,6 +231,7 @@ Three state objects are registered via `.manage()` in `lib.rs`:
 | `set_tuning_favourites` | `favourites: Vec<String>` | `()` | Set pinned tuning filenames |
 | `set_backup_targets` | `targets: Vec<String>` | `()` | Set backup target paths |
 | `set_store_html_output_dir` | `dir: String` | `()` | Set bundle HTML output directory |
+| `set_console_presets` | `presets: Vec<String>` | `()` | Set command shortcut preset list |
 
 ### Launcher (`launcher.rs`)
 
@@ -216,13 +244,27 @@ Three state objects are registered via `.manage()` in `lib.rs`:
 
 | Command | Parameters | Returns | Description |
 |---|---|---|---|
-| `start_server` | `server_exe: String` | `()` | Spawn MHServerEmu with log streaming |
+| `start_server` | `server_exe: String` | `()` | Spawn MHServerEmu with log streaming and player tracking |
 | `stop_server` | — | `()` | Graceful shutdown via stdin, 10s hard-kill fallback |
 | `start_apache` | `server_exe: String` | `()` | Spawn Apache (derived path from server_exe) |
 | `stop_apache` | — | `()` | Kill Apache process |
 | `send_command` | `cmd: String` | `()` | Write to MHServerEmu stdin |
 | `server_is_running` | — | `bool` | Check MHServerEmu child process via try_wait |
 | `apache_is_running` | — | `bool` | Check Apache child process via try_wait |
+| `get_players` | — | `Vec<PlayerSession>` | Return current online players sorted alphabetically |
+
+### Events (`events.rs`)
+
+| Command | Parameters | Returns | Description |
+|---|---|---|---|
+| `load_events` | `server_exe: String` | `EventsData` | Load event definitions (override preferred over default) |
+| `load_event_schedule` | `server_exe: String` | `ScheduleData` | Load schedule rules (override preferred over default) |
+| `save_events_override` | `server_exe: String, definitions: Vec<EventDefinition>` | `()` | Write full definitions list to EventsOverride.json |
+| `save_schedule_override` | `server_exe: String, rules: Vec<ScheduleRule>` | `()` | Write full rules list to EventScheduleOverride.json |
+| `reset_events_override` | `server_exe: String` | `EventsData` | Copy Events.json → EventsOverride.json, return result |
+| `reset_schedule_override` | `server_exe: String` | `ScheduleData` | Copy EventSchedule.json → EventScheduleOverride.json, return result |
+| `merge_events_override` | `server_exe: String` | `EventsData` | Add missing default events to override (by ID), return result |
+| `merge_schedule_override` | `server_exe: String` | `ScheduleData` | Add missing default rules to override (by name), return result |
 
 ### INI (`ini.rs`)
 
@@ -296,7 +338,7 @@ Three state objects are registered via `.manage()` in `lib.rs`:
 | Export | Type | Description |
 |---|---|---|
 | `activeTab` | `writable<Tab>` | Current top-level tab |
-| `activeDataTab` | `writable<DataTab>` | Current data sub-tab (tuning / store / patches) |
+| `activeDataTab` | `writable<DataTab>` | Current data sub-tab (`events` / `tuning` / `store` / `patches`) |
 | `serverRunning` | `writable<boolean>` | MHServerEmu process state |
 | `gameRunning` | `writable<boolean>` | MarvelHeroesOmega.exe process state |
 | `apacheRunning` | `writable<boolean>` | Apache process state |
@@ -306,6 +348,9 @@ Three state objects are registered via `.manage()` in `lib.rs`:
 | `appConfig` | `writable<AppConfig>` | Full config including server list, launch options, etc. |
 | `activeTheme` | `writable<string>` | Current theme ID |
 | `activeServerId` | `writable<string>` | Currently selected server UUID |
+| `tuningFocusFile` | `writable<string \| null>` | Canonical tuning filename to auto-select when switching to the Tuning tab (set by EventsPanel when navigating to a linked tuning file) |
+| `schedulerNow` | `writable<Date \| null>` | Most recently parsed server-side "now" timestamp from log output (UTC) |
+| `eventTimezoneOffset` | `writable<number>` | Offset in whole hours between server time and client UTC, derived from `schedulerNow`; used by EventsPanel to evaluate schedule rule active states |
 
 ### Functions
 
@@ -331,6 +376,8 @@ Three state objects are registered via `.manage()` in `lib.rs`:
 | `setTuningFavourites` | `(favourites) => Promise<void>` | Update pinned tuning files |
 | `setBackupTargets` | `(targets) => Promise<void>` | Update backup target list |
 | `setStoreHtmlOutputDir` | `(dir) => Promise<void>` | Update HTML output directory |
+| `setConsolePresets` | `(presets) => Promise<void>` | Update command shortcut preset list |
+| `setSchedulerNow` | `(dt: Date) => void` | Store server-parsed UTC time and recompute `eventTimezoneOffset` |
 
 ---
 
@@ -343,7 +390,10 @@ Three state objects are registered via `.manage()` in `lib.rs`:
 | `server-log` | `LogLinePayload[]` | `server.rs` batcher thread | Batched log lines (up to 50 per emission, 50ms flush) |
 | `server-started` | `ServerStatusPayload` | `server.rs` after spawn | Server process started |
 | `server-stopped` | `ServerStatusPayload` | `server.rs` watcher thread | Server process exited (includes exit code) |
+| `player-event` | `PlayerEventPayload` | `server.rs` stdout reader | Player login, logout, or full session clear on server stop |
 | `update-progress` | `UpdateProgressPayload` | `updater.rs` | Update stage + percentage (downloading, extracting, installing, restoring, done) |
+
+`PlayerEventPayload` shape: `{ kind: "login" | "logout" | "clear", session_id: string | null, username: string | null, count: number }`.
 
 ---
 
@@ -366,19 +416,22 @@ Passwords follow a separate path: the frontend sends plaintext to `upsert_server
 ```
 start_server
   → validate exe path
+  → update DbPath to <server_exe_dir>/Data/Account.db
   → spawn MHServerEmu (piped stdin/stdout/stderr, cwd = server dir)
   → assign to Job Object (Windows)
-  → spawn stdout reader thread → log_tx
+  → spawn stdout reader thread → log_tx + player event parsing
   → spawn stderr reader thread → log_tx
   → spawn batcher thread: collects from log_rx, emits "server-log" events
-  → spawn watcher thread: polls try_wait(150ms), emits "server-stopped" on exit
+  → spawn watcher thread: polls try_wait(150ms), emits "server-stopped" on exit,
+                          calls clear_player_state before emitting
   → emit "server-started"
 
 stop_server
   → write "!server shutdown\n" to stdin
   → return immediately
-  → (watcher thread detects exit, emits "server-stopped")
-  → safety net: background thread hard-kills after 10s if still running
+  → (watcher thread detects exit, clears PlayerState, emits "server-stopped")
+  → safety net: background thread hard-kills after 10s if still running,
+                also clears PlayerState and emits "server-stopped" as fallback
 
 Window close
   → prevent default close
@@ -388,6 +441,33 @@ Window close
 ```
 
 Apache start/stop is independent: `start_apache` derives the Apache path from `server_exe` (`../../Apache24/bin/httpd.exe`), spawns with `APACHE_SERVER_ROOT` env var, and stores the handle in `ServerProcess.apache_child`. Apache stdout/stderr is piped to null.
+
+### Player Session Tracking
+
+```
+stdout line arrives on reader thread
+  → parse_log_line → send to log_tx (always)
+  → parse_player_log_event → match on "Accepted and registered client" / "Removed client"
+      Login:
+        → extract username + session_id via regex
+        → lookup_account(db_path, username)
+            → open Account.db read-only (rusqlite)
+            → JOIN Account + Player + GuildMember + Guild
+            → separate COUNT query for Avatar
+            → return AccountInfo (best-effort, None on any error)
+        → insert PlayerSession into PlayerState map (keyed by session_id)
+        → emit "player-event" { kind: "login", session_id, username, count }
+      Logout:
+        → extract session_id (and username if present) via regex
+        → remove session from PlayerState map
+        → emit "player-event" { kind: "logout", session_id, username, count }
+
+server stopped / hard-killed:
+  → clear_player_state: PlayerState.clear()
+  → emit "player-event" { kind: "clear", count: 0 }
+```
+
+The Account.db connection is opened fresh on every login event. This is safe because MHServerEmu holds its own separate connection and SQLite supports concurrent readers.
 
 ### INI Editing
 
@@ -405,6 +485,33 @@ write_config
       if value == default → remove from overrides
       if value != default → set in overrides
   → write ConfigOverride.ini (only non-default values)
+```
+
+### Events File I/O
+
+```
+load_events / load_event_schedule
+  → check for EventsOverride.json / EventScheduleOverride.json
+  → if exists → read and return (using_override: true)
+  → else check Events.json / EventSchedule.json
+  → if exists → read and return (using_override: false)
+  → else return empty list (using_override: false)
+
+save_events_override / save_schedule_override
+  → always write to EventsOverride.json / EventScheduleOverride.json
+  → Events.json format: JSON object keyed by event ID
+  → EventSchedule.json format: JSON array
+
+reset_events_override / reset_schedule_override
+  → copy default file → override file (requires default to exist)
+  → return loaded override content
+
+merge_events_override / merge_schedule_override
+  → read default file (required)
+  → read override file if it exists, else start from empty
+  → append any default entries whose ID/name is not already in override
+  → write merged result to override file
+  → return merged content
 ```
 
 ### Live Tuning File I/O
@@ -490,6 +597,10 @@ Prototype runtime IDs and GUIDs are u64 values that can exceed JavaScript's `Num
 
 Catalog edits are never written to the base `Catalog*.json` files. Instead, a `*MODIFIED.json` sidecar file holds user-created or user-modified entries. This means a server update can safely overwrite base catalog files without losing user edits. The merge-by-SkuId logic in `load_catalog_entries` makes the MODIFIED version authoritative when both exist.
 
+### EventsOverride / Default File Pattern (Events)
+
+Event definitions and schedule rules follow a similar override pattern to catalogs, but without sidecar files. Instead, MHServerEmu natively recognises `EventsOverride.json` and `EventScheduleOverride.json` as alternatives to `Events.json` and `EventSchedule.json`. MH Multiverse always reads the override if it exists and always writes to the override. The default files are never modified. This means a server update can overwrite the default files without affecting the operator's custom event configuration. The Reset operation recreates the override as a copy of the current default; the Merge operation forward-fills any new entries from the default into the existing override.
+
 ### OFF_ Prefix Convention (Tuning)
 
 Tuning files are toggled by renaming with an `OFF_` prefix rather than modifying file contents or moving to a subdirectory. This matches how MHServerEmu discovers tuning files: it loads files matching `LiveTuningData*.json`, so `OFF_LiveTuningData_X.json` does not match and is effectively disabled.
@@ -497,6 +608,10 @@ Tuning files are toggled by renaming with an `OFF_` prefix rather than modifying
 ### Patches/Off/ Subdirectory (Patches)
 
 Patch files use a different toggle convention from tuning: disabled files are moved to a `Patches/Off/` subdirectory rather than being renamed. This is because MHServerEmu loads all `PatchData*.json` files from the `Patches/` directory, and a prefix-based rename would still match the `PatchData` prefix.
+
+### Player Session State (In-Memory, Derived from Logs)
+
+`PlayerState` is a runtime-only in-memory map. It is populated by parsing MHServerEmu's stdout log lines for login and logout events. It is not persisted and is always cleared on server stop. This means it reflects only the current server run. Account data (email, flags, user level, balance, etc.) is fetched from Account.db once at login time and stored in the session; it is not refreshed while the player remains online. The DB connection is opened read-only and closed immediately after each lookup, which is safe given SQLite's concurrent-reader model.
 
 ### Job Object Lifecycle (Windows)
 
@@ -524,10 +639,18 @@ Each Rust config command loads `multiverse.json` from disk, mutates, and writes 
 │   ├── Config.ini
 │   ├── ConfigOverride.ini        (created/managed by MH Multiverse)
 │   ├── Data/
+│   │   ├── Account.db            ← SQLite database read at player login
 │   │   ├── Game/
 │   │   │   ├── Calligraphy.sip
 │   │   │   ├── mu_cdata.sip
 │   │   │   ├── LiveTuning/       ← LiveTuningData*.json files
+│   │   │   │   ├── Events.json                (default, not modified)
+│   │   │   │   ├── EventsOverride.json        (created/managed by MH Multiverse)
+│   │   │   │   ├── EventSchedule.json         (default, not modified)
+│   │   │   │   ├── EventScheduleOverride.json (created/managed by MH Multiverse)
+│   │   │   │   ├── LiveTuningData*.json       
+│   │   │   │   └── Events/
+│   │   │   │       └── Weekly/
 │   │   │   ├── Patches/          ← PatchData*.json files (enabled)
 │   │   │   │   └── Off/          ← PatchData*.json files (disabled)
 │   │   │   └── MTXStore/         ← Catalog*.json + *MODIFIED.json files

@@ -2,7 +2,7 @@
   import { onMount } from 'svelte'
   import { invoke } from '@tauri-apps/api/core'
   import { openPath } from '@tauri-apps/plugin-opener'
-  import { appConfig, serverRunning, setTuningTags, setTuningFavourites } from '../lib/store'
+  import { appConfig, serverRunning, setTuningTags, setTuningFavourites, activeDataTab, tuningFocusFile } from '../lib/store'
   import { categoryForSetting, KNOWN_CORE, KNOWN_EVENTS, CATEGORY_PREFIXES } from '../lib/tuningMeta'
   import PanelSidebar from './PanelSidebar.svelte'
   import TuningEditorModal from './TuningEditorModal.svelte'
@@ -13,6 +13,20 @@
     canonical_name: string
     enabled: boolean
     toggleable: boolean
+    relative_path: string
+    event_id: string | null
+    was_auto_enabled: boolean
+  }
+
+  interface EventDefinition {
+    id: string
+    display_name: string
+    file_path: string
+  }
+
+  interface EventsData {
+    definitions: EventDefinition[]
+    using_override: boolean
   }
 
   type Tag = 'core' | 'event' | 'custom' | ''
@@ -35,12 +49,18 @@
   let tagFilter: Tag | '' = ''
   let searchQuery = ''
   let editingTag: string | null = null
+  let eventDefsById: Record<string, EventDefinition> = {}
 
   // ── Derived ────────────────────────────────────────────────────────────────
 
   $: tags = $appConfig.tuning_tags ?? {}
   $: favourites = $appConfig.tuning_favourites ?? []
   $: existingNames = files.map(f => f.canonical_name)
+
+  // At runtime, treat files with event_id as the event set; fall back to static KNOWN_EVENTS
+  // when no Events.json is present (older servers).
+  $: runtimeEventFiles = new Set(files.filter(f => f.event_id !== null).map(f => f.canonical_name))
+  $: effectiveEventSet = runtimeEventFiles.size > 0 ? runtimeEventFiles : KNOWN_EVENTS
 
   $: searchLower = searchQuery.toLowerCase()
 
@@ -62,24 +82,26 @@
     return f.canonical_name.toLowerCase().includes(searchLower) || name.includes(searchLower)
   })
 
-  // Sidebar: all files mapped with reactive starred state so {#each} re-renders on favourite changes
+  // Sidebar groupings
   $: knownSidebarFiles = files
-    .filter(f => f.toggleable)
+    .filter(f => f.toggleable && !f.event_id)
     .map(f => ({ ...f, starred: favourites.includes(f.canonical_name) }))
 
   $: enabledSidebarFiles  = knownSidebarFiles.filter(f => f.enabled)
   $: disabledSidebarFiles = knownSidebarFiles.filter(f => !f.enabled)
 
+  $: eventOwnedSidebarFiles = files
+    .filter(f => f.event_id !== null)
+    .map(f => ({ ...f, starred: favourites.includes(f.canonical_name) }))
+
   $: unknownSidebarFiles = files
-    .filter(f => !f.toggleable)
+    .filter(f => !f.toggleable && !f.event_id)
     .map(f => ({ ...f, starred: favourites.includes(f.canonical_name) }))
 
   $: aggregates = (() => {
     const total = files.length
     const active = files.filter(f => f.enabled).length
-    const eventFiles = files.filter(
-      f => (tags[f.canonical_name] || (KNOWN_CORE.has(f.canonical_name) ? 'core' : KNOWN_EVENTS.has(f.canonical_name) ? 'event' : '')) === 'event'
-    )
+    const eventFiles = files.filter(f => effectiveTag(f.canonical_name) === 'event')
     return {
       total,
       active,
@@ -99,7 +121,7 @@
   function effectiveTag(canonical: string): Tag {
     if (tags[canonical]) return tags[canonical] as Tag
     if (KNOWN_CORE.has(canonical)) return 'core'
-    if (KNOWN_EVENTS.has(canonical)) return 'event'
+    if (effectiveEventSet.has(canonical)) return 'event'
     return ''
   }
 
@@ -135,9 +157,16 @@
       files = await invoke<TuningFileInfo[]>('scan_tuning_files', {
         serverExe: $appConfig.server_exe,
       })
+      // Load event definitions for "managed by" labels — non-fatal if absent
+      try {
+        const evtsData = await invoke<EventsData>('load_events', { serverExe: $appConfig.server_exe })
+        eventDefsById = Object.fromEntries(evtsData.definitions.map(d => [d.id, d]))
+      } catch {
+        eventDefsById = {}
+      }
       // Keep modal in sync if the file it's editing was rescanned
       if (editingFile) {
-        const still = files.find(f => f.canonical_name === editingFile!.canonical_name)
+        const still = files.find(f => f.relative_path === editingFile!.relative_path)
         editingFile = still ?? null
       }
     } catch (e) {
@@ -147,26 +176,26 @@
     }
   }
 
-  async function handleCreated(canonicalName: string) {
+  async function handleCreated(relativePath: string) {
     creatingNew = false
     await scan()
-    const created = files.find(f => f.canonical_name === canonicalName)
+    const created = files.find(f => f.relative_path === relativePath)
     if (created) editingFile = created
   }
 
   // ── Toggle file ────────────────────────────────────────────────────────────
 
   async function toggleFile(file: TuningFileInfo) {
-    if (!file.toggleable) return
+    if (!file.toggleable || file.event_id) return
     const newEnabled = !file.enabled
     try {
       await invoke('toggle_tuning_file', {
         serverExe: $appConfig.server_exe,
-        canonicalName: file.canonical_name,
+        relativePath: file.relative_path,
         enabled: newEnabled,
       })
       files = files.map(f =>
-        f.canonical_name === file.canonical_name ? { ...f, enabled: newEnabled } : f
+        f.relative_path === file.relative_path ? { ...f, enabled: newEnabled } : f
       )
     } catch (err) {
       scanError = String(err)
@@ -200,6 +229,16 @@
     if (editingTag && !(e.target as Element).closest('.card-tag-picker, .card-tag-btn')) {
       editingTag = null
     }
+  }
+
+  // When EventsPanel navigates here with a file to open, pre-select it once files are loaded.
+  $: if ($tuningFocusFile && files.length > 0) {
+    const target = files.find(f => f.relative_path === $tuningFocusFile)
+    if (target) {
+      editingFile = target
+      creatingNew = false
+    }
+    tuningFocusFile.set(null)
   }
 
   onMount(() => {
@@ -285,7 +324,7 @@
             {@const tag = effectiveTag(file.canonical_name)}
             <div
               class="file-item"
-              class:editing={editingFile?.canonical_name === file.canonical_name}
+              class:editing={editingFile?.relative_path === file.relative_path}
               role="button"
               tabindex="0"
               aria-label="Edit {file.canonical_name}"
@@ -325,7 +364,7 @@
             {@const tag = effectiveTag(file.canonical_name)}
             <div
               class="file-item file-item-off"
-              class:editing={editingFile?.canonical_name === file.canonical_name}
+              class:editing={editingFile?.relative_path === file.relative_path}
               role="button"
               tabindex="0"
               aria-label="Edit {file.canonical_name}"
@@ -358,13 +397,51 @@
           {/each}
         {/if}
 
+        {#if eventOwnedSidebarFiles.length > 0}
+          <div class="file-group-label">Event managed</div>
+          {#each eventOwnedSidebarFiles as file (file.canonical_name)}
+            <div
+              class="file-item"
+              class:editing={editingFile?.relative_path === file.relative_path}
+              role="button"
+              tabindex="0"
+              aria-label="Edit {file.canonical_name}"
+              on:click={() => editingFile = file}
+              on:keydown={e => e.key === 'Enter' && (editingFile = file)}
+            >
+              <button
+                class="star-btn"
+                class:starred={file.starred}
+                aria-label={file.starred ? 'Remove from favourites' : 'Add to favourites'}
+                on:click|stopPropagation={() => toggleFavourite(file)}
+              >
+                {#if file.starred}
+                  <svg viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="1.5">
+                    <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+                  </svg>
+                {:else}
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                    <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+                  </svg>
+                {/if}
+              </button>
+              <div class="file-info">
+                <span class="file-name">{displayName(file)}</span>
+                {#if file.event_id && eventDefsById[file.event_id]}
+                  <span class="file-tag tag-event">{eventDefsById[file.event_id].display_name}</span>
+                {/if}
+              </div>
+            </div>
+          {/each}
+        {/if}
+
         {#if unknownSidebarFiles.length > 0}
           <div class="file-group-label">Unknown prefix</div>
           {#each unknownSidebarFiles as file (file.canonical_name)}
             {@const tag = effectiveTag(file.canonical_name)}
             <div
               class="file-item"
-              class:editing={editingFile?.canonical_name === file.canonical_name}
+              class:editing={editingFile?.relative_path === file.relative_path}
               role="button"
               tabindex="0"
               aria-label="Edit {file.canonical_name}"
@@ -527,18 +604,24 @@
                   <span class="card-filename">{file.canonical_name}</span>
                 </div>
                 <div class="card-footer">
-                  <div
-                    class="file-toggle"
-                    class:on={file.enabled}
-                    class:locked={!file.toggleable}
-                    role="switch"
-                    aria-checked={file.enabled}
-                    tabindex="0"
-                    title={!file.toggleable ? 'Unknown prefix — cannot toggle' : undefined}
-                    on:click={() => toggleFile(file)}
-                    on:keydown={e => e.key === 'Enter' && toggleFile(file)}
-                  ></div>
-                  <span class="toggle-label">{file.enabled ? 'Active' : 'Inactive'}</span>
+                  {#if file.event_id}
+                    <span class="managed-by-label">
+                      Managed by {eventDefsById[file.event_id]?.display_name ?? file.event_id}
+                    </span>
+                  {:else}
+                    <div
+                      class="file-toggle"
+                      class:on={file.enabled}
+                      class:locked={!file.toggleable}
+                      role="switch"
+                      aria-checked={file.enabled}
+                      tabindex="0"
+                      title={!file.toggleable ? 'Unknown prefix — cannot toggle' : undefined}
+                      on:click={() => toggleFile(file)}
+                      on:keydown={e => e.key === 'Enter' && toggleFile(file)}
+                    ></div>
+                    <span class="toggle-label">{file.enabled ? 'Active' : 'Inactive'}</span>
+                  {/if}
                   <button class="btn btn-sm btn-outline card-edit-btn" on:click={() => editingFile = file}>
                     Edit
                   </button>
@@ -599,18 +682,24 @@
                   <span class="card-filename">{file.canonical_name}</span>
                 </div>
                 <div class="card-footer">
-                  <div
-                    class="file-toggle"
-                    class:on={file.enabled}
-                    class:locked={!file.toggleable}
-                    role="switch"
-                    aria-checked={file.enabled}
-                    tabindex="0"
-                    title={!file.toggleable ? 'Unknown prefix — cannot toggle' : undefined}
-                    on:click={() => toggleFile(file)}
-                    on:keydown={e => e.key === 'Enter' && toggleFile(file)}
-                  ></div>
-                  <span class="toggle-label">{file.enabled ? 'Active' : 'Inactive'}</span>
+                  {#if file.event_id}
+                    <span class="managed-by-label">
+                      Managed by {eventDefsById[file.event_id]?.display_name ?? file.event_id}
+                    </span>
+                  {:else}
+                    <div
+                      class="file-toggle"
+                      class:on={file.enabled}
+                      class:locked={!file.toggleable}
+                      role="switch"
+                      aria-checked={file.enabled}
+                      tabindex="0"
+                      title={!file.toggleable ? 'Unknown prefix — cannot toggle' : undefined}
+                      on:click={() => toggleFile(file)}
+                      on:keydown={e => e.key === 'Enter' && toggleFile(file)}
+                    ></div>
+                    <span class="toggle-label">{file.enabled ? 'Active' : 'Inactive'}</span>
+                  {/if}
                   <button class="btn btn-sm btn-outline card-edit-btn" on:click={() => editingFile = file}>
                     Edit
                   </button>
@@ -988,6 +1077,18 @@
     color: var(--text-3);
   }
   .tuning-card.enabled .toggle-label { color: var(--accent-dim); }
+
+  .managed-by-label {
+    font-family: var(--font-head);
+    font-size: 9px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--green-bright);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    flex: 1;
+  }
 
   .card-edit-btn {
     margin-left: auto;

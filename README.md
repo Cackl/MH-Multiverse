@@ -22,8 +22,8 @@ The app is currently Windows-only and communicates with the server via stdin/std
 
 ### Local Server Management
 - Start and stop MHServerEmu with stdout/stderr log streaming to an in-app console
-- Structured log parsing (timestamp, level, category, message) with level-based colouring and filtering
 - Interactive command input with autocomplete drawn from the MHServerEmu command list
+- View logged in players and easily access moderation commands like setting user account level, kick, ban and whitelist
 - Timed shutdown with configurable delay and broadcast message
 - Independent Apache start/stop for players running in offline mode without the reverse proxy
 - Windows Job Object integration - child processes are killed automatically if MH Multiverse crashes or is force-closed
@@ -34,12 +34,12 @@ The app is currently Windows-only and communicates with the server via stdin/std
 - Per-section reset to defaults
 - Currently displays a subset of the full `Config.ini` options for simplicity, though more may be added in future
 
-### Live Tuning Editor
-- Scan, create, edit, and toggle `LiveTuningData*.json` files in `Data/Game/LiveTuning`
-- Enable/disable tuning files via `OFF_` filename prefix convention
+### Events & Live Tuning Editor
+- Scan, create, edit, and toggle Events and `LiveTuningData*.json` files in `Data/Game/LiveTuning`
+- Attach new or existing live tuning files to event schedules to customise event rotations
+- Create custom live tuning files with the help of settings autocomplete and prototype path searching
 - Tag-based organisation (Core, Event, Custom) with favourites pinning
 - Category-aware setting enum validation (Global, World Entity, Power, Region, Loot, etc.)
-- Prototype path picker backed by Calligraphy.sip for prototype-scoped tuning entries
 
 ### Data Patching Editor
 - Scan, create, edit, and toggle `PatchData*.json` files in `Data/Game/Patches`
@@ -47,7 +47,7 @@ The app is currently Windows-only and communicates with the server via stdin/std
 - Per-entry enable/disable, prototype path, field path, value type, and value editing
 - Prototype picker and value type dropdown matching MHServerEmu's supported patch value types
 
-### MTX Store Catalog Editor
+### Store Catalog Editor
 - Load, create, edit, and delete catalog entries across `Catalog*.json` files in `Data/Game/MTXStore`
 - Non-destructive editing - saves always write to `*MODIFIED.json` sidecar files; base catalog files are never modified
 - Automatic `.bak` snapshots before every write
@@ -115,8 +115,7 @@ npm run check
 
 ## Planned Updates
 
-Aside from some upfront bug fixes and issue mitigation, I'll first be looking at updating the Live Tuning feature in response to the Event system update coming soon to MHServerEmu. I'm also looking to make the calligraphy.sip parsing smoother (and in particular less reliant on `display_names.json` for prototype ID -> display name replacement).
-If there's enough interest, I'll also look into Linux support.
+With the first implementation of the Event/LiveTuning system overhaul following the recent MHServerEmu update in place, I'm back to UI/UX polishing and bug fixes. I'm also looking to make the calligraphy.sip parsing smoother (and in particular less reliant on `display_names.json` for prototype ID -> display name replacement). If there's enough interest, I'll also look into Linux support.
 
 ---
 

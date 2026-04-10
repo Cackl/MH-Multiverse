@@ -34,7 +34,27 @@ export function isWhitelisted(flags?: number): boolean {
   return (flags === 16);
 }
 
+function timestampToDate(ts: number): Date {
+  // .NET ticks: 100ns intervals since 0001-01-01
+  if (ts > 1e16) {
+    return new Date(ts / 10000 - 62135596800000)
+  }
+
+  // Unix milliseconds
+  if (ts > 1e12) {
+    return new Date(ts)
+  }
+
+  // Unix seconds
+  return new Date(ts * 1000)
+}
+
 export function formatLastSeen(ts?: number): string {
   if (!ts || ts === 0) return 'Never'
-  return new Date(ts * 1000).toLocaleString()
+
+  const date = timestampToDate(ts)
+
+  if (Number.isNaN(date.getTime())) return 'Invalid date'
+
+  return date.toLocaleString()
 }
