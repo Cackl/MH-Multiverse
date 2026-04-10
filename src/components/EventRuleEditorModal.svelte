@@ -28,6 +28,8 @@
   export let onSave: (rule: ScheduleRule) => void
   export let onDiscard: () => void
   export let saving = false
+  export let onEditDefinition: ((def: EventDefinition) => void) | null = null
+  export let onOpenTuning: ((filePath: string) => void) | null = null
 
   // ── Constants ───────────────────────────────────────────────────────────────
 
@@ -66,6 +68,10 @@
 
   function eventLabel(id: string): string {
     return allEvents.find(e => e.id === id)?.display_name ?? id
+  }
+
+  function definitionFor(id: string): EventDefinition | undefined {
+    return allEvents.find(e => e.id === id)
   }
 
   function addEvent() {
@@ -225,32 +231,54 @@
                 <span class="event-id">{eventId}</span>
               </div>
               <div class="event-actions">
+                {#if onOpenTuning}
+                    {@const def = definitionFor(eventId)}
+                    {#if def?.file_path}
+                    <button
+                        class="btn btn-sm btn-outline"
+                        title="Open in Live Tuning editor"
+                        disabled={saving}
+                        on:click={() => onOpenTuning(def.file_path)}
+                    >Tuning</button>
+                    {/if}
+                {/if}
+                {#if onEditDefinition}
+                    {@const def = definitionFor(eventId)}
+                    {#if def}
+                    <button
+                        class="btn btn-sm btn-outline"
+                        title="Edit event definition"
+                        disabled={saving}
+                        on:click={() => onEditDefinition(def)}
+                    >Edit</button>
+                    {/if}
+                {/if}
                 {#if isRotation}
-                  <button
+                    <button
                     class="move-btn"
                     title="Move up"
                     disabled={saving || i === 0}
                     on:click={() => moveEvent(i, -1)}
-                  >↑</button>
-                  <button
+                    >↑</button>
+                    <button
                     class="move-btn"
                     title="Move down"
                     disabled={saving || i === events.length - 1}
                     on:click={() => moveEvent(i, 1)}
-                  >↓</button>
+                    >↓</button>
                 {/if}
                 <button
-                  class="remove-btn"
-                  title="Remove"
-                  disabled={saving}
-                  on:click={() => removeEvent(eventId)}
+                    class="remove-btn"
+                    title="Remove"
+                    disabled={saving}
+                    on:click={() => removeEvent(eventId)}
                 >
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <line x1="18" y1="6" x2="6" y2="18"/>
                     <line x1="6" y1="6" x2="18" y2="18"/>
-                  </svg>
+                    </svg>
                 </button>
-              </div>
+                </div>
             </div>
           {/each}
         </div>

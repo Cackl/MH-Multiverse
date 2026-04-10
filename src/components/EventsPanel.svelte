@@ -70,7 +70,7 @@
   let creatingRule        = false
   let editingDefinition:  EventDefinition | null = null
   let creatingDefinition  = false
-  let allEventsExpanded   = false
+  let allEventsExpanded   = true
 
   // ── Derived ─────────────────────────────────────────────────────────────────
 
@@ -476,11 +476,13 @@
         <div class="editor-wrap">
           {#key editorKey}
             <EventRuleEditorModal
-              rule={creatingRule ? null : selectedRule}
-              allEvents={definitions}
-              onSave={saveRule}
-              onDiscard={discardEditor}
-              {saving}
+                rule={creatingRule ? null : selectedRule}
+                allEvents={definitions}
+                onSave={saveRule}
+                onDiscard={discardEditor}
+                onEditDefinition={(def) => { editingDefinition = def; creatingDefinition = false }}
+                onOpenTuning={openInTuning}
+                {saving}
             />
           {/key}
         </div>
