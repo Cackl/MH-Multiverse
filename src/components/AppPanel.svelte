@@ -45,7 +45,8 @@
     { id: 'light',         label: 'Light',           accent: '#f4f7fa' },
     { id: 'phoenix',       label: 'Phoenix',         accent: '#d96a1d' },
     { id: 'tahiti',        label: 'Tahiti',          accent: '#b31618' },
-    { id: 'grey',          label: 'Grey',            accent: '#8f8f8f' }
+    { id: 'grey',          label: 'Grey',            accent: '#8f8f8f' },
+    { id: 'blue-grey',     label: 'HC Blue',            accent: '#4a5a7a' }
   ]
 </script>
 
