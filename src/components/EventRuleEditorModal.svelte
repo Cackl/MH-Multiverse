@@ -135,6 +135,15 @@
       duration_days:     needsDate ? duration_days : null,
       events,
     })
+    // Advance the snapshot so isDirty resets immediately
+    _orig.name          = name.trim()
+    _orig.is_enabled    = is_enabled
+    _orig.rule_type     = rule_type
+    _orig.start_dow     = start_dow
+    _orig.start_month   = start_month
+    _orig.start_day     = start_day
+    _orig.duration_days = duration_days
+    _orig.events        = JSON.stringify(events)
   }
 </script>
 
