@@ -6,7 +6,7 @@ export type Tab = 'launch' | 'server' | 'config' | 'data' | 'ops' | 'settings'
 export type LogLevel = 'all' | 'trace' | 'debug' | 'info' | 'warn' | 'err' | 'fatal'
 
 export const activeTab = writable<Tab>('launch')
-export const activeDataTab = writable<DataTab>('tuning')
+export const activeDataTab = writable<DataTab>('events')
 export const serverRunning = writable<boolean>(false)
 export const gameRunning = writable<boolean>(false)
 export const apacheRunning = writable<boolean>(false)

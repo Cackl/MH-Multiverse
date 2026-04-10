@@ -626,7 +626,7 @@
   <EventDefinitionEditorModal
     definition={creatingDefinition ? null : editingDefinition}
     {tuningFiles}
-    onSave={saveDefinition}
+    onSave={(def) => saveDefinition(def)}
     onClose={() => { editingDefinition = null; creatingDefinition = false }}
   />
 {/if}

@@ -146,6 +146,7 @@
           class:on={is_enabled}
           role="switch"
           aria-checked={is_enabled}
+          aria-label={is_enabled ? 'Disable rule' : 'Enable rule'}
           disabled={saving}
           on:click={() => is_enabled = !is_enabled}
         ></button>
