@@ -1280,8 +1280,8 @@
   .catalog-table input[type="checkbox"] {
     cursor: pointer;
     accent-color: var(--accent);
-    width: 14px;
-    height: 14px;
+    width: 12px;
+    height: 12px;
   }
 
   /* ── Type badge ── */
