@@ -32,6 +32,7 @@
   let scrollLocked = false
   let logEl: HTMLDivElement
   let dashboardPort = DASHBOARD_PORT_DEFAULT
+  let dashboardPath = '/Dashboard/'
 
   let countdownSec = 0
   let countdownInterval: ReturnType<typeof setInterval> | null = null
@@ -115,14 +116,18 @@
   }
 
   onMount(async () => {
+    onMount(async () => {
     if ($appConfig.server_exe) {
       try {
         const state = await invoke<{ values: Record<string, Record<string, string>> }>('read_config', { serverExe: $appConfig.server_exe })
         const raw = state.values['WebFrontend']?.['Port']
         const parsed = raw ? parseInt(raw, 10) : NaN
         if (!isNaN(parsed) && parsed > 0) dashboardPort = parsed
+        const rawPath = state.values['WebFrontend']?.['DashboardUrlPath']
+        if (rawPath?.trim()) dashboardPath = rawPath.trim()
       } catch {}
     }
+  })
   })
 
   async function startServer() {
@@ -311,7 +316,7 @@
   }
 
   async function openDashboard() {
-    await openUrl(`http://localhost:${dashboardPort}/Dashboard/`)
+    await openUrl(`http://localhost:${dashboardPort}${dashboardPath}`)
   }
 
   // const presets = [
