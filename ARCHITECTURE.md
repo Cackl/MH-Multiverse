@@ -1,5 +1,5 @@
 # MH Multiverse — Architecture
-v1.2.0
+v1.2.1
 ## Tech Stack
 
 | Layer | Technology |
@@ -22,7 +22,7 @@ v1.2.0
 ```
 mh-multiverse/
 ├── src/
-│   ├── App.svelte                Root — tab router, mounts config + event bridge
+│   ├── App.svelte                Root - tab router, mounts config + event bridge
 │   ├── app.css                   Design tokens, CSS variables, data-theme variants
 │   ├── main.ts                   Svelte 5 entry (mount())
 │   ├── vite-env.d.ts             TypeScript ambient declarations
@@ -53,12 +53,12 @@ mh-multiverse/
 │       ├── PatchesPanel.svelte    PatchData file list, enable/disable
 │       ├── PatchEditorModal.svelte   Per-file patch entry editor
 │       ├── OpsPanel.svelte        Server update, backup create/restore/delete
-│       ├── ServerModal.svelte     Add/edit server dialog
+│       ├── ServerModal.svelte     Add/edit server dialog, Local/HTTPS toggles
 │       └── AppPanel.svelte        Settings: exe paths, launch options, themes, about
 │
 ├── src-tauri/
 │   ├── src/
-│   │   ├── main.rs               Entry point — calls app_lib::run()
+│   │   ├── main.rs               Entry point - calls app_lib::run()
 │   │   ├── lib.rs                Tauri builder: plugins, managed state, command registration,
 │   │   │                         window close hook, window state persistence
 │   │   ├── config.rs             AppConfig, Server, LaunchOptions, ShutdownConfig structs;
@@ -105,8 +105,8 @@ mh-multiverse/
 
 The app uses a flat conditional routing model driven by two stores:
 
-- `activeTab` (`Tab`): selects the top-level panel — `launch`, `server`, `config`, `data`, `ops`, `settings`
-- `activeDataTab` (`DataTab`): selects within the Data panel — `events`, `tuning`, `store`, `patches`
+- `activeTab` (`Tab`): selects the top-level panel - `launch`, `server`, `config`, `data`, `ops`, `settings`
+- `activeDataTab` (`DataTab`): selects within the Data panel - `events`, `tuning`, `store`, `patches`
 
 `App.svelte` renders the active panel inside a fixed layout of `TitleBar` + `Rail` + content area. `DataPanel.svelte` is a sub-router that renders a secondary tab bar and conditionally mounts `EventsPanel`, `TuningPanel`, `StorePanel`, or `PatchesPanel`.
 
@@ -151,13 +151,13 @@ On bridge init, `syncInitialState()` polls `server_is_running` and `apache_is_ru
 
 ### Metadata Modules
 
-**`tuningMeta.ts`** — maps tuning enum prefixes (e.g. `eGTV_`, `eWETV_`) to display categories and blueprint hints for prototype search scoping. Contains known file sets (`KNOWN_CORE`, `KNOWN_EVENTS`) for auto-tagging, and the full tuning setting reference with descriptions and default values.
+**`tuningMeta.ts`** - maps tuning enum prefixes (e.g. `eGTV_`, `eWETV_`) to display categories and blueprint hints for prototype search scoping. Contains known file sets (`KNOWN_CORE`, `KNOWN_EVENTS`) for auto-tagging, and the full tuning setting reference with descriptions and default values.
 
-**`catalogMeta.ts`** — defines TypeScript interfaces mirroring the Rust catalog types (PascalCase field names matching `serde(rename_all = "PascalCase")`). Contains the catalog type/modifier taxonomy, item category definitions with prototype path prefixes for the item picker, and helper functions for type inference and modifier construction.
+**`catalogMeta.ts`** - defines TypeScript interfaces mirroring the Rust catalog types (PascalCase field names matching `serde(rename_all = "PascalCase")`). Contains the catalog type/modifier taxonomy, item category definitions with prototype path prefixes for the item picker, and helper functions for type inference and modifier construction.
 
-**`playerMeta.ts`** — defines the `PlayerSession` type (mirroring the Rust struct serialised from `server.rs`), user level label maps and option arrays, and helper functions: `userLevelLabel(level)`, `isBanned(flags)` (flag value 2), `isWhitelisted(flags)` (flag value 16), `formatLastSeen(ts)` (handles .NET ticks, Unix ms, and Unix seconds).
+**`playerMeta.ts`** - defines the `PlayerSession` type (mirroring the Rust struct serialised from `server.rs`), user level label maps and option arrays, and helper functions: `userLevelLabel(level)`, `isBanned(flags)` (flag value 2), `isWhitelisted(flags)` (flag value 16), `formatLastSeen(ts)` (handles .NET ticks, Unix ms, and Unix seconds).
 
-**`serverCommands.ts`** — hardcoded fallback command list used for autocomplete in the command input. The `ServerPanel` has commented-out code for fetching commands from the server's `/Commands` endpoint at runtime, which is not yet implemented on the MHServerEmu side.
+**`serverCommands.ts`** - hardcoded fallback command list used for autocomplete in the command input. The `ServerPanel` has commented-out code for fetching commands from the server's `/Commands` endpoint at runtime, which is not yet implemented on the MHServerEmu side.
 
 ### Component Patterns
 
@@ -185,25 +185,25 @@ Five state objects are registered via `.manage()` in `lib.rs`:
 
 ### Rust Modules
 
-**`config.rs`** — `AppConfig` is the root persisted configuration. Stored as `multiverse.json` in the OS app data directory (`%APPDATA%\com.mhmultiverse.app\`). Passwords are encrypted with AES-256-GCM; the 256-bit key is stored in and retrieved from the OS keychain via `keyring`. Each config-mutating command loads the full config from disk, modifies the relevant field, and writes back — there is no in-process config cache on the Rust side. `AppConfig` includes a `console_presets` field (`Vec<String>`) for persisted command shortcut strings shown in the server panel.
+**`config.rs`** - `AppConfig` is the root persisted configuration. Stored as `multiverse.json` in the OS app data directory (`%APPDATA%\com.mhmultiverse.app\`). Passwords are encrypted with AES-256-GCM; the 256-bit key is stored in and retrieved from the OS keychain via `keyring`. Each config-mutating command loads the full config from disk, modifies the relevant field, and writes back - there is no in-process config cache on the Rust side. `AppConfig` includes a `console_presets` field (`Vec<String>`) for persisted command shortcut strings shown in the server panel. Server struct includes is_local (bool) and use_https (bool) fields; is_local suppresses host storage and triggers Config.ini-derived URL building at launch time.
 
-**`server.rs`** — Server lifecycle management and player session tracking. `start_server` spawns MHServerEmu with piped stdin/stdout/stderr and assigns it to a Windows Job Object (`JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`). Five background threads are spawned per server start: stdout reader, stderr reader, a batcher that collects log lines and emits them to the frontend in batches (up to 50 lines per 50ms flush interval), and a watcher thread that polls `try_wait()` every 150ms to detect process exit. The stdout reader additionally calls `parse_player_log_event` on every line; matches trigger `handle_player_log_event` which updates `PlayerState` and emits `player-event` to the frontend. On login, `lookup_account` opens a read-only SQLite connection to `Account.db` and queries the `Account`, `Player`, `Guild`, `GuildMember`, and `Avatar` tables to populate the full `PlayerSession`. On server stop, `clear_player_state` empties `PlayerState` and emits a `player-event` with `kind: "clear"`. `stop_server` writes `!server shutdown\n` to stdin and falls back to a hard kill after 10 seconds. Apache is managed independently via `start_apache`/`stop_apache`. `DbPath.set_from_server_exe` derives `<server_exe_dir>/Data/Account.db` and is called both when `set_server_exe` is invoked from config and when `start_server` is called.
+**`server.rs`** - Server lifecycle management and player session tracking. `start_server` spawns MHServerEmu with piped stdin/stdout/stderr and assigns it to a Windows Job Object (`JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`). Five background threads are spawned per server start: stdout reader, stderr reader, a batcher that collects log lines and emits them to the frontend in batches (up to 50 lines per 50ms flush interval), and a watcher thread that polls `try_wait()` every 150ms to detect process exit. The stdout reader additionally calls `parse_player_log_event` on every line; matches trigger `handle_player_log_event` which updates `PlayerState` and emits `player-event` to the frontend. On login, `lookup_account` opens a read-only SQLite connection to `Account.db` and queries the `Account`, `Player`, `Guild`, `GuildMember`, and `Avatar` tables to populate the full `PlayerSession`. On server stop, `clear_player_state` empties `PlayerState` and emits a `player-event` with `kind: "clear"`. `stop_server` writes `!server shutdown\n` to stdin and falls back to a hard kill after 10 seconds. Apache is managed independently via `start_apache`/`stop_apache`. `DbPath.set_from_server_exe` derives `<server_exe_dir>/Data/Account.db` and is called both when `set_server_exe` is invoked from config and when `start_server` is called.
 
-**`events.rs`** — File I/O for `Events.json` / `EventsOverride.json` and `EventSchedule.json` / `EventScheduleOverride.json` in `Data/Game/LiveTuning/`. Both file pairs follow the same override pattern: the override file takes precedence if it exists, otherwise the default file is read. `Events.json` is a JSON object keyed by event ID; `EventSchedule.json` is a JSON array. Read functions deserialise into `EventDefinition` and `ScheduleRule` structs respectively. Write functions always target the override file. `reset_*_override` copies the default file over the override; `merge_*_override` adds any entries present in the default but missing from the override (by ID for events, by name for rules), without overwriting existing override entries.
+**`events.rs`** - File I/O for `Events.json` / `EventsOverride.json` and `EventSchedule.json` / `EventScheduleOverride.json` in `Data/Game/LiveTuning/`. Both file pairs follow the same override pattern: the override file takes precedence if it exists, otherwise the default file is read. `Events.json` is a JSON object keyed by event ID; `EventSchedule.json` is a JSON array. Read functions deserialise into `EventDefinition` and `ScheduleRule` structs respectively. Write functions always target the override file. `reset_*_override` copies the default file over the override; `merge_*_override` adds any entries present in the default but missing from the override (by ID for events, by name for rules), without overwriting existing override entries.
 
-**`launcher.rs`** — Spawns the game client as a detached process with command-line arguments derived from the active server profile and launch options. Credentials are decrypted from the config at launch time. `game_is_running` uses `sysinfo` to check for a `MarvelHeroesOmega.exe` process.
+**`launcher.rs`** - Spawns the game client as a detached process with command-line arguments derived from the active server profile and launch options. Credentials are decrypted from the config at launch time. For local servers, the siteconfigurl host is derived at launch time from WebFrontend.Port in Config.ini via ini::read_merged_value. For remote servers, normalize_host strips any scheme and path from the stored host before building the URL; use_https determines the scheme. game_is_running uses sysinfo to check for a MarvelHeroesOmega.exe process.
 
-**`ini.rs`** — Reads `Config.ini` (defaults) and `ConfigOverride.ini` (overrides), merges them, and returns the merged values plus a set of which keys are overridden. Writes use diff-only logic: values matching the default are removed from the override file; only differing values are written.
+**`ini.rs`** - Reads `Config.ini` (defaults) and `ConfigOverride.ini` (overrides), merges them, and returns the merged values plus a set of which keys are overridden. Writes use diff-only logic: values matching the default are removed from the override file; only differing values are written. Also exposes `read_merged_value` (non-command pub fn) for reading a single merged key by section, used by `launcher.rs` at launch time.
 
-**`tuning.rs`** — File I/O for `LiveTuningData*.json` files in `Data/Game/LiveTuning`. The enable/disable toggle works by renaming files with an `OFF_` prefix. JSON is read/written using PascalCase field names (`Prototype`, `Setting`, `Value`) to match MHServerEmu's expected format. Handles UTF-8 BOM stripping.
+**`tuning.rs`** - File I/O for `LiveTuningData*.json` files in `Data/Game/LiveTuning`. The enable/disable toggle works by renaming files with an `OFF_` prefix. JSON is read/written using PascalCase field names (`Prototype`, `Setting`, `Value`) to match MHServerEmu's expected format. Handles UTF-8 BOM stripping.
 
-**`patches.rs`** — File I/O for `PatchData*.json` files in `Data/Game/Patches`. Enable/disable works by moving files between `Patches/` and `Patches/Off/`. Patch entries use `serde_json::Value` for the `Value` field to support arbitrary JSON value types.
+**`patches.rs`** - File I/O for `PatchData*.json` files in `Data/Game/Patches`. Enable/disable works by moving files between `Patches/` and `Patches/Off/`. Patch entries use `serde_json::Value` for the `Value` field to support arbitrary JSON value types.
 
-**`store.rs`** — Catalog entry management for `Catalog*.json` in `Data/Game/MTXStore`. Uses a base/MODIFIED file separation: base files are read-only from MH Multiverse's perspective, and all edits go to `*MODIFIED.json` sidecar files. MODIFIED entries override base entries with the same `SkuId`. The module handles u64 precision by using a dual type system: `CatalogEntryDisk` (raw u64 for on-disk JSON) and `CatalogEntry` (String for the JS boundary). Display name resolution chains through: custom override file → embedded `display_names.json` → prototype path → raw ID. Also generates HTML/CSS bundle pages for in-game store display.
+**`store.rs`** - Catalog entry management for `Catalog*.json` in `Data/Game/MTXStore`. Uses a base/MODIFIED file separation: base files are read-only from MH Multiverse's perspective, and all edits go to `*MODIFIED.json` sidecar files. MODIFIED entries override base entries with the same `SkuId`. The module handles u64 precision by using a dual type system: `CatalogEntryDisk` (raw u64 for on-disk JSON) and `CatalogEntry` (String for the JS boundary). Display name resolution chains through: custom override file → embedded `display_names.json` → prototype path → raw ID. Also generates HTML/CSS bundle pages for in-game store display.
 
-**`calligraphy.rs`** — Reads MHServerEmu's `Calligraphy.sip` pak file (LZ4-compressed entries with a `KAPG` signature). Parses the `Blueprint.directory` and `Prototype.directory` files within the pak to build a `PrototypeCatalogue` with indices by runtime ID, path, and GUID. The catalogue is cached per sip file path and rebuilt automatically if the server executable changes. Prototype search supports multi-prefix category filtering and case-insensitive matching against both path and display name.
+**`calligraphy.rs`** - Reads MHServerEmu's `Calligraphy.sip` pak file (LZ4-compressed entries with a `KAPG` signature). Parses the `Blueprint.directory` and `Prototype.directory` files within the pak to build a `PrototypeCatalogue` with indices by runtime ID, path, and GUID. The catalogue is cached per sip file path and rebuilt automatically if the server executable changes. Prototype search supports multi-prefix category filtering and case-insensitive matching against both path and display name.
 
-**`updater.rs`** — Downloads nightly builds from `nightly.link/Crypto137/MHServerEmu/...`, extracts them, and overlays onto the server directory. The update flow: check availability (HTTP range probe) → backup selected targets → download with progress events → extract to staging dir → detect wrapper directory → copy to server dir → restore backed-up user files. Backups are stored in `{server_dir}/Backups/{timestamp}/` with a `manifest.json`. `Calligraphy.sip` and `mu_cdata.sip` are blacklisted from backups.
+**`updater.rs`** - Downloads nightly builds from `nightly.link/Crypto137/MHServerEmu/...`, extracts them, and overlays onto the server directory. The update flow: check availability (HTTP range probe) → backup selected targets → download with progress events → extract to staging dir → detect wrapper directory → copy to server dir → restore backed-up user files. Backups are stored in `{server_dir}/Backups/{timestamp}/` with a `manifest.json`. `Calligraphy.sip` and `mu_cdata.sip` are blacklisted from backups.
 
 ### Window Close Hook
 
@@ -217,7 +217,7 @@ Five state objects are registered via `.manage()` in `lib.rs`:
 
 | Command | Parameters | Returns | Description |
 |---|---|---|---|
-| `get_config` | — | `AppConfig` | Load config from `multiverse.json` |
+| `get_config` | - | `AppConfig` | Load config from `multiverse.json` |
 | `cmd_save_config` | `config: AppConfig` | `()` | Write full config to disk |
 | `upsert_server` | `server: Server, password: String` | `AppConfig` | Add/update server, encrypts password |
 | `delete_server` | `server_id: String` | `AppConfig` | Remove server by ID |
@@ -237,21 +237,21 @@ Five state objects are registered via `.manage()` in `lib.rs`:
 
 | Command | Parameters | Returns | Description |
 |---|---|---|---|
-| `launch_game` | `server_id: String` | `()` | Spawn game client with server args and launch options |
-| `game_is_running` | — | `bool` | Poll sysinfo for `MarvelHeroesOmega.exe` |
+| `launch_game` | `server_id: String` | `()` | Spawn game client with server args and launch options. siteconfigurl derived from Config.ini for local servers, normalize_host + use_https for remote |
+| `game_is_running` | - | `bool` | Poll sysinfo for `MarvelHeroesOmega.exe` |
 
 ### Server (`server.rs`)
 
 | Command | Parameters | Returns | Description |
 |---|---|---|---|
 | `start_server` | `server_exe: String` | `()` | Spawn MHServerEmu with log streaming and player tracking |
-| `stop_server` | — | `()` | Graceful shutdown via stdin, 10s hard-kill fallback |
+| `stop_server` | - | `()` | Graceful shutdown via stdin, 10s hard-kill fallback |
 | `start_apache` | `server_exe: String` | `()` | Spawn Apache (derived path from server_exe) |
-| `stop_apache` | — | `()` | Kill Apache process |
+| `stop_apache` | - | `()` | Kill Apache process |
 | `send_command` | `cmd: String` | `()` | Write to MHServerEmu stdin |
-| `server_is_running` | — | `bool` | Check MHServerEmu child process via try_wait |
-| `apache_is_running` | — | `bool` | Check Apache child process via try_wait |
-| `get_players` | — | `Vec<PlayerSession>` | Return current online players sorted alphabetically |
+| `server_is_running` | - | `bool` | Check MHServerEmu child process via try_wait |
+| `apache_is_running` | - | `bool` | Check Apache child process via try_wait |
+| `get_players` | - | `Vec<PlayerSession>` | Return current online players sorted alphabetically |
 
 ### Events (`events.rs`)
 
@@ -321,7 +321,7 @@ Five state objects are registered via `.manage()` in `lib.rs`:
 
 | Command | Parameters | Returns | Description |
 |---|---|---|---|
-| `check_update_available` | — | `UpdateInfo` | Probe nightly build URL availability |
+| `check_update_available` | - | `UpdateInfo` | Probe nightly build URL availability |
 | `run_update` | `server_exe: String, backup_targets: Vec<String>` | `()` | Full update flow: backup → download → extract → install → restore |
 | `create_backup` | `server_exe: String, targets: Vec<String>, label: String` | `BackupManifest` | Create a named backup |
 | `list_backups` | `server_exe: String` | `Vec<BackupManifest>` | List backups (newest first) |
@@ -409,7 +409,7 @@ Frontend store ──invoke──→ Rust command ──→ load multiverse.json
 
 Every config mutation loads from disk, modifies, and writes back. There is no in-memory cache on the Rust side. This is simple and correct but means rapid successive mutations each do a full read-write cycle. The frontend's optimistic store update keeps the UI responsive regardless.
 
-Passwords follow a separate path: the frontend sends plaintext to `upsert_server`, which encrypts via AES-256-GCM before storing. The `Server` type sent to the frontend omits `password_enc` and `password_nonce` (they are `#[serde(default)]` fields not populated in the response). Passwords are only decrypted at game launch time in `launcher.rs`.
+Passwords follow a separate path: the frontend sends plaintext to `upsert_server`, which encrypts via AES-256-GCM before storing. The `Server` type sent to the frontend omits `password_enc` and `password_nonce` (they are `#[serde(default)]` fields not populated in the response). Passwords are only decrypted at game launch time in `launcher.rs`. The is_local and use_https fields are included in the serialised Server record. For local servers, host is stored as an empty string; the actual siteconfigurl and dashboard URL are computed at use time from Config.ini.
 
 ### Server Lifecycle
 
@@ -435,7 +435,7 @@ stop_server
 
 Window close
   → prevent default close
-  → kill_child() — kills both MHServerEmu and Apache
+  → kill_child() - kills both MHServerEmu and Apache
   → save window state
   → exit(0)
 ```
@@ -537,7 +537,7 @@ CatalogBundle.json           ← base file (read-only from MH Multiverse)
 CatalogBundleMODIFIED.json   ← sidecar with user edits
 ```
 
-On load, entries from both files are merged by `SkuId` — MODIFIED entries override base entries. On save, the entry is upserted into the MODIFIED file. On delete, the entry is removed from whichever file contains it (base or MODIFIED). A `.bak` snapshot of the target file is written before every mutation.
+On load, entries from both files are merged by `SkuId` - MODIFIED entries override base entries. On save, the entry is upserted into the MODIFIED file. On delete, the entry is removed from whichever file contains it (base or MODIFIED). A `.bak` snapshot of the target file is written before every mutation.
 
 ### Calligraphy.sip Reading
 
@@ -619,7 +619,16 @@ The Windows Job Object is created with `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`. Sin
 
 ### Config Read-Write-on-Every-Mutation
 
-Each Rust config command loads `multiverse.json` from disk, mutates, and writes back. There is no in-process config singleton. This avoids stale-state bugs at the cost of extra I/O — acceptable given the low mutation frequency and small file size.
+Each Rust config command loads `multiverse.json` from disk, mutates, and writes back. There is no in-process config singleton. This avoids stale-state bugs at the cost of extra I/O - acceptable given the low mutation frequency and small file size.
+
+### Server Host Normalisation
+
+The Server record stores a raw host string (hostname, IP, or hostname:port) for remote servers and an empty string for local ones. Two derived values are computed at use time rather than stored:
+
+- **Siteconfigurl** (`launcher.rs`): for local servers, reads WebFrontend.Port from Config.ini via ini::read_merged_value and builds http://localhost:{port}/SiteConfig.xml. For remote servers, normalize_host strips any scheme and path suffix from the stored host, and use_https determines the scheme.
+- **Dashboard URL** (`LaunchPanel.svelte`): for local servers, reads WebFrontend.Port and DashboardUrlPath from Config.ini on mount. For remote servers, normalizeHost (TS mirror of the Rust helper) and use_https build the URL; a separate Home button opens the server root without a path.
+
+This avoids storing derived URLs that would silently go stale if Config.ini is edited, and prevents the class of bugs where user-entered schemes or path suffixes corrupt the siteconfigurl.
 
 ---
 

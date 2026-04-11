@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { tick } from 'svelte'
   import { upsertServer, type Server } from '../lib/store'
 
   export let server: Server | null = null
@@ -10,6 +11,8 @@
   let password = ''
   let saving = false
   let error = ''
+  let isLocal  = server?.is_local  ?? true
+  let useHttps = server?.use_https ?? false
 
   const isEdit = server !== null
 
@@ -20,7 +23,7 @@
     password = password.trim()
 
     if (!name) { error = 'Name is required.'; return }
-    if (!host) { error = 'Host is required.'; return }
+    if (!isLocal && !host) { error = 'Host is required for non-local servers.'; return }
     if (!isEdit && !password) { error = 'Password is required for a new server.'; return }
 
     saving = true
@@ -30,8 +33,10 @@
       const entry: Server = {
         id: server?.id ?? crypto.randomUUID(),
         name,
-        host,
+        host: isLocal ? '' : host,
         email,
+        is_local: isLocal,
+        use_https: useHttps,
       }
       await upsertServer(entry, password)
       onClose()
@@ -45,9 +50,48 @@
   function onKeydown(e: KeyboardEvent) {
     if (e.key === 'Escape') onClose()
   }
+
+  // -- Tooltip --
+
+  let tooltip = ''
+  let tooltipX = 0
+  let tooltipY = 0
+  let tooltipVisible = false
+  let tooltipEl: HTMLDivElement | null = null
+
+  const TOOLTIP_OFFSET = 12
+  const VIEWPORT_PAD = 10
+
+  async function showTooltip(e: MouseEvent, text: string) {
+    tooltip = text
+    tooltipVisible = true
+    await tick()
+    if (!tooltipEl) return
+    const rect = tooltipEl.getBoundingClientRect()
+    const vw = window.innerWidth
+    const vh = window.innerHeight
+    let x = e.clientX + TOOLTIP_OFFSET
+    let y = e.clientY - 8
+    if (x + rect.width + VIEWPORT_PAD > vw) x = e.clientX - rect.width - TOOLTIP_OFFSET
+    x = Math.max(VIEWPORT_PAD, Math.min(x, vw - rect.width - VIEWPORT_PAD))
+    if (y < VIEWPORT_PAD) y = e.clientY + TOOLTIP_OFFSET
+    y = Math.max(VIEWPORT_PAD, Math.min(y, vh - rect.height - VIEWPORT_PAD))
+    tooltipX = x
+    tooltipY = y
+  }
+
+  function hideTooltip() {
+    tooltipVisible = false
+  }
 </script>
 
 <svelte:window on:keydown={onKeydown} />
+
+{#if tooltipVisible}
+  <div bind:this={tooltipEl} class="tooltip" style="left:{tooltipX}px; top:{tooltipY}px">
+    {tooltip}
+  </div>
+{/if}
 
 <div class="modal-backdrop" role="dialog" aria-modal="true">
   <div class="modal">
@@ -72,20 +116,54 @@
 
     <form on:submit|preventDefault={save}>
       <div class="modal-body">
-        <div class="form-row">
-          <div class="form-group">
-            <label class="field-label" for="modal-name">Name</label>
-            <input id="modal-name" type="text" bind:value={name} placeholder="Local Server">
-          </div>
-          <div class="form-group">
-            <label class="field-label" for="modal-host">Host / IP</label>
-            <input id="modal-host" type="text" bind:value={host} placeholder="localhost:8080">
-          </div>
+
+        <div class="form-group">
+          <label class="field-label" for="modal-name">Name</label>
+          <input id="modal-name" type="text" bind:value={name} placeholder="Local Server">
         </div>
+
+        <label class="check-row">
+          <input type="checkbox" bind:checked={isLocal}>
+          <span class="check-label">Local</span>
+          <button
+            class="info-btn"
+            type="button"
+            on:mouseenter={(e) => showTooltip(e, 'Server runs on this machine - port and dashboard path are read from MHServerEmu Config.')}
+            on:mouseleave={hideTooltip}
+            tabindex="-1"
+          >?</button>
+        </label>
+
+        {#if !isLocal}
+          <div class="form-group">
+            <div class="label-row">
+              <label class="field-label" for="modal-host">Host / IP</label>
+              <button
+                class="info-btn"
+                type="button"
+                on:mouseenter={(e) => showTooltip(e, 'Hostname or IP address only - no http:// prefix or path suffix required. Include a port as hostname:port if not on standard 80/443.')}
+                on:mouseleave={hideTooltip}
+                tabindex="-1"
+              >?</button>
+            </div>
+            <input id="modal-host" type="text" bind:value={host} placeholder="e.g. 192.168.xxx, mhphoenix.net, &lt;hostname&gt;:&lt;port&gt;">
+          </div>
+          <label class="check-row">
+            <input type="checkbox" bind:checked={useHttps}>
+            <span class="check-label">Use HTTPS</span>
+            <button
+              class="info-btn"
+              type="button"
+              on:mouseenter={(e) => showTooltip(e, 'Use HTTPS for the dashboard URL and SiteConfig requests. Requires SSL to be configured on the remote server.')}
+              on:mouseleave={hideTooltip}
+              tabindex="-1"
+            >?</button>
+          </label>
+        {/if}
 
         <div class="form-group">
           <label class="field-label" for="modal-email">Email</label>
-          <input id="modal-email" type="text" bind:value={email} placeholder="player1@localhost">
+          <input id="modal-email" type="text" bind:value={email} placeholder="player1@local.host">
         </div>
 
         <div class="form-group">
@@ -186,16 +264,19 @@
     gap: 12px;
   }
 
-  .form-row {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 12px;
-  }
-
   .form-group {
     display: flex;
     flex-direction: column;
     gap: 5px;
+  }
+
+  .label-row {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+  }
+  .label-row .field-label {
+    margin-bottom: 0;
   }
 
   .hint {
@@ -222,5 +303,65 @@
     display: flex;
     justify-content: flex-end;
     gap: 8px;
+  }
+
+  /* -- Checkbox rows -- */
+  .check-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    user-select: none;
+  }
+  .check-row input[type="checkbox"] {
+    width: 12px;
+    height: 12px;
+    cursor: pointer;
+    accent-color: var(--accent);
+    flex-shrink: 0;
+  }
+  .check-label {
+    font-family: var(--font-head);
+    font-size: 9px;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--text-1);
+  }
+
+  /* -- Info button -- */
+  .info-btn {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    border: 1px solid var(--border-lit);
+    background: var(--bg-3);
+    color: var(--text-3);
+    font-size: 9px;
+    cursor: help;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    transition: all 0.12s;
+    padding: 0;
+  }
+  .info-btn:hover { border-color: var(--accent-dim); color: var(--accent-bright); }
+
+  /* -- Tooltip -- */
+  .tooltip {
+    position: fixed;
+    z-index: calc(var(--z-modal) + 1);
+    background: var(--bg-3);
+    border: 1px solid var(--border-lit);
+    border-radius: var(--radius-sm);
+    color: var(--text-1);
+    font-size: 12px;
+    font-family: var(--font-body);
+    padding: 6px 10px;
+    max-width: 280px;
+    line-height: 1.5;
+    pointer-events: none;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
   }
 </style>

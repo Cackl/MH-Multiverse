@@ -108,6 +108,10 @@ pub struct Server {
     pub host: String,
     pub email: String,
     #[serde(default)]
+    pub is_local: bool,
+    #[serde(default)]
+    pub use_https: bool,
+    #[serde(default)]
     pub password_enc: String,
     #[serde(default)]
     pub password_nonce: String,

@@ -81,6 +81,33 @@ fn override_ini_path(server_exe: &str) -> Option<PathBuf> {
 
 // ── Public commands ───────────────────────────────────────────────────────────
 
+/// Read a single merged value (ConfigOverride wins over Config) for use by
+/// other Rust modules. Returns `default` if the server directory cannot be
+/// resolved, Config.ini cannot be read, or the key is absent.
+pub fn read_merged_value(server_exe: &str, section: &str, key: &str, default: &str) -> String {
+    let Some(config_path)   = config_ini_path(server_exe)   else { return default.to_string() };
+    let Some(override_path) = override_ini_path(server_exe) else { return default.to_string() };
+
+    let base = std::fs::read_to_string(&config_path)
+        .map(|c| parse_ini(&c))
+        .unwrap_or_default();
+
+    let overrides = if override_path.exists() {
+        std::fs::read_to_string(&override_path)
+            .map(|c| parse_ini(&c))
+            .unwrap_or_default()
+    } else {
+        HashMap::new()
+    };
+
+    // Override wins
+    overrides
+        .get(section).and_then(|s| s.get(key))
+        .or_else(|| base.get(section).and_then(|s| s.get(key)))
+        .map(|v| v.clone())
+        .unwrap_or_else(|| default.to_string())
+}
+
 #[tauri::command]
 pub fn read_config(server_exe: String) -> Result<ConfigState, String> {
     let config_path = config_ini_path(&server_exe)

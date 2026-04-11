@@ -120,6 +120,8 @@ export interface Server {
   name: string
   host: string
   email: string
+  is_local?: boolean
+  use_https?: boolean
 }
 
 export interface AppConfig {
