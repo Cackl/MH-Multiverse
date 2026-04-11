@@ -130,6 +130,14 @@
     }
     await openUrl(url)
   }
+
+  async function openHome() {
+    if (!activeServer) return
+    const scheme = activeServer.use_https ? 'https' : 'http'
+    const host = normalizeHost(activeServer.host)
+    await openUrl(`${scheme}://${host}/`)
+  }
+
 </script>
 
 {#if showModal}
@@ -231,7 +239,10 @@
         {#if launchError}
           <div class="launch-error">{launchError}</div>
         {/if}
-        <button class="btn btn-dashboard" on:click={openDashboard}>Dashboard</button>
+        {#if !activeServer.is_local && !isLocalhost(activeServer.host)}
+          <button class="btn btn-secondary" on:click={openHome}>Home</button>
+        {/if}
+        <button class="btn btn-secondary" on:click={openDashboard}>Dashboard</button>
         <button
           class="btn btn-launch"
           disabled={!$appConfig.game_exe || !activeServer || launching || $gameRunning}
@@ -421,7 +432,7 @@
     gap: 12px;
   }
 
-  .btn-dashboard {
+  .btn-secondary {
     padding: 10px 20px;
     border-color: var(--border-lit);
     color: var(--text-1);
@@ -435,7 +446,7 @@
     cursor: pointer;
     transition: all 0.14s;
   }
-  .btn-dashboard:hover {
+  .btn-secondary:hover {
     border-color: var(--text-2);
     color: var(--text-0);
     background: var(--bg-3);
