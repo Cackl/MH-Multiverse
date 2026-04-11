@@ -46,8 +46,17 @@ pub fn launch_game(app: tauri::AppHandle, server_id: String) -> Result<(), Strin
 
     let opts = &config.launch_options;
 
+    let siteconfig_url = if server.is_local {
+        let port = ini::read_merged_value(&config.server_exe, "WebFrontend", "Port", "8080");
+        format!("http://localhost:{port}/SiteConfig.xml")
+    } else {
+        let scheme = if server.use_https { "https" } else { "http" };
+        let host = normalize_host(&server.host);
+        format!("{scheme}://{host}/SiteConfig.xml")
+    };
+
     let mut args: Vec<String> = vec![
-        format!("-siteconfigurl=http://{}/SiteConfig.xml", server.host),
+        format!("-siteconfigurl={siteconfig_url}"),
     ];
 
     if opts.no_steam    { args.push("-nosteam".into()); }
