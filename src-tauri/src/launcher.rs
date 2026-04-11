@@ -1,5 +1,6 @@
 use std::process::Command;
 use crate::config::{load_config, decrypt_password};
+use crate::ini;
 use sysinfo::System;
 
 #[tauri::command]
@@ -10,6 +11,19 @@ pub fn game_is_running() -> bool {
         .next()
         .is_some();
     running
+}
+
+/// Strips any scheme ("http://", "https://") and any path suffix ("/foo/bar")
+/// from a raw host string, leaving only "host" or "host:port".
+fn normalize_host(raw: &str) -> String {
+    let without_scheme = match raw.find("://") {
+        Some(pos) => &raw[pos + 3..],
+        None => raw,
+    };
+    match without_scheme.find('/') {
+        Some(pos) => without_scheme[..pos].trim().to_string(),
+        None => without_scheme.trim().to_string(),
+    }
 }
 
 #[tauri::command]
@@ -56,7 +70,7 @@ pub fn launch_game(app: tauri::AppHandle, server_id: String) -> Result<(), Strin
 
     Command::new(&exe)
         .args(&args)
-        // Detach — we don't own the game process
+        // Detach - MH Multiverse doesn't own the game process
         .spawn()
         .map_err(|e| format!("Failed to launch game: {e}"))?;
 

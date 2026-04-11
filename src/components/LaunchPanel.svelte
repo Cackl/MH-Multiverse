@@ -19,6 +19,9 @@
   let launching = false
   let pollTimer: ReturnType<typeof setInterval> | null = null
 
+  let dashboardPort = 8080
+  let dashboardPath = `/Dashboard/`
+
   // -- Inline delete confirmation --
 
   let pendingDeleteId: string | null = null
@@ -53,6 +56,8 @@
         const raw = state.values['WebFrontend']?.['Port']
         const parsed = raw ? parseInt(raw, 10) : NaN
         if (!isNaN(parsed) && parsed > 0) dashboardPort = parsed
+        const rawPath = state.values['WebFrontend']?.['DashboardUrlPath']
+        if (rawPath?.trim()) dashboardPath = rawPath.trim()
       } catch {}
     }
   })
@@ -67,6 +72,16 @@
       const running = await invoke<boolean>('game_is_running')
       gameRunning.set(running)
     } catch {}
+  }
+
+  function normalizeHost(raw: string): string {
+    const withoutScheme = raw.includes('://')
+      ? raw.slice(raw.indexOf('://') + 3)
+      : raw
+    const slashPos = withoutScheme.indexOf('/')
+    return slashPos === -1
+      ? withoutScheme.trim()
+      : withoutScheme.slice(0, slashPos).trim()
   }
 
   function openAdd() {
@@ -97,8 +112,6 @@
     }
   }
 
-  let dashboardPort = 8080
-
   function isLocalhost(host: string): boolean {
     const h = host.split(':')[0]
     return h === 'localhost' || h === '127.0.0.1'
@@ -107,11 +120,13 @@
   async function openDashboard() {
     if (!activeServer) return
     let url: string
-    if (isLocalhost(activeServer.host)) {
-      url = `http://localhost:${dashboardPort}/Dashboard/`
+    if (activeServer.is_local || isLocalhost(activeServer.host)) {
+      // isLocalhost kept as legacy fallback for pre-migration records
+      url = `http://localhost:${dashboardPort}${dashboardPath}`
     } else {
-      const host = activeServer.host.includes('://') ? activeServer.host : `http://${activeServer.host}`
-      url = `${host}/`
+      const scheme = activeServer.use_https ? 'https' : 'http'
+      const host   = normalizeHost(activeServer.host)
+      url = `${scheme}://${host}/Dashboard/`
     }
     await openUrl(url)
   }
@@ -149,7 +164,9 @@
             on:keydown={(e) => e.key === 'Enter' && selectServer(server.id)}
           >
             <div class="server-card-name">{server.name}</div>
-            <div class="server-card-url">{server.host}</div>
+            <div class="server-card-url">
+              {server.is_local ? 'Local Server' : server.host}
+            </div>
           </div>
         {/each}
 
@@ -174,7 +191,7 @@
           </div>
           <div class="detail-hero-text">
             <h2>{activeServer.name}</h2>
-            <p>{activeServer.host}</p>
+            <p>{activeServer.is_local ? 'Local Server' : activeServer.host}</p>
           </div>
           <div class="detail-hero-actions">
             <button class="btn btn-sm btn-outline" on:click={() => openEdit(activeServer)}>Edit</button>
