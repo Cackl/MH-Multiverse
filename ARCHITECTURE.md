@@ -1,5 +1,5 @@
 # MH Multiverse — Architecture
-v1.2.1
+
 ## Tech Stack
 
 | Layer | Technology |
@@ -193,7 +193,7 @@ Five state objects are registered via `.manage()` in `lib.rs`:
 
 **`launcher.rs`** - Spawns the game client as a detached process with command-line arguments derived from the active server profile and launch options. Credentials are decrypted from the config at launch time. For local servers, the siteconfigurl host is derived at launch time from WebFrontend.Port in Config.ini via ini::read_merged_value. For remote servers, normalize_host strips any scheme and path from the stored host before building the URL; use_https determines the scheme. game_is_running uses sysinfo to check for a MarvelHeroesOmega.exe process.
 
-**`ini.rs`** - Reads `Config.ini` (defaults) and `ConfigOverride.ini` (overrides), merges them, and returns the merged values plus a set of which keys are overridden. Writes use diff-only logic: values matching the default are removed from the override file; only differing values are written. Also exposes `read_merged_value` (non-command pub fn) for reading a single merged key by section, used by `launcher.rs` at launch time.
+**`ini.rs`** - Reads `Config.ini` (defaults) and `ConfigOverride.ini` (overrides), merges them, and returns the merged values plus a set of which keys are overridden. Writes use diff-only logic: values matching the default are removed from the override file; only differing values are written. Also exposes `read_merged_value` (non-command pub fn) for reading a single merged key by section.
 
 **`tuning.rs`** - File I/O for `LiveTuningData*.json` files in `Data/Game/LiveTuning`. The enable/disable toggle works by renaming files with an `OFF_` prefix. JSON is read/written using PascalCase field names (`Prototype`, `Setting`, `Value`) to match MHServerEmu's expected format. Handles UTF-8 BOM stripping.
 
@@ -237,7 +237,7 @@ Five state objects are registered via `.manage()` in `lib.rs`:
 
 | Command | Parameters | Returns | Description |
 |---|---|---|---|
-| `launch_game` | `server_id: String` | `()` | Spawn game client with server args and launch options. siteconfigurl derived from Config.ini for local servers, normalize_host + use_https for remote |
+| `launch_game` | `server_id: String` | `()` | Spawn game client with server args and launch options. siteconfigurl uses /Dashboard/SiteConfig.xml for patched local clients, /SiteConfig.xml for unpatched, normalize_host + use_https for remote |
 | `game_is_running` | - | `bool` | Poll sysinfo for `MarvelHeroesOmega.exe` |
 
 ### Server (`server.rs`)
@@ -664,7 +664,7 @@ This avoids storing derived URLs that would silently go stale if Config.ini is e
 │   │   │   │   └── Off/          ← PatchData*.json files (disabled)
 │   │   │   └── MTXStore/         ← Catalog*.json + *MODIFIED.json files
 │   │   └── Web/
-│   │       └── Bundles/          ← Generated HTML/CSS (default output)
+│   │       └── MH-Multiverse-Bundles/          ← Generated HTML/CSS (default output)
 │   ├── Backups/                  ← Created by MH Multiverse's backup system
 │   │   └── {timestamp}/
 │   │       ├── manifest.json

@@ -116,7 +116,6 @@
   }
 
   onMount(async () => {
-    onMount(async () => {
     if ($appConfig.server_exe) {
       try {
         const state = await invoke<{ values: Record<string, Record<string, string>> }>('read_config', { serverExe: $appConfig.server_exe })
@@ -127,7 +126,6 @@
         if (rawPath?.trim()) dashboardPath = rawPath.trim()
       } catch {}
     }
-  })
   })
 
   async function startServer() {

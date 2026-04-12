@@ -46,7 +46,7 @@
     { id: 'phoenix',       label: 'Phoenix',         accent: '#d96a1d' },
     { id: 'tahiti',        label: 'Tahiti',          accent: '#b31618' },
     { id: 'grey',          label: 'Grey',            accent: '#8f8f8f' },
-    { id: 'blue-grey',     label: 'HC Blue',            accent: '#4a5a7a' }
+    { id: 'blue-grey',     label: 'HC Blue',         accent: '#4a5a7a' }
   ]
 </script>
 
@@ -120,6 +120,22 @@
                 tabindex="0"
                 on:click={() => updateOpt('auto_login', !$appConfig.launch_options.auto_login)}
                 on:keydown={(e) => e.key === 'Enter' && updateOpt('auto_login', !$appConfig.launch_options.auto_login)}
+              ></div>
+            </div>
+
+            <div class="opt-row">
+              <div class="opt-label">
+                <span class="opt-name">Patched Client</span>
+                <span class="opt-desc">Enable if using Crypto137's port 8080 client patch. Changes the SiteConfig URL path for local servers</span>
+              </div>
+              <div
+                class="toggle-switch"
+                class:on={$appConfig.launch_options.patched_client}
+                role="switch"
+                aria-checked={$appConfig.launch_options.patched_client}
+                tabindex="0"
+                on:click={() => updateOpt('patched_client', !$appConfig.launch_options.patched_client)}
+                on:keydown={(e) => e.key === 'Enter' && updateOpt('patched_client', !$appConfig.launch_options.patched_client)}
               ></div>
             </div>
 

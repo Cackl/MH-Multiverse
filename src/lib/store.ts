@@ -98,6 +98,7 @@ export function clearServerError() {
 
 export interface LaunchOptions {
   auto_login: boolean
+  patched_client: boolean
   skip_startup_movies: boolean
   skip_motion_comics: boolean
   no_sound: boolean
@@ -141,6 +142,7 @@ export interface AppConfig {
 
 const defaultLaunchOptions: LaunchOptions = {
   auto_login: true,
+  patched_client: false,
   skip_startup_movies: false,
   skip_motion_comics: false,
   no_sound: false,
