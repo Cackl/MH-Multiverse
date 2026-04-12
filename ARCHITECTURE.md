@@ -1,5 +1,5 @@
 # MH Multiverse — Architecture
-v1.2.1
+
 ## Tech Stack
 
 | Layer | Technology |

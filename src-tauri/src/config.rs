@@ -65,6 +65,8 @@ pub struct LaunchOptions {
     #[serde(default = "default_true")]
     pub auto_login: bool,
     #[serde(default)]
+    pub patched_client: bool,
+    #[serde(default)]
     pub skip_startup_movies: bool,
     #[serde(default)]
     pub skip_motion_comics: bool,
@@ -88,6 +90,7 @@ impl Default for LaunchOptions {
     fn default() -> Self {
         Self {
             auto_login: true,
+            patched_client: false,
             skip_startup_movies: false,
             skip_motion_comics: false,
             no_sound: false,

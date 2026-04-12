@@ -1,6 +1,5 @@
 use std::process::Command;
 use crate::config::{load_config, decrypt_password};
-use crate::ini;
 use sysinfo::System;
 
 #[tauri::command]
@@ -47,8 +46,11 @@ pub fn launch_game(app: tauri::AppHandle, server_id: String) -> Result<(), Strin
     let opts = &config.launch_options;
 
     let siteconfig_url = if server.is_local {
-        let port = ini::read_merged_value(&config.server_exe, "WebFrontend", "Port", "8080");
-        format!("http://localhost:{port}/SiteConfig.xml")
+        if config.launch_options.patched_client {
+            "http://localhost/Dashboard/SiteConfig.xml".to_string()
+        } else {
+            "http://localhost/SiteConfig.xml".to_string()
+        }
     } else {
         let scheme = if server.use_https { "https" } else { "http" };
         let host = normalize_host(&server.host);
