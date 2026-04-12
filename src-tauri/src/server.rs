@@ -456,9 +456,9 @@ pub async fn start_server(
         return Err(format!("Server executable not found: {server_exe}"));
     }
 
-    // Pre-check: verify WebFrontend port is available before attempting to spawn.
-    // TcpListener::bind is used as a probe — if it fails the port is occupied.
-    // The listener is dropped immediately so MHServerEmu can bind it on spawn.
+    // Pre-check: verify the WebFrontend port is available before attempting to spawn.
+    // TcpStream::connect_timeout is used as a probe — a successful connection means
+    // something is already listening on the port and MHServerEmu will fail to bind it.
     {
         let port = ini::read_merged_value(&server_exe, "WebFrontend", "Port", "8080");
         let addr = format!("127.0.0.1:{port}");

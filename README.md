@@ -15,7 +15,7 @@ The app is currently Windows-only and communicates with the server via stdin/std
 ## Features
 
 ### Game Launching
-- Multi-server profile management with per-server credentials. Local server profiles derive the correct siteconfig from `Config.ini` for easy setups
+- Multi-server profile management with per-server credentials. Local server profiles support both patched and unpatched client configurations
 - Encrypted password storage via OS keychain (Windows Credential Manager)
 - Auto-login support - email and password passed as command-line arguments
 - Configurable launch flags: skip startup movies, skip motion comics, no sound, client logging, custom resolution, robocopy, no-Steam mode
