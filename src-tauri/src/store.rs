@@ -547,10 +547,10 @@ pub fn resolve_display_name(
 /// Generate the HTML page for a bundle catalog entry and write it to disk.
 ///
 /// Always writes a backup to:
-///   `{server_dir}/Data/Web/MH Multiverse Bundles/html/{title_slug}_{sku}_en_bundle.html`
+///   `{server_dir}/Data/Web/MH-Multiverse-Bundles/html/{title_slug}_{sku}_en_bundle.html`
 ///
 /// Also writes a backup CSS seed to:
-///   `{server_dir}/Data/Web/MH Multiverse Bundles/css/style.css`
+///   `{server_dir}/Data/Web/MH-Multiverse-Bundles/css/style.css`
 ///   (only if the file does not already exist, preserving manual edits)
 ///
 /// If `save_to_apache` is true, additionally writes the HTML to:
@@ -613,7 +613,7 @@ pub fn generate_bundle_html(
     let backup_root = server_dir_of(&server_exe)?
         .join("Data")
         .join("Web")
-        .join("MH Multiverse Bundles");
+        .join("MH-Multiverse-Bundles");
 
     let backup_html_dir = backup_root.join("html");
     let backup_css_dir  = backup_root.join("css");
@@ -786,7 +786,7 @@ static HTML_TEMPLATE: &str = r#"<!DOCTYPE html>
 /// Generate a 344×128 PNG thumbnail for a bundle store page and write it to disk.
 ///
 /// Always writes a backup to:
-///   `{server_dir}/Data/Web/MH Multiverse Bundles/images/{title_slug}_{sku}.png`
+///   `{server_dir}/Data/Web/MH-Multiverse-Bundles/images/{title_slug}_{sku}.png`
 ///
 /// If `save_to_apache` is true, additionally writes to:
 ///   `{server_dir}/../Apache24/htdocs/bundles/images/{title_slug}_{sku}.png`
@@ -816,7 +816,7 @@ pub fn save_thumbnail(
     let backup_dir = server_dir_of(&server_exe)?
         .join("Data")
         .join("Web")
-        .join("MH Multiverse Bundles")
+        .join("MH-Multiverse-Bundles")
         .join("images");
 
     fs::create_dir_all(&backup_dir)
