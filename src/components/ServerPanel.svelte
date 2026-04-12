@@ -8,6 +8,8 @@
     appConfig,
     serverLog,
     serverLogFilter,
+    logFilterThreshold,
+    LOG_LEVEL_SEVERITY,
     appendLog,
     clearLog,
     apacheRunning,
@@ -100,7 +102,14 @@
     try { await invoke('send_command', { cmd: '!server broadcast Server shutdown has been cancelled.' }) } catch {}
   }
 
-  $: filtered = $serverLogFilter === 'all' ? $serverLog : $serverLog.filter(l => l.level === $serverLogFilter)
+  $: filtered = (() => {
+    if ($serverLogFilter === 'all') return $serverLog
+    if ($logFilterThreshold) {
+      const minSev = LOG_LEVEL_SEVERITY[$serverLogFilter]
+      return $serverLog.filter(l => LOG_LEVEL_SEVERITY[l.level] >= minSev)
+    }
+    return $serverLog.filter(l => l.level === $serverLogFilter)
+  })()
   $: filtered, scrollToEnd()
   $: if (!scrollLocked) filtered.length, scrollToEnd()
 

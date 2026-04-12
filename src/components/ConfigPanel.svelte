@@ -2,7 +2,7 @@
   import { onMount, tick } from 'svelte'
   import { openPath } from '@tauri-apps/plugin-opener'
   import { invoke } from '@tauri-apps/api/core'
-  import { appConfig, setConsolePresets, serverRunning, setShutdownConfig, type ShutdownConfig } from '../lib/store'
+  import { appConfig, setConsolePresets, serverRunning, setShutdownConfig, logFilterThreshold, type ShutdownConfig } from '../lib/store'
   import { FALLBACK_COMMANDS } from '../lib/serverCommands'
   import PanelSidebar from './PanelSidebar.svelte'
 
@@ -760,6 +760,24 @@
             </div>
           </div>
 
+        <div class="config-field full">
+          <div class="toggle-row" style="margin-bottom: 8px;">
+              <div class="toggle-info">
+                <span class="config-field-label">Threshold Log Filter</span>
+                <span class="config-tooltip">When on, the log filter shows the selected level and all more severe levels. When off, only the exact selected level is shown.</span>
+              </div>
+              <div
+                class="toggle-switch"
+                class:on={$logFilterThreshold}
+                role="switch"
+                aria-checked={$logFilterThreshold}
+                tabindex="0"
+                on:click={() => logFilterThreshold.update(v => !v)}
+                on:keydown={(e) => e.key === 'Enter' && logFilterThreshold.update(v => !v)}
+              ></div>
+            </div>
+        </div>
+
         </div>
       </div>
 
@@ -1254,6 +1272,7 @@
   /* -- Preset add row -- */
   .preset-add-wrap {
     position: relative;
+    margin-bottom: 10px;
   }
 
   .preset-add-row {
