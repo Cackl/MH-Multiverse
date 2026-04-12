@@ -629,12 +629,14 @@ Each Rust config command loads `multiverse.json` from disk, mutates, and writes 
 
 ### Server Host Normalisation
 
-The Server record stores a raw host string (hostname, IP, or hostname:port) for remote servers and an empty string for local ones. Two derived values are computed at use time rather than stored:
+The Server record stores a raw host string (hostname, IP, or hostname:port) for remote servers and an empty string for local ones. The siteconfigurl passed to the game client is computed at launch time in launcher.rs rather than stored:
 
-- **Siteconfigurl** (`launcher.rs`): for local servers, reads WebFrontend.Port from Config.ini via ini::read_merged_value and builds http://localhost:{port}/SiteConfig.xml. For remote servers, normalize_host strips any scheme and path suffix from the stored host, and use_https determines the scheme.
-- **Dashboard URL** (`LaunchPanel.svelte`): for local servers, reads WebFrontend.Port and DashboardUrlPath from Config.ini on mount. For remote servers, normalizeHost (TS mirror of the Rust helper) and use_https build the URL; a separate Home button opens the server root without a path.
+- Local server, patched client (`is_local` && `patched_client`): `http://localhost/Dashboard/SiteConfig.xml`
+- Local server, unpatched client (`is_local` && `!patched_client`): `http://localhost/SiteConfig.xml`
+- Remote server: `normalize_host` strips any scheme and path suffix from the stored host string; `use_https` determines the scheme. Result: `{scheme}://{host}/SiteConfig.xml`
 
-This avoids storing derived URLs that would silently go stale if Config.ini is edited, and prevents the class of bugs where user-entered schemes or path suffixes corrupt the siteconfigurl.
+`patched_client` is part of `LaunchOptions`, which is app-global rather than per-server. For remote servers the flag has no effect - the `patched_client` branch is only evaluated inside the `is_local` path.
+Computing the URL at use time rather than storing it prevents the class of bugs where user-entered schemes or path suffixes corrupt the siteconfigurl, and ensures the local paths always reflect the actual routing through Apache on port 80.
 
 ---
 
