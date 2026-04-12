@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte'
   import { invoke } from '@tauri-apps/api/core'
+  import { openPath } from '@tauri-apps/plugin-opener'
   import { appConfig } from '../lib/store'
   import { activeDataTab, tuningFocusFile } from '../lib/store'
   import { get } from 'svelte/store'
@@ -248,6 +249,19 @@
     }
   }
 
+  let openDirError = ''
+
+  async function openLiveTuningDir() {
+    if (!$appConfig.server_exe) return
+    openDirError = ''
+    try {
+      const dir = await invoke<string>('get_live_tuning_dir', { serverExe: $appConfig.server_exe })
+      await openPath(dir)
+    } catch (e) {
+      openDirError = String(e)
+    }
+  }
+
   // ── Rule operations ──────────────────────────────────────────────────────────
 
   async function saveRule(updated: ScheduleRule) {
@@ -388,6 +402,16 @@
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <polyline points="23 4 23 10 17 10"/>
             <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+          </svg>
+        </button>
+        <button
+          class="btn-icon"
+          on:click={openLiveTuningDir}
+          title="Open LiveTuning folder"
+          disabled={!$appConfig.server_exe}
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
           </svg>
         </button>
       </svelte:fragment>
