@@ -96,6 +96,32 @@ export function clearServerError() {
   serverError.set('')
 }
 
+export const LOG_LEVEL_SEVERITY: Record<LogLevel, number> = {
+  all:   -1,
+  trace:  0,
+  debug:  1,
+  info:   2,
+  ok:     3,
+  warn:   4,
+  err:    5,
+  fatal:  6,
+}
+
+const LOG_FILTER_THRESHOLD_KEY = 'server-log-filter-threshold'
+
+function loadLogFilterThreshold(): boolean {
+  if (typeof localStorage === 'undefined') return true
+  return localStorage.getItem(LOG_FILTER_THRESHOLD_KEY) !== 'false'
+}
+
+export const logFilterThreshold = writable<boolean>(loadLogFilterThreshold())
+
+logFilterThreshold.subscribe(value => {
+  if (typeof localStorage !== 'undefined') {
+    localStorage.setItem(LOG_FILTER_THRESHOLD_KEY, String(value))
+  }
+})
+
 export interface LaunchOptions {
   auto_login: boolean
   patched_client: boolean

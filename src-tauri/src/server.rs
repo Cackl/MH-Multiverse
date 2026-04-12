@@ -6,6 +6,7 @@ use std::path::PathBuf;
 use std::process::{Child, Command, Stdio};
 use std::sync::{Arc, Mutex};
 use tauri::{AppHandle, Emitter, Manager};
+use crate::ini;
 
 #[cfg(target_os = "windows")]
 use windows::{
@@ -21,6 +22,12 @@ use windows::{
 use std::os::windows::process::CommandExt;
 #[cfg(target_os = "windows")]
 const CREATE_NO_WINDOW: u32 = 0x08000000;
+
+// -- Helper --
+
+fn log_timestamp() -> String {
+    chrono::Local::now().format("%Y.%m.%d %H:%M:%S%.3f").to_string()
+}
 
 // -- Payload types emitted to the frontend --
 
@@ -449,6 +456,26 @@ pub async fn start_server(
         return Err(format!("Server executable not found: {server_exe}"));
     }
 
+    // Pre-check: verify WebFrontend port is available before attempting to spawn.
+    // TcpListener::bind is used as a probe — if it fails the port is occupied.
+    // The listener is dropped immediately so MHServerEmu can bind it on spawn.
+    {
+        let port = ini::read_merged_value(&server_exe, "WebFrontend", "Port", "8080");
+        let addr = format!("127.0.0.1:{port}");
+        if std::net::TcpStream::connect_timeout(
+            &addr.parse().map_err(|e| format!("Invalid address: {e}"))?,
+            std::time::Duration::from_millis(200),
+        ).is_ok() {
+            let msg = format!("Port {port} is already in use — WebFrontend cannot start. Free the port or change WebFrontend.Port in Config.ini.");
+            let _ = app.emit("server-log", vec![LogLinePayload {
+                time: log_timestamp(),
+                level: "fatal".into(),
+                msg: msg.clone(),
+            }]);
+            return Err(format!("Port {port} already in use."));
+        }
+    }
+
     let exe_path = std::path::Path::new(&server_exe);
     let mhserver_dir = exe_path.parent()
         .ok_or("Could not determine server directory")?;
@@ -739,7 +766,7 @@ pub async fn start_apache(app: AppHandle, server_exe: String) -> Result<(), Stri
     proc.apache_child = Some(child);
 
     let _ = app.emit("server-log", vec![LogLinePayload {
-        time: String::new(),
+        time: log_timestamp(),
         level: "ok".into(),
         msg: "Apache started".into(),
     }]);
@@ -757,7 +784,7 @@ pub async fn stop_apache(app: AppHandle) -> Result<(), String> {
         let _ = apache.wait();
 
         let _ = app.emit("server-log", vec![LogLinePayload {
-            time: String::new(),
+            time: log_timestamp(),
             level: "info".into(),
             msg: "Apache stopped".into(),
         }]);

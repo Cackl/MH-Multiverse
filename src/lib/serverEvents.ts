@@ -38,6 +38,14 @@ declare global {
   }
 }
 
+function logTimestamp(): string {
+  const now = new Date()
+  const pad = (n: number, w = 2) => String(n).padStart(w, '0')
+  return `${now.getFullYear()}.${pad(now.getMonth() + 1)}.${pad(now.getDate())} ` +
+    `${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}.` +
+    `${String(now.getMilliseconds()).padStart(3, '0')}`
+}
+
 function getBridgeState(): BridgeState {
   if (!window.__mhmServerBridge) {
     window.__mhmServerBridge = {
@@ -128,7 +136,7 @@ export async function initServerEventBridge(): Promise<void> {
     serverRunning.set(true)
     clearServerError()
     startUptime()
-    appendLog({ time: '', level: 'ok', msg: '-- Server started --' })
+    appendLog({ time: logTimestamp(), level: 'ok', msg: '[MH Multiverse] Server started' })
 
     try {
       const apache = await invoke<boolean>('apache_is_running')
@@ -146,10 +154,10 @@ export async function initServerEventBridge(): Promise<void> {
     if (event.payload.exit_code !== null && event.payload.exit_code !== 0) {
       const message = `Server exited unexpectedly (code ${event.payload.exit_code})`
       setServerError(message)
-      appendLog({ time: '', level: 'err', msg: `-- ${message} --` })
+      appendLog({ time: logTimestamp(), level: 'err', msg: `[MH Multiverse] ${message}` })
     } else {
       clearServerError()
-      appendLog({ time: '', level: 'info', msg: '-- Server stopped --' })
+      appendLog({ time: logTimestamp(), level: 'info', msg: '[MH Multiverse] Server stopped' })
     }
   })
 }
