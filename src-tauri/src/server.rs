@@ -432,6 +432,19 @@ fn clear_player_state(
     emit_player_event(app, player_state, "clear", None, None);
 }
 
+/// Returns true if the MHServerEmu child process appears to be running.
+/// Called by accounts::import_account to guard against concurrent DB access.
+pub fn server_process_is_running(state: &crate::server::ServerState) -> bool {
+    state.0.lock()
+        .map(|mut proc| {
+            proc.child
+                .as_mut()
+                .map(|child: &mut std::process::Child| child.try_wait().ok().flatten().is_none())
+                .unwrap_or(false)
+        })
+        .unwrap_or(false)
+}
+
 // -- Commands --
 
 #[tauri::command]

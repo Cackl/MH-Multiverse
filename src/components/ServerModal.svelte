@@ -4,11 +4,13 @@
 
   export let server: Server | null = null
   export let onClose: () => void
+  export let prefillEmail: string = ''
+  export let prefillPassword: string = ''
 
   let name = server?.name ?? ''
   let host = server?.host ?? ''
-  let email = server?.email ?? ''
-  let password = ''
+  let email = server?.email ?? prefillEmail
+  let password = prefillPassword
   let saving = false
   let error = ''
   let isLocal  = server?.is_local  ?? true
