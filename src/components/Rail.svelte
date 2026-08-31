@@ -212,6 +212,7 @@
     flex-direction: column;
     align-items: center;
     gap: 3px;
+    width: 42px;
   }
 
   .status-dot {
@@ -223,8 +224,8 @@
   }
 
   .status-dot.on {
-    background: var(--green-bright);
-    box-shadow: 0 0 8px rgba(46, 204, 113, 0.4);
+    background: var(--accent-bright);
+    box-shadow: 0 0 8px var(--accent-glow);
   }
 
   .status-dot-label {

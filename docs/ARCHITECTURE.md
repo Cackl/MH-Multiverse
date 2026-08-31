@@ -12,7 +12,7 @@
 | Calligraphy parsing | `lz4_flex` (LZ4 block decompression) |
 | Server updates | `reqwest` (HTTP streaming), `zip` (extraction) |
 | Timestamps | `chrono` |
-| SQLite | `rusqlite` (Account.db read-only access) |
+| SQLite | `rusqlite` (`Account.db` - read queries player-login lookups; read/write for account import and restore) |
 | Log parsing | `regex` (player login/logout extraction) |
 
 ---
@@ -53,7 +53,7 @@ mh-multiverse/
 │       ├── PatchesPanel.svelte    PatchData file list, enable/disable
 │       ├── PatchEditorModal.svelte   Per-file patch entry editor
 │       ├── OpsPanel.svelte        Server update, backup create/restore/delete
-│       ├── ServerModal.svelte     Add/edit server dialog, Local/HTTPS toggles
+│       ├── ServerModal.svelte     Add/edit server dialog; tabbed Manual / Import Account / Restore Backup
 │       └── AppPanel.svelte        Settings: exe paths, launch options, themes, about
 │
 ├── src-tauri/
@@ -80,8 +80,10 @@ mh-multiverse/
 │   │   │                         u64 precision handling, bundle HTML generation
 │   │   ├── calligraphy.rs        Calligraphy.sip pak reader, blueprint/prototype directory
 │   │   │                         parsing, prototype search, ID/GUID/path resolution
-│   │   └── updater.rs            Nightly build update (download/extract/install),
-│   │                             backup create/list/restore/delete with manifests
+│   │   ├── updater.rs            Nightly build update (download/extract/install),
+│   │   │                         backup create/list/restore/delete with manifests
+│   │   └── accounts.rs           Account export (!account download JSON) import and restore;
+│   │                             Download/ folder scanning, ID remapping, Add/Replace modes
 │   ├── assets/
 │   │   └── display_names.json    Embedded prototype path → display name map (~260KB)
 │   ├── capabilities/
@@ -169,6 +171,8 @@ Panels follow a consistent layout: `PanelSidebar` on the left (file/item list wi
 
 **`PlayerCard.svelte`** is a self-contained card rendered per online player in `PlayersPanel.svelte` (accessed via a button in `ServerPanel`). It issues moderation commands (`!client kick`, `!account ban/unban`, `!account whitelist/unwhitelist`, `!client info`) and admin commands (`!account userlevel`) directly via `invoke('send_command', { cmd })`. Actions requiring an email address check `player.email` before proceeding and display inline feedback. Destructive actions (kick, ban) require a two-step confirmation UI within the card.
 
+**`ServerModal.svelte`** is tabbed rather than a single form. Add mode shows Manual (the original host/email/password form) and Import Account (create a new local account from a `!account download` export, then create its server profile in the same step). Edit mode shows Manual and, for local servers only, Restore Backup (overwrite the existing profile's account data from a newer export — no identity fields, no picker, resolved automatically from the profile's `email`). The two non-Manual tabs are otherwise independent of each other and of Manual's fields, except that Restore's visibility reactively tracks the Local checkbox.
+
 ---
 
 ## Backend Architecture
@@ -208,6 +212,8 @@ The stdout reader additionally calls `parse_player_log_event` on every line; mat
 **`calligraphy.rs`** - Reads MHServerEmu's `Calligraphy.sip` pak file (LZ4-compressed entries with a `KAPG` signature). Parses the `Blueprint.directory` and `Prototype.directory` files within the pak to build a `PrototypeCatalogue` with indices by runtime ID, path, and GUID. The catalogue is cached per sip file path and rebuilt automatically if the server executable changes. Prototype search supports multi-prefix category filtering and case-insensitive matching against both path and display name.
 
 **`updater.rs`** - Downloads nightly builds from `nightly.link/Crypto137/MHServerEmu/...`, extracts them, and overlays onto the server directory. The update flow: check availability (HTTP range probe) → backup selected targets → download with progress events → extract to staging dir → detect wrapper directory → copy to server dir → restore backed-up user files. Backups are stored in `{server_dir}/Backups/{timestamp}/` with a `manifest.json`. `Calligraphy.sip` and `mu_cdata.sip` are blacklisted from backups.
+
+**`accounts.rs`** - Parses `!account download` JSON exports and writes them into `Account.db` in one of two modes. Add creates a new account: uniqueness-checked against existing Email/PlayerName, with optional overrides for both plus the password (falling back to the export's own PasswordHash/Salt if no new password is given). Replace overwrites only the game-data of an existing account identified by `target_id` — Email, PlayerName, Password, UserLevel, and Flags on the Account row are never touched, so the caller (`ServerModal`'s Restore tab) is responsible for verifying the file actually belongs to the target before invoking it. Both modes route through `insert_player_data`, which assigns every entity (Player, Avatar, TeamUp, Item, ControlledEntity) a fresh DbGuid and rewrites ContainerDbGuid references through an in-memory remap table — this remapping is entirely self-contained per file, so it has no dependency on the file's original account ID matching anything. `scan_download_backups` lists candidate files from `<game_exe_dir>/Download/` by filename pattern (`0x{IdHex}_{PlayerName}_{yyyy-MM-dd_HH.mm.ss}.json`) without parsing them, so the frontend can offer a quick-select list before committing to a full parse. All writes run inside a transaction and are guarded by `server_process_is_running` to avoid DB lock contention with a live MHServerEmu process.
 
 ### Window Close Hook
 
@@ -332,6 +338,15 @@ The stdout reader additionally calls `parse_player_log_event` on every line; mat
 | `restore_backup` | `server_exe: String, backup_id: String` | `()` | Restore backup by ID |
 | `delete_backup` | `server_exe: String, backup_id: String` | `()` | Delete backup directory |
 | `get_backups_dir` | `server_exe: String` | `String` | Return Backups directory path |
+
+### Accounts (`accounts.rs`)
+
+| Command | Parameters | Returns | Description |
+|---|---|---|---|
+| `parse_import_json` | `json_path: String` | `ImportSummary` | Parse an export file and summarise it; no database access |
+| `scan_download_backups` | `game_exe: String` | `Vec<BackupFileEntry>` | List candidate files in `<game_exe_dir>/Download/` by filename pattern only |
+| `list_accounts_for_import` | `server_exe: String` | `Vec<AccountEntry>` | All accounts (id, player name, email) — used for Add conflict pre-checks and Restore target resolution |
+| `import_account` | `server_exe: String, json_path: String, mode: String, target_id: Option<i64>, overrides: Option<ImportOverrides>` | `()` | `mode: "add"` creates a new account (`overrides` applies); `mode: "replace"` overwrites `target_id`'s game data only (`overrides` ignored) |
 
 ---
 
@@ -591,6 +606,35 @@ run_update
   → clean up temp files (_update.zip, _update_staging/)
 ```
 
+### Account Import and Restore
+
+```
+scan_download_backups(game_exe)
+  → derive Download/ as a sibling of game_exe
+  → list files matching 0x{IdHex}_{PlayerName}_{yyyy-MM-dd_HH.mm.ss}.json
+  → non-matching files skipped, not errored
+  → return [{ path, player_name, modified }, ...] sorted newest first
+
+parse_import_json(json_path)
+  → deserialise the export, return a summary only (no DB access)
+
+import_account(mode: "add", overrides)
+  → resolve final email/player_name/password (overrides win, else export values)
+  → EMAIL_CONFLICT / NAME_CONFLICT if already registered
+  → INSERT Account row
+  → insert_player_data: remap every entity's DbGuid, rewrite ContainerDbGuid
+    references through that map, insert Player/Avatar/TeamUp/Item/ControlledEntity
+
+import_account(mode: "replace", target_id)
+  → verify target_id exists — no other checks against the target
+  → DELETE Player row (ON DELETE CASCADE removes its Avatar/TeamUp/Item/
+    ControlledEntity children)
+  → insert_player_data against target_id, same remap logic as Add
+  → Account row's Email/PlayerName/Password/UserLevel/Flags untouched
+```
+
+The remap step means an imported file's original account identity is irrelevant to whether it can be written — Replace will happily attach any file's data to any target. `ServerModal`'s Restore tab is the only safeguard: it resolves the target account from the profile's own `email` and hard-blocks the Restore button if the selected file's email/player name don't match that account, since nothing on the backend would otherwise catch a mismatched file.
+
 ---
 
 ## Key Design Decisions
@@ -637,6 +681,10 @@ The Server record stores a raw host string (hostname, IP, or hostname:port) for 
 
 `patched_client` is part of `LaunchOptions`, which is app-global rather than per-server. For remote servers the flag has no effect - the `patched_client` branch is only evaluated inside the `is_local` path.
 Computing the URL at use time rather than storing it prevents the class of bugs where user-entered schemes or path suffixes corrupt the siteconfigurl, and ensures the local paths always reflect the actual routing through Apache on port 80.
+
+### Replace Never Touches Identity (Accounts)
+
+`do_replace` only ever deletes and reinserts an account's Player/Avatar/TeamUp/Item/ControlledEntity rows — Email, PlayerName, Password, UserLevel, and Flags on the Account row itself are out of scope, even though an earlier version of this function did write them. The entity ID remap in `insert_player_data` is what makes this safe: every DbGuid in the imported file is rewritten relative to the target account, not the file's original account, so Replace has no functional dependency on the file "belonging" to the target in any sense the database would enforce. That's a deliberate tradeoff - it makes Replace simple and keeps credentials/permissions stable across a restore, but it also means the backend alone can't tell a legitimate restore from a mismatched file. The mismatch check lives entirely in `ServerModal`'s Restore tab (comparing the parsed file's email/player name against the resolved target account) rather than in `accounts.rs`.
 
 ---
 
