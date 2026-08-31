@@ -43,7 +43,7 @@ export interface NamedItem {
 }
 
 export interface CatalogEntry {
-  SkuId: number
+  SkuId: string
   GuidItems: GuidItem[]
   AdditionalGuidItems: GuidItem[]
   LocalizedEntries: LocalizedEntry[]
@@ -256,7 +256,7 @@ export function defaultUrlEntry(): UrlEntry {
  */
 export function newCatalogEntry(
   typeName: string,
-  skuId: number,
+  skuId: string,
   order: number = 5,
 ): CatalogEntry {
   const isBundle = typeName === 'Bundle'

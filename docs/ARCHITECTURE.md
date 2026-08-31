@@ -315,8 +315,8 @@ The stdout reader additionally calls `parse_player_log_event` on every line; mat
 | `list_catalog_files` | `server_exe: String` | `Vec<String>` | List base Catalog*.json filenames |
 | `load_catalog_entries` | `server_exe: String` | `Vec<CatalogEntryWithMeta>` | Load all entries with base/MODIFIED merge |
 | `save_catalog_entry` | `server_exe: String, entry: CatalogEntry, target_file: String` | `()` | Upsert entry into *MODIFIED.json |
-| `delete_catalog_entry` | `server_exe: String, sku_id: u64, source_file: String, from_modified: bool` | `()` | Delete entry by SKU from target file |
-| `get_next_sku_id` | `server_exe: String` | `u64` | Return max SKU + 1 (floor 1001) |
+| `delete_catalog_entry` | `server_exe: String, sku_id: String, source_file: String, from_modified: bool` | `()` | Delete entry by SKU from target file |
+| `get_next_sku_id` | `server_exe: String` | `String` | Return max SKU + 1 (floor 1001), as a decimal string |
 | `resolve_display_name` | `server_exe: String, prototype_runtime_id: String` | `String` | Resolve prototype ID to display name |
 | `generate_bundle_html` | `server_exe: String, entry: CatalogEntry, output_dir: String` | `String` | Generate HTML bundle page, return file path |
 
@@ -641,7 +641,7 @@ The remap step means an imported file's original account identity is irrelevant 
 
 ### u64 Precision Across the JS Boundary
 
-Prototype runtime IDs and GUIDs are u64 values that can exceed JavaScript's `Number.MAX_SAFE_INTEGER` (2^53 - 1). The catalog system handles this with dual types: `CatalogEntryDisk` uses raw `u64` for on-disk serialisation, while the frontend-facing `CatalogEntry` represents these as `String`. Conversion happens in `guid_disk_to_view` and `guid_view_to_disk`. Calligraphy prototype IDs and GUIDs are similarly transported as decimal strings.
+Prototype runtime IDs, GUIDs, and catalog SKU IDs are u64 values that can exceed JavaScript's `Number.MAX_SAFE_INTEGER` (2^53 - 1). The catalog system handles this with dual types: `CatalogEntryDisk` uses raw `u64` for on-disk serialisation, while the frontend-facing `CatalogEntry` represents these as `String`. GuidItem conversion happens in `guid_disk_to_view` and `guid_view_to_disk`; `SkuId` is converted inline in `disk_to_view` and `view_to_disk` since it's a scalar field rather than a nested collection. Calligraphy prototype IDs and GUIDs are similarly transported as decimal strings.
 
 ### MODIFIED File Pattern (Store)
 

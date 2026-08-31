@@ -35,7 +35,7 @@
   let sortDir: 'asc' | 'desc' = 'asc'
 
   // Selection
-  let selectedSkus = new Set<number>()
+  let selectedSkus = new Set<string>()
   let headerCheckEl: HTMLInputElement
 
   // Modals
@@ -68,7 +68,7 @@
     if (priceMaxN !== null && !isNaN(priceMaxN) && entryPrice(e) > priceMaxN) return false
     if (searchLower) {
       const title = entryTitle(e).toLowerCase()
-      const sku   = String(e.SkuId)
+      const sku = e.SkuId
       return title.includes(searchLower) || sku.includes(searchLower)
     }
     return true
@@ -77,7 +77,12 @@
   $: sortedEntries = [...filteredEntries].sort((a, b) => {
     let cmp = 0
     switch (sortCol) {
-      case 'sku':   cmp = a.SkuId - b.SkuId; break
+      case 'sku': {
+        const ai = BigInt(a.SkuId)
+        const bi = BigInt(b.SkuId)
+        cmp = ai < bi ? -1 : ai > bi ? 1 : 0
+        break
+      }
       case 'name':  cmp = entryTitle(a).localeCompare(entryTitle(b)); break
       case 'type':  cmp = a.Type.Name.localeCompare(b.Type.Name); break
       case 'price': cmp = entryPrice(a) - entryPrice(b); break
@@ -145,7 +150,7 @@
     selectedSkus = selectedSkus
   }
 
-  function toggleSelectRow(skuId: number) {
+  function toggleSelectRow(skuId: string) {
     if (selectedSkus.has(skuId)) selectedSkus.delete(skuId)
     else selectedSkus.add(skuId)
     selectedSkus = selectedSkus
@@ -222,7 +227,7 @@
     }
   }
 
-  function handleDeleted(skuId: number) {
+  function handleDeleted(skuId: string) {
     entries = entries.filter(e => e.SkuId !== skuId)
     selectedSkus.delete(skuId)
     selectedSkus = selectedSkus
@@ -321,7 +326,7 @@
     // Snapshot the targets before the loop since handleDeleted mutates entries.
     const targets = entries.filter(e => selectedSkus.has(e.SkuId))
     let deleted = 0
-    const failed: number[] = []
+    const failed: string[] = []
     try {
       for (const orig of targets) {
         try {

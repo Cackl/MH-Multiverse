@@ -156,7 +156,8 @@ pub struct NamedItem {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "PascalCase")]
 pub struct CatalogEntry {
-    pub sku_id: u64,
+    /// Stored as a decimal string to preserve full u64 precision across the JS boundary.
+    pub sku_id: String,
     pub guid_items: Vec<GuidItem>,
     pub additional_guid_items: Vec<GuidItem>,
     pub localized_entries: Vec<LocalizedEntry>,
@@ -182,7 +183,7 @@ pub struct CatalogEntryWithMeta {
 
 fn disk_to_view(d: CatalogEntryDisk) -> CatalogEntry {
     CatalogEntry {
-        sku_id: d.sku_id,
+        sku_id: d.sku_id.to_string(),
         guid_items: d.guid_items.into_iter().map(guid_disk_to_view).collect(),
         additional_guid_items: d
             .additional_guid_items
@@ -206,6 +207,10 @@ fn guid_disk_to_view(g: GuidItemDisk) -> GuidItem {
 }
 
 fn view_to_disk(v: CatalogEntry) -> Result<CatalogEntryDisk, String> {
+    let sku_id = v
+        .sku_id
+        .parse::<u64>()
+        .map_err(|e| format!("Invalid SKU ID '{}': {e}", v.sku_id))?;
     let guid_items = v
         .guid_items
         .into_iter()
@@ -217,7 +222,7 @@ fn view_to_disk(v: CatalogEntry) -> Result<CatalogEntryDisk, String> {
         .map(guid_view_to_disk)
         .collect::<Result<Vec<_>, _>>()?;
     Ok(CatalogEntryDisk {
-        sku_id: v.sku_id,
+        sku_id,
         guid_items,
         additional_guid_items,
         localized_entries: v.localized_entries,
@@ -429,8 +434,8 @@ pub fn save_catalog_entry(
     }
 
     let mut disk_entries = load_disk_entries(&modified_path);
-    let sku = entry.sku_id;
     let disk_entry = view_to_disk(entry)?;
+    let sku = disk_entry.sku_id;
 
     if let Some(existing) = disk_entries.iter_mut().find(|e| e.sku_id == sku) {
         *existing = disk_entry;
@@ -453,10 +458,14 @@ pub fn save_catalog_entry(
 #[tauri::command]
 pub fn delete_catalog_entry(
     server_exe: String,
-    sku_id: u64,
+    sku_id: String,
     source_file: String,
     from_modified: bool,
 ) -> Result<(), String> {
+    let sku: u64 = sku_id
+        .parse()
+        .map_err(|e| format!("Invalid SKU ID '{sku_id}': {e}"))?;
+
     let dir = mtxstore_dir(&server_exe)?;
     let base_path = dir.join(&source_file);
 
@@ -482,10 +491,10 @@ pub fn delete_catalog_entry(
         serde_json::from_str(&json).map_err(|e| format!("Parse failed: {e}"))?;
 
     let before = disk_entries.len();
-    disk_entries.retain(|e| e.sku_id != sku_id);
+    disk_entries.retain(|e| e.sku_id != sku);
 
     if disk_entries.len() == before {
-        return Err(format!("SKU {sku_id} not found in target file"));
+        return Err(format!("SKU {sku} not found in target file"));
     }
 
     let json = serde_json::to_string_pretty(&disk_entries)
@@ -498,10 +507,10 @@ pub fn delete_catalog_entry(
 /// Scan all JSON files in the MTXStore directory (base and MODIFIED) and return the
 /// next available SKU ID: `max_found + 1`, floored at 1001.
 #[tauri::command]
-pub fn get_next_sku_id(server_exe: String) -> Result<u64, String> {
+pub fn get_next_sku_id(server_exe: String) -> Result<String, String> {
     let dir = mtxstore_dir(&server_exe)?;
     if !dir.exists() {
-        return Ok(1001);
+        return Ok("1001".to_string());
     }
 
     let mut max_sku: u64 = 1000;
@@ -521,7 +530,7 @@ pub fn get_next_sku_id(server_exe: String) -> Result<u64, String> {
         }
     }
 
-    Ok(max_sku + 1)
+    Ok((max_sku + 1).to_string())
 }
 
 /// Resolve a prototype runtime ID (decimal string) to a human-readable display name.
@@ -570,6 +579,11 @@ pub fn generate_bundle_html(
         .map(|p| p.to_string_lossy().to_string())
         .unwrap_or_default();
 
+    let sku: u64 = entry
+        .sku_id
+        .parse()
+        .map_err(|e| format!("Invalid SKU ID '{}': {e}", entry.sku_id))?;
+
     let loc = entry
         .localized_entries
         .iter()
@@ -579,7 +593,7 @@ pub fn generate_bundle_html(
 
     let title = &loc.title;
     let price = loc.item_price;
-    let sku_hex = format!("0x{:X}", entry.sku_id);
+    let sku_hex = format!("0x{:X}", sku);
 
     let mut items_html = String::new();
     for item in &entry.guid_items {
@@ -606,7 +620,7 @@ pub fn generate_bundle_html(
         .replace("{sku_hex}", &sku_hex);
 
     let slug = title.to_lowercase().replace(' ', "_");
-    let filename = format!("{slug}_{}_en_bundle.html", entry.sku_id);
+    let filename = format!("{slug}_{sku}_en_bundle.html");
 
     // ── Unconditional backup ──────────────────────────────────────────────────
 
@@ -799,7 +813,7 @@ static HTML_TEMPLATE: &str = r#"<!DOCTYPE html>
 pub fn save_thumbnail(
     server_exe: String,
     slug: String,
-    sku_id: u64,
+    sku_id: String,
     png_base64: String,
     save_to_apache: bool,
 ) -> Result<String, String> {
