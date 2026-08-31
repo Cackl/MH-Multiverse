@@ -92,7 +92,9 @@ pub struct ImportSummary {
     pub flags: i32,
 }
 
-/// A single account entry, returned by the replace picker.
+/// A single account entry. Used by the frontend both to pre-check Add-mode
+/// email/player-name conflicts, and to resolve which account a server
+/// profile's email corresponds to for Restore (Replace mode).
 #[derive(Serialize)]
 pub struct AccountEntry {
     pub id: i64,
@@ -293,18 +295,21 @@ pub fn list_accounts_for_import(server_exe: String) -> Result<Vec<AccountEntry>,
 /// Perform the account import.
 ///
 /// `mode` is either `"add"` (create a new account) or `"replace"` (overwrite
-/// the player data of an existing account identified by `target_id`).
+/// the game-data of an existing account identified by `target_id`).
+/// `overrides` only applies to `"add"` — Replace never touches Email,
+/// PlayerName, Password, UserLevel, or Flags, so it's ignored if supplied.
 ///
 /// Conflict errors are returned with a prefix that the frontend can parse:
 ///   `EMAIL_CONFLICT:...`
 ///   `NAME_CONFLICT:...`
+/// (Add only — Replace can't produce these since it never touches identity.)
 #[tauri::command]
 pub fn import_account(
     server_exe: String,
     json_path: String,
     mode: String,
     target_id: Option<i64>,
-    overrides: ImportOverrides,
+    overrides: Option<ImportOverrides>,
     server_state: State<'_, ServerState>,
 ) -> Result<(), String> {
     // Guard: importing while the server is running risks DB lock contention.
@@ -315,7 +320,44 @@ pub fn import_account(
 
     let data = read_and_parse(&json_path)?;
 
-    // Resolve final values — overrides take precedence over JSON.
+    let mut conn = open_db(&server_exe)?;
+    let tx = conn.transaction().map_err(|e| e.to_string())?;
+
+    let result = match mode.as_str() {
+        "add" => {
+            let overrides = overrides.unwrap_or(ImportOverrides {
+                email: None,
+                player_name: None,
+                new_password: None,
+            });
+            do_add_with_overrides(&tx, &overrides, &data)
+        }
+        "replace" => {
+            let target = match target_id {
+                Some(t) => t,
+                None => return Err("A target account must be selected for Replace mode.".to_owned()),
+            };
+            do_replace(&tx, target, &data)
+        }
+        other => Err(format!("Unknown import mode: {other}")),
+    };
+
+    if result.is_ok() {
+        tx.commit().map_err(|e| e.to_string())?;
+    }
+    // On Err the transaction is dropped, triggering an automatic rollback.
+    result
+}
+
+// ── Import modes ───────────────────────────────────────────────────────────
+
+/// Resolve overrides on top of the parsed JSON, then delegate to `do_add`.
+/// Only used by Add mode — Replace has no identity fields to resolve.
+fn do_add_with_overrides(
+    conn: &Connection,
+    overrides: &ImportOverrides,
+    data: &ImportJson,
+) -> Result<(), String> {
     let final_email = overrides
         .email
         .as_deref()
@@ -337,7 +379,6 @@ pub fn import_account(
         return Err("Player name cannot be empty.".into());
     }
 
-    // Determine the password hash/salt to write.
     let (final_hash, final_salt) = match overrides
         .new_password
         .as_deref()
@@ -356,27 +397,8 @@ pub fn import_account(
         }
     };
 
-    let mut conn = open_db(&server_exe)?;
-    let tx = conn.transaction().map_err(|e| e.to_string())?;
-
-    let result = match mode.as_str() {
-        "add" => do_add(&tx, &final_email, &final_name, &final_hash, &final_salt, &data),
-        "replace" => {
-            let target = target_id
-                .ok_or_else(|| "A target account must be selected for Replace mode.".to_owned())?;
-            do_replace(&tx, target, &final_email, &final_name, &final_hash, &final_salt, &data)
-        }
-        other => Err(format!("Unknown import mode: {other}")),
-    };
-
-    if result.is_ok() {
-        tx.commit().map_err(|e| e.to_string())?;
-    }
-    // On Err the transaction is dropped, triggering an automatic rollback.
-    result
+    do_add(conn, &final_email, &final_name, &final_hash, &final_salt, data)
 }
-
-// ── Import modes ───────────────────────────────────────────────────────────
 
 fn do_add(
     conn: &Connection,
@@ -428,13 +450,16 @@ fn do_add(
     insert_player_data(conn, new_account_id, new_account_id + 1, data)
 }
 
+/// Overwrite an existing account's game data (Player, Avatar, TeamUp, Item,
+/// ControlledEntity) from `data`. Never touches Email, PlayerName,
+/// Password, UserLevel, or Flags on the Account row — those are considered
+/// identity, not game data, and the caller is responsible for having
+/// already verified `data` actually belongs to `target_id` if that matters
+/// for the calling context (see the ServerModal Restore tab, which blocks
+/// on a player-name/email mismatch before ever calling this).
 fn do_replace(
     conn: &Connection,
     target_id: i64,
-    email: &str,
-    player_name: &str,
-    password_hash: &[u8],
-    salt: &[u8],
     data: &ImportJson,
 ) -> Result<(), String> {
     // Target must exist.
@@ -446,53 +471,6 @@ fn do_replace(
     {
         return Err("Target account not found.".into());
     }
-
-    // Uniqueness checks, excluding the target account itself.
-    let email_taken: i64 = conn
-        .query_row(
-            "SELECT COUNT(*) FROM Account \
-             WHERE Email = ?1 COLLATE NOCASE AND Id != ?2",
-            params![email, target_id],
-            |r| r.get(0),
-        )
-        .map_err(|e| e.to_string())?;
-    if email_taken > 0 {
-        return Err(format!(
-            "EMAIL_CONFLICT:Email '{email}' is already in use by another account."
-        ));
-    }
-
-    let name_taken: i64 = conn
-        .query_row(
-            "SELECT COUNT(*) FROM Account \
-             WHERE PlayerName = ?1 COLLATE NOCASE AND Id != ?2",
-            params![player_name, target_id],
-            |r| r.get(0),
-        )
-        .map_err(|e| e.to_string())?;
-    if name_taken > 0 {
-        return Err(format!(
-            "NAME_CONFLICT:Player name '{player_name}' is already in use by another account."
-        ));
-    }
-
-    // Update the account record.
-    conn.execute(
-        "UPDATE Account \
-         SET Email = ?1, PlayerName = ?2, PasswordHash = ?3, Salt = ?4, \
-             UserLevel = ?5, Flags = ?6 \
-         WHERE Id = ?7",
-        params![
-            email,
-            player_name,
-            password_hash,
-            salt,
-            data.user_level as i32,
-            data.flags,
-            target_id
-        ],
-    )
-    .map_err(|e| format!("Failed to update account: {e}"))?;
 
     // Delete existing player data. The ON DELETE CASCADE on Player.DbGuid
     // propagates automatically to Avatar, TeamUp, Item, and ControlledEntity.

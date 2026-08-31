@@ -56,7 +56,7 @@
   // Account.db access and always creates a local profile, neither of which
   // makes sense while editing an existing profile's connection details.
 
-  type TabId = 'manual' | 'import'
+  type TabId = 'manual' | 'import' | 'restore'
   let activeTab: TabId = 'manual'
 
   // ── Import tab types ─────────────────────────────────────────────────────
@@ -108,6 +108,17 @@
   let importEmailError = ''
   let importNameError = ''
 
+  // ── Restore tab state (Edit mode, local only) ────────────────────────────
+  // Never touches Email/PlayerName/Password — see do_replace in accounts.rs.
+  // Target account is resolved automatically from server.email; there is
+  // no picker, since editing a profile already implies which account it is.
+
+  let restoreFilePath = ''
+  let restoreSummary: ImportSummary | null = null
+  let restoreParseError = ''
+  let restoreSaving = false
+  let restoreError = ''
+
   // ── Derived ──────────────────────────────────────────────────────────────
 
   $: hasGameExe = !!$appConfig.game_exe
@@ -134,11 +145,32 @@
     !!importServerName.trim() &&
     !importConflictMsg
 
+  $: restoreTargetAccount = existingAccounts.find(
+    a => a.email.toLowerCase() === (server?.email ?? '').toLowerCase()
+  ) ?? null
+
+  $: restoreMismatchMsg = (() => {
+    if (!restoreSummary || !restoreTargetAccount) return ''
+    const sameEmail = restoreSummary.email.toLowerCase() === restoreTargetAccount.email.toLowerCase()
+    const sameName = restoreSummary.player_name.toLowerCase() === restoreTargetAccount.player_name.toLowerCase()
+    if (sameEmail && sameName) return ''
+    return `This backup is for ${restoreSummary.player_name} (${restoreSummary.email}), but this profile is for ${restoreTargetAccount.player_name} (${restoreTargetAccount.email}).`
+  })()
+
+  $: canRestore =
+    !!restoreSummary &&
+    !!restoreTargetAccount &&
+    !restoreMismatchMsg &&
+    !$serverRunning &&
+    hasServerExe
+
+  $: if (activeTab === 'restore' && !isLocal) activeTab = 'manual'
+
   // ── Tab switching ────────────────────────────────────────────────────────
 
   async function selectTab(tab: TabId) {
     activeTab = tab
-    if (tab === 'import' && !downloadsLoaded) {
+    if ((tab === 'import' || tab === 'restore') && !downloadsLoaded) {
       downloadsLoaded = true
       await Promise.all([loadDownloadBackups(), loadExistingAccounts()])
     }
@@ -253,6 +285,51 @@
     }
   }
 
+  // ── Restore: file selection ──────────────────────────────────────────────
+
+  async function pickRestoreFile() {
+    const selected = await open({
+      multiple: false,
+      filters: [{ name: 'JSON Account Export', extensions: ['json'] }],
+    })
+    if (typeof selected === 'string') await loadRestoreFile(selected)
+  }
+
+  async function loadRestoreFile(path: string) {
+    restoreParseError = ''
+    restoreError = ''
+    try {
+      const result = await invoke<ImportSummary>('parse_import_json', { jsonPath: path })
+      restoreFilePath = path
+      restoreSummary = result
+    } catch (e) {
+      restoreSummary = null
+      restoreParseError = String(e)
+    }
+  }
+
+  // ── Restore: run ─────────────────────────────────────────────────────────
+
+  async function runRestore() {
+    if (!canRestore || !restoreTargetAccount) return
+    restoreError = ''
+    restoreSaving = true
+    try {
+      await invoke('import_account', {
+        serverExe: $appConfig.server_exe,
+        jsonPath: restoreFilePath,
+        mode: 'replace',
+        targetId: restoreTargetAccount.id,
+        overrides: null,
+      })
+      onClose()
+    } catch (e) {
+      restoreError = String(e)
+    } finally {
+      restoreSaving = false
+    }
+  }
+
   function fileName(path: string): string {
     return path.split(/[\\/]/).pop() ?? path
   }
@@ -269,8 +346,10 @@
   function submit() {
     if (activeTab === 'manual') {
       save()
-    } else {
+    } else if (activeTab === 'import') {
       runImport()
+    } else if (activeTab === 'restore') {
+      runRestore()
     }
   }
 
@@ -356,11 +435,30 @@
           Import Account
         </button>
       </div>
+    {:else if isLocal}
+      <div class="tab-bar">
+        <button
+          type="button"
+          class="tab-btn"
+          class:active={activeTab === 'manual'}
+          on:click={() => selectTab('manual')}
+        >
+          Manual
+        </button>
+        <button
+          type="button"
+          class="tab-btn"
+          class:active={activeTab === 'restore'}
+          on:click={() => selectTab('restore')}
+        >
+          Restore Backup
+        </button>
+      </div>
     {/if}
 
     <div class="modal-body">
 
-      {#if activeTab === 'manual' || isEdit}
+      {#if activeTab === 'manual'}
         <div class="form-group">
           <label class="field-label" for="modal-name">Name</label>
           <input id="modal-name" type="text" bind:value={name} placeholder="Local Server">
@@ -422,7 +520,7 @@
           <div class="error">{error}</div>
         {/if}
 
-      {:else}
+      {:else if activeTab === 'import'}
         <!-- ── Import tab ── -->
 
         <div class="import-note">
@@ -491,7 +589,7 @@
 
           <div class="form-group">
             <label class="field-label" for="modal-import-server-name">Server Name</label>
-            <input id="modal-import-server-name" type="text" bind:value={importServerName} placeholder="Local Server">
+            <input id="modal-import-server-name" type="text" bind:value={importServerName} placeholder={importSummary.player_name}>
           </div>
 
           <div class="form-group">
@@ -535,18 +633,109 @@
             <div class="error">{importError}</div>
           {/if}
         {/if}
+
+      {:else if activeTab === 'restore'}
+        <!-- ── Restore tab ── -->
+
+        <div class="import-note note-warning">
+          <i class="note-icon">!</i>
+          Restoring overwrites this account's current avatars, items, and progress. This cannot be undone.
+        </div>
+
+        {#if !restoreTargetAccount}
+          <div class="hint-block">No account in Account.db matches {server?.email ?? 'this profile\'s email'}.</div>
+        {:else}
+          <div class="form-group">
+            <span class="field-label">From Download folder</span>
+            {#if !hasGameExe}
+              <div class="hint-block">Set the game executable path in Settings to enable this.</div>
+            {:else if loadingDownloads}
+              <div class="hint-block">Scanning...</div>
+            {:else if downloadScanError}
+              <div class="error">{downloadScanError}</div>
+            {:else if downloadBackups.length === 0}
+              <div class="hint-block">No backups found. Use Upload File below.</div>
+            {:else}
+              <div class="file-list">
+                {#each downloadBackups as backup (backup.path)}
+                  <button
+                    type="button"
+                    class="file-row"
+                    class:selected={restoreFilePath === backup.path}
+                    on:click={() => loadRestoreFile(backup.path)}
+                  >
+                    <span class="file-name">{backup.player_name}</span>
+                    <span class="file-date">{formatDate(backup.modified)}</span>
+                  </button>
+                {/each}
+              </div>
+            {/if}
+          </div>
+
+          <button type="button" class="btn btn-outline btn-sm" on:click={pickRestoreFile}>
+            Upload File
+          </button>
+
+          {#if restoreParseError}
+            <div class="error">{restoreParseError}</div>
+          {/if}
+
+          {#if restoreSummary}
+            <div class="import-summary">
+              <div class="summary-row">
+                <span class="summary-label">File</span>
+                <span class="summary-value mono" title={restoreFilePath}>{fileName(restoreFilePath)}</span>
+              </div>
+              <div class="summary-row">
+                <span class="summary-label">Player</span>
+                <span class="summary-value">{restoreSummary.player_name}</span>
+              </div>
+              <div class="summary-row">
+                <span class="summary-label">Email</span>
+                <span class="summary-value mono">{restoreSummary.email}</span>
+              </div>
+              <div class="summary-row">
+                <span class="summary-label">Contents</span>
+                <span class="summary-value">
+                  {restoreSummary.avatar_count} avatars, {restoreSummary.team_up_count} team-ups, {restoreSummary.item_count} items
+                </span>
+              </div>
+            </div>
+
+            {#if restoreMismatchMsg}
+              <div class="error">{restoreMismatchMsg}</div>
+            {/if}
+
+            {#if $serverRunning}
+              <div class="warning-notice">Stop the server before restoring.</div>
+            {/if}
+
+            {#if restoreError}
+              <div class="error">{restoreError}</div>
+            {/if}
+          {/if}
+        {/if}
       {/if}
     </div>
 
     <div class="modal-footer">
-      <button type="button" class="btn btn-outline" on:click={onClose} disabled={saving || importSaving}>Cancel</button>
-      {#if activeTab === 'manual' || isEdit}
+      <button
+        type="button"
+        class="btn btn-outline"
+        on:click={onClose}
+        disabled={saving || importSaving || restoreSaving}
+      >Cancel</button>
+      {#if activeTab === 'manual'}
         <button type="button" class="btn btn-accent" on:click={submit} disabled={saving}>
           {saving ? 'Saving...' : isEdit ? 'Save Changes' : 'Add Server'}
         </button>
-      {:else}
+      {:else if activeTab === 'import'}
         <button type="button" class="btn btn-accent" on:click={submit} disabled={!canImport || importSaving}>
           {importSaving ? 'Importing...' : 'Add Account'}
+        </button>
+      {:else if activeTab === 'restore'}
+        <button type="button" class="btn btn-accent" on:click={submit} disabled={!canRestore || restoreSaving}>
+          {restoreSaving ? 'Restoring...' : 'Restore Backup'}
         </button>
       {/if}
     </div>
@@ -763,6 +952,14 @@
     border-radius: var(--radius-sm);
     font-size: 12px;
     color: var(--text-2);
+  }
+  .import-note.note-warning {
+    background: var(--amber-dim);
+    color: var(--amber-bright);
+  }
+  .import-note.note-warning .note-icon {
+    border-color: rgba(200, 146, 10, 0.4);
+    color: var(--amber-bright);
   }
   .note-icon {
     width: 14px;
