@@ -550,7 +550,8 @@
         </div>
 
       </div>
-    {/if}
+
+      {/if}
 
   </div><!-- ops-layout -->
 </div>

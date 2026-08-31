@@ -8,6 +8,7 @@ mod store;
 mod tuning;
 mod updater;
 mod patches;
+mod accounts;
 
 pub use config::*;
 
@@ -130,6 +131,10 @@ pub fn run() {
             events::reset_schedule_override,
             events::merge_events_override,
             events::merge_schedule_override,
+            accounts::parse_import_json,
+            accounts::scan_download_backups,
+            accounts::list_accounts_for_import,
+            accounts::import_account,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

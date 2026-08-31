@@ -3,6 +3,23 @@
 <br>
 
 ---
+# Version 1.3.0 Release
+
+## What's Changed
+
+### Add Server: Account Import
+- Add Server is now tabbed: Manual (the existing host/email/password form) alongside a new Import Account tab
+- Import Account creates a new local account from an `!account download` JSON export and its server profile in a single step
+- Backup files are auto-discovered from the `Download/` folder next to the Marvel Heroes Omega executable linked in Settings and shown as a quick-select list, alongside a manual file upload option
+- Player name, email, and password can be overridden before import; email/player name conflicts against existing accounts are checked as soon as a file is selected, before the Add button is even enabled
+
+### Edit Server: Restore Backup
+- Editing a local server profile now has a Restore Backup tab, for overwriting that account's progress from a newer `!account download` JSON export
+- Restore never touches the account's email, player name, password, user level, or moderation flags
+
+<br>
+
+---
 # Version 1.2.2 Release
 
 ## What's Changed

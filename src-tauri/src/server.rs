@@ -251,8 +251,11 @@ struct AccountInfo {
     guild_name: Option<String>,
 }
 
-/// Look up account info by PlayerName. Opens the DB read-only on every call
-/// (SQLite handles concurrent readers fine; the server holds its own connection).
+/// Look up account info by PlayerName. Opens a fresh connection to the DB on
+/// every call and only ever issues SELECT queries against it - nothing
+/// enforces that at the connection level, it's just the only thing this
+/// function does. Safe to call repeatedly because SQLite handles concurrent
+/// connections to the same file fine; the server holds its own separate one.
 /// Returns None on any error so the caller always gets a valid PlayerSession.
 fn lookup_account(db_path: &PathBuf, username: &str) -> Option<AccountInfo> {
     let conn = Connection::open(db_path).ok()?;
@@ -364,8 +367,9 @@ fn handle_player_log_event(
     match player_state.lock() {
         Ok(mut sessions) => match &event {
             PlayerLogEvent::Login { username, session_id } => {
-                // Best-effort DB lookup — runs on the stdout reader thread, which
-                // is fine because rusqlite opens a separate read-only connection.
+                // Best-effort DB lookup - runs on the stdout reader thread, which
+                // is fine because lookup_account opens its own separate connection
+                // and only ever issues SELECT queries against it.
                 let db_opt = db_path.lock().ok().and_then(|g| g.clone());
                 let account = db_opt.as_ref().and_then(|p| lookup_account(p, username));
 
@@ -430,6 +434,19 @@ fn clear_player_state(
     }
 
     emit_player_event(app, player_state, "clear", None, None);
+}
+
+/// Returns true if the MHServerEmu child process appears to be running.
+/// Called by accounts::import_account to guard against concurrent DB access.
+pub fn server_process_is_running(state: &crate::server::ServerState) -> bool {
+    state.0.lock()
+        .map(|mut proc| {
+            proc.child
+                .as_mut()
+                .map(|child: &mut std::process::Child| child.try_wait().ok().flatten().is_none())
+                .unwrap_or(false)
+        })
+        .unwrap_or(false)
 }
 
 // -- Commands --
