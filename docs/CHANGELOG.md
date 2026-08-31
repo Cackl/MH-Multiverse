@@ -3,6 +3,17 @@
 <br>
 
 ---
+# Version 1.3.1 Release
+
+## What's Changed
+
+### Store Catalog Editor: SKU ID Precision Fix
+- Fixed `SkuId` values above `Number.MAX_SAFE_INTEGER` getting silently rounded when passed to the frontend, which could cause saves and deletes to miss the original entry or write back the wrong SKU
+- `SkuId` now crosses through Rust and JS as a decimal string, matching the existing handling for item prototype IDs and Calligraphy prototype IDs/GUIDs
+
+<br>
+
+---
 # Version 1.3.0 Release
 
 ## What's Changed

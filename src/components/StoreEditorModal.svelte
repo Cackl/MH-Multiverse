@@ -44,7 +44,7 @@
   export let allEntries: CatalogEntryWithMeta[] = []
   export let onClose: () => void
   export let onSaved: (entry: CatalogEntryWithMeta) => void = () => {}
-  export let onDeleted: (skuId: number) => void = () => {}
+  export let onDeleted: (skuId: string) => void = () => {}
 
   function deepClone<T>(value: T): T {
     return JSON.parse(JSON.stringify(value))
@@ -150,7 +150,7 @@
 
   // ── Working SKU ───────────────────────────────────────────────────────────
 
-  let workingSku: number = entry?.SkuId ?? 0
+  let workingSku: string = entry?.SkuId ?? ''
 
   // ── Form fields ───────────────────────────────────────────────────────────
 
@@ -668,7 +668,7 @@
 
   onMount(async () => {
     if (isNew) {
-      try { workingSku = await invoke<number>('get_next_sku_id', { serverExe }) } catch {}
+      try { workingSku = await invoke<string>('get_next_sku_id', { serverExe }) } catch {}
     }
     if (formGuidItems.length)           resolveGuidNames()
     if (formAdditionalGuidItems.length) resolveAdditionalGuidNames()
