@@ -27,6 +27,7 @@ use std::path::{Path, PathBuf};
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
 use pbkdf2::pbkdf2_hmac;
 use rand::RngCore;
+use regex::Regex;
 use rusqlite::{params, Connection};
 use serde::{Deserialize, Serialize};
 use sha2::Sha512;
@@ -97,6 +98,19 @@ pub struct AccountEntry {
     pub id: i64,
     pub player_name: String,
     pub email: String,
+}
+
+/// A single backup file discovered in the game's Download/ folder.
+#[derive(Serialize)]
+pub struct BackupFileEntry {
+    pub path: String,
+    pub file_name: String,
+    pub player_name: String,
+    pub account_id_hex: String,
+    /// ISO 8601 UTC timestamp parsed from the filename. Always Some in
+    /// practice since the regex match already requires the date group;
+    /// kept optional so a future looser pattern can't panic here.
+    pub modified: Option<String>,
 }
 
 /// Frontend-supplied overrides applied on top of the imported JSON values.
@@ -185,8 +199,71 @@ pub fn parse_import_json(json_path: String) -> Result<ImportSummary, String> {
     })
 }
 
+/// Scan `<game_exe_dir>/Download` for account export files written by the
+/// in-game `!account download` command. Filenames follow the pattern
+/// `0x{IdHex}_{PlayerName}_{yyyy-MM-dd_HH.mm.ss}.json` (see FileHelper on
+/// the MHServerEmu side — time components are dot-separated, not
+/// underscore-separated). Non-matching files are silently skipped rather
+/// than surfaced as errors. Returns an empty list if game_exe is unset or
+/// the Download folder doesn't exist — the frontend falls back to the
+/// upload button in either case.
+#[tauri::command]
+pub fn scan_download_backups(game_exe: String) -> Result<Vec<BackupFileEntry>, String> {
+    if game_exe.trim().is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let dir = match Path::new(&game_exe).parent() {
+        Some(p) => p.join("Download"),
+        None => return Ok(Vec::new()),
+    };
+
+    if !dir.is_dir() {
+        return Ok(Vec::new());
+    }
+
+    let re = Regex::new(r"^(0x[0-9A-Fa-f]+)_(.+)_(\d{4}-\d{2}-\d{2}_\d{2}\.\d{2}\.\d{2})\.json$")
+        .map_err(|e| format!("Invalid pattern: {e}"))?;
+
+    let entries = fs::read_dir(&dir)
+        .map_err(|e| format!("Failed to read Download folder: {e}"))?;
+
+    let mut backups: Vec<BackupFileEntry> = Vec::new();
+
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if !path.is_file() {
+            continue;
+        }
+        let Some(file_name) = path.file_name().and_then(|n| n.to_str()) else {
+            continue;
+        };
+        let Some(caps) = re.captures(file_name) else {
+            continue;
+        };
+
+        let date_raw = &caps[3];
+        let modified = date_raw
+            .split_once('_')
+            .map(|(date, time)| format!("{date}T{}Z", time.replace('.', ":")));
+
+        backups.push(BackupFileEntry {
+            path: path.to_string_lossy().to_string(),
+            file_name: file_name.to_string(),
+            player_name: caps[2].to_string(),
+            account_id_hex: caps[1].to_string(),
+            modified,
+        });
+    }
+
+    // Newest first.
+    backups.sort_by(|a, b| b.modified.cmp(&a.modified));
+
+    Ok(backups)
+}
+
 /// Return every account in the database, ordered by player name.
-/// Used to populate the target picker in Replace mode.
+/// Used for client-side email/player-name conflict checking during Add.
 #[tauri::command]
 pub fn list_accounts_for_import(server_exe: String) -> Result<Vec<AccountEntry>, String> {
     let conn = open_db(&server_exe)?;

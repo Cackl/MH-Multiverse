@@ -5,7 +5,6 @@
   import { listen, type UnlistenFn } from '@tauri-apps/api/event'
   import { appConfig, serverRunning, setBackupTargets } from '../lib/store'
   import PanelSidebar from './PanelSidebar.svelte'
-  import AccountImport from './AccountImport.svelte'
 
   // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -61,7 +60,7 @@
 
   // ── State ──────────────────────────────────────────────────────────────────
 
-  type Section = 'update' | 'backups' | 'import'
+  type Section = 'update' | 'backups'
   let section: Section = 'update'
 
   // Update
@@ -296,16 +295,6 @@
         on:keydown={(e) => e.key === 'Enter' && (section = 'backups')}
       >
         Backups
-      </div>
-      <div
-        class="nav-item"
-        class:selected={section === 'import'}
-        on:click={() => section = 'import'}
-        role="button"
-        tabindex="0"
-        on:keydown={(e) => e.key === 'Enter' && (section = 'import')}
-      >
-        Account Import
       </div>
     </nav>
   </PanelSidebar>
@@ -562,12 +551,6 @@
 
       </div>
 
-      {:else if section === 'import'}
-      <div class="ops-section-head">
-        <div class="section-title">Account Import</div>
-      </div>
-      <AccountImport />
-    
       {/if}
 
   </div><!-- ops-layout -->

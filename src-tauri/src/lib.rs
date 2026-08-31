@@ -132,6 +132,7 @@ pub fn run() {
             events::merge_events_override,
             events::merge_schedule_override,
             accounts::parse_import_json,
+            accounts::scan_download_backups,
             accounts::list_accounts_for_import,
             accounts::import_account,
         ])
