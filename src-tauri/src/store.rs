@@ -250,6 +250,34 @@ fn guid_view_to_disk(g: GuidItem) -> Result<GuidItemDisk, String> {
     })
 }
 
+/// Mirrors `slugify()` in `StoreEditorModal.svelte` exactly: lowercase, collapse
+/// each run of whitespace into a single `_`, then drop anything that isn't
+/// ascii `a-z`, `0-9`, or `_`. Must stay in sync with the frontend implementation -
+/// this is what keeps a generated bundle's filename and its catalog URL pointing
+/// at the same file for titles containing punctuation (apostrophes, colons, etc.).
+fn slugify(s: &str) -> String {
+    let lower = s.to_lowercase();
+
+    let mut collapsed = String::with_capacity(lower.len());
+    let mut in_run = false;
+    for ch in lower.chars() {
+        if ch.is_whitespace() {
+            if !in_run {
+                collapsed.push('_');
+                in_run = true;
+            }
+        } else {
+            collapsed.push(ch);
+            in_run = false;
+        }
+    }
+
+    collapsed
+        .chars()
+        .filter(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || *c == '_')
+        .collect()
+}
+
 // ── Path helpers ──────────────────────────────────────────────────────────────
 
 fn server_dir_of(server_exe: &str) -> Result<PathBuf, String> {
@@ -619,7 +647,7 @@ pub fn generate_bundle_html(
         .replace("{price}", &price.to_string())
         .replace("{sku_hex}", &sku_hex);
 
-    let slug = title.to_lowercase().replace(' ', "_");
+    let slug = slugify(title);
     let filename = format!("{slug}_{sku}_en_bundle.html");
 
     // ── Unconditional backup ──────────────────────────────────────────────────

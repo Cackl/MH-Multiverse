@@ -13,6 +13,7 @@
     type CatalogEntry,
     type CatalogEntryWithMeta,
     type GuidItem,
+    type UrlEntry,
   } from '../lib/catalogMeta'
 
   type EditableStoreState = {
@@ -432,9 +433,25 @@
 
   // ── Entry assembly ────────────────────────────────────────────────────────
 
-  function buildEntry(): CatalogEntry {
+  function buildEntry(regenerateUrls: boolean = false): CatalogEntry {
     const order    = formOrder
     const isBundle = offerType === 'bundle' || offerType === 'bogo'
+
+    // Auto mode is only safe to recompute when we're explicitly regenerating
+    // (the Generate button, which is about to write a matching file) or when
+    // there's no existing URL to lose. Otherwise a stock entry's real CDN URL —
+    // which legitimately shares STORECDN_HTML_BASE with our own generated
+    // URLs — would get silently replaced with a URL pointing at a file that
+    // was never generated. See inferOverrideMode: it infers "auto" from a
+    // URL prefix match, which can't tell "we generated this" apart from
+    // "this happens to live on the same real CDN host".
+    function autoOrPreserved(auto: string, existing: UrlEntry[] | undefined): UrlEntry[] {
+      if (regenerateUrls || !existing?.length) {
+        return [{ LanguageId: 'en_us', Url: auto, ImageData: '' }]
+      }
+      return existing
+    }
+
     return {
       SkuId: workingSku,
       GuidItems: cloneGuidItems(formGuidItems),
@@ -449,12 +466,12 @@
       InfoUrls: isBundle
         ? overrideApache
           ? (formInfoUrl ? [{ LanguageId: 'en_us', Url: formInfoUrl, ImageData: '' }] : (entry?.InfoUrls ?? []))
-          : [{ LanguageId: 'en_us', Url: autoInfoUrl, ImageData: '' }]
+          : autoOrPreserved(autoInfoUrl, entry?.InfoUrls)
         : (entry?.InfoUrls ?? []),
       ContentData: isBundle
         ? overrideApache
           ? (formContentUrl ? [{ LanguageId: 'en_us', Url: formContentUrl, ImageData: '' }] : (entry?.ContentData ?? []))
-          : [{ LanguageId: 'en_us', Url: autoThumbUrl, ImageData: '' }]
+          : autoOrPreserved(autoThumbUrl, entry?.ContentData)
         : (entry?.ContentData ?? []),
       Type: { Name: formTypeName, Order: order },
       TypeModifiers: buildModifiers([...selectedModifiers], order),
@@ -619,7 +636,7 @@
     saveSuccess   = false
     try {
       // Save first so catalog JSON is always in sync with the generated HTML.
-      const built  = buildEntry()
+      const built  = buildEntry(true)
       const target = entry!.source_file
       await invoke('save_catalog_entry', { serverExe, entry: built, targetFile: target })
       initialStateSerialized = currentStateSerialized
