@@ -91,8 +91,11 @@ mh-multiverse/
 │   ├── Cargo.toml
 │   └── tauri.conf.json           Window config (1100×700, min 900×580, decorations: false)
 │
+├── scripts/
+│   └── bump-version.js           Version bump script (package.json, Cargo.toml, tauri.conf.json)
+│
 ├── package.json
-├── vite.config.ts                Injects __APP_VERSION__ from tauri.conf.json
+├── vite.config.ts                
 ├── svelte.config.js
 ├── tsconfig.app.json
 ├── tsconfig.node.json
