@@ -6,7 +6,7 @@ import { resolve } from "node:path";
 const host = process.env.TAURI_DEV_HOST;
 
 const tauriConf = JSON.parse(
-  readFileSync(resolve(__dirname, "src-tauri", "tauri.conf.json"), "utf-8")
+  readFileSync(resolve(import.meta.dirname, "src-tauri", "tauri.conf.json"), "utf-8")
 );
 
 const appVersion =
