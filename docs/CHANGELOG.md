@@ -3,6 +3,18 @@
 <br>
 
 ---
+# Version 1.3.2 Release
+
+## What's Changed
+
+### Store Catalog Editor: Bundle URL Fixes
+- Fixed saving a bundle silently overwriting its `InfoUrls`/`ContentData` with a fresh CDN URL, even when nothing about the URL was meant to change. This could replace a stock entry's real, working store URLs with a link to a file that was never generated
+- The auto-generated URL is now only recomputed via the Generate button, which is about to write a matching file, as a normal save preserves whatever URL was already there
+- Fixed a mismatch between the frontend and `generate_bundle_html`'s filename formatting - the server only replaced spaces, while the frontend also stripped punctuation so titles containing apostrophes, colons, etc. could produce a catalog URL that didn't match the actual generated file. Both now use the same rules
+
+<br>
+
+---
 # Version 1.3.1 Release
 
 ## What's Changed
