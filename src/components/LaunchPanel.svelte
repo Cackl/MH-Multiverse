@@ -17,7 +17,6 @@
   let editingServer: Server | null = null
   let launchError = ''
   let launching = false
-  let pollTimer: ReturnType<typeof setInterval> | null = null
 
   let dashboardPort = 8080
   let dashboardPath = `/Dashboard/`
@@ -46,9 +45,6 @@
   }
 
   onMount(async () => {
-    await checkGame()
-    pollTimer = setInterval(checkGame, 3000)
-
     // Read WebFrontend port for localhost dashboard URL
     if ($appConfig.server_exe) {
       try {
@@ -63,26 +59,8 @@
   })
 
   onDestroy(() => {
-    if (pollTimer) clearInterval(pollTimer)
     cancelDelete()
   })
-
-  async function checkGame() {
-    try {
-      const running = await invoke<boolean>('game_is_running')
-      gameRunning.set(running)
-    } catch {}
-  }
-
-  function normalizeHost(raw: string): string {
-    const withoutScheme = raw.includes('://')
-      ? raw.slice(raw.indexOf('://') + 3)
-      : raw
-    const slashPos = withoutScheme.indexOf('/')
-    return slashPos === -1
-      ? withoutScheme.trim()
-      : withoutScheme.slice(0, slashPos).trim()
-  }
 
   function openAdd() {
     editingServer = null
@@ -125,7 +103,7 @@
       url = `http://localhost:${dashboardPort}${dashboardPath}`
     } else {
       const scheme = activeServer.use_https ? 'https' : 'http'
-      const host   = normalizeHost(activeServer.host)
+      const host   = await invoke<string>('normalize_host', { raw: activeServer.host })
       url = `${scheme}://${host}/Dashboard/`
     }
     await openUrl(url)
@@ -134,7 +112,7 @@
   async function openHome() {
     if (!activeServer) return
     const scheme = activeServer.use_https ? 'https' : 'http'
-    const host = normalizeHost(activeServer.host)
+    const host = await invoke<string>('normalize_host', { raw: activeServer.host })
     await openUrl(`${scheme}://${host}/`)
   }
 

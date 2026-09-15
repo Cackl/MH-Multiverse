@@ -1,5 +1,25 @@
+// ── Prefix-ordering safety net ───────────────────────────────────────────────
+// Both maps below do a first-match scan over a prefix list. If a prefix is
+// itself a prefix of a later, more specific one in the same list, the later
+// one would never be reached. Verified at load time rather than left to
+// convention alone.
+
+function assertPrefixOrder<T>(entries: [string, T][], listName: string): void {
+  for (let i = 0; i < entries.length; i++) {
+    for (let j = i + 1; j < entries.length; j++) {
+      const [earlier] = entries[i]
+      const [later] = entries[j]
+      if (later.startsWith(earlier)) {
+        throw new Error(
+          `${listName}: '${earlier}' (index ${i}) is a prefix of '${later}' (index ${j}) ` +
+          `but appears first, so '${later}' can never match. Move '${later}' before '${earlier}'.`
+        )
+      }
+    }
+  }
+}
+
 // ── Category prefix map ────────────────────────────────────────────────────────
-// Order matters: eRT_ must come after eRTV_ to avoid false prefix matches.
 
 export const CATEGORY_PREFIXES: [string, string][] = [
   ['eGTV_',  'Global'],
@@ -17,6 +37,8 @@ export const CATEGORY_PREFIXES: [string, string][] = [
   ['ePETV_', 'Public Events'],
 ]
 
+assertPrefixOrder(CATEGORY_PREFIXES, 'CATEGORY_PREFIXES')
+
 export function categoryForSetting(setting: string): string {
   for (const [prefix, label] of CATEGORY_PREFIXES) {
     if (setting.startsWith(prefix)) return label
@@ -26,22 +48,74 @@ export function categoryForSetting(setting: string): string {
 
 // Maps a setting prefix to a substring matched case-insensitively against
 // blueprint file paths in Calligraphy.sip. Used to scope prototype searches
-// to the correct blueprint category. Returns null for Global settings (no
+// to the correct blueprint category. Maps to null for Global settings (no
 // prototype required) and for unknown prefixes (search across all blueprints).
+const BLUEPRINT_HINT_PREFIXES: [string, string | null][] = [
+  ['eGTV_',  null], // Global — no prototype
+  ['eWETV_', 'WorldEntity'],
+  ['ePTV_',  'Power'],
+  ['eRTV_',  'Region'],
+  ['eRT_',   'Region'],
+  ['eLTTV_', 'LootTable'],
+  ['eMTV_',  'Mission'],
+  ['eCTV_',  'Condition'],
+  ['eAETV_', 'Avatar'],
+  ['eATV_',  'Area'],
+  ['ePOTV_', 'PopulationObject'],
+  ['ePETV_', 'PublicEvent'],
+]
+
+assertPrefixOrder(BLUEPRINT_HINT_PREFIXES, 'BLUEPRINT_HINT_PREFIXES')
+
 export function blueprintHintForSetting(setting: string): string | null {
-  if (setting.startsWith('eGTV_'))  return null              // Global — no prototype
-  if (setting.startsWith('eWETV_')) return 'WorldEntity'
-  if (setting.startsWith('ePTV_'))  return 'Power'
-  if (setting.startsWith('eRTV_'))  return 'Region'
-  if (setting.startsWith('eRT_'))   return 'Region'
-  if (setting.startsWith('eLTTV_')) return 'LootTable'
-  if (setting.startsWith('eMTV_'))  return 'Mission'
-  if (setting.startsWith('eCTV_'))  return 'Condition'
-  if (setting.startsWith('eAETV_')) return 'Avatar'
-  if (setting.startsWith('eATV_'))  return 'Area'
-  if (setting.startsWith('ePOTV_')) return 'PopulationObject'
-  if (setting.startsWith('ePETV_')) return 'PublicEvent'
+  for (const [prefix, hint] of BLUEPRINT_HINT_PREFIXES) {
+    if (setting.startsWith(prefix)) return hint
+  }
   return null
+}
+
+// ── Tuning/Events payload types ─────────────────────────────────────────────
+// Mirror the Rust structs in tuning.rs and events.rs. Previously re-declared
+// independently in TuningPanel.svelte, EventsPanel.svelte,
+// EventDefinitionEditorModal.svelte, and EventRuleEditorModal.svelte.
+
+export interface TuningFileInfo {
+  canonical_name: string
+  enabled: boolean
+  toggleable: boolean
+  relative_path: string
+  event_id: string | null
+  was_auto_enabled: boolean
+}
+
+export interface EventDefinition {
+  id: string
+  display_name: string
+  file_path: string
+  daily_gift: string | null
+  instanced_missions: string[] | null
+  is_hidden: boolean | null
+}
+
+export interface EventsData {
+  definitions: EventDefinition[]
+  using_override: boolean
+}
+
+export interface ScheduleRule {
+  name: string
+  is_enabled: boolean
+  rule_type: string
+  start_day_of_week: string | null
+  start_month: number | null
+  start_day: number | null
+  duration_days: number | null
+  events: string[]
+}
+
+export interface ScheduleData {
+  rules: ScheduleRule[]
+  using_override: boolean
 }
 
 // ── Known file sets ────────────────────────────────────────────────────────────

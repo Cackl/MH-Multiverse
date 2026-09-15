@@ -3,7 +3,7 @@ export type PlayerSession = {
   username: string
   email?: string
   user_level?: number       // 0 = Player, 1 = Moderator, 2 = Admin
-  flags?: number            // bit 0 = banned
+  flags?: number            // AccountFlags bitmask: 2 = banned, 16 = whitelisted
   gazillionite_balance?: number
   last_logout_time?: number // unix timestamp
   avatar_count?: number
@@ -27,11 +27,11 @@ export function userLevelLabel(level?: number): string {
 }
 
 export function isBanned(flags?: number): boolean {
-  return (flags === 2);
+  return ((flags ?? 0) & 2) !== 0;
 }
 
 export function isWhitelisted(flags?: number): boolean {
-  return (flags === 16);
+  return ((flags ?? 0) & 16) !== 0;
 }
 
 function timestampToDate(ts: number): Date {

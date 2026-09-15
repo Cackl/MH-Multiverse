@@ -39,10 +39,7 @@ struct UpdateProgressPayload {
 // ── Path helpers ──────────────────────────────────────────────────────────────
 
 fn server_dir_from_exe(server_exe: &str) -> Result<PathBuf, String> {
-    Path::new(server_exe)
-        .parent()
-        .ok_or_else(|| "Cannot determine server directory from exe path".to_string())
-        .map(|p| p.to_path_buf())
+    crate::paths::server_dir(server_exe)
 }
 
 fn target_build_date() -> String {

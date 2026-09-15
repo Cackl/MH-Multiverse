@@ -3,24 +3,9 @@
   import { invoke } from '@tauri-apps/api/core'
   import { openPath } from '@tauri-apps/plugin-opener'
   import { appConfig } from '../lib/store'
+  import type { PatchFileInfo, PatchEntry } from '../lib/patchesMeta'
   import PanelSidebar from './PanelSidebar.svelte'
   import PatchEditorModal from './PatchEditorModal.svelte'
-
-  // ── Types ──────────────────────────────────────────────────────────────────
-
-  interface PatchFileInfo {
-    file_name: string
-    enabled: boolean
-  }
-
-  interface PatchEntry {
-    Enabled: boolean
-    Prototype: string
-    Path: string
-    Description: string
-    ValueType: string
-    Value: unknown
-  }
 
   // ── State ──────────────────────────────────────────────────────────────────
 

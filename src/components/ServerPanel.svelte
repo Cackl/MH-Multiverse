@@ -17,6 +17,10 @@
     serverError,
     clearServerError,
     setServerError,
+    shutdownCountdownSec,
+    shutdownCountdownActive,
+    startShutdownCountdown,
+    cancelShutdownCountdown,
   } from '../lib/store'
   import { FALLBACK_COMMANDS } from '../lib/serverCommands'
   import PlayersBlade from './PlayersBlade.svelte'
@@ -36,27 +40,16 @@
   let dashboardPort = DASHBOARD_PORT_DEFAULT
   let dashboardPath = '/Dashboard/'
 
-  let countdownSec = 0
-  let countdownInterval: ReturnType<typeof setInterval> | null = null
-  $: countdownActive = countdownInterval !== null
-
   $: if ($serverRunning) starting = false
   $: if (!$serverRunning) stopping = false
-  $: if (!$serverRunning && countdownActive) clearCountdown()
 
   $: countdownLabel = (() => {
-    if (!countdownActive) return ''
-    const m = Math.floor(countdownSec / 60)
-    const s = countdownSec % 60
+    if (!$shutdownCountdownActive) return ''
+    const m = Math.floor($shutdownCountdownSec / 60)
+    const s = $shutdownCountdownSec % 60
     if (m > 0) return `${m}m ${String(s).padStart(2, '0')}s`
     return `${s}s`
   })()
-
-  function clearCountdown() {
-    if (countdownInterval) clearInterval(countdownInterval)
-    countdownInterval = null
-    countdownSec = 0
-  }
 
   async function initiateStop() {
     const delay = $appConfig.shutdown.delay_minutes
@@ -72,34 +65,11 @@
       return
     }
 
-    countdownSec = delay * 60
-    const initialMsg = $appConfig.shutdown.broadcast_message.replace('{minutes}', String(delay))
-    try { await invoke('send_command', { cmd: `!server broadcast ${initialMsg}` }) } catch {}
-
-    countdownInterval = setInterval(async () => {
-      countdownSec -= 1
-
-      if (countdownSec === 60) {
-        try { await invoke('send_command', { cmd: '!server broadcast Server is shutting down in 1 minute.' }) } catch {}
-      }
-
-      if (countdownSec <= 0) {
-        clearCountdown()
-        stopping = true
-        clearServerError()
-        try {
-          await invoke('stop_server')
-        } catch (e) {
-          setServerError(String(e))
-          stopping = false
-        }
-      }
-    }, 1000)
+    startShutdownCountdown(delay, $appConfig.shutdown.broadcast_message)
   }
 
   async function cancelStop() {
-    clearCountdown()
-    try { await invoke('send_command', { cmd: '!server broadcast Server shutdown has been cancelled.' }) } catch {}
+    await cancelShutdownCountdown()
   }
 
   $: filtered = (() => {
@@ -382,7 +352,7 @@
           <div class="header-error" title={$serverError}>{$serverError}</div>
         {/if}
         {#if $serverRunning}
-          {#if countdownActive}
+          {#if $shutdownCountdownActive}
             <button class="btn btn-sm btn-countdown" on:click={cancelStop}>
               <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" style="width:10px;height:10px;"><rect x="3" y="3" width="8" height="8" rx="1"/></svg>
               {countdownLabel}

@@ -1,4 +1,4 @@
-import { writable } from 'svelte/store'
+import { writable, get } from 'svelte/store'
 import { invoke } from '@tauri-apps/api/core'
 
 export type DataTab = 'events' | 'tuning' | 'store' | 'patches'
@@ -29,6 +29,79 @@ export function stopUptime() {
   if (_uptimeTimer) clearInterval(_uptimeTimer)
   _uptimeTimer = null
   uptimeSec.set(0)
+}
+
+// -- Game running poll (persists across tab switches) --
+// Previously scoped to LaunchPanel's onMount/onDestroy, so gameRunning only
+// updated while that panel was mounted and went stale on any other tab.
+
+let _gameRunningTimer: ReturnType<typeof setInterval> | null = null
+
+async function checkGameRunning() {
+  try {
+    const running = await invoke<boolean>('game_is_running')
+    gameRunning.set(running)
+  } catch {}
+}
+
+export function startGameRunningPoll() {
+  if (_gameRunningTimer) return
+  checkGameRunning()
+  _gameRunningTimer = setInterval(checkGameRunning, 3000)
+}
+
+// -- Shutdown countdown state (persists across tab switches) --
+
+export const shutdownCountdownSec = writable<number>(0)
+export const shutdownCountdownActive = writable<boolean>(false)
+
+let _shutdownCountdownInterval: ReturnType<typeof setInterval> | null = null
+
+export function clearShutdownCountdown() {
+  if (_shutdownCountdownInterval) clearInterval(_shutdownCountdownInterval)
+  _shutdownCountdownInterval = null
+  shutdownCountdownActive.set(false)
+  shutdownCountdownSec.set(0)
+}
+
+// Auto-cancel if the server stops running for any other reason (crash, manual
+// stop elsewhere), even while ServerPanel isn't mounted to observe it itself.
+serverRunning.subscribe(running => {
+  if (!running) clearShutdownCountdown()
+})
+
+export function startShutdownCountdown(delayMinutes: number, broadcastMessage: string) {
+  clearShutdownCountdown()
+
+  shutdownCountdownSec.set(delayMinutes * 60)
+  shutdownCountdownActive.set(true)
+
+  const initialMsg = broadcastMessage.replace('{minutes}', String(delayMinutes))
+  invoke('send_command', { cmd: `!server broadcast ${initialMsg}` }).catch(() => {})
+
+  _shutdownCountdownInterval = setInterval(async () => {
+    let remaining = 0
+    shutdownCountdownSec.update(s => { remaining = s - 1; return remaining })
+
+    if (remaining === 60) {
+      try { await invoke('send_command', { cmd: '!server broadcast Server is shutting down in 1 minute.' }) } catch {}
+    }
+
+    if (remaining <= 0) {
+      clearShutdownCountdown()
+      clearServerError()
+      try {
+        await invoke('stop_server')
+      } catch (e) {
+        setServerError(String(e))
+      }
+    }
+  }, 1000)
+}
+
+export async function cancelShutdownCountdown() {
+  clearShutdownCountdown()
+  try { await invoke('send_command', { cmd: '!server broadcast Server shutdown has been cancelled.' }) } catch {}
 }
 
 // -- Log state (persists across tab switches) --
@@ -247,56 +320,72 @@ export async function selectServer(serverId: string): Promise<void> {
   await invoke('set_active_server', { serverId })
 }
 
+/// Optimistically applies `updater` to `appConfig`, then invokes `invokeName`.
+/// On failure, reverts `appConfig` to its pre-update value instead of
+/// leaving the store showing a value the backend never actually persisted.
+async function updateConfigOptimistic(
+  updater: (c: AppConfig) => AppConfig,
+  invokeName: string,
+  invokeArgs: Record<string, unknown>,
+): Promise<void> {
+  const previous = get(appConfig)
+  appConfig.update(updater)
+  try {
+    await invoke(invokeName, invokeArgs)
+  } catch {
+    appConfig.set(previous)
+  }
+}
+
 export async function setGameExe(path: string): Promise<void> {
-  appConfig.update(c => ({ ...c, game_exe: path }))
-  await invoke('set_game_exe', { path })
+  await updateConfigOptimistic(c => ({ ...c, game_exe: path }), 'set_game_exe', { path })
 }
 
 export async function setServerExe(path: string): Promise<void> {
-  appConfig.update(c => ({ ...c, server_exe: path }))
-  await invoke('set_server_exe', { path })
+  await updateConfigOptimistic(c => ({ ...c, server_exe: path }), 'set_server_exe', { path })
 }
 
 export async function setTheme(theme: string): Promise<void> {
+  const previousTheme = get(activeTheme)
+  const previous = get(appConfig)
   activeTheme.set(theme)
   applyTheme(theme)
   appConfig.update(c => ({ ...c, theme }))
-  await invoke('set_theme', { theme })
+  try {
+    await invoke('set_theme', { theme })
+  } catch {
+    activeTheme.set(previousTheme)
+    applyTheme(previousTheme)
+    appConfig.set(previous)
+  }
 }
 
 export async function setLaunchOptions(options: LaunchOptions): Promise<void> {
-  appConfig.update(c => ({ ...c, launch_options: options }))
-  await invoke('set_launch_options', { options })
+  await updateConfigOptimistic(c => ({ ...c, launch_options: options }), 'set_launch_options', { options })
 }
 
 export async function setShutdownConfig(shutdown: ShutdownConfig): Promise<void> {
-  appConfig.update(c => ({ ...c, shutdown }))
-  await invoke('set_shutdown_config', { shutdown })
+  await updateConfigOptimistic(c => ({ ...c, shutdown }), 'set_shutdown_config', { shutdown })
 }
 
 export async function setTuningTags(tags: Record<string, string>): Promise<void> {
-  appConfig.update(c => ({ ...c, tuning_tags: tags }))
-  await invoke('set_tuning_tags', { tags })
+  await updateConfigOptimistic(c => ({ ...c, tuning_tags: tags }), 'set_tuning_tags', { tags })
 }
 
 export async function setTuningFavourites(favourites: string[]): Promise<void> {
-  appConfig.update(c => ({ ...c, tuning_favourites: favourites }))
-  await invoke('set_tuning_favourites', { favourites })
+  await updateConfigOptimistic(c => ({ ...c, tuning_favourites: favourites }), 'set_tuning_favourites', { favourites })
 }
 
 export async function setBackupTargets(targets: string[]): Promise<void> {
-  appConfig.update(c => ({ ...c, backup_targets: targets }))
-  await invoke('set_backup_targets', { targets })
+  await updateConfigOptimistic(c => ({ ...c, backup_targets: targets }), 'set_backup_targets', { targets })
 }
 
 export async function setStoreHtmlOutputDir(dir: string): Promise<void> {
-  appConfig.update(c => ({ ...c, store_html_output_dir: dir }))
-  await invoke('set_store_html_output_dir', { dir })
+  await updateConfigOptimistic(c => ({ ...c, store_html_output_dir: dir }), 'set_store_html_output_dir', { dir })
 }
 
 export async function setConsolePresets(presets: string[]): Promise<void> {
-  appConfig.update(c => ({ ...c, console_presets: presets }))
-  await invoke('set_console_presets', { presets })
+  await updateConfigOptimistic(c => ({ ...c, console_presets: presets }), 'set_console_presets', { presets })
 }
 
 export function setSchedulerNow(dt: Date) {

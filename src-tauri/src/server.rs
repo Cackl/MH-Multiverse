@@ -4,7 +4,7 @@ use std::collections::HashMap;
 use std::io::{BufRead, BufReader};
 use std::path::PathBuf;
 use std::process::{Child, Command, Stdio};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, LazyLock, Mutex};
 use tauri::{AppHandle, Emitter, Manager};
 use crate::ini;
 
@@ -301,17 +301,21 @@ fn lookup_account(db_path: &PathBuf, username: &str) -> Option<AccountInfo> {
 
 // -- Player log event parsing --
 
+static LOGIN_RE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"\[Account=(.+?)\s+\(.*?\),\s+SessionId=(0x[0-9A-Fa-f]+)\]").unwrap()
+});
+static LOGOUT_SESSION_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"SessionId=(0x[0-9A-Fa-f]+)").unwrap());
+static LOGOUT_USERNAME_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"Account=(.+?)\s+\(").unwrap());
+
 fn parse_player_log_event(raw: &str) -> Option<PlayerLogEvent> {
     if raw.contains("Accepted and registered client") {
         if !raw.contains("SessionId=") || !raw.contains("Account=") {
             return None;
         }
 
-        let re = Regex::new(
-            r"\[Account=(.+?)\s+\(.*?\),\s+SessionId=(0x[0-9A-Fa-f]+)\]"
-        ).ok()?;
-
-        let caps = re.captures(raw)?;
+        let caps = LOGIN_RE.captures(raw)?;
         let username = caps.get(1)?.as_str().trim().to_string();
         let session_id = caps.get(2)?.as_str().trim().to_string();
 
@@ -319,12 +323,10 @@ fn parse_player_log_event(raw: &str) -> Option<PlayerLogEvent> {
     }
 
     if raw.contains("Removed client") {
-        let session_re = Regex::new(r"SessionId=(0x[0-9A-Fa-f]+)").ok()?;
-        let session_caps = session_re.captures(raw)?;
+        let session_caps = LOGOUT_SESSION_RE.captures(raw)?;
         let session_id = session_caps.get(1)?.as_str().trim().to_string();
 
-        let username_re = Regex::new(r"Account=(.+?)\s+\(").ok()?;
-        let username = username_re
+        let username = LOGOUT_USERNAME_RE
             .captures(raw)
             .and_then(|caps| caps.get(1).map(|m| m.as_str().trim().to_string()))
             .unwrap_or_default();
@@ -504,12 +506,14 @@ pub async fn start_server(
     // Apache is no longer auto-started with the server.
     // Use the separate start_apache command instead.
 
-    let mut child = Command::new(&server_exe)
-        .current_dir(working_dir)
+    let mut cmd = Command::new(&server_exe);
+    cmd.current_dir(working_dir)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
-        .stdin(Stdio::piped())
-        .creation_flags(CREATE_NO_WINDOW)
+        .stdin(Stdio::piped());
+    #[cfg(target_os = "windows")]
+    cmd.creation_flags(CREATE_NO_WINDOW);
+    let mut child = cmd
         .spawn()
         .map_err(|e| format!("Failed to spawn server: {e}"))?;
 
@@ -537,79 +541,88 @@ pub async fn start_server(
         let player_state_for_thread = player_state.clone();
         let db_path_for_thread = db_path.clone();
 
-        std::thread::spawn(move || {
-            let reader = BufReader::new(stdout);
-            for line in reader.lines() {
-                match line {
-                    Ok(raw) => {
-                        let _ = tx.send(parse_log_line(&raw));
+        std::thread::Builder::new()
+            .name("mhserver-stdout-reader".into())
+            .spawn(move || {
+                let reader = BufReader::new(stdout);
+                for line in reader.lines() {
+                    match line {
+                        Ok(raw) => {
+                            let _ = tx.send(parse_log_line(&raw));
 
-                        if let Some(event) = parse_player_log_event(&raw) {
-                            handle_player_log_event(
-                                &app_for_players,
-                                &player_state_for_thread,
-                                &db_path_for_thread,
-                                event,
-                            );
+                            if let Some(event) = parse_player_log_event(&raw) {
+                                handle_player_log_event(
+                                    &app_for_players,
+                                    &player_state_for_thread,
+                                    &db_path_for_thread,
+                                    event,
+                                );
+                            }
                         }
+                        Err(_) => break,
                     }
-                    Err(_) => break,
                 }
-            }
-        });
+            })
+            .expect("failed to spawn stdout reader thread");
     }
 
     if let Some(stderr) = child.stderr.take() {
         let tx = log_tx;
-        std::thread::spawn(move || {
-            let reader = BufReader::new(stderr);
-            for line in reader.lines() {
-                match line {
-                    Ok(raw) if !raw.trim().is_empty() => {
-                        let _ = tx.send(LogLinePayload {
-                            time: String::new(),
-                            level: "err".into(),
-                            msg: raw.trim().to_string(),
-                        });
+        std::thread::Builder::new()
+            .name("mhserver-stderr-reader".into())
+            .spawn(move || {
+                let reader = BufReader::new(stderr);
+                for line in reader.lines() {
+                    match line {
+                        Ok(raw) if !raw.trim().is_empty() => {
+                            let _ = tx.send(LogLinePayload {
+                                time: String::new(),
+                                level: "err".into(),
+                                msg: raw.trim().to_string(),
+                            });
+                        }
+                        _ => break,
                     }
-                    _ => break,
                 }
-            }
-        });
+            })
+            .expect("failed to spawn stderr reader thread");
     }
 
     // Batcher thread
     {
         let app_clone = app.clone();
-        std::thread::spawn(move || {
-            const MAX_BATCH: usize = 50;
-            const FLUSH_INTERVAL: std::time::Duration = std::time::Duration::from_millis(50);
-            let mut batch: Vec<LogLinePayload> = Vec::with_capacity(MAX_BATCH);
+        std::thread::Builder::new()
+            .name("mhserver-log-batcher".into())
+            .spawn(move || {
+                const MAX_BATCH: usize = 50;
+                const FLUSH_INTERVAL: std::time::Duration = std::time::Duration::from_millis(50);
+                let mut batch: Vec<LogLinePayload> = Vec::with_capacity(MAX_BATCH);
 
-            loop {
-                match log_rx.recv_timeout(FLUSH_INTERVAL) {
-                    Ok(line) => {
-                        batch.push(line);
-                        if batch.len() >= MAX_BATCH {
-                            let _ = app_clone.emit("server-log", std::mem::take(&mut batch));
-                            batch.reserve(MAX_BATCH);
+                loop {
+                    match log_rx.recv_timeout(FLUSH_INTERVAL) {
+                        Ok(line) => {
+                            batch.push(line);
+                            if batch.len() >= MAX_BATCH {
+                                let _ = app_clone.emit("server-log", std::mem::take(&mut batch));
+                                batch.reserve(MAX_BATCH);
+                            }
                         }
-                    }
-                    Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
-                        if !batch.is_empty() {
-                            let _ = app_clone.emit("server-log", std::mem::take(&mut batch));
-                            batch.reserve(MAX_BATCH);
+                        Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
+                            if !batch.is_empty() {
+                                let _ = app_clone.emit("server-log", std::mem::take(&mut batch));
+                                batch.reserve(MAX_BATCH);
+                            }
                         }
-                    }
-                    Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
-                        if !batch.is_empty() {
-                            let _ = app_clone.emit("server-log", batch);
+                        Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
+                            if !batch.is_empty() {
+                                let _ = app_clone.emit("server-log", batch);
+                            }
+                            break;
                         }
-                        break;
                     }
                 }
-            }
-        });
+            })
+            .expect("failed to spawn log batcher thread");
     }
 
     // Watch for process exit on a background thread
@@ -618,51 +631,54 @@ pub async fn start_server(
         let app_clone = app.clone();
         let player_state_for_watcher = player_state.clone();
         let child_id = child.id();
-        std::thread::spawn(move || {
-            loop {
-                std::thread::sleep(std::time::Duration::from_millis(150));
-                let mut proc = match state_arc.lock() {
-                    Ok(g) => g,
-                    Err(_) => break,
-                };
-                if let Some(ref mut c) = proc.child {
-                    if c.id() != child_id {
-                        break;
-                    }
-                    match c.try_wait() {
-                        Ok(Some(status)) => {
-                            let code = status.code();
-                            proc.child = None;
-
-                            // Clean up Apache
-                            if let Some(mut apache) = proc.apache_child.take() {
-                                let _ = apache.kill();
-                                let _ = apache.wait();
-                            }
-
-                            // Release job object
-                            #[cfg(target_os = "windows")]
-                            { proc._job = None; }
-
-                            // Drop the lock before emitting
-                            drop(proc);
-
-                            clear_player_state(&app_clone, &player_state_for_watcher);
-
-                            let _ = app_clone.emit("server-stopped", ServerStatusPayload {
-                                running: false,
-                                exit_code: code,
-                            });
+        std::thread::Builder::new()
+            .name("mhserver-watcher".into())
+            .spawn(move || {
+                loop {
+                    std::thread::sleep(std::time::Duration::from_millis(150));
+                    let mut proc = match state_arc.lock() {
+                        Ok(g) => g,
+                        Err(_) => break,
+                    };
+                    if let Some(ref mut c) = proc.child {
+                        if c.id() != child_id {
                             break;
                         }
-                        Ok(None) => {}
-                        Err(_) => break,
+                        match c.try_wait() {
+                            Ok(Some(status)) => {
+                                let code = status.code();
+                                proc.child = None;
+
+                                // Clean up Apache
+                                if let Some(mut apache) = proc.apache_child.take() {
+                                    let _ = apache.kill();
+                                    let _ = apache.wait();
+                                }
+
+                                // Release job object
+                                #[cfg(target_os = "windows")]
+                                { proc._job = None; }
+
+                                // Drop the lock before emitting
+                                drop(proc);
+
+                                clear_player_state(&app_clone, &player_state_for_watcher);
+
+                                let _ = app_clone.emit("server-stopped", ServerStatusPayload {
+                                    running: false,
+                                    exit_code: code,
+                                });
+                                break;
+                            }
+                            Ok(None) => {}
+                            Err(_) => break,
+                        }
+                    } else {
+                        break;
                     }
-                } else {
-                    break;
                 }
-            }
-        });
+            })
+            .expect("failed to spawn watcher thread");
     }
 
     proc.child = Some(child);
@@ -700,45 +716,48 @@ pub async fn stop_server(app: AppHandle) -> Result<(), String> {
     // hard-kill it. This thread does NOT poll or emit — it just
     // sleeps and then checks once.
     let app_clone = app.clone();
-    std::thread::spawn(move || {
-        std::thread::sleep(std::time::Duration::from_secs(10));
+    std::thread::Builder::new()
+        .name("mhserver-stop-timeout".into())
+        .spawn(move || {
+            std::thread::sleep(std::time::Duration::from_secs(10));
 
-        let mut proc = match state_arc.lock() {
-            Ok(g) => g,
-            Err(_) => return,
-        };
+            let mut proc = match state_arc.lock() {
+                Ok(g) => g,
+                Err(_) => return,
+            };
 
-        // If child is already None, the watcher handled it — nothing to do.
-        if proc.child.is_none() {
-            return;
-        }
+            // If child is already None, the watcher handled it — nothing to do.
+            if proc.child.is_none() {
+                return;
+            }
 
-        // Still running after 10s — hard kill.
-        if let Some(ref mut c) = proc.child {
-            let _ = c.kill();
-            let _ = c.wait();
-        }
-        proc.child = None;
+            // Still running after 10s — hard kill.
+            if let Some(ref mut c) = proc.child {
+                let _ = c.kill();
+                let _ = c.wait();
+            }
+            proc.child = None;
 
-        if let Some(mut apache) = proc.apache_child.take() {
-            let _ = apache.kill();
-            let _ = apache.wait();
-        }
+            if let Some(mut apache) = proc.apache_child.take() {
+                let _ = apache.kill();
+                let _ = apache.wait();
+            }
 
-        #[cfg(target_os = "windows")]
-        { proc._job = None; }
+            #[cfg(target_os = "windows")]
+            { proc._job = None; }
 
-        // Watcher thread may have exited its loop when it saw child = None
-        // from the kill above, so emit ourselves as a fallback.
-        drop(proc);
+            // Watcher thread may have exited its loop when it saw child = None
+            // from the kill above, so emit ourselves as a fallback.
+            drop(proc);
 
-        clear_player_state(&app_clone, &player_state);
+            clear_player_state(&app_clone, &player_state);
 
-        let _ = app_clone.emit("server-stopped", ServerStatusPayload {
-            running: false,
-            exit_code: None,
-        });
-    });
+            let _ = app_clone.emit("server-stopped", ServerStatusPayload {
+                running: false,
+                exit_code: None,
+            });
+        })
+        .expect("failed to spawn stop-timeout thread");
 
     Ok(())
 }
@@ -770,13 +789,15 @@ pub async fn start_apache(app: AppHandle, server_exe: String) -> Result<(), Stri
     }
 
     let apache_working = apache_exe.parent().unwrap();
-    let child = Command::new(&apache_exe)
-        .current_dir(apache_working)
+    let mut cmd = Command::new(&apache_exe);
+    cmd.current_dir(apache_working)
         .env("APACHE_SERVER_ROOT", root_dir.join("Apache24"))
         .stdout(Stdio::null())
         .stderr(Stdio::null())
-        .stdin(Stdio::null())
-        .creation_flags(CREATE_NO_WINDOW)
+        .stdin(Stdio::null());
+    #[cfg(target_os = "windows")]
+    cmd.creation_flags(CREATE_NO_WINDOW);
+    let child = cmd
         .spawn()
         .map_err(|e| format!("Failed to start Apache: {e}"))?;
 
@@ -831,21 +852,20 @@ pub fn send_command(app: AppHandle, cmd: String) -> Result<(), String> {
     Ok(())
 }
 
+/// Exit detection for the server process is owned entirely by the watcher
+/// thread spawned in `start_server`, which clears `proc.child` once
+/// `try_wait` reports it has exited. This command just reads that state
+/// rather than calling `try_wait` itself, so there's a single source of
+/// truth for "has the process exited" instead of two independent pollers
+/// racing to observe the same one-shot exit status.
 #[tauri::command]
 pub fn server_is_running(app: AppHandle) -> bool {
     let state = app.state::<ServerState>();
-    let mut proc = match state.0.lock() {
+    let proc = match state.0.lock() {
         Ok(g) => g,
         Err(_) => return false,
     };
-    if let Some(ref mut child) = proc.child {
-        match child.try_wait() {
-            Ok(None) => true,
-            _ => false,
-        }
-    } else {
-        false
-    }
+    proc.child.is_some()
 }
 
 #[tauri::command]

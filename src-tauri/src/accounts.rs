@@ -97,7 +97,8 @@ pub struct ImportSummary {
 /// profile's email corresponds to for Restore (Replace mode).
 #[derive(Serialize)]
 pub struct AccountEntry {
-    pub id: i64,
+    /// Stored as a decimal string to preserve full i64 precision across the JS boundary.
+    pub id: String,
     pub player_name: String,
     pub email: String,
 }
@@ -127,16 +128,14 @@ pub struct ImportOverrides {
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
-fn db_path(server_exe: &str) -> PathBuf {
-    Path::new(server_exe)
-        .parent()
-        .unwrap_or(Path::new("."))
+fn db_path(server_exe: &str) -> Result<PathBuf, String> {
+    Ok(crate::paths::server_dir(server_exe)?
         .join("Data")
-        .join("Account.db")
+        .join("Account.db"))
 }
 
 fn open_db(server_exe: &str) -> Result<Connection, String> {
-    let conn = Connection::open(db_path(server_exe))
+    let conn = Connection::open(db_path(server_exe)?)
         .map_err(|e| format!("Failed to open database: {e}"))?;
     // The Item table has three FOREIGN KEY constraints on ContainerDbGuid
     // (Player, Avatar, TeamUp). SQLite checks all of them independently,
@@ -279,8 +278,9 @@ pub fn list_accounts_for_import(server_exe: String) -> Result<Vec<AccountEntry>,
 
     let rows = stmt
         .query_map([], |row| {
+            let id: i64 = row.get(0)?;
             Ok(AccountEntry {
-                id: row.get(0)?,
+                id: id.to_string(),
                 player_name: row.get(1)?,
                 email: row.get(2)?,
             })
@@ -308,7 +308,7 @@ pub fn import_account(
     server_exe: String,
     json_path: String,
     mode: String,
-    target_id: Option<i64>,
+    target_id: Option<String>,
     overrides: Option<ImportOverrides>,
     server_state: State<'_, ServerState>,
 ) -> Result<(), String> {
@@ -333,8 +333,10 @@ pub fn import_account(
             do_add_with_overrides(&tx, &overrides, &data)
         }
         "replace" => {
-            let target = match target_id {
-                Some(t) => t,
+            let target: i64 = match target_id {
+                Some(t) => t
+                    .parse()
+                    .map_err(|e| format!("Invalid target account id '{t}': {e}"))?,
                 None => return Err("A target account must be selected for Replace mode.".to_owned()),
             };
             do_replace(&tx, target, &data)
@@ -472,8 +474,41 @@ fn do_replace(
         return Err("Target account not found.".into());
     }
 
-    // Delete existing player data. The ON DELETE CASCADE on Player.DbGuid
-    // propagates automatically to Avatar, TeamUp, Item, and ControlledEntity.
+    // Delete existing player data. `open_db` sets `PRAGMA foreign_keys = OFF`
+    // (Item's three container FKs can't all be satisfied at once), so
+    // `ON DELETE CASCADE` never fires here - every child table must be
+    // cleared explicitly, in dependency order. `insert_entities` shows Item
+    // and ControlledEntity rows can be contained by an Avatar or TeamUp as
+    // well as directly by the Player, so those must be removed before their
+    // container rows or they're orphaned rather than deleted.
+    conn.execute(
+        "DELETE FROM Item WHERE ContainerDbGuid = ?1 \
+         OR ContainerDbGuid IN (SELECT DbGuid FROM Avatar WHERE ContainerDbGuid = ?1) \
+         OR ContainerDbGuid IN (SELECT DbGuid FROM TeamUp WHERE ContainerDbGuid = ?1)",
+        params![target_id],
+    )
+    .map_err(|e| format!("Failed to remove existing item data: {e}"))?;
+
+    conn.execute(
+        "DELETE FROM ControlledEntity WHERE ContainerDbGuid = ?1 \
+         OR ContainerDbGuid IN (SELECT DbGuid FROM Avatar WHERE ContainerDbGuid = ?1) \
+         OR ContainerDbGuid IN (SELECT DbGuid FROM TeamUp WHERE ContainerDbGuid = ?1)",
+        params![target_id],
+    )
+    .map_err(|e| format!("Failed to remove existing controlled entity data: {e}"))?;
+
+    conn.execute(
+        "DELETE FROM Avatar WHERE ContainerDbGuid = ?1",
+        params![target_id],
+    )
+    .map_err(|e| format!("Failed to remove existing avatar data: {e}"))?;
+
+    conn.execute(
+        "DELETE FROM TeamUp WHERE ContainerDbGuid = ?1",
+        params![target_id],
+    )
+    .map_err(|e| format!("Failed to remove existing team-up data: {e}"))?;
+
     conn.execute(
         "DELETE FROM Player WHERE DbGuid = ?1",
         params![target_id],

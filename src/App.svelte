@@ -7,11 +7,12 @@
   import ConfigPanel from './components/ConfigPanel.svelte'
   import OpsPanel from './components/OpsPanel.svelte'
   import AppPanel from './components/AppPanel.svelte'
-  import { activeTab, loadConfig } from './lib/store'
+  import { activeTab, loadConfig, startGameRunningPoll } from './lib/store'
   import { initServerEventBridge } from './lib/serverEvents'
   import DataPanel from './components/DataPanel.svelte'
 
   onMount(async () => {
+    startGameRunningPoll()
     await Promise.all([
       loadConfig(),
       initServerEventBridge(),

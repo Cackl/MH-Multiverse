@@ -6,50 +6,12 @@
   import { activeDataTab, tuningFocusFile } from '../lib/store'
   import { get } from 'svelte/store'
   import { eventTimezoneOffset } from '../lib/store'
+  import type { TuningFileInfo, EventDefinition, EventsData, ScheduleRule, ScheduleData } from '../lib/tuningMeta'
   import PanelSidebar from './PanelSidebar.svelte'
   import EventRuleEditorModal from './EventRuleEditorModal.svelte'
   import EventDefinitionEditorModal from './EventDefinitionEditorModal.svelte'
 
   // ── Types ───────────────────────────────────────────────────────────────────
-
-  interface TuningFileInfo {
-    canonical_name: string
-    enabled: boolean
-    toggleable: boolean
-    relative_path: string
-    event_id: string | null
-    was_auto_enabled: boolean
-  }
-
-  interface EventDefinition {
-    id: string
-    display_name: string
-    file_path: string
-    daily_gift: string | null
-    instanced_missions: string[] | null
-    is_hidden: boolean | null
-  }
-
-  interface ScheduleRule {
-    name: string
-    is_enabled: boolean
-    rule_type: string
-    start_day_of_week: string | null
-    start_month: number | null
-    start_day: number | null
-    duration_days: number | null
-    events: string[]
-  }
-
-  interface EventsData {
-    definitions: EventDefinition[]
-    using_override: boolean
-  }
-
-  interface ScheduleData {
-    rules: ScheduleRule[]
-    using_override: boolean
-  }
 
   type RuleStatus = 'active' | 'scheduled' | 'disabled'
 
@@ -237,7 +199,7 @@
       const [evts, sched, tFiles] = await Promise.all([
         invoke<EventsData>('load_events',         { serverExe: $appConfig.server_exe }),
         invoke<ScheduleData>('load_event_schedule', { serverExe: $appConfig.server_exe }),
-        invoke<TuningFileInfo[]>('scan_tuning_files', { serverExe: $appConfig.server_exe }),
+        invoke<TuningFileInfo[]>('scan_tuning_files', { serverExe: $appConfig.server_exe, applyAutoEnable: true }),
       ])
       eventsData   = evts
       scheduleData = sched

@@ -9,6 +9,7 @@ mod tuning;
 mod updater;
 mod patches;
 mod accounts;
+mod paths;
 
 pub use config::*;
 
@@ -32,6 +33,7 @@ pub fn run() {
         .manage(server::DbPath::empty())
         .manage(calligraphy::CatalogueState(Mutex::new(None)))
         .manage(store::DisplayNameState::new())
+        .manage(launcher::GameProcessState::new())
         .setup(|app| {
             app.handle().plugin(tauri_plugin_dialog::init())?;
             app.handle().plugin(tauri_plugin_opener::init())?;
@@ -81,6 +83,7 @@ pub fn run() {
             config::set_console_presets,
             launcher::launch_game,
             launcher::game_is_running,
+            launcher::normalize_host,
             server::start_server,
             server::stop_server,
             server::start_apache,

@@ -1,5 +1,6 @@
 <script lang="ts">
   import { invoke } from '@tauri-apps/api/core'
+  import type { PatchEntry } from '../lib/patchesMeta'
 
   // ── Props ──────────────────────────────────────────────────────────────────
 
@@ -11,15 +12,6 @@
   export let onDelete: () => void
 
   // ── Types ──────────────────────────────────────────────────────────────────
-
-  interface PatchEntry {
-    Enabled:     boolean
-    Prototype:   string
-    Path:        string
-    Description: string
-    ValueType:   string
-    Value:       unknown
-  }
 
   interface PrototypeMatch {
     path:           string

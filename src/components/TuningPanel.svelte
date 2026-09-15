@@ -3,31 +3,11 @@
   import { invoke } from '@tauri-apps/api/core'
   import { openPath } from '@tauri-apps/plugin-opener'
   import { appConfig, serverRunning, setTuningTags, setTuningFavourites, activeDataTab, tuningFocusFile } from '../lib/store'
-  import { categoryForSetting, KNOWN_CORE, KNOWN_EVENTS, CATEGORY_PREFIXES } from '../lib/tuningMeta'
+  import { categoryForSetting, KNOWN_CORE, KNOWN_EVENTS, CATEGORY_PREFIXES, type TuningFileInfo, type EventDefinition, type EventsData } from '../lib/tuningMeta'
   import PanelSidebar from './PanelSidebar.svelte'
   import TuningEditorModal from './TuningEditorModal.svelte'
 
   // ── Types ──────────────────────────────────────────────────────────────────
-
-  interface TuningFileInfo {
-    canonical_name: string
-    enabled: boolean
-    toggleable: boolean
-    relative_path: string
-    event_id: string | null
-    was_auto_enabled: boolean
-  }
-
-  interface EventDefinition {
-    id: string
-    display_name: string
-    file_path: string
-  }
-
-  interface EventsData {
-    definitions: EventDefinition[]
-    using_override: boolean
-  }
 
   type Tag = 'core' | 'event' | 'custom' | ''
 
@@ -156,6 +136,7 @@
     try {
       files = await invoke<TuningFileInfo[]>('scan_tuning_files', {
         serverExe: $appConfig.server_exe,
+        applyAutoEnable: true,
       })
       // Load event definitions for "managed by" labels — non-fatal if absent
       try {
