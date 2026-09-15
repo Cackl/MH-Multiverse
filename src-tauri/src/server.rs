@@ -438,17 +438,15 @@ fn clear_player_state(
     emit_player_event(app, player_state, "clear", None, None);
 }
 
-/// Returns true if the MHServerEmu child process appears to be running.
-/// Called by accounts::import_account to guard against concurrent DB access.
-pub fn server_process_is_running(state: &crate::server::ServerState) -> bool {
-    state.0.lock()
-        .map(|mut proc| {
-            proc.child
-                .as_mut()
-                .map(|child: &mut std::process::Child| child.try_wait().ok().flatten().is_none())
-                .unwrap_or(false)
-        })
-        .unwrap_or(false)
+/// Returns true if the MHServerEmu child process is running.
+///
+/// Reads the watcher-owned `child` slot rather than calling `try_wait`
+/// itself: the watcher thread spawned in `start_server` is the single
+/// source of truth for exit detection and clears `child` when the process
+/// goes away. Shared by the `server_is_running` command,
+/// `accounts::import_account`, and `updater::run_update_inner`.
+pub fn server_process_is_running(state: &ServerState) -> bool {
+    state.0.lock().map(|proc| proc.child.is_some()).unwrap_or(false)
 }
 
 // -- Commands --
@@ -860,12 +858,7 @@ pub fn send_command(app: AppHandle, cmd: String) -> Result<(), String> {
 /// racing to observe the same one-shot exit status.
 #[tauri::command]
 pub fn server_is_running(app: AppHandle) -> bool {
-    let state = app.state::<ServerState>();
-    let proc = match state.0.lock() {
-        Ok(g) => g,
-        Err(_) => return false,
-    };
-    proc.child.is_some()
+    server_process_is_running(&app.state::<ServerState>())
 }
 
 #[tauri::command]

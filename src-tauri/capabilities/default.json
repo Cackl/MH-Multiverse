@@ -13,10 +13,6 @@
     "dialog:allow-open",
     "dialog:allow-save",
     {
-      "identifier": "http:default",
-      "allow": [{ "url": "http://localhost:*/**" }]
-    },
-    {
       "identifier": "opener:allow-open-url",
       "allow": [{ "url": "http://**" }, { "url": "https://**" }]
     },

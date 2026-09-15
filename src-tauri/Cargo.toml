@@ -32,7 +32,6 @@ windows = { version = "0.61", features = ["Win32_System_JobObjects", "Win32_Foun
 tauri-plugin-opener = "2.5.3"
 tauri-plugin-window-state = "2"
 sysinfo = "0.36.1"
-tauri-plugin-http = "2"
 reqwest = { version = "0.12", features = ["stream", "rustls-tls"], default-features = false }
 zip = "2"
 chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }

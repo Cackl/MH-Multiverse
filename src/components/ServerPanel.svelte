@@ -2,7 +2,6 @@
   import { tick, onMount } from 'svelte'
   import { invoke } from '@tauri-apps/api/core'
   import { openUrl } from '@tauri-apps/plugin-opener'
-  import { fetch as tauriFetch } from '@tauri-apps/plugin-http'
   import {
     serverRunning,
     appConfig,
@@ -162,38 +161,8 @@
 
   interface Cmd { f: string; a: string; d: string; invokerType?: string }
 
+  // TODO: replace FALLBACK_COMMANDS with a fetch of /Commands once MHServerEmu exposes that endpoint.
   let commands: Cmd[] = FALLBACK_COMMANDS.map(c => ({ ...c, invokerType: 'Any' }))
-
-  /* Will be made available when /Commands (or similar) endpoint is made available */
-  // async function loadServerCommands(retryMs = 0) {
-  //   if (retryMs > 0) await new Promise(r => setTimeout(r, retryMs))
-  //   try {
-  //     const res = await tauriFetch(`http://localhost:${dashboardPort}/Commands`)
-  //     if (!res.ok) return
-  //     const data: { command: string; description: string; userLevel: string; invokerType: string }[] = await res.json()
-  //     commands = data.map(entry => {
-  //       const full = entry.command
-  //       const argsMatch = full.match(/(\[.+)$/)
-  //       const args = argsMatch ? argsMatch[1] : ''
-  //       const base = args ? full.slice(0, full.length - args.length).trimEnd() : full
-  //       return { f: base.toLowerCase(), a: args, d: entry.description, invokerType: entry.invokerType }
-  //     })
-  //     console.log(`[MH Multiverse] Loaded ${commands.length} commands from server`)
-  //   } catch (e) {
-  //     console.warn('[MH Multiverse] Failed to load commands from server, using fallback', e)
-  //   }
-  // }
-
-  // let commandsLoadedForRunning = false
-
-  // $: if ($serverRunning && !commandsLoadedForRunning) {
-  //   commandsLoadedForRunning = true
-  //   loadServerCommands()
-  // }
-
-  // $: if (!$serverRunning) {
-  //   commandsLoadedForRunning = false
-  // }
 
   let acSel = -1
   let acSuggs: Cmd[] = []

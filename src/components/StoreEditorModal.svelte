@@ -656,6 +656,7 @@
       generatePath = await invoke<string>('generate_bundle_html', {
         serverExe,
         entry:        built,
+        slug:         slugify(formTitle),
         saveToApache: !overrideApache,
       })
     } catch (e) {
