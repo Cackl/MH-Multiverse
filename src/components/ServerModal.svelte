@@ -73,7 +73,7 @@
   }
 
   interface AccountEntry {
-    id: number
+    id: string
     player_name: string
     email: string
   }

@@ -97,7 +97,8 @@ pub struct ImportSummary {
 /// profile's email corresponds to for Restore (Replace mode).
 #[derive(Serialize)]
 pub struct AccountEntry {
-    pub id: i64,
+    /// Stored as a decimal string to preserve full i64 precision across the JS boundary.
+    pub id: String,
     pub player_name: String,
     pub email: String,
 }
@@ -279,8 +280,9 @@ pub fn list_accounts_for_import(server_exe: String) -> Result<Vec<AccountEntry>,
 
     let rows = stmt
         .query_map([], |row| {
+            let id: i64 = row.get(0)?;
             Ok(AccountEntry {
-                id: row.get(0)?,
+                id: id.to_string(),
                 player_name: row.get(1)?,
                 email: row.get(2)?,
             })
@@ -308,7 +310,7 @@ pub fn import_account(
     server_exe: String,
     json_path: String,
     mode: String,
-    target_id: Option<i64>,
+    target_id: Option<String>,
     overrides: Option<ImportOverrides>,
     server_state: State<'_, ServerState>,
 ) -> Result<(), String> {
@@ -333,8 +335,10 @@ pub fn import_account(
             do_add_with_overrides(&tx, &overrides, &data)
         }
         "replace" => {
-            let target = match target_id {
-                Some(t) => t,
+            let target: i64 = match target_id {
+                Some(t) => t
+                    .parse()
+                    .map_err(|e| format!("Invalid target account id '{t}': {e}"))?,
                 None => return Err("A target account must be selected for Replace mode.".to_owned()),
             };
             do_replace(&tx, target, &data)
