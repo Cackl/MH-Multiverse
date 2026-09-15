@@ -504,12 +504,14 @@ pub async fn start_server(
     // Apache is no longer auto-started with the server.
     // Use the separate start_apache command instead.
 
-    let mut child = Command::new(&server_exe)
-        .current_dir(working_dir)
+    let mut cmd = Command::new(&server_exe);
+    cmd.current_dir(working_dir)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
-        .stdin(Stdio::piped())
-        .creation_flags(CREATE_NO_WINDOW)
+        .stdin(Stdio::piped());
+    #[cfg(target_os = "windows")]
+    cmd.creation_flags(CREATE_NO_WINDOW);
+    let mut child = cmd
         .spawn()
         .map_err(|e| format!("Failed to spawn server: {e}"))?;
 
@@ -770,13 +772,15 @@ pub async fn start_apache(app: AppHandle, server_exe: String) -> Result<(), Stri
     }
 
     let apache_working = apache_exe.parent().unwrap();
-    let child = Command::new(&apache_exe)
-        .current_dir(apache_working)
+    let mut cmd = Command::new(&apache_exe);
+    cmd.current_dir(apache_working)
         .env("APACHE_SERVER_ROOT", root_dir.join("Apache24"))
         .stdout(Stdio::null())
         .stderr(Stdio::null())
-        .stdin(Stdio::null())
-        .creation_flags(CREATE_NO_WINDOW)
+        .stdin(Stdio::null());
+    #[cfg(target_os = "windows")]
+    cmd.creation_flags(CREATE_NO_WINDOW);
+    let child = cmd
         .spawn()
         .map_err(|e| format!("Failed to start Apache: {e}"))?;
 
