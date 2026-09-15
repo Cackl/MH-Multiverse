@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::path::Path;
 
 use crate::tuning::live_tuning_dir;
@@ -162,9 +162,9 @@ fn read_schedule_from_path(path: &Path) -> Result<Vec<ScheduleRule>, String> {
 }
 
 fn write_events_to_path(path: &Path, definitions: &[EventDefinition]) -> Result<(), String> {
-    // Events.json is an object keyed by event ID. HashMap does not guarantee
-    // key order; the override file is valid regardless of ordering.
-    let map: HashMap<&str, RawEventDefOut> = definitions
+    // BTreeMap keeps keys in sorted order, so re-saving the same definitions
+    // produces a stable diff instead of reshuffling on every save.
+    let map: BTreeMap<&str, RawEventDefOut> = definitions
         .iter()
         .map(|def| {
             (
