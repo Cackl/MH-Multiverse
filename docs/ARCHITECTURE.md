@@ -31,8 +31,11 @@ mh-multiverse/
 │   │   ├── serverEvents.ts       Tauri event listeners (log, start, stop, player-event)
 │   │   ├── serverCommands.ts     Fallback command list for autocomplete
 │   │   ├── playerMeta.ts         PlayerSession type, user level labels, ban/whitelist flag helpers
-│   │   ├── tuningMeta.ts         Tuning enum prefixes, category maps, known file sets
-│   │   └── catalogMeta.ts        Catalog type interfaces, type/modifier metadata, categories
+│   │   ├── tuningMeta.ts         Tuning enum prefixes, category maps, known file sets,
+│   │   │                         Tuning/Events payload type interfaces
+│   │   ├── catalogMeta.ts        Catalog type interfaces, type/modifier metadata, categories
+│   │   ├── configMeta.ts         ConfigPanel schema (Field/SubSection/NavSection types + data)
+│   │   └── patchesMeta.ts        Patches payload type interfaces (PatchFileInfo, PatchEntry)
 │   └── components/
 │       ├── TitleBar.svelte        Custom window chrome (drag region, min/max/close)
 │       ├── Rail.svelte            Left nav rail (MHO / Local / App groups)
@@ -82,8 +85,10 @@ mh-multiverse/
 │   │   │                         parsing, prototype search, ID/GUID/path resolution
 │   │   ├── updater.rs            Nightly build update (download/extract/install),
 │   │   │                         backup create/list/restore/delete with manifests
-│   │   └── accounts.rs           Account export (!account download JSON) import and restore;
-│   │                             Download/ folder scanning, ID remapping, Add/Replace modes
+│   │   ├── accounts.rs           Account export (!account download JSON) import and restore;
+│   │   │                         Download/ folder scanning, ID remapping, Add/Replace modes
+│   │   └── paths.rs             Shared server_dir() helper (derives the server's containing
+│   │                             directory from server_exe), used across most other modules
 │   ├── assets/
 │   │   └── display_names.json    Embedded prototype path → display name map (~260KB)
 │   ├── capabilities/
@@ -196,9 +201,9 @@ Five state objects are registered via `.manage()` in `lib.rs`:
 
 **`config.rs`** - `AppConfig` is the root persisted configuration. Stored as `multiverse.json` in the OS app data directory (`%APPDATA%\com.mhmultiverse.app\`). Passwords are encrypted with AES-256-GCM; the 256-bit key is stored in and retrieved from the OS keychain via `keyring`. Each config-mutating command loads the full config from disk, modifies the relevant field, and writes back - there is no in-process config cache on the Rust side. `AppConfig` includes a `console_presets` field (`Vec<String>`) for persisted command shortcut strings shown in the server panel. Server struct includes is_local (bool) and use_https (bool) fields; is_local suppresses host storage and triggers Config.ini-derived URL building at launch time.
 
-**`server.rs`** - Server lifecycle management and player session tracking. `start_server` spawns MHServerEmu with piped stdin/stdout/stderr and assigns it to a Windows Job Object (`JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`). Five background threads are spawned per server start: stdout reader, stderr reader, a batcher that collects log lines and emits them to the frontend in batches (up to 50 lines per 50ms flush interval), and a watcher thread that polls `try_wait()` every 150ms to detect process exit. `start_server` performs a pre-flight TcpStream::connect check against the configured WebFrontend Port before spawning, returning a clear error if the port is already in use.
+**`server.rs`** - Server lifecycle management and player session tracking. `start_server` spawns MHServerEmu with piped stdin/stdout/stderr and assigns it to a Windows Job Object (`JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`). Four named background threads are spawned per server start (`mhserver-stdout-reader`, `mhserver-stderr-reader`, `mhserver-log-batcher`, `mhserver-watcher`): stdout/stderr readers, a batcher that collects log lines and emits them to the frontend in batches (up to 50 lines per 50ms flush interval), and a watcher thread that polls `try_wait()` every 150ms to detect process exit, clearing `proc.child` and emitting `server-stopped` when it does. The watcher is the sole source of truth for exit state - `server_is_running` just reads `proc.child.is_some()` rather than also calling `try_wait()` itself. `start_server` performs a pre-flight TcpStream::connect check against the configured WebFrontend Port before spawning, returning a clear error if the port is already in use.
 
-The stdout reader additionally calls `parse_player_log_event` on every line; matches trigger `handle_player_log_event` which updates `PlayerState` and emits `player-event` to the frontend. On login, `lookup_account` opens a read-only SQLite connection to `Account.db` and queries the `Account`, `Player`, `Guild`, `GuildMember`, and `Avatar` tables to populate the full `PlayerSession`. On server stop, `clear_player_state` empties `PlayerState` and emits a `player-event` with `kind: "clear"`. `stop_server` writes `!server shutdown\n` to stdin and falls back to a hard kill after 10 seconds. Apache is managed independently via `start_apache`/`stop_apache`. `DbPath.set_from_server_exe` derives `<server_exe_dir>/Data/Account.db` and is called both when `set_server_exe` is invoked from config and when `start_server` is called.
+The stdout reader additionally calls `parse_player_log_event` on every line (regexes compiled once via `LazyLock`, not per line); matches trigger `handle_player_log_event` which updates `PlayerState` and emits `player-event` to the frontend. On login, `lookup_account` opens a read-only SQLite connection to `Account.db` and queries the `Account`, `Player`, `Guild`, `GuildMember`, and `Avatar` tables to populate the full `PlayerSession`. On server stop, `clear_player_state` empties `PlayerState` and emits a `player-event` with `kind: "clear"`. `stop_server` writes `!server shutdown\n` to stdin and spawns a fifth thread (`mhserver-stop-timeout`) that falls back to a hard kill after 10 seconds if the watcher hasn't already detected exit. Apache is managed independently via `start_apache`/`stop_apache` - `apache_is_running` still calls `try_wait()` directly, since there's no equivalent watcher thread tracking Apache's own exit. `DbPath.set_from_server_exe` derives `<server_exe_dir>/Data/Account.db` and is called both when `set_server_exe` is invoked from config and when `start_server` is called.
 
 **`events.rs`** - File I/O for `Events.json` / `EventsOverride.json` and `EventSchedule.json` / `EventScheduleOverride.json` in `Data/Game/LiveTuning/`. Both file pairs follow the same override pattern: the override file takes precedence if it exists, otherwise the default file is read. `Events.json` is a JSON object keyed by event ID; `EventSchedule.json` is a JSON array. Read functions deserialise into `EventDefinition` and `ScheduleRule` structs respectively. Write functions always target the override file. `reset_*_override` copies the default file over the override; `merge_*_override` adds any entries present in the default but missing from the override (by ID for events, by name for rules), without overwriting existing override entries.
 
@@ -251,7 +256,8 @@ The stdout reader additionally calls `parse_player_log_event` on every line; mat
 | Command | Parameters | Returns | Description |
 |---|---|---|---|
 | `launch_game` | `server_id: String` | `()` | Spawn game client with server args and launch options. siteconfigurl uses /Dashboard/SiteConfig.xml for patched local clients, /SiteConfig.xml for unpatched, normalize_host + use_https for remote |
-| `game_is_running` | - | `bool` | Poll sysinfo for `MarvelHeroesOmega.exe` |
+| `game_is_running` | - | `bool` | Poll a reused `sysinfo::System` (managed state) for `MarvelHeroesOmega.exe` |
+| `normalize_host` | `raw: String` | `String` | Strip scheme/path from a host string; also used internally by `launch_game`. Exposed so the frontend derives dashboard/home URLs from the same logic instead of a separate TS copy |
 
 ### Server (`server.rs`)
 
@@ -262,7 +268,7 @@ The stdout reader additionally calls `parse_player_log_event` on every line; mat
 | `start_apache` | `server_exe: String` | `()` | Spawn Apache (derived path from server_exe) |
 | `stop_apache` | - | `()` | Kill Apache process |
 | `send_command` | `cmd: String` | `()` | Write to MHServerEmu stdin |
-| `server_is_running` | - | `bool` | Check MHServerEmu child process via try_wait |
+| `server_is_running` | - | `bool` | Read watcher-owned state (`proc.child.is_some()`) - the exit watcher thread is the sole source of truth |
 | `apache_is_running` | - | `bool` | Check Apache child process via try_wait |
 | `get_players` | - | `Vec<PlayerSession>` | Return current online players sorted alphabetically |
 
@@ -321,7 +327,8 @@ The stdout reader additionally calls `parse_player_log_event` on every line; mat
 | `delete_catalog_entry` | `server_exe: String, sku_id: String, source_file: String, from_modified: bool` | `()` | Delete entry by SKU from target file |
 | `get_next_sku_id` | `server_exe: String` | `String` | Return max SKU + 1 (floor 1001), as a decimal string |
 | `resolve_display_name` | `server_exe: String, prototype_runtime_id: String` | `String` | Resolve prototype ID to display name |
-| `generate_bundle_html` | `server_exe: String, entry: CatalogEntry, output_dir: String` | `String` | Generate HTML bundle page, return file path |
+| `generate_bundle_html` | `server_exe: String, entry: CatalogEntry, save_to_apache: bool` | `String` | Generate HTML bundle page (always backed up to `MH-Multiverse-Bundles`; also written to Apache's `bundles/` dir when `save_to_apache`), return backup file path |
+| `save_thumbnail` | `server_exe: String, slug: String, sku_id: String, png_base64: String, save_to_apache: bool` | `String` | Decode and save a bundle thumbnail PNG (same backup/Apache dual-write pattern), return backup file path |
 
 ### Calligraphy (`calligraphy.rs`)
 
@@ -349,7 +356,7 @@ The stdout reader additionally calls `parse_player_log_event` on every line; mat
 | `parse_import_json` | `json_path: String` | `ImportSummary` | Parse an export file and summarise it; no database access |
 | `scan_download_backups` | `game_exe: String` | `Vec<BackupFileEntry>` | List candidate files in `<game_exe_dir>/Download/` by filename pattern only |
 | `list_accounts_for_import` | `server_exe: String` | `Vec<AccountEntry>` | All accounts (id, player name, email) — used for Add conflict pre-checks and Restore target resolution |
-| `import_account` | `server_exe: String, json_path: String, mode: String, target_id: Option<i64>, overrides: Option<ImportOverrides>` | `()` | `mode: "add"` creates a new account (`overrides` applies); `mode: "replace"` overwrites `target_id`'s game data only (`overrides` ignored) |
+| `import_account` | `server_exe: String, json_path: String, mode: String, target_id: Option<String>, overrides: Option<ImportOverrides>` | `()` | `mode: "add"` creates a new account (`overrides` applies); `mode: "replace"` overwrites `target_id`'s game data only (`overrides` ignored). `target_id` is a decimal string (see u64 Precision) |
 
 ---
 
@@ -644,7 +651,7 @@ The remap step means an imported file's original account identity is irrelevant 
 
 ### u64 Precision Across the JS Boundary
 
-Prototype runtime IDs, GUIDs, and catalog SKU IDs are u64 values that can exceed JavaScript's `Number.MAX_SAFE_INTEGER` (2^53 - 1). The catalog system handles this with dual types: `CatalogEntryDisk` uses raw `u64` for on-disk serialisation, while the frontend-facing `CatalogEntry` represents these as `String`. GuidItem conversion happens in `guid_disk_to_view` and `guid_view_to_disk`; `SkuId` is converted inline in `disk_to_view` and `view_to_disk` since it's a scalar field rather than a nested collection. Calligraphy prototype IDs and GUIDs are similarly transported as decimal strings.
+Prototype runtime IDs, GUIDs, catalog SKU IDs, and account IDs are all integer values that can exceed JavaScript's `Number.MAX_SAFE_INTEGER` (2^53 - 1). The catalog system handles this with dual types: `CatalogEntryDisk` uses raw `u64` for on-disk serialisation, while the frontend-facing `CatalogEntry` represents these as `String`. GuidItem conversion happens in `guid_disk_to_view` and `guid_view_to_disk`; `SkuId` is converted inline in `disk_to_view` and `view_to_disk` since it's a scalar field rather than a nested collection. Calligraphy prototype IDs and GUIDs are similarly transported as decimal strings. `AccountEntry.id` (from `list_accounts_for_import`) and `import_account`'s `target_id` follow the same pattern - account IDs are far past `Number.MAX_SAFE_INTEGER` in practice, so passing them as raw JSON numbers silently corrupted the value and broke Restore's account lookup entirely until fixed.
 
 ### MODIFIED File Pattern (Store)
 
