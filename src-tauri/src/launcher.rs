@@ -1,12 +1,28 @@
 use std::process::Command;
+use std::sync::Mutex;
 use crate::config::{load_config, decrypt_password};
 use sysinfo::System;
 
+/// Reused across `game_is_running` polls (called every few seconds while
+/// LaunchPanel is mounted) instead of constructing a fresh `System` and
+/// doing a full process refresh on every call.
+pub struct GameProcessState(pub Mutex<System>);
+
+impl GameProcessState {
+    pub fn new() -> Self {
+        Self(Mutex::new(System::new()))
+    }
+}
+
 #[tauri::command]
-pub fn game_is_running() -> bool {
-    let mut sys = System::new();
+pub fn game_is_running(state: tauri::State<GameProcessState>) -> bool {
+    let mut sys = match state.0.lock() {
+        Ok(g) => g,
+        Err(_) => return false,
+    };
     sys.refresh_processes(sysinfo::ProcessesToUpdate::All, false);
-    let running = sys.processes_by_exact_name("MarvelHeroesOmega.exe".as_ref())
+    let running = sys
+        .processes_by_exact_name("MarvelHeroesOmega.exe".as_ref())
         .next()
         .is_some();
     running

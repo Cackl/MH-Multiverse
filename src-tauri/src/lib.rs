@@ -32,6 +32,7 @@ pub fn run() {
         .manage(server::DbPath::empty())
         .manage(calligraphy::CatalogueState(Mutex::new(None)))
         .manage(store::DisplayNameState::new())
+        .manage(launcher::GameProcessState::new())
         .setup(|app| {
             app.handle().plugin(tauri_plugin_dialog::init())?;
             app.handle().plugin(tauri_plugin_opener::init())?;
