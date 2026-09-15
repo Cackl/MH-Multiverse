@@ -31,6 +31,25 @@ export function stopUptime() {
   uptimeSec.set(0)
 }
 
+// -- Game running poll (persists across tab switches) --
+// Previously scoped to LaunchPanel's onMount/onDestroy, so gameRunning only
+// updated while that panel was mounted and went stale on any other tab.
+
+let _gameRunningTimer: ReturnType<typeof setInterval> | null = null
+
+async function checkGameRunning() {
+  try {
+    const running = await invoke<boolean>('game_is_running')
+    gameRunning.set(running)
+  } catch {}
+}
+
+export function startGameRunningPoll() {
+  if (_gameRunningTimer) return
+  checkGameRunning()
+  _gameRunningTimer = setInterval(checkGameRunning, 3000)
+}
+
 // -- Shutdown countdown state (persists across tab switches) --
 
 export const shutdownCountdownSec = writable<number>(0)

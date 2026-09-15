@@ -17,7 +17,6 @@
   let editingServer: Server | null = null
   let launchError = ''
   let launching = false
-  let pollTimer: ReturnType<typeof setInterval> | null = null
 
   let dashboardPort = 8080
   let dashboardPath = `/Dashboard/`
@@ -46,9 +45,6 @@
   }
 
   onMount(async () => {
-    await checkGame()
-    pollTimer = setInterval(checkGame, 3000)
-
     // Read WebFrontend port for localhost dashboard URL
     if ($appConfig.server_exe) {
       try {
@@ -63,16 +59,8 @@
   })
 
   onDestroy(() => {
-    if (pollTimer) clearInterval(pollTimer)
     cancelDelete()
   })
-
-  async function checkGame() {
-    try {
-      const running = await invoke<boolean>('game_is_running')
-      gameRunning.set(running)
-    } catch {}
-  }
 
   function openAdd() {
     editingServer = null
