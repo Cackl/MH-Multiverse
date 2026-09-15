@@ -3,14 +3,22 @@
 <br>
 
 ---
-# Version 1.3.2 Release
+# Version 1.3.3 Release
 
 ## What's Changed
 
-### Store Catalog Editor: Bundle URL Fixes
-- Fixed saving a bundle silently overwriting its `InfoUrls`/`ContentData` with a fresh CDN URL, even when nothing about the URL was meant to change. This could replace a stock entry's real, working store URLs with a link to a file that was never generated
-- The auto-generated URL is now only recomputed via the Generate button, which is about to write a matching file, as a normal save preserves whatever URL was already there
-- Fixed a mismatch between the frontend and `generate_bundle_html`'s filename formatting - the server only replaced spaces, while the frontend also stripped punctuation so titles containing apostrophes, colons, etc. could produce a catalog URL that didn't match the actual generated file. Both now use the same rules
+### Account Restore Fixes (Very High)
+- Restoring a backup onto an existing profile always failed with "Target account not found" - account IDs were getting silently corrupted on the way from the backend to the app. Restore is reliable again. (This turned out to be the same root cause as the SKU precision)
+- Restoring also left orphaned avatars, team-ups, and items behind instead of fully replacing them. A restored profile's data is now cleanly and completely replaced
+
+### Player Moderation Fix (High)
+- Ban and whitelist status could show incorrectly for a player with more than one account flag set (e.g. banned and whitelisted at the same time), displaying them as neither. Status should now show correctly regardless of other flags
+
+### Stability & Reliability
+- Pointing at a corrupt or partially-downloaded `Calligraphy.sip` file can no longer crash prototype search in Live Tuning, Patches, and Store
+- The shutdown countdown no longer disappears when switching tabs mid-countdown - it stays visible and cancellable from anywhere in the app
+- In the App, Config, Tuning, and Ops panels, a setting that fails to save no longer shows as saved when an update actually failed
+- A number of smaller consistency and reliability fixes across the Tuning, Store, and Config panels - as well as the app more generally
 
 <br>
 

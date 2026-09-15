@@ -1,6 +1,6 @@
 [package]
 name = "mh-multiverse"
-version = "1.3.2"
+version = "1.3.3"
 description = "A desktop launcher and server management tool built for MHServerEmu"
 authors = ["cackl"]
 license = ""
