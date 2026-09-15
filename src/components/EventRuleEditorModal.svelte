@@ -1,25 +1,5 @@
 <script lang="ts">
-  // ── Types ───────────────────────────────────────────────────────────────────
-
-  interface EventDefinition {
-    id: string
-    display_name: string
-    file_path: string
-    daily_gift: string | null
-    instanced_missions: string[] | null
-    is_hidden: boolean | null
-  }
-
-  interface ScheduleRule {
-    name: string
-    is_enabled: boolean
-    rule_type: string
-    start_day_of_week: string | null
-    start_month: number | null
-    start_day: number | null
-    duration_days: number | null
-    events: string[]
-  }
+  import type { EventDefinition, ScheduleRule } from '../lib/tuningMeta'
 
   // ── Props ───────────────────────────────────────────────────────────────────
 

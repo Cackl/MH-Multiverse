@@ -74,6 +74,50 @@ export function blueprintHintForSetting(setting: string): string | null {
   return null
 }
 
+// ── Tuning/Events payload types ─────────────────────────────────────────────
+// Mirror the Rust structs in tuning.rs and events.rs. Previously re-declared
+// independently in TuningPanel.svelte, EventsPanel.svelte,
+// EventDefinitionEditorModal.svelte, and EventRuleEditorModal.svelte.
+
+export interface TuningFileInfo {
+  canonical_name: string
+  enabled: boolean
+  toggleable: boolean
+  relative_path: string
+  event_id: string | null
+  was_auto_enabled: boolean
+}
+
+export interface EventDefinition {
+  id: string
+  display_name: string
+  file_path: string
+  daily_gift: string | null
+  instanced_missions: string[] | null
+  is_hidden: boolean | null
+}
+
+export interface EventsData {
+  definitions: EventDefinition[]
+  using_override: boolean
+}
+
+export interface ScheduleRule {
+  name: string
+  is_enabled: boolean
+  rule_type: string
+  start_day_of_week: string | null
+  start_month: number | null
+  start_day: number | null
+  duration_days: number | null
+  events: string[]
+}
+
+export interface ScheduleData {
+  rules: ScheduleRule[]
+  using_override: boolean
+}
+
 // ── Known file sets ────────────────────────────────────────────────────────────
 
 export const KNOWN_CORE = new Set([

@@ -1,25 +1,8 @@
 <script lang="ts">
   import { invoke } from '@tauri-apps/api/core'
+  import type { TuningFileInfo, EventDefinition } from '../lib/tuningMeta'
 
   // ── Types ───────────────────────────────────────────────────────────────────
-
-  interface TuningFileInfo {
-    canonical_name: string
-    enabled: boolean
-    toggleable: boolean
-    relative_path: string
-    event_id: string | null
-    was_auto_enabled: boolean
-  }
-
-  interface EventDefinition {
-    id: string
-    display_name: string
-    file_path: string
-    daily_gift: string | null
-    instanced_missions: string[] | null
-    is_hidden: boolean | null
-  }
 
   interface PrototypeMatch {
     path: string
