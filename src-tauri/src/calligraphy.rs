@@ -442,8 +442,12 @@ pub fn search_prototypes(
         .map(|s| s.replace('\\', "/").to_lowercase())
         .collect();
 
-    let _inventory_type = is_inventory_type.unwrap_or(false);
     let max_results: usize = if query_lower.is_empty() { 500 } else { 100 };
+
+    // Accepted for parity with the source app's category config (see doc
+    // comment above) but not read: path-prefix filtering already covers
+    // every case this would otherwise filter.
+    let _ = is_inventory_type;
 
     let mut results: Vec<PrototypeMatch> = Vec::new();
     for p in catalogue.prototypes.iter().filter(|p| !p.is_abstract) {
