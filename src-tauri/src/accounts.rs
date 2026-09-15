@@ -128,16 +128,14 @@ pub struct ImportOverrides {
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
-fn db_path(server_exe: &str) -> PathBuf {
-    Path::new(server_exe)
-        .parent()
-        .unwrap_or(Path::new("."))
+fn db_path(server_exe: &str) -> Result<PathBuf, String> {
+    Ok(crate::paths::server_dir(server_exe)?
         .join("Data")
-        .join("Account.db")
+        .join("Account.db"))
 }
 
 fn open_db(server_exe: &str) -> Result<Connection, String> {
-    let conn = Connection::open(db_path(server_exe))
+    let conn = Connection::open(db_path(server_exe)?)
         .map_err(|e| format!("Failed to open database: {e}"))?;
     // The Item table has three FOREIGN KEY constraints on ContainerDbGuid
     // (Player, Avatar, TeamUp). SQLite checks all of them independently,

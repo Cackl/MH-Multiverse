@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use serde::{Deserialize, Serialize};
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -68,7 +68,7 @@ fn serialize_ini(data: &IniData) -> String {
 // ── Path helpers ──────────────────────────────────────────────────────────────
 
 fn server_dir(server_exe: &str) -> Option<PathBuf> {
-    Path::new(server_exe).parent().map(|p| p.to_path_buf())
+    crate::paths::server_dir(server_exe).ok()
 }
 
 fn config_ini_path(server_exe: &str) -> Option<PathBuf> {

@@ -9,6 +9,7 @@ mod tuning;
 mod updater;
 mod patches;
 mod accounts;
+mod paths;
 
 pub use config::*;
 

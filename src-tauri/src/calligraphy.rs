@@ -1,6 +1,5 @@
 use serde::Serialize;
 use std::collections::HashMap;
-use std::path::Path;
 use std::sync::Mutex;
 
 use crate::store::DisplayNameState;
@@ -294,9 +293,7 @@ fn build_catalogue(sip_path: &str) -> Result<PrototypeCatalogue, String> {
 }
 
 fn sip_path_for_server_exe(server_exe: &str) -> Result<String, String> {
-    let sip_path = Path::new(server_exe)
-        .parent()
-        .ok_or_else(|| "Cannot determine server directory from exe path".to_string())?
+    let sip_path = crate::paths::server_dir(server_exe)?
         .join("Data")
         .join("Game")
         .join("Calligraphy.sip");
@@ -420,9 +417,7 @@ pub fn search_prototypes(
         return Ok(vec![]);
     }
 
-    let server_dir = Path::new(&server_exe)
-        .parent()
-        .ok_or_else(|| "Cannot determine server directory from exe path".to_string())?
+    let server_dir = crate::paths::server_dir(&server_exe)?
         .to_string_lossy()
         .to_string();
 

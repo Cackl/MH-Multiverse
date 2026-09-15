@@ -29,10 +29,10 @@ pub struct PatchFileInfo {
 // ── Path helpers ──────────────────────────────────────────────────────────────
 
 fn patches_dir(server_exe: &str) -> Result<PathBuf, String> {
-    Path::new(server_exe)
-        .parent()
-        .ok_or_else(|| "Cannot determine server directory".to_string())
-        .map(|p| p.join("Data").join("Game").join("Patches"))
+    Ok(crate::paths::server_dir(server_exe)?
+        .join("Data")
+        .join("Game")
+        .join("Patches"))
 }
 
 fn off_dir(patches: &Path) -> PathBuf {

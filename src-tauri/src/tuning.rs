@@ -53,11 +53,10 @@ struct RawEntryOut {
 // ── Path helpers ──────────────────────────────────────────────────────────────
 
 pub(crate) fn live_tuning_dir(server_exe: &str) -> Result<std::path::PathBuf, String> {
-    let exe_path = Path::new(server_exe);
-    let server_dir = exe_path
-        .parent()
-        .ok_or_else(|| "Cannot determine server directory from exe path".to_string())?;
-    Ok(server_dir.join("Data").join("Game").join("LiveTuning"))
+    Ok(crate::paths::server_dir(server_exe)?
+        .join("Data")
+        .join("Game")
+        .join("LiveTuning"))
 }
 
 fn is_tuning_file(name: &str) -> bool {

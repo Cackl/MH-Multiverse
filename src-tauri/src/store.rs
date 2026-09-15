@@ -281,10 +281,7 @@ fn slugify(s: &str) -> String {
 // ── Path helpers ──────────────────────────────────────────────────────────────
 
 fn server_dir_of(server_exe: &str) -> Result<PathBuf, String> {
-    Path::new(server_exe)
-        .parent()
-        .map(|p| p.to_path_buf())
-        .ok_or_else(|| "Cannot determine server directory from exe path".to_string())
+    crate::paths::server_dir(server_exe)
 }
 
 fn mtxstore_dir(server_exe: &str) -> Result<PathBuf, String> {
