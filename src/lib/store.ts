@@ -31,6 +31,60 @@ export function stopUptime() {
   uptimeSec.set(0)
 }
 
+// -- Shutdown countdown state (persists across tab switches) --
+
+export const shutdownCountdownSec = writable<number>(0)
+export const shutdownCountdownActive = writable<boolean>(false)
+
+let _shutdownCountdownInterval: ReturnType<typeof setInterval> | null = null
+
+export function clearShutdownCountdown() {
+  if (_shutdownCountdownInterval) clearInterval(_shutdownCountdownInterval)
+  _shutdownCountdownInterval = null
+  shutdownCountdownActive.set(false)
+  shutdownCountdownSec.set(0)
+}
+
+// Auto-cancel if the server stops running for any other reason (crash, manual
+// stop elsewhere), even while ServerPanel isn't mounted to observe it itself.
+serverRunning.subscribe(running => {
+  if (!running) clearShutdownCountdown()
+})
+
+export function startShutdownCountdown(delayMinutes: number, broadcastMessage: string) {
+  clearShutdownCountdown()
+
+  shutdownCountdownSec.set(delayMinutes * 60)
+  shutdownCountdownActive.set(true)
+
+  const initialMsg = broadcastMessage.replace('{minutes}', String(delayMinutes))
+  invoke('send_command', { cmd: `!server broadcast ${initialMsg}` }).catch(() => {})
+
+  _shutdownCountdownInterval = setInterval(async () => {
+    let remaining = 0
+    shutdownCountdownSec.update(s => { remaining = s - 1; return remaining })
+
+    if (remaining === 60) {
+      try { await invoke('send_command', { cmd: '!server broadcast Server is shutting down in 1 minute.' }) } catch {}
+    }
+
+    if (remaining <= 0) {
+      clearShutdownCountdown()
+      clearServerError()
+      try {
+        await invoke('stop_server')
+      } catch (e) {
+        setServerError(String(e))
+      }
+    }
+  }, 1000)
+}
+
+export async function cancelShutdownCountdown() {
+  clearShutdownCountdown()
+  try { await invoke('send_command', { cmd: '!server broadcast Server shutdown has been cancelled.' }) } catch {}
+}
+
 // -- Log state (persists across tab switches) --
 
 const SERVER_LOG_FILTER_KEY = 'server-log-filter'
