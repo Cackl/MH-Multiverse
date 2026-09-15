@@ -4,7 +4,7 @@ use std::collections::HashMap;
 use std::io::{BufRead, BufReader};
 use std::path::PathBuf;
 use std::process::{Child, Command, Stdio};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, LazyLock, Mutex};
 use tauri::{AppHandle, Emitter, Manager};
 use crate::ini;
 
@@ -301,17 +301,21 @@ fn lookup_account(db_path: &PathBuf, username: &str) -> Option<AccountInfo> {
 
 // -- Player log event parsing --
 
+static LOGIN_RE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"\[Account=(.+?)\s+\(.*?\),\s+SessionId=(0x[0-9A-Fa-f]+)\]").unwrap()
+});
+static LOGOUT_SESSION_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"SessionId=(0x[0-9A-Fa-f]+)").unwrap());
+static LOGOUT_USERNAME_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"Account=(.+?)\s+\(").unwrap());
+
 fn parse_player_log_event(raw: &str) -> Option<PlayerLogEvent> {
     if raw.contains("Accepted and registered client") {
         if !raw.contains("SessionId=") || !raw.contains("Account=") {
             return None;
         }
 
-        let re = Regex::new(
-            r"\[Account=(.+?)\s+\(.*?\),\s+SessionId=(0x[0-9A-Fa-f]+)\]"
-        ).ok()?;
-
-        let caps = re.captures(raw)?;
+        let caps = LOGIN_RE.captures(raw)?;
         let username = caps.get(1)?.as_str().trim().to_string();
         let session_id = caps.get(2)?.as_str().trim().to_string();
 
@@ -319,12 +323,10 @@ fn parse_player_log_event(raw: &str) -> Option<PlayerLogEvent> {
     }
 
     if raw.contains("Removed client") {
-        let session_re = Regex::new(r"SessionId=(0x[0-9A-Fa-f]+)").ok()?;
-        let session_caps = session_re.captures(raw)?;
+        let session_caps = LOGOUT_SESSION_RE.captures(raw)?;
         let session_id = session_caps.get(1)?.as_str().trim().to_string();
 
-        let username_re = Regex::new(r"Account=(.+?)\s+\(").ok()?;
-        let username = username_re
+        let username = LOGOUT_USERNAME_RE
             .captures(raw)
             .and_then(|caps| caps.get(1).map(|m| m.as_str().trim().to_string()))
             .unwrap_or_default();
