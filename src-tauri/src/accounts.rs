@@ -476,8 +476,41 @@ fn do_replace(
         return Err("Target account not found.".into());
     }
 
-    // Delete existing player data. The ON DELETE CASCADE on Player.DbGuid
-    // propagates automatically to Avatar, TeamUp, Item, and ControlledEntity.
+    // Delete existing player data. `open_db` sets `PRAGMA foreign_keys = OFF`
+    // (Item's three container FKs can't all be satisfied at once), so
+    // `ON DELETE CASCADE` never fires here - every child table must be
+    // cleared explicitly, in dependency order. `insert_entities` shows Item
+    // and ControlledEntity rows can be contained by an Avatar or TeamUp as
+    // well as directly by the Player, so those must be removed before their
+    // container rows or they're orphaned rather than deleted.
+    conn.execute(
+        "DELETE FROM Item WHERE ContainerDbGuid = ?1 \
+         OR ContainerDbGuid IN (SELECT DbGuid FROM Avatar WHERE ContainerDbGuid = ?1) \
+         OR ContainerDbGuid IN (SELECT DbGuid FROM TeamUp WHERE ContainerDbGuid = ?1)",
+        params![target_id],
+    )
+    .map_err(|e| format!("Failed to remove existing item data: {e}"))?;
+
+    conn.execute(
+        "DELETE FROM ControlledEntity WHERE ContainerDbGuid = ?1 \
+         OR ContainerDbGuid IN (SELECT DbGuid FROM Avatar WHERE ContainerDbGuid = ?1) \
+         OR ContainerDbGuid IN (SELECT DbGuid FROM TeamUp WHERE ContainerDbGuid = ?1)",
+        params![target_id],
+    )
+    .map_err(|e| format!("Failed to remove existing controlled entity data: {e}"))?;
+
+    conn.execute(
+        "DELETE FROM Avatar WHERE ContainerDbGuid = ?1",
+        params![target_id],
+    )
+    .map_err(|e| format!("Failed to remove existing avatar data: {e}"))?;
+
+    conn.execute(
+        "DELETE FROM TeamUp WHERE ContainerDbGuid = ?1",
+        params![target_id],
+    )
+    .map_err(|e| format!("Failed to remove existing team-up data: {e}"))?;
+
     conn.execute(
         "DELETE FROM Player WHERE DbGuid = ?1",
         params![target_id],
