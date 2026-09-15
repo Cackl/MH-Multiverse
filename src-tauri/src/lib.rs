@@ -81,6 +81,7 @@ pub fn run() {
             config::set_console_presets,
             launcher::launch_game,
             launcher::game_is_running,
+            launcher::normalize_host,
             server::start_server,
             server::stop_server,
             server::start_apache,

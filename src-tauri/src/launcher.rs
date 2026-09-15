@@ -14,7 +14,7 @@ pub fn game_is_running() -> bool {
 
 /// Strips any scheme ("http://", "https://") and any path suffix ("/foo/bar")
 /// from a raw host string, leaving only "host" or "host:port".
-fn normalize_host(raw: &str) -> String {
+fn normalize_host_str(raw: &str) -> String {
     let without_scheme = match raw.find("://") {
         Some(pos) => &raw[pos + 3..],
         None => raw,
@@ -23,6 +23,15 @@ fn normalize_host(raw: &str) -> String {
         Some(pos) => without_scheme[..pos].trim().to_string(),
         None => without_scheme.trim().to_string(),
     }
+}
+
+/// Exposes `normalize_host_str` to the frontend, so dashboard/home URLs in
+/// LaunchPanel.svelte use the exact same logic that builds the actual game
+/// launch URL below, instead of maintaining an independent TS copy that can
+/// drift out of sync.
+#[tauri::command]
+pub fn normalize_host(raw: String) -> String {
+    normalize_host_str(&raw)
 }
 
 #[tauri::command]
@@ -53,7 +62,7 @@ pub fn launch_game(app: tauri::AppHandle, server_id: String) -> Result<(), Strin
         }
     } else {
         let scheme = if server.use_https { "https" } else { "http" };
-        let host = normalize_host(&server.host);
+        let host = normalize_host_str(&server.host);
         format!("{scheme}://{host}/SiteConfig.xml")
     };
 

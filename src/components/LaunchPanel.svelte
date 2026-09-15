@@ -74,16 +74,6 @@
     } catch {}
   }
 
-  function normalizeHost(raw: string): string {
-    const withoutScheme = raw.includes('://')
-      ? raw.slice(raw.indexOf('://') + 3)
-      : raw
-    const slashPos = withoutScheme.indexOf('/')
-    return slashPos === -1
-      ? withoutScheme.trim()
-      : withoutScheme.slice(0, slashPos).trim()
-  }
-
   function openAdd() {
     editingServer = null
     showModal = true
@@ -125,7 +115,7 @@
       url = `http://localhost:${dashboardPort}${dashboardPath}`
     } else {
       const scheme = activeServer.use_https ? 'https' : 'http'
-      const host   = normalizeHost(activeServer.host)
+      const host   = await invoke<string>('normalize_host', { raw: activeServer.host })
       url = `${scheme}://${host}/Dashboard/`
     }
     await openUrl(url)
@@ -134,7 +124,7 @@
   async function openHome() {
     if (!activeServer) return
     const scheme = activeServer.use_https ? 'https' : 'http'
-    const host = normalizeHost(activeServer.host)
+    const host = await invoke<string>('normalize_host', { raw: activeServer.host })
     await openUrl(`${scheme}://${host}/`)
   }
 
