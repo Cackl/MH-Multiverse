@@ -327,7 +327,7 @@ The stdout reader additionally calls `parse_player_log_event` on every line (reg
 | `delete_catalog_entry` | `server_exe: String, sku_id: String, source_file: String, from_modified: bool` | `()` | Delete entry by SKU from target file |
 | `get_next_sku_id` | `server_exe: String` | `String` | Return max SKU + 1 (floor 1001), as a decimal string |
 | `resolve_display_name` | `server_exe: String, prototype_runtime_id: String` | `String` | Resolve prototype ID to display name |
-| `generate_bundle_html` | `server_exe: String, entry: CatalogEntry, save_to_apache: bool` | `String` | Generate HTML bundle page (always backed up to `MH-Multiverse-Bundles`; also written to Apache's `bundles/` dir when `save_to_apache`), return backup file path |
+| `generate_bundle_html` | `server_exe: String, entry: CatalogEntry, slug: String, save_to_apache: bool` | `String` | Generate HTML bundle page (always backed up to `MH-Multiverse-Bundles`; also written to Apache's `bundles/` dir when `save_to_apache`), return backup file path |
 | `save_thumbnail` | `server_exe: String, slug: String, sku_id: String, png_base64: String, save_to_apache: bool` | `String` | Decode and save a bundle thumbnail PNG (same backup/Apache dual-write pattern), return backup file path |
 
 ### Calligraphy (`calligraphy.rs`)
