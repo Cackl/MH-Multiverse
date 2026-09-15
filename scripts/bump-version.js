@@ -1,4 +1,4 @@
-// scripts/bump-version.mjs
+// scripts/bump-version.js
 //
 // Bumps the version across package.json, src-tauri/Cargo.toml, and
 // src-tauri/tauri.conf.json, then syncs package-lock.json and Cargo.lock.
