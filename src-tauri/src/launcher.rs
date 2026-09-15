@@ -20,7 +20,11 @@ pub fn game_is_running(state: tauri::State<GameProcessState>) -> bool {
         Ok(g) => g,
         Err(_) => return false,
     };
-    sys.refresh_processes(sysinfo::ProcessesToUpdate::All, false);
+    // remove_dead_processes must be true: this System is reused across polls
+    // (see GameProcessState), so a process that has exited needs to be
+    // pruned from its internal list each refresh, or processes_by_exact_name
+    // below keeps finding the stale entry forever.
+    sys.refresh_processes(sysinfo::ProcessesToUpdate::All, true);
     let running = sys
         .processes_by_exact_name("MarvelHeroesOmega.exe".as_ref())
         .next()
