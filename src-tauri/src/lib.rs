@@ -37,7 +37,6 @@ pub fn run() {
         .setup(|app| {
             app.handle().plugin(tauri_plugin_dialog::init())?;
             app.handle().plugin(tauri_plugin_opener::init())?;
-            app.handle().plugin(tauri_plugin_http::init())?;
             app.handle().plugin(tauri_plugin_window_state::Builder::default().build())?;
             if let Some(window) = app.get_webview_window("main") {
                 let _ = window.restore_state(WINDOW_STATE_FLAGS);
