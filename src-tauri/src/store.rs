@@ -329,6 +329,17 @@ fn load_disk_entries(path: &Path) -> Vec<CatalogEntryDisk> {
         .unwrap_or_default()
 }
 
+/// Writes `contents` to `path` atomically: writes to a sibling `.tmp` file
+/// first, then renames over the target. `fs::rename` is atomic on the same
+/// filesystem, so a crash mid-write leaves the original file intact instead
+/// of a truncated/corrupt one.
+fn write_atomic(path: &Path, contents: &str) -> Result<(), String> {
+    let tmp_path = path.with_extension("json.tmp");
+    fs::write(&tmp_path, contents).map_err(|e| format!("Write failed: {e}"))?;
+    fs::rename(&tmp_path, path).map_err(|e| format!("Write failed: {e}"))?;
+    Ok(())
+}
+
 // ── Display name resolution (internal) ───────────────────────────────────────
 
 /// Resolve a prototype runtime ID (as a decimal string) to a display name,
@@ -473,7 +484,7 @@ pub fn save_catalog_entry(
 
     let json = serde_json::to_string_pretty(&disk_entries)
         .map_err(|e| format!("Serialisation failed: {e}"))?;
-    fs::write(&modified_path, json).map_err(|e| format!("Write failed: {e}"))?;
+    write_atomic(&modified_path, &json)?;
 
     Ok(())
 }
@@ -527,7 +538,7 @@ pub fn delete_catalog_entry(
 
     let json = serde_json::to_string_pretty(&disk_entries)
         .map_err(|e| format!("Serialisation failed: {e}"))?;
-    fs::write(&target_path, json).map_err(|e| format!("Write failed: {e}"))?;
+    write_atomic(&target_path, &json)?;
 
     Ok(())
 }
