@@ -156,6 +156,7 @@
     try {
       files = await invoke<TuningFileInfo[]>('scan_tuning_files', {
         serverExe: $appConfig.server_exe,
+        applyAutoEnable: true,
       })
       // Load event definitions for "managed by" labels — non-fatal if absent
       try {

@@ -153,8 +153,15 @@ const RESERVED_FILENAMES: &[&str] = &[
     "EventScheduleOverride.json",
 ];
 
+/// `apply_auto_enable`: if true, an event-owned file found with an OFF_
+/// prefix has that prefix stripped on disk (auto-enabling it) as part of
+/// this scan; if false, the scan is read-only and such a file is reported
+/// as disabled, reflecting its actual current state on disk.
 #[tauri::command]
-pub fn scan_tuning_files(server_exe: String) -> Result<Vec<TuningFileInfo>, String> {
+pub fn scan_tuning_files(
+    server_exe: String,
+    apply_auto_enable: bool,
+) -> Result<Vec<TuningFileInfo>, String> {
     let dir = live_tuning_dir(&server_exe)?;
     if !dir.exists() {
         return Ok(vec![]);
@@ -218,7 +225,7 @@ pub fn scan_tuning_files(server_exe: String) -> Result<Vec<TuningFileInfo>, Stri
         // Toggleable only for root-level files that are not event-owned.
         let toggleable = !in_subdirectory && event_id.is_none();
 
-        let (enabled, was_auto_enabled) = if has_off_prefix && event_id.is_some() {
+        let (enabled, was_auto_enabled) = if has_off_prefix && event_id.is_some() && apply_auto_enable {
             // Event-owned file has an OFF_ prefix: strip it automatically.
             let canonical_full_path = full_path
                 .parent()

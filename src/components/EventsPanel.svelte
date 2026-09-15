@@ -237,7 +237,7 @@
       const [evts, sched, tFiles] = await Promise.all([
         invoke<EventsData>('load_events',         { serverExe: $appConfig.server_exe }),
         invoke<ScheduleData>('load_event_schedule', { serverExe: $appConfig.server_exe }),
-        invoke<TuningFileInfo[]>('scan_tuning_files', { serverExe: $appConfig.server_exe }),
+        invoke<TuningFileInfo[]>('scan_tuning_files', { serverExe: $appConfig.server_exe, applyAutoEnable: true }),
       ])
       eventsData   = evts
       scheduleData = sched

@@ -292,7 +292,7 @@ The stdout reader additionally calls `parse_player_log_event` on every line; mat
 
 | Command | Parameters | Returns | Description |
 |---|---|---|---|
-| `scan_tuning_files` | `server_exe: String` | `Vec<TuningFileInfo>` | List LiveTuningData*.json files with enabled state |
+| `scan_tuning_files` | `server_exe: String, apply_auto_enable: bool` | `Vec<TuningFileInfo>` | List LiveTuningData*.json files with enabled state; auto-enables OFF_ event-owned files on disk when `apply_auto_enable` |
 | `read_tuning_file` | `server_exe: String, canonical_name: String` | `Vec<TuningEntry>` | Parse tuning entries from file |
 | `write_tuning_file` | `server_exe: String, canonical_name: String, entries: Vec<TuningEntry>` | `()` | Write entries back to file |
 | `create_tuning_file` | `server_exe: String, canonical_name: String, entries: Vec<TuningEntry>` | `()` | Create new tuning file |
