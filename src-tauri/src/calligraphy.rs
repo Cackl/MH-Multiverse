@@ -52,54 +52,66 @@ pub struct CatalogueState(pub Mutex<Option<(String, PrototypeCatalogue)>>);
 
 // ── Binary helpers ────────────────────────────────────────────────────────────
 
-fn read_u8(data: &[u8], pos: &mut usize) -> u8 {
-    let v = data[*pos];
+fn eod_err(pos: usize) -> String {
+    format!("Unexpected end of data at offset {pos} — file may be truncated or corrupt")
+}
+
+fn read_u8(data: &[u8], pos: &mut usize) -> Result<u8, String> {
+    let v = *data.get(*pos).ok_or_else(|| eod_err(*pos))?;
     *pos += 1;
-    v
+    Ok(v)
 }
 
-fn read_u16_le(data: &[u8], pos: &mut usize) -> u16 {
-    let v = u16::from_le_bytes(data[*pos..*pos + 2].try_into().unwrap());
-    *pos += 2;
-    v
+fn read_u16_le(data: &[u8], pos: &mut usize) -> Result<u16, String> {
+    let end = *pos + 2;
+    let bytes = data.get(*pos..end).ok_or_else(|| eod_err(*pos))?;
+    let v = u16::from_le_bytes(bytes.try_into().unwrap());
+    *pos = end;
+    Ok(v)
 }
 
-fn read_i32_le(data: &[u8], pos: &mut usize) -> i32 {
-    let v = i32::from_le_bytes(data[*pos..*pos + 4].try_into().unwrap());
-    *pos += 4;
-    v
+fn read_i32_le(data: &[u8], pos: &mut usize) -> Result<i32, String> {
+    let end = *pos + 4;
+    let bytes = data.get(*pos..end).ok_or_else(|| eod_err(*pos))?;
+    let v = i32::from_le_bytes(bytes.try_into().unwrap());
+    *pos = end;
+    Ok(v)
 }
 
-fn read_u32_le(data: &[u8], pos: &mut usize) -> u32 {
-    let v = u32::from_le_bytes(data[*pos..*pos + 4].try_into().unwrap());
-    *pos += 4;
-    v
+fn read_u32_le(data: &[u8], pos: &mut usize) -> Result<u32, String> {
+    let end = *pos + 4;
+    let bytes = data.get(*pos..end).ok_or_else(|| eod_err(*pos))?;
+    let v = u32::from_le_bytes(bytes.try_into().unwrap());
+    *pos = end;
+    Ok(v)
 }
 
-fn read_u64_le(data: &[u8], pos: &mut usize) -> u64 {
-    let v = u64::from_le_bytes(data[*pos..*pos + 8].try_into().unwrap());
-    *pos += 8;
-    v
+fn read_u64_le(data: &[u8], pos: &mut usize) -> Result<u64, String> {
+    let end = *pos + 8;
+    let bytes = data.get(*pos..end).ok_or_else(|| eod_err(*pos))?;
+    let v = u64::from_le_bytes(bytes.try_into().unwrap());
+    *pos = end;
+    Ok(v)
 }
 
 /// FixedString32: i32 byte-length prefix + UTF-8 bytes (used in pak entry table)
-fn read_fixed_string32(data: &[u8], pos: &mut usize) -> String {
-    let len = read_i32_le(data, pos) as usize;
-    let s = std::str::from_utf8(&data[*pos..*pos + len])
-        .unwrap_or("")
-        .to_string();
-    *pos += len;
-    s
+fn read_fixed_string32(data: &[u8], pos: &mut usize) -> Result<String, String> {
+    let len = read_i32_le(data, pos)? as usize;
+    let end = pos.checked_add(len).ok_or_else(|| eod_err(*pos))?;
+    let bytes = data.get(*pos..end).ok_or_else(|| eod_err(*pos))?;
+    let s = std::str::from_utf8(bytes).unwrap_or("").to_string();
+    *pos = end;
+    Ok(s)
 }
 
 /// FixedString16: u16 byte-length prefix + UTF-8 bytes (used in directory records)
-fn read_fixed_string16(data: &[u8], pos: &mut usize) -> String {
-    let len = read_u16_le(data, pos) as usize;
-    let s = std::str::from_utf8(&data[*pos..*pos + len])
-        .unwrap_or("")
-        .to_string();
-    *pos += len;
-    s
+fn read_fixed_string16(data: &[u8], pos: &mut usize) -> Result<String, String> {
+    let len = read_u16_le(data, pos)? as usize;
+    let end = *pos + len;
+    let bytes = data.get(*pos..end).ok_or_else(|| eod_err(*pos))?;
+    let s = std::str::from_utf8(bytes).unwrap_or("").to_string();
+    *pos = end;
+    Ok(s)
 }
 
 // ── Pak reader ────────────────────────────────────────────────────────────────
@@ -117,30 +129,30 @@ fn load_pak(sip_path: &str) -> Result<(Vec<u8>, HashMap<String, PakEntry>, usize
 
     let mut pos = 0;
 
-    let signature = read_u32_le(&data, &mut pos);
+    let signature = read_u32_le(&data, &mut pos)?;
     if signature != PAK_SIGNATURE {
         return Err(format!(
             "Invalid Calligraphy.sip signature 0x{signature:X} — expected 0x{PAK_SIGNATURE:X}"
         ));
     }
 
-    let version = read_u32_le(&data, &mut pos);
+    let version = read_u32_le(&data, &mut pos)?;
     if version != PAK_VERSION {
         return Err(format!(
             "Unexpected Calligraphy.sip version {version} — expected {PAK_VERSION}"
         ));
     }
 
-    let num_entries = read_i32_le(&data, &mut pos) as usize;
-    let mut entries = HashMap::with_capacity(num_entries);
+    let num_entries = read_i32_le(&data, &mut pos)? as usize;
+    let mut entries = HashMap::new();
 
     for _ in 0..num_entries {
-        let _hash = read_u64_le(&data, &mut pos);
-        let file_path = read_fixed_string32(&data, &mut pos);
-        let _mod_time = read_i32_le(&data, &mut pos);
-        let offset = read_i32_le(&data, &mut pos) as usize;
-        let compressed_size = read_i32_le(&data, &mut pos) as usize;
-        let uncompressed_size = read_i32_le(&data, &mut pos) as usize;
+        let _hash = read_u64_le(&data, &mut pos)?;
+        let file_path = read_fixed_string32(&data, &mut pos)?;
+        let _mod_time = read_i32_le(&data, &mut pos)?;
+        let offset = read_i32_le(&data, &mut pos)? as usize;
+        let compressed_size = read_i32_le(&data, &mut pos)? as usize;
+        let uncompressed_size = read_i32_le(&data, &mut pos)? as usize;
 
         entries.insert(
             file_path,
@@ -164,8 +176,15 @@ fn extract_pak_file(
         .get(file_path)
         .ok_or_else(|| format!("'{file_path}' not found in Calligraphy.sip"))?;
 
-    let start = data_section_start + entry.offset;
-    let compressed = &pak_data[start..start + entry.compressed_size];
+    let start = data_section_start
+        .checked_add(entry.offset)
+        .ok_or_else(|| format!("'{file_path}' entry offset overflow"))?;
+    let end = start
+        .checked_add(entry.compressed_size)
+        .ok_or_else(|| format!("'{file_path}' entry size overflow"))?;
+    let compressed = pak_data
+        .get(start..end)
+        .ok_or_else(|| format!("'{file_path}' entry extends beyond Calligraphy.sip data"))?;
 
     lz4_flex::block::decompress(compressed, entry.uncompressed_size)
         .map_err(|e| format!("LZ4 decompression of '{file_path}' failed: {e}"))
@@ -175,19 +194,20 @@ fn extract_pak_file(
 
 /// Reads the 4-byte CalligraphyHeader (3 bytes magic + 1 byte version).
 /// Returns version so the caller can choose record count width.
-fn read_calligraphy_header(data: &[u8], pos: &mut usize) -> u8 {
-    *pos += 3; // magic bytes ("Cal" or similar — not used)
-    let version = data[*pos];
-    *pos += 1;
-    version
+fn read_calligraphy_header(data: &[u8], pos: &mut usize) -> Result<u8, String> {
+    let end = *pos + 4;
+    let bytes = data.get(*pos..end).ok_or_else(|| eod_err(*pos))?;
+    let version = bytes[3]; // first 3 bytes are magic ("Cal" or similar — not used)
+    *pos = end;
+    Ok(version)
 }
 
 /// Version >= 11 uses i32 record count; earlier uses u16.
-fn read_record_count(data: &[u8], pos: &mut usize, version: u8) -> usize {
+fn read_record_count(data: &[u8], pos: &mut usize, version: u8) -> Result<usize, String> {
     if version >= 11 {
-        read_i32_le(data, pos) as usize
+        Ok(read_i32_le(data, pos)? as usize)
     } else {
-        read_u16_le(data, pos) as usize
+        Ok(read_u16_le(data, pos)? as usize)
     }
 }
 
@@ -195,15 +215,15 @@ fn read_record_count(data: &[u8], pos: &mut usize, version: u8) -> usize {
 /// Each record: u64 id + u64 guid + u8 flags + FixedString16 filePath
 fn parse_blueprint_directory(data: &[u8]) -> Result<HashMap<u64, String>, String> {
     let mut pos = 0;
-    let version = read_calligraphy_header(data, &mut pos);
-    let count = read_record_count(data, &mut pos, version);
-    let mut blueprints = HashMap::with_capacity(count);
+    let version = read_calligraphy_header(data, &mut pos)?;
+    let count = read_record_count(data, &mut pos, version)?;
+    let mut blueprints = HashMap::new();
 
     for _ in 0..count {
-        let id = read_u64_le(data, &mut pos);
-        let _guid = read_u64_le(data, &mut pos);
-        let _flags = read_u8(data, &mut pos);
-        let path = read_fixed_string16(data, &mut pos).replace('\\', "/");
+        let id = read_u64_le(data, &mut pos)?;
+        let _guid = read_u64_le(data, &mut pos)?;
+        let _flags = read_u8(data, &mut pos)?;
+        let path = read_fixed_string16(data, &mut pos)?.replace('\\', "/");
         blueprints.insert(id, path);
     }
 
@@ -214,16 +234,16 @@ fn parse_blueprint_directory(data: &[u8]) -> Result<HashMap<u64, String>, String
 /// Each record: u64 prototypeId + u64 prototypeGuid + u64 blueprintId + u8 flags + FixedString16 filePath
 fn parse_prototype_directory(data: &[u8]) -> Result<Vec<PrototypeRecord>, String> {
     let mut pos = 0;
-    let version = read_calligraphy_header(data, &mut pos);
-    let count = read_record_count(data, &mut pos, version);
-    let mut prototypes = Vec::with_capacity(count);
+    let version = read_calligraphy_header(data, &mut pos)?;
+    let count = read_record_count(data, &mut pos, version)?;
+    let mut prototypes = Vec::new();
 
     for _ in 0..count {
-        let prototype_id = read_u64_le(data, &mut pos);
-        let prototype_guid = read_u64_le(data, &mut pos);
-        let blueprint_id = read_u64_le(data, &mut pos);
-        let flags = read_u8(data, &mut pos);
-        let path = read_fixed_string16(data, &mut pos).replace('\\', "/");
+        let prototype_id = read_u64_le(data, &mut pos)?;
+        let prototype_guid = read_u64_le(data, &mut pos)?;
+        let blueprint_id = read_u64_le(data, &mut pos)?;
+        let flags = read_u8(data, &mut pos)?;
+        let path = read_fixed_string16(data, &mut pos)?.replace('\\', "/");
 
         // PrototypeRecordFlags::Abstract = bit 0
         let is_abstract = flags & 0x01 != 0;
