@@ -301,19 +301,8 @@ async fn run_update_inner(
     staging_dir: &Path,
     backup_targets: Vec<String>,
 ) -> Result<(), String> {
-    // Guard: server must not be running
-    {
-        let state = app.state::<crate::server::ServerState>();
-        let mut proc = state.0.lock()
-            .map_err(|_| "Cannot acquire server state lock".to_string())?;
-        if let Some(ref mut child) = proc.child {
-            match child.try_wait() {
-                Ok(None) => {
-                    return Err("Cannot update while the server is running. Stop the server first.".into());
-                }
-                _ => {}
-            }
-        }
+    if crate::server::server_process_is_running(&app.state::<crate::server::ServerState>()) {
+        return Err("Cannot update while the server is running. Stop the server first.".into());
     }
 
     // Pre-update backup
