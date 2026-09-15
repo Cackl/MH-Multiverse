@@ -837,21 +837,20 @@ pub fn send_command(app: AppHandle, cmd: String) -> Result<(), String> {
     Ok(())
 }
 
+/// Exit detection for the server process is owned entirely by the watcher
+/// thread spawned in `start_server`, which clears `proc.child` once
+/// `try_wait` reports it has exited. This command just reads that state
+/// rather than calling `try_wait` itself, so there's a single source of
+/// truth for "has the process exited" instead of two independent pollers
+/// racing to observe the same one-shot exit status.
 #[tauri::command]
 pub fn server_is_running(app: AppHandle) -> bool {
     let state = app.state::<ServerState>();
-    let mut proc = match state.0.lock() {
+    let proc = match state.0.lock() {
         Ok(g) => g,
         Err(_) => return false,
     };
-    if let Some(ref mut child) = proc.child {
-        match child.try_wait() {
-            Ok(None) => true,
-            _ => false,
-        }
-    } else {
-        false
-    }
+    proc.child.is_some()
 }
 
 #[tauri::command]
