@@ -1,8 +1,7 @@
 //! Self-update for MH Multiverse itself (the server updater lives in `updater.rs`).
 //!
 //! Every install must pass all of the following before the running exe is touched:
-//! the SHA-256 digest GitHub publishes for the asset, a minisign signature from
-//! `PUBKEY`, a trusted comment naming the expected file, and a version check
+//! a minisign signature from `PUBKEY`, a trusted comment naming the expected file, and a version check
 //! (the msi file name / exe version resource must equal the release tag). The
 //! version check stops an old genuine release being replayed under a newer tag.
 
@@ -10,10 +9,8 @@ use base64::Engine;
 use futures_util::StreamExt;
 use semver::Version;
 use serde::{Deserialize, Serialize};
-use sha2::{Digest, Sha256};
 use std::path::{Path, PathBuf};
 use tauri::{AppHandle, Emitter, Manager};
-use tokio::io::AsyncWriteExt;
 
 const REPO: &str = "Cackl/MH-Multiverse";
 const APP_VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -38,7 +35,6 @@ const ALLOWED_HOSTS: &[&str] = &[
 struct GhAsset {
     name: String,
     size: u64,
-    digest: Option<String>,
     browser_download_url: String,
 }
 
@@ -174,76 +170,44 @@ async fn get_json<T: serde::de::DeserializeOwned>(client: &reqwest::Client, url:
     serde_json::from_str(&text).map_err(|e| format!("Unexpected GitHub response: {e}"))
 }
 
-/// Streams `asset` to `dest`, enforcing the advertised size, and returns the SHA-256.
+/// Downloads `asset` into memory, enforcing `max` and the advertised size. Emits
+/// progress when `app` is given.
 async fn download(
-    app: &AppHandle,
+    app: Option<&AppHandle>,
     client: &reqwest::Client,
     asset: &GhAsset,
-    dest: &Path,
-) -> Result<[u8; 32], String> {
+    max: u64,
+) -> Result<Vec<u8>, String> {
     let url = reqwest::Url::parse(&asset.browser_download_url).map_err(|e| format!("Bad asset URL: {e}"))?;
     if !host_allowed(&url) {
         return Err("Asset URL is not on GitHub".into());
     }
-    if asset.size == 0 || asset.size > MAX_DOWNLOAD_BYTES {
-        return Err(format!("Unexpected asset size: {} bytes", asset.size));
+    if asset.size == 0 || asset.size > max {
+        return Err(format!("Unexpected size for {}: {} bytes", asset.name, asset.size));
     }
     let resp = client.get(url).send().await.map_err(|e| format!("Download failed: {e}"))?;
     if !resp.status().is_success() {
         return Err(format!("Download failed with HTTP {}", resp.status()));
     }
 
-    let mut file = tokio::fs::File::create(dest).await.map_err(|e| {
-        format!("Cannot write to {}: {e}", dest.parent().unwrap_or(dest).display())
-    })?;
-    let mut hasher = Sha256::new();
-    let mut received: u64 = 0;
+    let mut data = Vec::with_capacity(asset.size as usize);
     let mut stream = resp.bytes_stream();
     while let Some(chunk) = stream.next().await {
-        let chunk = chunk.map_err(|e| format!("Download interrupted: {e}"))?;
-        received += chunk.len() as u64;
-        if received > asset.size {
+        data.extend_from_slice(&chunk.map_err(|e| format!("Download interrupted: {e}"))?);
+        if data.len() as u64 > asset.size {
             return Err("Download is larger than GitHub advertised".into());
         }
-        hasher.update(&chunk);
-        file.write_all(&chunk).await.map_err(|e| format!("Cannot write download: {e}"))?;
-        emit_progress(app, "downloading", received as f32 / asset.size as f32 * 100.0);
+        if let Some(app) = app {
+            emit_progress(app, "downloading", data.len() as f32 / asset.size as f32 * 100.0);
+        }
     }
-    file.flush().await.map_err(|e| format!("Cannot write download: {e}"))?;
-    if received != asset.size {
+    if data.len() as u64 != asset.size {
         return Err("Download is incomplete".into());
     }
-    Ok(hasher.finalize().into())
-}
-
-async fn download_small(client: &reqwest::Client, asset: &GhAsset) -> Result<String, String> {
-    let url = reqwest::Url::parse(&asset.browser_download_url).map_err(|e| format!("Bad asset URL: {e}"))?;
-    if !host_allowed(&url) || asset.size > MAX_SIG_BYTES {
-        return Err("Signature asset rejected".into());
-    }
-    let resp = client.get(url).send().await.map_err(|e| format!("Download failed: {e}"))?;
-    if !resp.status().is_success() {
-        return Err(format!("Signature download failed with HTTP {}", resp.status()));
-    }
-    let bytes = resp.bytes().await.map_err(|e| format!("Signature download failed: {e}"))?;
-    if bytes.len() as u64 > MAX_SIG_BYTES {
-        return Err("Signature asset rejected".into());
-    }
-    String::from_utf8(bytes.to_vec()).map_err(|_| "Signature is not text".into())
+    Ok(data)
 }
 
 // ── Verification ──────────────────────────────────────────────────────────────
-
-fn verify_digest(expected: Option<&str>, actual: &[u8; 32]) -> Result<(), String> {
-    let expected = expected
-        .and_then(|d| d.strip_prefix("sha256:"))
-        .ok_or("GitHub did not publish a SHA-256 digest for this file")?;
-    let actual: String = actual.iter().map(|b| format!("{b:02x}")).collect();
-    if !expected.eq_ignore_ascii_case(&actual) {
-        return Err("Downloaded file does not match GitHub's SHA-256 digest".into());
-    }
-    Ok(())
-}
 
 fn b64_text(s: &str) -> Result<String, String> {
     let bytes = base64::engine::general_purpose::STANDARD
@@ -370,14 +334,14 @@ async fn install_inner(app: &AppHandle, target: &Version, exe: &Path, dest: &Pat
     let sig_asset = find(&format!("{asset_name}.sig"))
         .ok_or_else(|| format!("Release v{target} is not signed ({asset_name}.sig is missing)"))?;
 
-    let sig = download_small(&client, &sig_asset).await?;
+    let sig = String::from_utf8(download(None, &client, &sig_asset, MAX_SIG_BYTES).await?)
+        .map_err(|_| "Signature is not text")?;
     emit_progress(app, "downloading", 0.0);
-    let hash = download(app, &client, &asset, dest).await?;
+    let data = download(Some(app), &client, &asset, MAX_DOWNLOAD_BYTES).await?;
 
     emit_progress(app, "verifying", 0.0);
-    verify_digest(asset.digest.as_deref(), &hash)?;
-    let data = tokio::fs::read(dest).await.map_err(|e| format!("Cannot read download: {e}"))?;
     verify_signature(&data, &sig, PUBKEY, &asset_name)?;
+    tokio::fs::write(dest, &data).await.map_err(|e| format!("Cannot write {}: {e}", dest.display()))?;
     drop(data);
     if !msi {
         let v = pe_file_version(dest)?;
@@ -513,16 +477,6 @@ mod tests {
         let info = build_info(releases, &Version::new(1, 3, 3));
         assert_eq!(info.notes.iter().filter(|n| n.breaking).map(|n| n.version.as_str()).collect::<Vec<_>>(), ["1.4.0"]);
         assert!(!is_breaking("### Breaking Changes is a subheading, not the flag"));
-    }
-
-    #[test]
-    fn digest_must_be_present_and_match() {
-        let hash: [u8; 32] = Sha256::digest(b"fixture").into();
-        let hex: String = hash.iter().map(|b| format!("{b:02x}")).collect();
-        assert!(verify_digest(Some(&format!("sha256:{hex}")), &hash).is_ok());
-        assert!(verify_digest(Some(&format!("sha256:{}", "0".repeat(64))), &hash).is_err());
-        assert!(verify_digest(None, &hash).is_err());
-        assert!(verify_digest(Some(&hex), &hash).is_err());
     }
 
     #[test]
