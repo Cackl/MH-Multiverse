@@ -1,4 +1,4 @@
-import { writable, get } from 'svelte/store'
+import { writable, derived, get } from 'svelte/store'
 import { invoke } from '@tauri-apps/api/core'
 
 export type DataTab = 'events' | 'tuning' | 'store' | 'patches'
@@ -397,4 +397,56 @@ export function setSchedulerNow(dt: Date) {
   )
 
   eventTimezoneOffset.set(offsetHours)
+}
+
+// -- App self-update --
+
+export interface ReleaseNote {
+  version: string
+  body: string
+  published_at: string | null
+  html_url: string
+  breaking: boolean
+}
+
+export interface AppUpdateInfo {
+  current: string
+  latest: string
+  up_to_date: boolean
+  html_url: string
+  notes: ReleaseNote[]
+}
+
+export const appUpdate = writable<AppUpdateInfo | null>(null)
+export const appUpdateError = writable<string>('')
+export const appUpdateCheckedAt = writable<Date | null>(null)
+// Session-only: the badge comes back on next launch.
+export const updateRemindLater = writable<boolean>(false)
+
+const DISMISSED_UPDATE_KEY = 'app-update-dismissed'
+
+function loadDismissedUpdate(): string {
+  try { return localStorage.getItem(DISMISSED_UPDATE_KEY) ?? '' } catch { return '' }
+}
+
+// The version the user chose to ignore; a newer release shows the badge again.
+export const dismissedUpdate = writable<string>(loadDismissedUpdate())
+
+dismissedUpdate.subscribe(value => {
+  try { localStorage.setItem(DISMISSED_UPDATE_KEY, value) } catch {}
+})
+
+export const showUpdateBadge = derived(
+  [appUpdate, dismissedUpdate, updateRemindLater],
+  ([$u, $dismissed, $later]) => !!$u && !$u.up_to_date && $u.latest !== $dismissed && !$later
+)
+
+export async function checkAppUpdate(): Promise<void> {
+  try {
+    appUpdate.set(await invoke<AppUpdateInfo>('check_app_update'))
+    appUpdateError.set('')
+  } catch (e) {
+    appUpdateError.set(String(e))
+  }
+  appUpdateCheckedAt.set(new Date())
 }

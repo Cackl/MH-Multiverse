@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { activeTab, activeDataTab, serverRunning, apacheRunning, gameRunning, type Tab, type DataTab } from '../lib/store'
+  import { activeTab, activeDataTab, serverRunning, apacheRunning, gameRunning, showUpdateBadge, type Tab, type DataTab } from '../lib/store'
 
   function go(tab: Tab) {
     activeTab.set(tab)
@@ -80,6 +80,7 @@
       <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
     </svg>
     <span class="rail-label">Settings</span>
+    {#if $showUpdateBadge}<span class="update-badge" title="Update available"></span>{/if}
   </button>
 
   <div class="rail-spacer"></div>
@@ -194,6 +195,17 @@
     height: 20px;
     background: var(--accent);
     border-radius: 0 2px 2px 0;
+  }
+
+  .update-badge {
+    position: absolute;
+    top: 5px;
+    right: 7px;
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--amber);
+    box-shadow: 0 0 0 2px var(--bg-0);
   }
 
   .rail-spacer { flex: 1; }

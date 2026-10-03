@@ -1,7 +1,59 @@
 <script lang="ts">
   import { open } from '@tauri-apps/plugin-dialog'
-  import { appConfig, setGameExe, setServerExe, activeTheme, setTheme, setLaunchOptions, type LaunchOptions } from '../lib/store'
+  import { onDestroy } from 'svelte'
+  import { invoke } from '@tauri-apps/api/core'
+  import { listen, type UnlistenFn } from '@tauri-apps/api/event'
+  import { openUrl } from '@tauri-apps/plugin-opener'
+  import {
+    appConfig, setGameExe, setServerExe, activeTheme, setTheme, setLaunchOptions, type LaunchOptions,
+    appUpdate, appUpdateError, appUpdateCheckedAt, checkAppUpdate, showUpdateBadge,
+    updateRemindLater, dismissedUpdate, serverRunning,
+  } from '../lib/store'
+  import { parseReleaseNotes } from '../lib/releaseNotes'
   import PanelSidebar from './PanelSidebar.svelte'
+
+  const REPO_URL = 'https://github.com/Cackl/MH-Multiverse'
+  const STAGE_LABELS: Record<string, string> = {
+    downloading: 'Downloading',
+    verifying: 'Verifying signature',
+    installing: 'Installing — restarting shortly',
+  }
+
+  let checking = false
+  let installing = false
+  let installError = ''
+  let progress: { stage: string; pct: number } | null = null
+  let unlistenProgress: UnlistenFn | null = null
+
+  $: breakingVersions = ($appUpdate?.notes ?? []).filter(n => n.breaking).map(n => n.version)
+
+  async function checkNow() {
+    checking = true
+    await checkAppUpdate()
+    checking = false
+  }
+
+  async function installUpdate() {
+    if (!$appUpdate || installing) return
+    installing = true
+    installError = ''
+    progress = { stage: 'downloading', pct: 0 }
+    unlistenProgress ??= await listen<{ stage: string; pct: number }>('app-update-progress', e => { progress = e.payload })
+    try {
+      // On success the app exits and relaunches, so nothing after this runs.
+      await invoke('install_app_update', { version: $appUpdate.latest })
+    } catch (e) {
+      installError = String(e)
+      progress = null
+    }
+    installing = false
+  }
+
+  function formatDate(iso: string | null): string {
+    return iso ? new Date(iso).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }) : ''
+  }
+
+  onDestroy(() => unlistenProgress?.())
 
   type Section = 'client' | 'theme' | 'about'
   let activeSection: Section = 'client'
@@ -71,6 +123,7 @@
             on:keydown={(e) => e.key === 'Enter' && (activeSection = item.id)}
           >
             {item.label}
+            {#if item.id === 'about' && $showUpdateBadge}<span class="nav-badge" title="Update available"></span>{/if}
           </div>
         {/each}
       </nav>
@@ -322,7 +375,88 @@
                 <h3>MH Multiverse</h3>
                 <p>{version} -- Tauri 2 + Svelte 5 + Rust</p>
               </div>
+              <button class="btn btn-outline btn-sm github-link" on:click={() => openUrl(REPO_URL)}>View on GitHub</button>
             </div>
+
+            <div class="section-divider"><span>Updates</span></div>
+
+            {#if $appUpdate && !$appUpdate.up_to_date}
+              <div class="update-card">
+                <div class="update-head">
+                  <div>
+                    <div class="update-title">Update available: v{$appUpdate.current} → v{$appUpdate.latest}</div>
+                    <div class="update-sub">Released {formatDate($appUpdate.notes[0]?.published_at ?? null)}</div>
+                  </div>
+                  <button class="btn btn-outline btn-sm" on:click={() => openUrl($appUpdate.html_url)}>Release page</button>
+                </div>
+
+                {#if breakingVersions.length}
+                  <div class="breaking-box">
+                    <strong>Breaking changes</strong> in v{breakingVersions.join(', v')}. Read the notes below before updating.
+                  </div>
+                {/if}
+
+                {#if progress}
+                  <div class="progress-wrap">
+                    <div class="progress-bar"><div class="progress-fill" style="width: {progress.pct}%"></div></div>
+                    <div class="progress-meta">
+                      <span class="progress-stage">{STAGE_LABELS[progress.stage] ?? progress.stage}</span>
+                      <span class="progress-pct">{Math.round(progress.pct)}%</span>
+                    </div>
+                  </div>
+                {/if}
+                {#if installError}<div class="update-error">{installError}</div>{/if}
+
+                <div class="update-actions">
+                  <button
+                    class="btn btn-accent btn-sm"
+                    disabled={installing || $serverRunning}
+                    title={$serverRunning ? 'Stop the server before updating' : ''}
+                    on:click={installUpdate}
+                  >{installing ? 'Updating…' : 'Update now'}</button>
+                  {#if $showUpdateBadge}
+                    <button class="btn btn-outline btn-sm" disabled={installing} on:click={() => updateRemindLater.set(true)}>Remind me later</button>
+                    <button class="btn btn-outline btn-sm" disabled={installing} on:click={() => $appUpdate && dismissedUpdate.set($appUpdate.latest)}>Dismiss this version</button>
+                  {/if}
+                </div>
+              </div>
+
+              <div class="release-notes">
+                {#each $appUpdate.notes as note, i (note.version)}
+                  <details open={i === 0}>
+                    <summary>v{note.version}{note.breaking ? ' — breaking changes' : ''} <span class="update-sub">{formatDate(note.published_at)}</span></summary>
+                    <div class="notes-body">
+                      {#each parseReleaseNotes(note.body) as block}
+                        {#if block.kind === 'hr'}
+                          <hr />
+                        {:else}
+                          <div class="md-{block.kind}" class:md-h1={block.kind === 'h' && block.level <= 1} class:md-h2={block.kind === 'h' && block.level === 2} style={block.kind === 'li' ? `margin-left: ${block.depth * 14}px` : ''}>
+                            {#each block.spans as s}{#if s.code}<code>{s.text}</code>{:else if s.bold}<strong>{s.text}</strong>{:else}{s.text}{/if}{/each}
+                          </div>
+                        {/if}
+                      {/each}
+                    </div>
+                  </details>
+                {/each}
+              </div>
+            {:else}
+              <div class="update-card">
+                <div class="update-head">
+                  <div>
+                    {#if $appUpdate}
+                      <div class="update-title up-to-date">✓ Up to date (v{$appUpdate.current})</div>
+                    {:else if $appUpdateError}
+                      <div class="update-title">Couldn't check for updates</div>
+                      <div class="update-error">{$appUpdateError}</div>
+                    {:else}
+                      <div class="update-title">Checking for updates…</div>
+                    {/if}
+                    {#if $appUpdateCheckedAt}<div class="update-sub">Last checked {$appUpdateCheckedAt.toLocaleTimeString()}</div>{/if}
+                  </div>
+                  <button class="btn btn-outline btn-sm" disabled={checking} on:click={checkNow}>{checking ? 'Checking…' : 'Check again'}</button>
+                </div>
+              </div>
+            {/if}
           </div>
         </div>
       {/if}
@@ -594,4 +728,120 @@
     color: var(--text-2);
     margin-top: 2px;
   }
+  .github-link { margin-left: auto; }
+
+  /* -- Updates -- */
+  .nav-item { position: relative; }
+  .nav-badge {
+    position: absolute;
+    top: 50%;
+    right: 12px;
+    transform: translateY(-50%);
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--amber);
+  }
+
+  .update-card {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 14px 16px;
+    background: var(--bg-2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+  }
+  .update-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+  .update-title {
+    font-family: var(--font-head);
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-0);
+  }
+  .update-title.up-to-date { color: var(--text-success); }
+  .update-sub {
+    font-size: 11px;
+    color: var(--text-3);
+    margin-top: 2px;
+  }
+  .update-error {
+    font-size: 12px;
+    color: var(--text-error);
+    word-break: break-word;
+  }
+  .update-actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .breaking-box {
+    font-size: 12px;
+    color: var(--text-1);
+    padding: 8px 12px;
+    border: 1px solid var(--amber);
+    border-left-width: 3px;
+    border-radius: var(--radius-sm);
+  }
+  .breaking-box strong { color: var(--amber); }
+
+  .progress-wrap { display: flex; flex-direction: column; gap: 6px; }
+  .progress-bar { height: 4px; background: var(--bg-3); border-radius: 2px; overflow: hidden; }
+  .progress-fill { height: 100%; background: var(--accent); border-radius: 2px; transition: width 0.2s ease; }
+  .progress-meta { display: flex; justify-content: space-between; align-items: center; }
+  .progress-stage {
+    font-family: var(--font-head);
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text-2);
+  }
+  .progress-pct { font-family: var(--font-mono); font-size: 11px; color: var(--accent-bright); }
+
+  .release-notes { display: flex; flex-direction: column; gap: 8px; }
+  .release-notes details {
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    background: var(--bg-2);
+  }
+  .release-notes summary {
+    cursor: pointer;
+    padding: 10px 14px;
+    font-family: var(--font-head);
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-1);
+  }
+  .notes-body {
+    padding: 4px 16px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-size: 12px;
+    line-height: 1.5;
+    color: var(--text-1);
+  }
+  .notes-body .md-h {
+    font-family: var(--font-head);
+    font-weight: 600;
+    color: var(--text-0);
+    margin-top: 8px;
+  }
+  .notes-body .md-h1 { font-size: 15px; }
+  .notes-body .md-h2 { font-size: 13px; color: var(--accent-bright); }
+  .notes-body .md-li { padding-left: 14px; position: relative; }
+  .notes-body .md-li::before { content: '•'; position: absolute; left: 2px; color: var(--text-3); }
+  .notes-body code {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    padding: 1px 4px;
+    background: var(--bg-3);
+    border-radius: 3px;
+  }
+  .notes-body hr { border: none; border-top: 1px solid var(--border); margin: 6px 0; }
 </style>
