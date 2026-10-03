@@ -314,6 +314,7 @@
     saving = true; opError = ''
     try {
       scheduleData = await invoke<ScheduleData>('reset_schedule_override', { serverExe: $appConfig.server_exe })
+      discardEditor()  // selection is by object reference; these are new objects
     } catch (e) { opError = String(e) }
     finally { saving = false }
   }
@@ -322,6 +323,7 @@
     saving = true; opError = ''
     try {
       scheduleData = await invoke<ScheduleData>('merge_schedule_override', { serverExe: $appConfig.server_exe })
+      discardEditor()  // selection is by object reference; these are new objects
     } catch (e) { opError = String(e) }
     finally { saving = false }
   }
