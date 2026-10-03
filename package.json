@@ -9,7 +9,8 @@
     "preview": "vite preview",
     "check": "svelte-check --tsconfig ./tsconfig.app.json && tsc -p tsconfig.node.json",
     "tauri": "tauri",
-    "bump-version": "node scripts/bump-version.js"
+    "bump-version": "node scripts/bump-version.js",
+    "sign-release": "node scripts/sign-release.js"
   },
   "devDependencies": {
     "@sveltejs/vite-plugin-svelte": "^7.0.0",

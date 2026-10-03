@@ -11,6 +11,7 @@
 | Process management | `sysinfo`, Windows Job Objects (`windows` crate) |
 | Calligraphy parsing | `lz4_flex` (LZ4 block decompression) |
 | Server updates | `reqwest` (HTTP streaming), `zip` (extraction) |
+| App self-update | `reqwest`, `sha2`, `minisign-verify` (release signatures), `semver` |
 | Timestamps | `chrono` |
 | SQLite | `rusqlite` (`Account.db` - read queries player-login lookups; read/write for account import and restore) |
 | Log parsing | `regex` (player login/logout extraction) |
@@ -28,6 +29,7 @@ mh-multiverse/
 │   ├── vite-env.d.ts             TypeScript ambient declarations
 │   ├── lib/
 │   │   ├── store.ts              Global stores, types, Tauri invoke wrappers
+│   │   ├── releaseNotes.ts       Minimal Markdown → blocks parser for release notes (no {@html})
 │   │   ├── serverEvents.ts       Tauri event listeners (log, start, stop, player-event)
 │   │   ├── serverCommands.ts     Fallback command list for autocomplete
 │   │   ├── playerMeta.ts         PlayerSession type, user level labels, ban/whitelist flag helpers
@@ -85,6 +87,8 @@ mh-multiverse/
 │   │   │                         parsing, prototype search, ID/GUID/path resolution
 │   │   ├── updater.rs            Nightly build update (download/extract/install),
 │   │   │                         backup create/list/restore/delete with manifests
+│   │   ├── app_update.rs         MH Multiverse self-update: GitHub Releases check, verified
+│   │   │                         download, portable exe swap or MSI install
 │   │   ├── accounts.rs           Account export (!account download JSON) import and restore;
 │   │   │                         Download/ folder scanning, ID remapping, Add/Replace modes
 │   │   └── paths.rs             Shared server_dir() helper (derives the server's containing
@@ -221,11 +225,13 @@ The stdout reader additionally calls `parse_player_log_event` on every line (reg
 
 **`updater.rs`** - Downloads nightly builds from `nightly.link/Crypto137/MHServerEmu/...`, extracts them, and overlays onto the server directory. The update flow: check availability (HTTP range probe) → backup selected targets → download with progress events → extract to staging dir → detect wrapper directory → copy to server dir → restore backed-up user files. Backups are stored in `{server_dir}/Backups/{timestamp}/` with a `manifest.json`. `Calligraphy.sip` and `mu_cdata.sip` are blacklisted from backups.
 
+**`app_update.rs`** - Self-update for MH Multiverse itself. Checks `api.github.com/repos/Cackl/MH-Multiverse/releases`, picks the highest published `vX.Y.Z` (skipping drafts and prereleases), and returns notes for every newer release, flagging any whose body contains a `## Breaking Changes` heading. Installs re-fetch the release by tag and refuse to touch the running exe unless the download carries a valid minisign signature from the embedded `PUBKEY`, names the expected file in its trusted comment, and (exe) reports the expected version in its version resource. See [Releasing](#releasing-signed-updates).
+
 **`accounts.rs`** - Parses `!account download` JSON exports and writes them into `Account.db` in one of two modes. Add creates a new account: uniqueness-checked against existing Email/PlayerName, with optional overrides for both plus the password (falling back to the export's own PasswordHash/Salt if no new password is given). Replace overwrites only the game-data of an existing account identified by `target_id` — Email, PlayerName, Password, UserLevel, and Flags on the Account row are never touched, so the caller (`ServerModal`'s Restore tab) is responsible for verifying the file actually belongs to the target before invoking it. Both modes route through `insert_player_data`, which assigns every entity (Player, Avatar, TeamUp, Item, ControlledEntity) a fresh DbGuid and rewrites ContainerDbGuid references through an in-memory remap table — this remapping is entirely self-contained per file, so it has no dependency on the file's original account ID matching anything. `scan_download_backups` lists candidate files from `<game_exe_dir>/Download/` by filename pattern (`0x{IdHex}_{PlayerName}_{yyyy-MM-dd_HH.mm.ss}.json`) without parsing them, so the frontend can offer a quick-select list before committing to a full parse. All writes run inside a transaction and are guarded by `server_process_is_running` to avoid DB lock contention with a live MHServerEmu process.
 
 ### Window Close Hook
 
-`lib.rs` intercepts `CloseRequested`, prevents the default close, kills child processes via `kill_child()`, saves window state, then calls `app.exit(0)`. This runs in an async Tauri runtime task.
+`lib.rs` intercepts `CloseRequested`, prevents the default close, and calls `shutdown()`, which kills child processes via `kill_child()`, saves window state, then calls `app.exit(0)`. This runs in an async Tauri runtime task. `app_update.rs` uses the same `shutdown()` after installing an update.
 
 ---
 
@@ -349,6 +355,13 @@ The stdout reader additionally calls `parse_player_log_event` on every line (reg
 | `delete_backup` | `server_exe: String, backup_id: String` | `()` | Delete backup directory |
 | `get_backups_dir` | `server_exe: String` | `String` | Return Backups directory path |
 
+### App Update (`app_update.rs`)
+
+| Command | Parameters | Returns | Description |
+|---|---|---|---|
+| `check_app_update` | - | `AppUpdateInfo` | Latest release vs running version, with notes for all newer releases |
+| `install_app_update` | `version: String` | `()` | Download, verify and install that release, then exit/relaunch |
+
 ### Accounts (`accounts.rs`)
 
 | Command | Parameters | Returns | Description |
@@ -423,6 +436,7 @@ The stdout reader additionally calls `parse_player_log_event` on every line (reg
 | `server-stopped` | `ServerStatusPayload` | `server.rs` watcher thread | Server process exited (includes exit code) |
 | `player-event` | `PlayerEventPayload` | `server.rs` stdout reader | Player login, logout, or full session clear on server stop |
 | `update-progress` | `UpdateProgressPayload` | `updater.rs` | Update stage + percentage (downloading, extracting, installing, restoring, done) |
+| `app-update-progress` | `{ stage, pct }` | `app_update.rs` | App self-update stage (downloading, verifying, installing) |
 
 `PlayerEventPayload` shape: `{ kind: "login" | "logout" | "clear", session_id: string | null, username: string | null, count: number }`.
 
@@ -616,6 +630,26 @@ run_update
   → clean up temp files (_update.zip, _update_staging/)
 ```
 
+### App Self-Update Flow
+
+```
+check_app_update (on launch, and from Settings → About)
+  → GET /repos/Cackl/MH-Multiverse/releases?per_page=30
+  → drop drafts, prereleases, non-vX.Y.Z tags; keep versions > running
+  → AppUpdateInfo { latest, up_to_date, notes[] (newest first, breaking flag each) }
+
+install_app_update(version)
+  → guards: release build, PUBKEY set, server not running, version > running
+  → re-fetch release by tag (never trusts a URL from the frontend)
+  → pick asset: mh-multiverse.exe (portable) or MH.Multiverse_{v}_x64_en-US.msi (exe under Program Files)
+  → download .sig + asset (HTTPS, redirects limited to GitHub hosts, size must match API)
+  → verify minisign signature → signed file name → exe version resource
+  → portable: exe → exe.old, exe.new → exe, spawn exe, shutdown()   (exe.old deleted on next launch)
+  → msi: msiexec /i <msi> /passive, shutdown()                       (MajorUpgrade replaces old install)
+```
+
+Frontend: `showUpdateBadge` (store) drives the dot on the Rail's Settings tab and the About nav item. "Remind me later" is in-memory (badge returns next launch); "Dismiss this version" stores the version in localStorage (`app-update-dismissed`), so a newer release shows the badge again.
+
 ### Account Import and Restore
 
 ```
@@ -695,6 +729,22 @@ Computing the URL at use time rather than storing it prevents the class of bugs 
 ### Replace Never Touches Identity (Accounts)
 
 `do_replace` only ever deletes and reinserts an account's Player/Avatar/TeamUp/Item/ControlledEntity rows — Email, PlayerName, Password, UserLevel, and Flags on the Account row itself are out of scope, even though an earlier version of this function did write them. The entity ID remap in `insert_player_data` is what makes this safe: every DbGuid in the imported file is rewritten relative to the target account, not the file's original account, so Replace has no functional dependency on the file "belonging" to the target in any sense the database would enforce. That's a deliberate tradeoff - it makes Replace simple and keeps credentials/permissions stable across a restore, but it also means the backend alone can't tell a legitimate restore from a mismatched file. The mismatch check lives entirely in `ServerModal`'s Restore tab (comparing the parsed file's email/player name against the resolved target account) rather than in `accounts.rs`.
+
+---
+
+## Releasing (Signed Updates)
+
+The in-app updater only installs files signed with the release key. The signature (minisign, Ed25519) carries no identity: just a random key ID, the signature, and a trusted comment with a timestamp and the file name.
+
+**One-time setup**
+1. In PowerShell, run `New-Item -ItemType Directory -Force "$HOME\.mhm"` then `npx tauri signer generate -w "$HOME\.mhm\update.key"`, and set a password. (Don't use `%USERPROFILE%`: only cmd expands it, so PowerShell and Git Bash create a folder with that literal name.) Back the key up: if it is lost, installed copies can't verify new releases and users must download one release manually.
+2. Paste the printed public key into `PUBKEY` in `src-tauri/src/app_update.rs`. Builds with an empty `PUBKEY` can check for updates but refuse to install.
+
+**Each release**
+1. `npm run bump-version -- <patch|minor|major>` then `npm run tauri build`.
+2. `npm run sign-release`. This writes `.sig` files next to `target/release/mh-multiverse.exe` and the msi.
+3. Upload the exe, the msi and both `.sig` files to the GitHub release (GitHub turns spaces in file names into dots; the updater accounts for this). The tag must be `vX.Y.Z` and the release must not be marked prerelease.
+4. If the release breaks compatibility, add a `## Breaking Changes` heading to its notes. Users see a warning before updating, even when skipping past that version.
 
 ---
 

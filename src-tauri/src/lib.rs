@@ -10,11 +10,12 @@ mod updater;
 mod patches;
 mod accounts;
 mod paths;
+mod app_update;
 
 pub use config::*;
 
 use std::sync::{Arc, Mutex};
-use tauri::Manager;
+use tauri::{AppHandle, Manager};
 use tauri_plugin_window_state::{AppHandleExt, StateFlags, WindowExt};
 use server::{ServerProcess, ServerState};
 
@@ -24,6 +25,17 @@ const WINDOW_STATE_FLAGS: StateFlags = StateFlags::from_bits_truncate(
         | StateFlags::POSITION.bits()
         | StateFlags::MAXIMIZED.bits()
 );
+
+/// Kills the server child, saves window state and exits. Shared by the window
+/// close hook and the app self-updater.
+pub(crate) fn shutdown(app: &AppHandle) {
+    let state = app.state::<ServerState>();
+    if let Ok(mut proc) = state.0.lock() {
+        server::kill_child(&mut proc);
+    }
+    let _ = app.save_window_state(WINDOW_STATE_FLAGS);
+    app.exit(0);
+}
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -41,6 +53,7 @@ pub fn run() {
             if let Some(window) = app.get_webview_window("main") {
                 let _ = window.restore_state(WINDOW_STATE_FLAGS);
             }
+            std::thread::spawn(app_update::cleanup_leftovers);
             if cfg!(debug_assertions) {
                 app.handle().plugin(
                     tauri_plugin_log::Builder::default()
@@ -54,14 +67,7 @@ pub fn run() {
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
                 api.prevent_close();
                 let app = window.app_handle().clone();
-                tauri::async_runtime::spawn(async move {
-                    let state = app.state::<ServerState>();
-                    if let Ok(mut proc) = state.0.lock() {
-                        server::kill_child(&mut proc);
-                    }
-                    let _ = app.save_window_state(WINDOW_STATE_FLAGS);
-                    app.exit(0);
-                });
+                tauri::async_runtime::spawn(async move { shutdown(&app) });
             }
         })
         .invoke_handler(tauri::generate_handler![
@@ -108,6 +114,8 @@ pub fn run() {
             updater::restore_backup,
             updater::delete_backup,
             updater::get_backups_dir,
+            app_update::check_app_update,
+            app_update::install_app_update,
             calligraphy::search_prototypes,
             calligraphy::lookup_prototype_id,
             store::get_mtxstore_dir,
