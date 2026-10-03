@@ -370,8 +370,8 @@ pub fn merge_schedule_override(server_exe: String) -> Result<ScheduleData, Strin
         vec![]
     };
 
-    // Names aren't unique (the stock file has two "Permanent Events"), so count
-    // occurrences: each existing rule accounts for one default of the same name.
+    // Names aren't guaranteed unique, so count occurrences: each existing rule
+    // accounts for one default of the same name.
     let mut existing: HashMap<String, usize> = HashMap::new();
     for r in &current {
         *existing.entry(r.name.clone()).or_insert(0) += 1;

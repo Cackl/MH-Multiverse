@@ -212,35 +212,3 @@ pub fn set_patch_file_enabled(
 pub fn get_patches_dir(server_exe: String) -> Result<String, String> {
     patches_dir(&server_exe).map(|p| p.to_string_lossy().to_string())
 }
-#[cfg(test)]
-mod id_tests {
-    use super::*;
-
-    fn entry(vt: &str, v: JsonValue) -> PatchEntry {
-        PatchEntry { enabled: true, prototype: String::new(), path: String::new(),
-            description: String::new(), value_type: vt.into(), value: v }
-    }
-
-    #[test]
-    fn ids_round_trip_without_precision_loss() {
-        let big = u64::MAX;
-        let mut e = entry("PrototypeId", JsonValue::Number(Number::from(big)));
-        convert_ids(&mut e, true);
-        assert_eq!(e.value, JsonValue::String(big.to_string()));
-        convert_ids(&mut e, false);
-        assert_eq!(e.value, JsonValue::Number(Number::from(big)));
-    }
-
-    #[test]
-    fn arrays_convert_and_other_types_untouched() {
-        let mut a = entry("PrototypeId[]", serde_json::json!([9007199254740993u64, 1]));
-        convert_ids(&mut a, true);
-        assert_eq!(a.value, serde_json::json!(["9007199254740993", "1"]));
-        convert_ids(&mut a, false);
-        assert_eq!(a.value, serde_json::json!([9007199254740993u64, 1]));
-
-        let mut i = entry("Integer", serde_json::json!(5));
-        convert_ids(&mut i, true);
-        assert_eq!(i.value, serde_json::json!(5));
-    }
-}

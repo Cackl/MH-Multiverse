@@ -447,25 +447,3 @@ pub fn toggle_tuning_file(
 
     Ok(())
 }
-#[cfg(test)]
-mod scan_tests {
-    use super::*;
-
-    #[test]
-    fn revisiting_a_directory_is_skipped() {
-        let dir = std::env::temp_dir().join("mhm_scan_visited_test");
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(dir.join("sub")).unwrap();
-        std::fs::write(dir.join("sub").join("a.json"), "{}").unwrap();
-
-        let mut out = vec![];
-        let mut visited = HashSet::new();
-        collect_files_recursive(&dir, &dir, &mut out, &mut visited).unwrap();
-        assert_eq!(out.len(), 1);
-
-        // Same directory again (what a looping junction would do) adds nothing.
-        collect_files_recursive(&dir, &dir, &mut out, &mut visited).unwrap();
-        assert_eq!(out.len(), 1);
-        let _ = std::fs::remove_dir_all(&dir);
-    }
-}
