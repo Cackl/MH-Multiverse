@@ -97,8 +97,9 @@
 
   $: activeEventIds = rules.length >= 0 ? Array.from(getActiveEventIds(getAdjustedNow())) : []
 
-  // Key for {#key} block — forces rule editor remount on selection change
-  $: editorKey = creatingRule ? '__creating__' : (selectedRule?.name ?? '')
+  // Key for {#key} block — forces rule editor remount on selection change.
+  // By object reference: rule names are not unique in real EventSchedule.json.
+  $: editorKey = creatingRule ? '__creating__' : selectedRule
 
   // ── Status helpers ──────────────────────────────────────────────────────────
 
@@ -233,7 +234,7 @@
     try {
       const newRules = creatingRule
         ? [...rules, updated]
-        : rules.map(r => r.name === selectedRule?.name ? updated : r)
+        : rules.map(r => r === selectedRule ? updated : r)
       await invoke('save_schedule_override', {
         serverExe: $appConfig.server_exe,
         rules: newRules,
@@ -392,11 +393,11 @@
           <div class="rule-list">
             {#each ruleGroups as group (group.key)}
               <div class="rule-group-label">{group.label}</div>
-              {#each group.rules as rule (rule.name)}
+              {#each group.rules as rule (rule)}
                 {@const status = ruleStatus(rule)}
                 <div
                   class="rule-item"
-                  class:active={selectedRule?.name === rule.name && !creatingRule}
+                  class:active={selectedRule === rule && !creatingRule}
                   class:rule-disabled={!rule.is_enabled}
                   role="button"
                   tabindex="0"
