@@ -2,6 +2,21 @@
 ---
 <br>
 
+# Version 1.4.1 Release
+
+## What's Changed
+
+### Bug fixes
+
+Credit to [lordunborn](https://github.com/lordunborn) for identifying some issues in their own fork of MH Multiverse, this version addresses them in mine.
+- Patch editor no longer corrupts large IDs.
+  - PrototypeId, PrototypeDataRef, PrototypeGuid and LocaleStringId values above 2^53 were silently rounded when a patch was saved (e.g. `9227248631086787379` became `9227248631086787000`), so the patch pointed at the wrong prototype. IDs are now kept exact end to end. If you saved patches with an earlier version, re-add any entries whose Value ends in several zeros.
+- Apache no longer left running if MH Multiverse crashes or is force-closed. It shuts down with the app, so the next "Start Apache" doesn't fail on a port that's already in use.
+- Events panel no longer hangs on "Loading…" when two schedule rules share a name. Saving one of them also no longer overwrites the other, and "Merge defaults" now adds a missing default rule even when another rule has the same name.
+- The tuning file scan can no longer hangs if a folder in LiveTuning loops back to a parent folder.
+
+<br>
+
 ---
 # Version 1.4.0 Release
 
