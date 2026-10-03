@@ -82,10 +82,9 @@
     if (vt === 'Integer')  return parseInt(s, 10)
     if (vt === 'Float')    return parseFloat(s)
     if (COMPLEX.has(vt))   { try { return JSON.parse(s) } catch { return s } }
-    // ID types: numeric where possible. Values > MAX_SAFE_INTEGER lose JS precision —
-    // use prototype search auto-fill to avoid manual entry of large IDs.
-    const n = Number(s)
-    return isNaN(n) ? s : n
+    // ID types stay strings: they are 64-bit and Number() would round anything above
+    // 2^53. save_patch_file converts them back to bare integers on write.
+    return s
   }
 
   function validateValueStr(s: string, vt: string): string {

@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use serde_json::Value as JsonValue;
+use serde_json::{Number, Value as JsonValue};
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -45,6 +45,38 @@ fn file_path(patches: &Path, file_name: &str, enabled: bool) -> PathBuf {
     } else {
         off_dir(patches).join(file_name)
     }
+}
+
+// ── 64-bit ID handling ────────────────────────────────────────────────────────
+//
+// Prototype IDs/GUIDs are u64 and routinely exceed 2^53, which the webview's
+// JSON round-trip (Tauri IPC) silently rounds. They cross to the frontend as
+// strings and are turned back into bare integers (what the server's patch
+// loader expects) when written to disk.
+
+const ID_TYPES: &[&str] = &[
+    "PrototypeId", "PrototypeDataRef", "PrototypeGuid", "LocaleStringId",
+    "PrototypeId[]", "PrototypeDataRef[]",
+];
+
+fn convert_ids(entry: &mut PatchEntry, to_strings: bool) {
+    if !ID_TYPES.contains(&entry.value_type.as_str()) {
+        return;
+    }
+    fn convert(v: &mut JsonValue, to_strings: bool) {
+        match v {
+            JsonValue::Array(items) => items.iter_mut().for_each(|i| convert(i, to_strings)),
+            JsonValue::Number(n) if to_strings => *v = JsonValue::String(n.to_string()),
+            JsonValue::String(s) if !to_strings => {
+                // Non-numeric text is left as-is so the server reports it, not us.
+                if let Ok(n) = s.trim().parse::<u64>() {
+                    *v = JsonValue::Number(Number::from(n));
+                }
+            }
+            _ => {}
+        }
+    }
+    convert(&mut entry.value, to_strings);
 }
 
 // ── Tauri commands ────────────────────────────────────────────────────────────
@@ -107,8 +139,10 @@ pub fn load_patch_file(
     let text = fs::read_to_string(&path)
         .map_err(|e| format!("Cannot read {file_name}: {e}"))?;
 
-    serde_json::from_str(&text)
-        .map_err(|e| format!("Cannot parse {file_name}: {e}"))
+    let mut entries: Vec<PatchEntry> = serde_json::from_str(&text)
+        .map_err(|e| format!("Cannot parse {file_name}: {e}"))?;
+    entries.iter_mut().for_each(|e| convert_ids(e, true));
+    Ok(entries)
 }
 
 /// Write entries back to a patch file, pretty-printed.
@@ -117,10 +151,12 @@ pub fn save_patch_file(
     server_exe: String,
     file_name: String,
     enabled: bool,
-    entries: Vec<PatchEntry>,
+    mut entries: Vec<PatchEntry>,
 ) -> Result<(), String> {
     let patches = patches_dir(&server_exe)?;
     let path = file_path(&patches, &file_name, enabled);
+
+    entries.iter_mut().for_each(|e| convert_ids(e, false));
 
     let text = serde_json::to_string_pretty(&entries)
         .map_err(|e| format!("Cannot serialise entries: {e}"))?;
@@ -175,4 +211,36 @@ pub fn set_patch_file_enabled(
 #[tauri::command]
 pub fn get_patches_dir(server_exe: String) -> Result<String, String> {
     patches_dir(&server_exe).map(|p| p.to_string_lossy().to_string())
+}
+#[cfg(test)]
+mod id_tests {
+    use super::*;
+
+    fn entry(vt: &str, v: JsonValue) -> PatchEntry {
+        PatchEntry { enabled: true, prototype: String::new(), path: String::new(),
+            description: String::new(), value_type: vt.into(), value: v }
+    }
+
+    #[test]
+    fn ids_round_trip_without_precision_loss() {
+        let big = u64::MAX;
+        let mut e = entry("PrototypeId", JsonValue::Number(Number::from(big)));
+        convert_ids(&mut e, true);
+        assert_eq!(e.value, JsonValue::String(big.to_string()));
+        convert_ids(&mut e, false);
+        assert_eq!(e.value, JsonValue::Number(Number::from(big)));
+    }
+
+    #[test]
+    fn arrays_convert_and_other_types_untouched() {
+        let mut a = entry("PrototypeId[]", serde_json::json!([9007199254740993u64, 1]));
+        convert_ids(&mut a, true);
+        assert_eq!(a.value, serde_json::json!(["9007199254740993", "1"]));
+        convert_ids(&mut a, false);
+        assert_eq!(a.value, serde_json::json!([9007199254740993u64, 1]));
+
+        let mut i = entry("Integer", serde_json::json!(5));
+        convert_ids(&mut i, true);
+        assert_eq!(i.value, serde_json::json!(5));
+    }
 }
