@@ -63,9 +63,19 @@ The app is currently Windows-only and communicates with the server via stdin/std
 ## Installation
 
 ### Prerequisites
+
+**Running the release (`.exe` / `.msi`)**
+- Windows 10 or 11
+- [Microsoft Edge WebView2 runtime](https://developer.microsoft.com/microsoft-edge/webview2/) (preinstalled on Windows 11 and most up-to-date Windows 10 installs; the `.msi`/installer will fetch it if missing)
+
+**Building from source**
+- Everything above
 - [Node.js](https://nodejs.org/) (LTS)
 - [Rust](https://rustup.rs/) (stable, 1.77.2+)
-- [Tauri CLI](https://v2.tauri.app/start/prerequisites/) prerequisites for your platform
+- [Tauri CLI](https://v2.tauri.app/start/prerequisites/) prerequisites for your platform (on Windows: Microsoft C++ Build Tools)
+
+If you just want to run MH Multiverse, grab the `.exe` or `.msi` from the [Releases page](https://github.com/cackl/mh-multiverse/releases) and skip the rest of this section.
+The "About" page in-app - found under "Settings" - checks for updates, so as long as you have release 1.4.0 or newer you can also update that way.
 
 ### Setup
 ```cmd
@@ -81,10 +91,22 @@ npm run tauri dev
 ```cmd
 npm run tauri build
 ```
+The standalone executable is written to `src-tauri\target\release\mh-multiverse.exe`. Installers are in `src-tauri\target\release\bundle\`.
 
-### Config File Location
+### Cleanup
+While the executable itself is small, `tauri dev` and `tauri build` generate a lot of temporary dependencies and build artifacts in `src-tauri\target` (in the multiple gigabyte range). Once you've copied the executable somewhere else, you can reclaim that space with:
+```cmd
+cd src-tauri
+cargo clean
 ```
-%APPDATA%\com.mhmultiverse.app\multiverse.json
+
+### Uninstall
+If you used the installer or `.msi`, remove **MH Multiverse** via Windows *Settings > Apps > Installed apps*. If you're running the standalone `.exe`, just delete it.
+
+Neither method removes your settings (like server lists). To fully clean up, also delete these folders:
+```
+%APPDATA%\com.mhmultiverse.app        (app settings in multiverse.json, window position and size)
+%LOCALAPPDATA%\com.mhmultiverse.app   (WebView2 cache)
 ```
 
 ### NOTE
