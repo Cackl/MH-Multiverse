@@ -3,6 +3,19 @@
 <br>
 
 ---
+# Version 1.4.0 Release
+
+## What's Changed
+
+### Update checking and self-update flow for MH Multiverse
+
+- On launch and from Settings → About, the app checks GitHub Releases for a newer version (vX.Y.Z). It shows a badge and the release notes, with a warning for any if any updates introduce a breaking change (something I'll be avoiding as much as possible).
+- Install downloads the exe or MSI plus its .sig, verifies the minisign signature, then swaps the exe or runs msiexec.
+- Update installations are blocked while the server emulator is running.
+
+<br>
+
+---
 # Version 1.3.3 Release
 
 ## What's Changed
