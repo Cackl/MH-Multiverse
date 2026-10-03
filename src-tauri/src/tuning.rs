@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::Path;
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -115,11 +115,20 @@ fn load_events_file_map(live_tuning_dir: &Path) -> HashMap<String, String> {
 
 /// Recursively collects all files under `dir`, returning (full_path, relative_path_from_base)
 /// pairs. Separators in relative_path are normalised to '/'.
+// `visited` holds canonical directory paths: a Windows junction pointing back at
+// an ancestor would otherwise recurse forever and hang the scan.
 fn collect_files_recursive(
     dir: &Path,
     base: &Path,
     out: &mut Vec<(std::path::PathBuf, String)>,
+    visited: &mut HashSet<std::path::PathBuf>,
 ) -> Result<(), String> {
+    let canonical = std::fs::canonicalize(dir)
+        .map_err(|e| format!("Cannot resolve directory {}: {e}", dir.display()))?;
+    if !visited.insert(canonical) {
+        return Ok(());
+    }
+
     let read_dir = std::fs::read_dir(dir)
         .map_err(|e| format!("Cannot read directory {}: {e}", dir.display()))?;
 
@@ -128,7 +137,7 @@ fn collect_files_recursive(
         let path = entry.path();
 
         if path.is_dir() {
-            collect_files_recursive(&path, base, out)?;
+            collect_files_recursive(&path, base, out, visited)?;
         } else {
             let relative = path
                 .strip_prefix(base)
@@ -171,7 +180,7 @@ pub fn scan_tuning_files(
 
     // Collect all files under LiveTuning/ recursively.
     let mut all_files: Vec<(std::path::PathBuf, String)> = Vec::new();
-    collect_files_recursive(&dir, &dir, &mut all_files)?;
+    collect_files_recursive(&dir, &dir, &mut all_files, &mut HashSet::new())?;
 
     let mut files: Vec<TuningFileInfo> = Vec::new();
 

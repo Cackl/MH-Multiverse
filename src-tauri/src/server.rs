@@ -116,6 +116,10 @@ pub struct ServerProcess {
     pub apache_child: Option<Child>,
     #[cfg(target_os = "windows")]
     _job: Option<JobObject>,
+    // Apache's own Job Object (KILL_ON_JOB_CLOSE). Without it, a crash or
+    // force-kill of this app leaves httpd.exe running and holding its port.
+    #[cfg(target_os = "windows")]
+    _apache_job: Option<JobObject>,
 }
 
 impl ServerProcess {
@@ -125,7 +129,19 @@ impl ServerProcess {
             apache_child: None,
             #[cfg(target_os = "windows")]
             _job: None,
+            #[cfg(target_os = "windows")]
+            _apache_job: None,
         }
+    }
+
+    /// Kill Apache (if running) and release its Job Object.
+    pub fn kill_apache(&mut self) {
+        if let Some(mut apache) = self.apache_child.take() {
+            let _ = apache.kill();
+            let _ = apache.wait();
+        }
+        #[cfg(target_os = "windows")]
+        { self._apache_job = None; }
     }
 }
 
@@ -135,10 +151,7 @@ impl Drop for ServerProcess {
             let _ = child.kill();
             let _ = child.wait();
         }
-        if let Some(mut apache) = self.apache_child.take() {
-            let _ = apache.kill();
-            let _ = apache.wait();
-        }
+        self.kill_apache();
     }
 }
 
@@ -179,11 +192,7 @@ pub fn kill_child(proc: &mut ServerProcess) {
         let _ = child.wait();
     }
     proc.child = None;
-    if let Some(ref mut apache) = proc.apache_child {
-        let _ = apache.kill();
-        let _ = apache.wait();
-    }
-    proc.apache_child = None;
+    proc.kill_apache();
 }
 
 // -- Parse a raw log line into structured fields --
@@ -648,10 +657,7 @@ pub async fn start_server(
                                 proc.child = None;
 
                                 // Clean up Apache
-                                if let Some(mut apache) = proc.apache_child.take() {
-                                    let _ = apache.kill();
-                                    let _ = apache.wait();
-                                }
+                                proc.kill_apache();
 
                                 // Release job object
                                 #[cfg(target_os = "windows")]
@@ -736,10 +742,7 @@ pub async fn stop_server(app: AppHandle) -> Result<(), String> {
             }
             proc.child = None;
 
-            if let Some(mut apache) = proc.apache_child.take() {
-                let _ = apache.kill();
-                let _ = apache.wait();
-            }
+            proc.kill_apache();
 
             #[cfg(target_os = "windows")]
             { proc._job = None; }
@@ -799,6 +802,20 @@ pub async fn start_apache(app: AppHandle, server_exe: String) -> Result<(), Stri
         .spawn()
         .map_err(|e| format!("Failed to start Apache: {e}"))?;
 
+    // Windows: put Apache in its own Job Object so it dies with this app.
+    #[cfg(target_os = "windows")]
+    {
+        use std::os::windows::io::AsRawHandle;
+        let job = create_job_object();
+        if let Some(ref j) = job {
+            unsafe {
+                let handle = HANDLE(child.as_raw_handle() as *mut core::ffi::c_void);
+                let _ = AssignProcessToJobObject(j.0, handle);
+            }
+        }
+        proc._apache_job = job;
+    }
+
     proc.apache_child = Some(child);
 
     let _ = app.emit("server-log", vec![LogLinePayload {
@@ -815,9 +832,8 @@ pub async fn stop_apache(app: AppHandle) -> Result<(), String> {
     let state = app.state::<ServerState>();
     let mut proc = state.0.lock().map_err(|e| e.to_string())?;
 
-    if let Some(mut apache) = proc.apache_child.take() {
-        let _ = apache.kill();
-        let _ = apache.wait();
+    if proc.apache_child.is_some() {
+        proc.kill_apache();
 
         let _ = app.emit("server-log", vec![LogLinePayload {
             time: log_timestamp(),

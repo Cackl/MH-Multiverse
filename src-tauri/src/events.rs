@@ -370,11 +370,17 @@ pub fn merge_schedule_override(server_exe: String) -> Result<ScheduleData, Strin
         vec![]
     };
 
-    let existing_names: HashSet<String> = current.iter().map(|r| r.name.clone()).collect();
+    // Names aren't guaranteed unique, so count occurrences: each existing rule
+    // accounts for one default of the same name.
+    let mut existing: HashMap<String, usize> = HashMap::new();
+    for r in &current {
+        *existing.entry(r.name.clone()).or_insert(0) += 1;
+    }
 
     for rule in defaults {
-        if !existing_names.contains(&rule.name) {
-            current.push(rule);
+        match existing.get_mut(&rule.name) {
+            Some(n) if *n > 0 => *n -= 1,
+            _ => current.push(rule),
         }
     }
 

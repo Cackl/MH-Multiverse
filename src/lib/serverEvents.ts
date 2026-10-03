@@ -103,13 +103,15 @@ async function syncInitialState() {
 
   if (running) {
     startUptime()
-    const apache = await invoke<boolean>('apache_is_running')
-    apacheRunning.set(apache)
     clearServerError()
   } else {
-    apacheRunning.set(false)
     stopUptime()
   }
+
+  // Apache can be started without the server, so check it either way.
+  // (The server-stopped handler still assumes false: every server exit path
+  // kills Apache too.)
+  apacheRunning.set(await invoke<boolean>('apache_is_running'))
 }
 
 export async function initServerEventBridge(): Promise<void> {
