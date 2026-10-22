@@ -28,9 +28,9 @@
   $: trustHelp = `${STATE_HELP[state]}\n\n${HOW_TRUST_WORKS}`
 
   const FLAGS: { key: string; name: string; desc: string }[] = [
-    { key: 'terminals', name: 'Terminals Tracker', desc: 'Shows terminal and tier info in missions' },
+    { key: 'terminals', name: 'Terminals Tracker', desc: 'Shows terminal tracker when opening the Waypoint' },
     { key: 'dps', name: 'DPS Meter', desc: 'Shows the damage meter' },
-    { key: 'detector_log', name: 'Debug Logging', desc: 'Writes the overlay log files' },
+    { key: 'detector_log', name: 'Debug Logging', desc: 'Writes overlay log files, separate to Hidden Items' },
   ]
 
   async function call(cmd: string, args?: Record<string, unknown>) {
@@ -91,7 +91,7 @@
   $: if ($overlayLog && logEl && stickToBottom) scrollLogToEnd()
 </script>
 
-<IntegrationCard id="overlay" title="MarvelHeroesOmega Overlay" subtitle="Loot filter, terminals tracker and DPS meter inside the game">
+<IntegrationCard id="overlay" title="MarvelHeroesOmega Overlay" subtitle="Loot filter, terminals tracker and DPS meter. (Wmascent)">
 
   <div class="path-group">
     <span class="field-label">Overlay Folder</span>
