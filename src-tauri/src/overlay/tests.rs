@@ -53,6 +53,17 @@ fn diff_reports_changed_missing_added() {
 }
 
 #[test]
+fn unexpected_entries_in_code_folders_are_flagged() {
+    let d = fixture("unhashable");
+    let t = record(&d);
+    // a subfolder (stand-in for a symlink) appears after trust
+    std::fs::create_dir_all(d.join("MhClientHook.ui-fonts/sub")).unwrap();
+    let now = scan_set(&d).unwrap();
+    assert_eq!(now["MhClientHook.ui-fonts/sub"], UNHASHABLE);
+    assert_eq!(diff(&t.files, &now), ["added: MhClientHook.ui-fonts/sub"]);
+}
+
+#[test]
 fn status_states() {
     let d = fixture("status");
     let mut cfg = OverlayConfig::default();

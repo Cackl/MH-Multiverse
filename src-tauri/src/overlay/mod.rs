@@ -16,6 +16,8 @@ mod pipe;
 mod tests;
 
 const DLL_NAME: &str = "MhClientHook.dll";
+/// Stands in for the hash of a symlink or subfolder found inside a code folder.
+const UNHASHABLE: &str = "!not-a-regular-file";
 
 /// Code and static assets the hook loads. Everything else in the overlay
 /// folder (legacy exes, updater, flags, panel layouts) is never hashed or copied.
@@ -95,9 +97,11 @@ fn scan_set(dir: &Path) -> Result<BTreeMap<String, String>, String> {
         let Ok(rd) = std::fs::read_dir(dir.join(d)) else { continue };
         for e in rd.flatten() {
             let p = e.path();
-            if is_plain_file(&p) {
-                out.insert(format!("{d}/{}", e.file_name().to_string_lossy()), hash_file(&p)?);
-            }
+            let key = format!("{d}/{}", e.file_name().to_string_lossy());
+            // symlinks and subfolders can't be hashed; record a marker so they surface as
+            // "added" after trust, and so Trust can refuse them
+            let hash = if is_plain_file(&p) { hash_file(&p)? } else { UNHASHABLE.to_string() };
+            out.insert(key, hash);
         }
     }
     if !out.contains_key(DLL_NAME) {
@@ -186,6 +190,9 @@ pub fn overlay_trust(app: tauri::AppHandle) -> Result<OverlayStatus, String> {
         return Err("No overlay folder linked.".into());
     }
     let files = scan_set(Path::new(&config.overlay.dir))?;
+    if let Some(k) = files.iter().find(|(_, v)| *v == UNHASHABLE).map(|(k, _)| k) {
+        return Err(format!("Cannot trust the overlay: {k} is a link or folder, not a plain file."));
+    }
     config.overlay.trusted = Some(TrustRecord { set_hash: set_hash(&files), files });
     save_config(&app, &config)?;
     Ok(status_of(&config.overlay))
@@ -219,13 +226,13 @@ struct InjectPayload {
     message: String,
 }
 
-/// Called right after the game is spawned. When injection is enabled and the
-/// overlay is still trusted, a background thread waits for the game to settle,
-/// re-verifies the hashes and injects. Never blocks or fails the launch;
+/// Called right after the game is spawned. When injection is enabled, a background
+/// thread verifies the hashes (refusing if anything changed), waits for the game to
+/// settle, re-verifies right before loading, and injects. Never blocks or fails the launch;
 /// the outcome is emitted as an `overlay-inject` event. The thread owns the
 /// `Child`, which keeps the PID from being reused while we work.
 pub(crate) fn on_game_spawned(app: &tauri::AppHandle, cfg: OverlayConfig, mut child: std::process::Child) {
-    if !cfg.auto_inject || status_of(&cfg).state != "trusted" {
+    if !cfg.auto_inject {
         return;
     }
     let app = app.clone();
@@ -244,6 +251,9 @@ pub(crate) fn on_game_spawned(app: &tauri::AppHandle, cfg: OverlayConfig, mut ch
 
 fn inject_into(cfg: &OverlayConfig, child: &mut std::process::Child) -> Result<(), String> {
     use inject::InjectError;
+    if status_of(cfg).state != "trusted" {
+        return Err("The overlay files changed since they were trusted; not injecting. Re-trust it in Settings.".into());
+    }
     let dir = PathBuf::from(&cfg.dir);
     // '0' on a fresh launch so the hook arms its loading gate (a stale '1' would skip it)
     write_flag(&dir, "MhClientHook.skip-boot-loading-gate.flag", false)?;
@@ -261,8 +271,17 @@ fn inject_into(cfg: &OverlayConfig, child: &mut std::process::Child) -> Result<(
         }
         match inject::inject(pid, &dll) {
             Ok(()) => return Ok(()),
-            Err(InjectError::Timeout) if attempt < 5 => std::thread::sleep(std::time::Duration::from_secs(2)),
-            Err(InjectError::Timeout) => return Err("Timed out waiting for the overlay to initialise.".into()),
+            // the remote LoadLibrary may still finish after our wait: give it a moment
+            // before retrying (or giving up) and accept it if the module shows up
+            Err(InjectError::Timeout) => {
+                let grace = if attempt < 5 { 2 } else { 10 };
+                if inject::wait_module(pid, DLL_NAME, grace) {
+                    return Ok(());
+                }
+                if attempt == 5 {
+                    return Err("Timed out waiting for the overlay to initialise.".into());
+                }
+            }
             Err(InjectError::Failed(m)) => return Err(m),
         }
     }
