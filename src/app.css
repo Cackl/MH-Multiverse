@@ -1147,3 +1147,91 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 .filter-chip.chip-green.active   { color: var(--green-bright);  border-color: rgba(39,174,96,0.4);             background: var(--green-dim); }
 .filter-chip.chip-amber.active   { color: var(--amber-bright);  border-color: rgba(200,146,10,0.4);            background: var(--amber-dim); }
 .filter-chip.chip-red.active     { color: var(--text-error);              border-color: rgba(192,57,43,0.4);             background: var(--red-dim); }
+/* Hover tooltip created by the `tip` action (src/lib/tooltip.ts); same look as ConfigPanel's .tooltip */
+.mhm-tooltip {
+  position: fixed;
+  z-index: var(--z-tooltip);
+  background: var(--bg-3);
+  border: 1px solid var(--border-lit);
+  border-radius: var(--radius-sm);
+  color: var(--text-1);
+  font-size: 12px;
+  font-family: var(--font-body);
+  padding: 6px 10px;
+  max-width: 300px;
+  line-height: 1.5;
+  pointer-events: none;
+  white-space: pre-line;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+}
+
+/* Settings-style form rows (moved from AppPanel so integration cards can reuse them) */
+.path-group {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.path-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.path-value {
+  flex: 1;
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.opt-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.opt-label {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.opt-name {
+  font-family: var(--font-head);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-1);
+}
+
+.opt-desc {
+  font-size: 11px;
+  color: var(--text-3);
+}
+
+.section-divider {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 4px 0;
+}
+
+.section-divider span {
+  font-family: var(--font-head);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--text-3);
+  white-space: nowrap;
+}
+
+.section-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--border-mid);
+}

@@ -11,6 +11,7 @@
   } from '../lib/store'
   import { parseReleaseNotes } from '../lib/releaseNotes'
   import PanelSidebar from './PanelSidebar.svelte'
+  import OverlayIntegration from './integrations/OverlayIntegration.svelte'
 
   const REPO_URL = 'https://github.com/Cackl/MH-Multiverse'
   const STAGE_LABELS: Record<string, string> = {
@@ -55,12 +56,13 @@
 
   onDestroy(() => unlistenProgress?.())
 
-  type Section = 'client' | 'theme' | 'about'
+  type Section = 'client' | 'theme' | 'integrations' | 'about'
   let activeSection: Section = 'client'
 
   const navItems: { id: Section; label: string }[] = [
     { id: 'client', label: 'Marvel Heroes Omega' },
     { id: 'theme',  label: 'Theme' },
+    { id: 'integrations', label: 'Integrations' },
     { id: 'about',  label: 'About' },
   ]
 
@@ -358,6 +360,16 @@
           </div>
         </div>
 
+      {:else if activeSection === 'integrations'}
+        <div class="detail-section">
+          <div class="detail-head">
+            <div class="section-title">Integrations</div>
+          </div>
+          <div class="detail-body">
+            <OverlayIntegration />
+          </div>
+        </div>
+
       {:else if activeSection === 'about'}
         <div class="detail-section">
           <div class="detail-head">
@@ -542,55 +554,7 @@
   }
 
   /* -- Section divider -- */
-  .section-divider {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    margin: 4px 0;
-  }
-  .section-divider span {
-    font-family: var(--font-head);
-    font-size: 9px;
-    font-weight: 600;
-    letter-spacing: 0.16em;
-    text-transform: uppercase;
-    color: var(--text-3);
-    white-space: nowrap;
-  }
-  .section-divider::after {
-    content: '';
-    flex: 1;
-    height: 1px;
-    background: var(--border-mid);
-  }
-
   /* -- Launch option rows -- */
-  .opt-row {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 16px;
-  }
-
-  .opt-label {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    min-width: 0;
-  }
-
-  .opt-name {
-    font-family: var(--font-head);
-    font-size: 12px;
-    font-weight: 600;
-    color: var(--text-1);
-  }
-
-  .opt-desc {
-    font-size: 11px;
-    color: var(--text-3);
-  }
-
   /* -- Resolution inputs -- */
   .resolution-row {
     display: flex;
@@ -612,26 +576,6 @@
     padding-bottom: 8px;
     flex-shrink: 0;
   }
-  .path-group {
-    display: flex;
-    flex-direction: column;
-    gap: 5px;
-  }
-
-  .path-row {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-  }
-
-  .path-value {
-    flex: 1;
-    font-size: 11px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
   /* -- Theme -- */
   .theme-list {
     display: flex;
@@ -641,6 +585,7 @@
     overflow-y: auto;
     border: 1px solid var(--border-mid);
     border-radius: var(--radius-sm);
+    background: var(--bg-2);
     padding: 4px;
   }
 
