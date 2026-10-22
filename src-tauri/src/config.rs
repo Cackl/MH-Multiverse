@@ -9,6 +9,7 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use tauri::Manager;
 
+use crate::overlay::OverlayConfig;
 use crate::server;
 
 const KEYRING_SERVICE: &str = "mh-multiverse";
@@ -146,7 +147,9 @@ pub struct AppConfig {
     #[serde(default)]
     pub store_html_output_dir: String,
     #[serde(default = "default_console_presets")]
-    pub console_presets: Vec<String>
+    pub console_presets: Vec<String>,
+    #[serde(default)]
+    pub overlay: OverlayConfig,
 }
 
 impl Default for AppConfig {
@@ -164,6 +167,7 @@ impl Default for AppConfig {
             tuning_favourites: Vec::new(),
             backup_targets: default_backup_targets(),
             store_html_output_dir: String::new(),
+            overlay: OverlayConfig::default(),
         }
     }
 }
