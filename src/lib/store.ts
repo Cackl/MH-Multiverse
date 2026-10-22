@@ -12,6 +12,24 @@ export const gameRunning = writable<boolean>(false)
 export const apacheRunning = writable<boolean>(false)
 export const uptimeSec = writable<number>(0)
 export const serverError = writable<string>('')
+
+export type OverlayStatus = {
+  state: 'not_linked' | 'missing' | 'untrusted' | 'trusted' | 'changed'
+  dir: string
+  auto_inject: boolean
+  changes: string[]
+}
+/** Outcome of the most recent overlay injection attempt (null until one happens). */
+export type OverlayLine = { id: number; event: string; text: string; fields: string[] }
+/** Live overlay events (plain text only), newest last, capped at 500. */
+export const overlayLog = writable<OverlayLine[]>([])
+let overlayLineId = 0
+export function appendOverlayLog(lines: Omit<OverlayLine, 'id'>[]) {
+  overlayLog.update(l => [...l, ...lines.map(x => ({ ...x, id: overlayLineId++ }))].slice(-500))
+}
+/** Latest overlay status seen by the UI (shared so the Launch page can show the inject indicator). */
+export const overlayStatus = writable<OverlayStatus | null>(null)
+export const overlayInject = writable<{ ok: boolean; message: string } | null>(null)
 export const tuningFocusFile = writable<string | null>(null)
 export const schedulerNow = writable<Date | null>(null)
 export const eventTimezoneOffset = writable<number>(0)
@@ -233,6 +251,7 @@ export interface AppConfig {
   launch_options: LaunchOptions
   shutdown: ShutdownConfig
   console_presets: string[]
+  overlay?: { dir: string; auto_inject?: boolean }
   tuning_tags: Record<string, string>
   tuning_favourites: string[]
   backup_targets: string[]

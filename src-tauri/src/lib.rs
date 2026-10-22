@@ -11,6 +11,7 @@ mod patches;
 mod accounts;
 mod paths;
 mod app_update;
+mod overlay;
 
 pub use config::*;
 
@@ -145,6 +146,13 @@ pub fn run() {
             accounts::scan_download_backups,
             accounts::list_accounts_for_import,
             accounts::import_account,
+            overlay::overlay_status,
+            overlay::overlay_set_dir,
+            overlay::overlay_trust,
+            overlay::overlay_untrust,
+            overlay::overlay_set_auto_inject,
+            overlay::overlay_get_flags,
+            overlay::overlay_set_flag,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

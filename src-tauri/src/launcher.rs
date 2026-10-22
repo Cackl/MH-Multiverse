@@ -108,11 +108,13 @@ pub fn launch_game(app: tauri::AppHandle, server_id: String) -> Result<(), Strin
         args.push(format!("-password={}", password));
     }
 
-    Command::new(&exe)
+    let child = Command::new(&exe)
         .args(&args)
         // Detach - MH Multiverse doesn't own the game process
         .spawn()
         .map_err(|e| format!("Failed to launch game: {e}"))?;
+
+    crate::overlay::on_game_spawned(&app, config.overlay.clone(), child);
 
     Ok(())
 }

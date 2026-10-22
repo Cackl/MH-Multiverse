@@ -15,6 +15,7 @@
 | Timestamps | `chrono` |
 | SQLite | `rusqlite` (`Account.db` - read queries player-login lookups; read/write for account import and restore) |
 | Log parsing | `regex` (player login/logout extraction) |
+| Overlay integration | `sha2` (trust hashing), `windows` (remote-thread DLL injection, `Threading`/`Memory`/`Diagnostics_Debug`/`LibraryLoader`), std named-pipe client |
 
 ---
 
@@ -30,6 +31,7 @@ mh-multiverse/
 │   ├── lib/
 │   │   ├── store.ts              Global stores, types, Tauri invoke wrappers
 │   │   ├── releaseNotes.ts       Minimal Markdown → blocks parser for release notes (no {@html})
+│   │   ├── tooltip.ts            `tip` Svelte action: hover tooltip in the Config panel's style
 │   │   ├── serverEvents.ts       Tauri event listeners (log, start, stop, player-event)
 │   │   ├── serverCommands.ts     Fallback command list for autocomplete
 │   │   ├── playerMeta.ts         PlayerSession type, user level labels, ban/whitelist flag helpers
@@ -42,7 +44,7 @@ mh-multiverse/
 │       ├── TitleBar.svelte        Custom window chrome (drag region, min/max/close)
 │       ├── Rail.svelte            Left nav rail (MHO / Local / App groups)
 │       ├── PanelSidebar.svelte    Reusable sidebar layout wrapper
-│       ├── LaunchPanel.svelte     Server profiles, credentials, game launch
+│       ├── LaunchPanel.svelte     Server profiles, credentials, game launch (shows an "Overlay" indicator when inject-on-launch is on)
 │       ├── ServerPanel.svelte     Server start/stop, log viewer, command input, online players
 │       ├── PlayersBlade.svelte    Searchable list of players connected to the server
 │       ├── PlayerCard.svelte      Per-player moderation/admin card (kick, ban, user level, info)
@@ -58,8 +60,12 @@ mh-multiverse/
 │       ├── PatchesPanel.svelte    PatchData file list, enable/disable
 │       ├── PatchEditorModal.svelte   Per-file patch entry editor
 │       ├── OpsPanel.svelte        Server update, backup create/restore/delete
+│       ├── integrations/          Integrations page building blocks
+│       │   ├── IntegrationCard.svelte     Collapsible card shell (title, subtitle); one per integration
+│       │   └── OverlayIntegration.svelte  MarvelHeroesOmega Overlay card: folder/trust, inject toggle, flags, loot log
 │       ├── ServerModal.svelte     Add/edit server dialog; tabbed Manual / Import Account / Restore Backup
-│       └── AppPanel.svelte        Settings: exe paths, launch options, themes, about
+│       └── AppPanel.svelte        Settings: exe paths, launch options, themes, integrations
+│                                  (overlay link/trust/flags/loot log), about
 │
 ├── src-tauri/
 │   ├── src/
@@ -91,6 +97,12 @@ mh-multiverse/
 │   │   │                         download, portable exe swap or MSI install
 │   │   ├── accounts.rs           Account export (!account download JSON) import and restore;
 │   │   │                         Download/ folder scanning, ID remapping, Add/Replace modes
+│   │   ├── overlay/              Third-party overlay integration (see Rust Modules)
+│   │   │   ├── mod.rs            OverlayConfig/TrustRecord, hashing, trust + flag commands,
+│   │   │   │                     post-launch injection orchestration
+│   │   │   ├── inject.rs         LoadLibraryW remote-thread injection by PID
+│   │   │   ├── pipe.rs           Status pipe reader, line splitting/sanitising, loot_hidden formatting
+│   │   │   └── tests.rs          Unit tests (compiled only under `cargo test`)
 │   │   └── paths.rs             Shared server_dir() helper (derives the server's containing
 │   │                             directory from server_exe), used across most other modules
 │   ├── assets/
@@ -150,7 +162,7 @@ This pattern is consistent across `setGameExe`, `setServerExe`, `setLaunchOption
 
 Server process events are received via Tauri's event system, not polling. The bridge is initialised once on mount and guards against duplicate initialisation using a `window.__mhmServerBridge` state object.
 
-Four listeners are registered:
+Six listeners are registered:
 
 | Event | Source | Effect |
 |---|---|---|
@@ -158,6 +170,8 @@ Four listeners are registered:
 | `server-started` | Emitted after successful spawn | Sets `serverRunning`, starts uptime timer |
 | `server-stopped` | Emitted on process exit (normal or crash) | Clears `serverRunning`/`apacheRunning`, stops uptime, logs exit code |
 | `player-event` | Emitted by `server.rs` on player login/logout/clear | Consumed by `ServerPanel` to update the online player list |
+| `overlay-inject` | Emitted by `overlay/mod.rs` when a post-launch injection finishes | Sets the `overlayInject` store (shown in Settings → Integrations) |
+| `overlay-pipe` | Emitted by `overlay/pipe.rs` per read of the overlay's status pipe | Appended to the `overlayLog` store (capped at 500 rows) |
 
 `server-started` and `server-stopped` use a logTimestamp() function to mirror the formatting used for MHServerEmu entries
 
@@ -203,7 +217,7 @@ Five state objects are registered via `.manage()` in `lib.rs`:
 
 ### Rust Modules
 
-**`config.rs`** - `AppConfig` is the root persisted configuration. Stored as `multiverse.json` in the OS app data directory (`%APPDATA%\com.mhmultiverse.app\`). Passwords are encrypted with AES-256-GCM; the 256-bit key is stored in and retrieved from the OS keychain via `keyring`. Each config-mutating command loads the full config from disk, modifies the relevant field, and writes back - there is no in-process config cache on the Rust side. `AppConfig` includes a `console_presets` field (`Vec<String>`) for persisted command shortcut strings shown in the server panel. Server struct includes is_local (bool) and use_https (bool) fields; is_local suppresses host storage and triggers Config.ini-derived URL building at launch time.
+**`config.rs`** - `AppConfig` is the root persisted configuration. Stored as `multiverse.json` in the OS app data directory (`%APPDATA%\com.mhmultiverse.app\`). Passwords are encrypted with AES-256-GCM; the 256-bit key is stored in and retrieved from the OS keychain via `keyring`. Each config-mutating command loads the full config from disk, modifies the relevant field, and writes back - there is no in-process config cache on the Rust side. `AppConfig` includes an `overlay` field (`OverlayConfig`, defined in `overlay/mod.rs`, `#[serde(default)]` so older files load unchanged). It also includes a `console_presets` field (`Vec<String>`) for persisted command shortcut strings shown in the server panel. Server struct includes is_local (bool) and use_https (bool) fields; is_local suppresses host storage and triggers Config.ini-derived URL building at launch time.
 
 **`server.rs`** - Server lifecycle management and player session tracking. `start_server` spawns MHServerEmu with piped stdin/stdout/stderr and assigns it to a Windows Job Object (`JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`). Four named background threads are spawned per server start (`mhserver-stdout-reader`, `mhserver-stderr-reader`, `mhserver-log-batcher`, `mhserver-watcher`): stdout/stderr readers, a batcher that collects log lines and emits them to the frontend in batches (up to 50 lines per 50ms flush interval), and a watcher thread that polls `try_wait()` every 150ms to detect process exit, clearing `proc.child` and emitting `server-stopped` when it does. The watcher is the sole source of truth for exit state - `server_is_running` just reads `proc.child.is_some()` rather than also calling `try_wait()` itself. `start_server` performs a pre-flight TcpStream::connect check against the configured WebFrontend Port before spawning, returning a clear error if the port is already in use.
 
@@ -211,7 +225,14 @@ The stdout reader additionally calls `parse_player_log_event` on every line (reg
 
 **`events.rs`** - File I/O for `Events.json` / `EventsOverride.json` and `EventSchedule.json` / `EventScheduleOverride.json` in `Data/Game/LiveTuning/`. Both file pairs follow the same override pattern: the override file takes precedence if it exists, otherwise the default file is read. `Events.json` is a JSON object keyed by event ID; `EventSchedule.json` is a JSON array. Read functions deserialise into `EventDefinition` and `ScheduleRule` structs respectively. Write functions always target the override file. `reset_*_override` copies the default file over the override; `merge_*_override` adds any entries present in the default but missing from the override (by ID for events, by name for rules), without overwriting existing override entries.
 
-**`launcher.rs`** - Spawns the game client as a detached process with command-line arguments derived from the active server profile and launch options. Credentials are decrypted from the config at launch time. For local servers, the siteconfigurl host is derived at launch time from WebFrontend.Port in Config.ini via ini::read_merged_value. For remote servers, normalize_host strips any scheme and path from the stored host before building the URL; use_https determines the scheme. game_is_running uses sysinfo to check for a MarvelHeroesOmega.exe process.
+**`launcher.rs`** - Spawns the game client as a detached process with command-line arguments derived from the active server profile and launch options. Credentials are decrypted from the config at launch time. For local servers, the siteconfigurl host is derived at launch time from WebFrontend.Port in Config.ini via ini::read_merged_value. For remote servers, normalize_host strips any scheme and path from the stored host before building the URL; use_https determines the scheme. game_is_running uses sysinfo to check for a MarvelHeroesOmega.exe process. After a successful spawn, `launch_game` hands the `Child` and a copy of the overlay config to `overlay::on_game_spawned`, which returns immediately unless overlay injection is enabled and trusted.
+
+**`overlay/`** - Integrates the third-party MarvelHeroesOmega Overlay (closed source, not part of this project; none of its files are bundled or redistributed). Multiverse never runs any overlay executable: the overlay is a native DLL (`MhClientHook.dll`) that runs inside the game process, so it lives and dies with the game.
+- *Trust (TOFU)*: the user links the overlay folder (`overlay_set_dir`, canonicalised, must contain `MhClientHook.dll`) and presses Trust. `scan_set` hashes (SHA-256) a fixed allowlist: the DLL, `terminals.bin`, `enum-names.bin`, the loot-filter default JSON, and the portraits/icons/fonts/textures folders. Flags, panel layout JSON, legacy exes and the overlay's updater are never hashed. The per-file hashes and a combined set hash are stored in `multiverse.json`. A symlink or subfolder inside an asset folder cannot be hashed: Trust refuses it, and one appearing later shows as `added`. Status is derived live: `not_linked`, `missing`, `untrusted`, `trusted`, or `changed` (with `changed:`/`missing:`/`added:` lines). There is no known-hash list in the repo. Changing folder or untrusting also switches injection off.
+- *Injection*: opt-in (`auto_inject`, default off, only settable while trusted). `on_game_spawned` starts a background thread (it does no hashing on the caller's thread) that owns the game's `Child` (so the PID cannot be reused), refuses immediately if the files no longer match (reported via `overlay-inject`), writes `skip-boot-loading-gate.flag` as `0` (a stale `1` would skip the loading gate), waits up to 15 s for the game to go input-idle, then re-verifies the hashes immediately before each attempt and refuses if anything changed. `inject.rs` opens the process with the minimum rights (create-thread, query, VM-operation, VM-write, synchronize), writes the UTF-16 DLL path, runs `LoadLibraryW` on a remote thread and waits 5 s; an exit code of 0 means the load failed. A timeout is retried (up to 5 times); between attempts it waits up to 2 s (10 s after the last) for the module to show up, since a slow hook can finish loading late. An exit code of 0 is double-checked against the process's module list, because it is only the low 32 bits of the module handle. Failures never block the game launch; the outcome is reported via `overlay-inject`.
+- *Flags*: `overlay_get_flags`/`overlay_set_flag` read and atomically write the one-byte `'1'`/`'0'` files the hook reads next to the DLL (terminals, DPS, debug logging; keys are allowlisted). A missing file reads as the hook's default (terminals/DPS on, logging off). The hook reads them at load, so changes apply on the next game launch.
+- *Status pipe*: after a successful injection `pipe.rs` connects (retrying for 30 s) to the hook's `\\.\pipe\MhTerminalsHelper` and reads JSON lines until the game exits. The pipe's access rules are unverified, so every line is untrusted: lines over 8 KB are dropped, control characters are replaced, text is capped at 512 characters, and only allowlisted `event` names pass (currently only `loot_hidden`). A `loot_hidden` event is rendered as `time | category | item name | item code | rarity`. Item names come from `enum-names.bin` in the linked folder (parsed best-effort; missing or malformed means `?`), the category is the name minus its trailing digits (a heuristic), and rarity codes map through an embedded table (unknown codes are shown as numbers).
+- *Why no copy*: an earlier design copied the trusted files into an app-owned folder and loaded from there. It was dropped: a same-user process can write to both locations, so the copy only narrowed a timing race, and it broke the overlay's own settings handling. The check now happens right before injection instead.
 
 **`ini.rs`** - Reads `Config.ini` (defaults) and `ConfigOverride.ini` (overrides), merges them, and returns the merged values plus a set of which keys are overridden. Writes use diff-only logic: values matching the default are removed from the override file; only differing values are written. Also exposes `read_merged_value` (non-command pub fn) for reading a single merged key by section, used by `server.rs` for the port pre-check.
 
@@ -362,6 +383,18 @@ The stdout reader additionally calls `parse_player_log_event` on every line (reg
 | `check_app_update` | - | `AppUpdateInfo` | Latest release vs running version, with notes for all newer releases |
 | `install_app_update` | `version: String` | `()` | Download, verify and install that release, then exit/relaunch |
 
+### Overlay (`overlay/mod.rs`)
+
+| Command | Parameters | Returns | Description |
+|---|---|---|---|
+| `overlay_status` | - | `OverlayStatus` | `{ state, dir, auto_inject, changes[] }`; state is computed by re-hashing the linked folder |
+| `overlay_set_dir` | `dir: String` | `OverlayStatus` | Link a folder (must contain `MhClientHook.dll`); clears trust and injection |
+| `overlay_trust` | - | `OverlayStatus` | Hash the code set and store the record in `multiverse.json` |
+| `overlay_untrust` | - | `OverlayStatus` | Drop the trust record and turn injection off |
+| `overlay_set_auto_inject` | `enabled: bool` | `OverlayStatus` | Toggle injection after launch; refused unless state is `trusted` |
+| `overlay_get_flags` | - | `{ terminals, dps, detector_log }` | Read the overlay's control flags from the linked folder |
+| `overlay_set_flag` | `key: String, on: bool` | flags map | Write one allowlisted flag file; applies on the next game launch |
+
 ### Accounts (`accounts.rs`)
 
 | Command | Parameters | Returns | Description |
@@ -394,6 +427,9 @@ The stdout reader additionally calls `parse_player_log_event` on every line (reg
 | `schedulerNow` | `writable<Date \| null>` | Most recently parsed server-side "now" timestamp from log output (UTC) |
 | `eventTimezoneOffset` | `writable<number>` | Offset in whole hours between server time and client UTC, derived from `schedulerNow`; used by EventsPanel to evaluate schedule rule active states |
 | `logFilterThreshold` | `writeable<boolean>` | When true, log filter shows selected level and all more severe levels. When false, exact level match only. Persisted to local storage. |
+| `overlayStatus` | `writable<OverlayStatus \| null>` | Latest overlay status seen by the UI; set by the Integrations card and refreshed by the Launch page (only while inject-on-launch is on) |
+| `overlayInject` | `writable<{ ok, message } \| null>` | Outcome of the latest overlay injection attempt |
+| `overlayLog` | `writable<OverlayLine[]>` | Overlay status-pipe lines (plain text only, capped at 500); `appendOverlayLog` adds to it |
 | `LOG_LEVEL_SEVERITY` | `Record<LogLevel, number>` | Severity order map used by threshold filtering; trace(0) through fatal(6), all(-1) |
 
 ### Functions
@@ -437,6 +473,8 @@ The stdout reader additionally calls `parse_player_log_event` on every line (reg
 | `player-event` | `PlayerEventPayload` | `server.rs` stdout reader | Player login, logout, or full session clear on server stop |
 | `update-progress` | `UpdateProgressPayload` | `updater.rs` | Update stage + percentage (downloading, extracting, installing, restoring, done) |
 | `app-update-progress` | `{ stage, pct }` | `app_update.rs` | App self-update stage (downloading, verifying, installing) |
+| `overlay-inject` | `{ ok: bool, message: string }` | `overlay/mod.rs` injection thread | Result of the post-launch overlay injection |
+| `overlay-pipe` | `{ event: string, text: string, fields: string[] }[]` | `overlay/pipe.rs` reader thread | Display rows from the overlay status pipe; `event` is `loot_hidden` (`fields` = time, category, item, code, rarity) or `_status` (connection notes, no fields) |
 
 `PlayerEventPayload` shape: `{ kind: "login" | "logout" | "clear", session_id: string | null, username: string | null, count: number }`.
 
@@ -649,6 +687,36 @@ install_app_update(version)
 ```
 
 Frontend: `showUpdateBadge` (store) drives the dot on the Rail's Settings tab and the About nav item. "Remind me later" is in-memory (badge returns next launch); "Dismiss this version" stores the version in localStorage (`app-update-dismissed`), so a newer release shows the badge again.
+
+### Overlay Injection
+
+```
+Settings → Integrations
+  overlay_set_dir(folder) → overlay_trust → hashes stored in multiverse.json
+  overlay_set_auto_inject(true)            (only while status == trusted)
+
+launch_game
+  → spawn game (Child kept)
+  → overlay::on_game_spawned(config.overlay, child)
+      no-op unless auto_inject
+      thread "overlay-inject":
+        status != trusted?      → fail ("changed since trusted")
+        write skip-boot-loading-gate.flag = '0'
+        WaitForInputIdle(game, 15 s)
+        repeat (max 5):
+          game exited?            → fail
+          status != trusted?      → fail ("changed since trusted")
+          inject (LoadLibraryW remote thread, 5 s)
+            ok      → spawn pipe reader, emit overlay-inject { ok: true }
+            timeout → sleep 2 s, retry
+            error   → emit overlay-inject { ok: false, message }
+      thread "overlay-pipe":
+        connect \\.\pipe\MhTerminalsHelper (retry 30 s)
+        read → split lines (8 KB cap) → JSON → allowlisted event → format → emit overlay-pipe
+        pipe closes when the game exits → "closed" status line
+```
+
+If the game is restarted outside Multiverse, the overlay is not re-injected; relaunch from Multiverse.
 
 ### Account Import and Restore
 

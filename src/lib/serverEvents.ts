@@ -10,6 +10,8 @@ import {
   startUptime,
   stopUptime,
   setSchedulerNow,
+  overlayInject,
+  appendOverlayLog,
   type LogLevel,
   type LogLine,
 } from './store'
@@ -30,6 +32,8 @@ type BridgeState = {
   unlistenLog: UnlistenFn | null
   unlistenStarted: UnlistenFn | null
   unlistenStopped: UnlistenFn | null
+  unlistenOverlay: UnlistenFn | null
+  unlistenOverlayPipe: UnlistenFn | null
 }
 
 declare global {
@@ -53,6 +57,8 @@ function getBridgeState(): BridgeState {
       unlistenLog: null,
       unlistenStarted: null,
       unlistenStopped: null,
+      unlistenOverlay: null,
+      unlistenOverlayPipe: null,
     }
   }
   return window.__mhmServerBridge
@@ -146,6 +152,14 @@ export async function initServerEventBridge(): Promise<void> {
     } catch {
       apacheRunning.set(false)
     }
+  })
+
+  bridge.unlistenOverlay = await listen<{ ok: boolean; message: string }>('overlay-inject', (event) => {
+    overlayInject.set(event.payload)
+  })
+
+  bridge.unlistenOverlayPipe = await listen<{ event: string; text: string; fields: string[] }[]>('overlay-pipe', (event) => {
+    appendOverlayLog(event.payload)
   })
 
   bridge.unlistenStopped = await listen<ServerStoppedPayload>('server-stopped', (event) => {
