@@ -44,7 +44,7 @@ mh-multiverse/
 │       ├── TitleBar.svelte        Custom window chrome (drag region, min/max/close)
 │       ├── Rail.svelte            Left nav rail (MHO / Local / App groups)
 │       ├── PanelSidebar.svelte    Reusable sidebar layout wrapper
-│       ├── LaunchPanel.svelte     Server profiles, credentials, game launch
+│       ├── LaunchPanel.svelte     Server profiles, credentials, game launch (shows an "Overlay" indicator when inject-on-launch is on)
 │       ├── ServerPanel.svelte     Server start/stop, log viewer, command input, online players
 │       ├── PlayersBlade.svelte    Searchable list of players connected to the server
 │       ├── PlayerCard.svelte      Per-player moderation/admin card (kick, ban, user level, info)
@@ -427,6 +427,7 @@ The stdout reader additionally calls `parse_player_log_event` on every line (reg
 | `schedulerNow` | `writable<Date \| null>` | Most recently parsed server-side "now" timestamp from log output (UTC) |
 | `eventTimezoneOffset` | `writable<number>` | Offset in whole hours between server time and client UTC, derived from `schedulerNow`; used by EventsPanel to evaluate schedule rule active states |
 | `logFilterThreshold` | `writeable<boolean>` | When true, log filter shows selected level and all more severe levels. When false, exact level match only. Persisted to local storage. |
+| `overlayStatus` | `writable<OverlayStatus \| null>` | Latest overlay status seen by the UI; set by the Integrations card and refreshed by the Launch page (only while inject-on-launch is on) |
 | `overlayInject` | `writable<{ ok, message } \| null>` | Outcome of the latest overlay injection attempt |
 | `overlayLog` | `writable<OverlayLine[]>` | Overlay status-pipe lines (plain text only, capped at 500); `appendOverlayLog` adds to it |
 | `LOG_LEVEL_SEVERITY` | `Record<LogLevel, number>` | Severity order map used by threshold filtering; trace(0) through fatal(6), all(-1) |

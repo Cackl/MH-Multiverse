@@ -2,7 +2,7 @@
   import { onMount, tick } from 'svelte'
   import { open } from '@tauri-apps/plugin-dialog'
   import { invoke } from '@tauri-apps/api/core'
-  import { overlayInject, overlayLog, type OverlayStatus } from '../../lib/store'
+  import { overlayInject, overlayLog, overlayStatus, type OverlayStatus } from '../../lib/store'
   import { tip } from '../../lib/tooltip'
   import IntegrationCard from './IntegrationCard.svelte'
 
@@ -10,6 +10,7 @@
   let flags: Record<string, boolean> = {}
   let error = ''
 
+  $: if (overlay) overlayStatus.set(overlay)
   $: state = overlay?.state ?? 'not_linked'
   $: canTrust = state === 'untrusted' || state === 'changed'
   $: trustLabel = state === 'trusted' ? 'Untrust' : state === 'changed' ? 'Re-trust' : 'Trust'

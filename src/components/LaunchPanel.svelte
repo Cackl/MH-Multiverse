@@ -5,9 +5,10 @@
   import {
     appConfig, activeServerId,
     selectServer, deleteServer,
-    gameRunning,
+    gameRunning, overlayStatus, type OverlayStatus,
     type Server
   } from '../lib/store'
+  import { tip } from '../lib/tooltip'
   import ServerModal from './ServerModal.svelte'
   import PanelSidebar from './PanelSidebar.svelte'
 
@@ -43,6 +44,13 @@
     cancelDelete()
     await deleteServer(server.id)
   }
+
+  onMount(() => {
+    // only check the overlay folder when injection is on (the indicator is the only consumer)
+    if ($overlayStatus?.auto_inject ?? $appConfig.overlay?.auto_inject) {
+      invoke<OverlayStatus>('overlay_status').then(s => overlayStatus.set(s)).catch(() => {})
+    }
+  })
 
   onMount(async () => {
     // Read WebFrontend port for localhost dashboard URL
@@ -221,6 +229,15 @@
           <button class="btn btn-secondary" on:click={openHome}>Home</button>
         {/if}
         <button class="btn btn-secondary" on:click={openDashboard}>Dashboard</button>
+        {#if $overlayStatus?.auto_inject}
+          <span
+            class="overlay-note"
+            class:warn={$overlayStatus.state !== 'trusted'}
+            use:tip={$overlayStatus.state === 'trusted'
+              ? 'The overlay will be injected when the game launches.'
+              : 'Overlay injection is on, but the overlay files changed or are missing, so it will not be injected. Re-trust it in Settings → Integrations.'}
+          ><span class="overlay-dot"></span>Overlay</span>
+        {/if}
         <button
           class="btn btn-launch"
           disabled={!$appConfig.game_exe || !activeServer || launching || $gameRunning}
@@ -430,6 +447,23 @@
     background: var(--bg-3);
   }
 
+  .overlay-note {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-family: var(--font-head);
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--text-3);
+    cursor: default;
+  }
+  .overlay-note + .btn-launch { margin-left: 0; }
+  .overlay-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
+  .overlay-note.warn { color: var(--amber); }
+  .overlay-note.warn .overlay-dot { background: var(--amber); }
   .btn-launch {
     margin-left: auto;
     padding: 10px 32px;

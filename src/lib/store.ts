@@ -27,6 +27,8 @@ let overlayLineId = 0
 export function appendOverlayLog(lines: Omit<OverlayLine, 'id'>[]) {
   overlayLog.update(l => [...l, ...lines.map(x => ({ ...x, id: overlayLineId++ }))].slice(-500))
 }
+/** Latest overlay status seen by the UI (shared so the Launch page can show the inject indicator). */
+export const overlayStatus = writable<OverlayStatus | null>(null)
 export const overlayInject = writable<{ ok: boolean; message: string } | null>(null)
 export const tuningFocusFile = writable<string | null>(null)
 export const schedulerNow = writable<Date | null>(null)
@@ -249,7 +251,7 @@ export interface AppConfig {
   launch_options: LaunchOptions
   shutdown: ShutdownConfig
   console_presets: string[]
-  overlay?: { dir: string }
+  overlay?: { dir: string; auto_inject?: boolean }
   tuning_tags: Record<string, string>
   tuning_favourites: string[]
   backup_targets: string[]
