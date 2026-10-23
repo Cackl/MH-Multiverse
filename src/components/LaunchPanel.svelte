@@ -45,12 +45,12 @@
     await deleteServer(server.id)
   }
 
-  onMount(() => {
-    // only check the overlay folder when injection is on (the indicator is the only consumer)
-    if ($overlayStatus?.auto_inject ?? $appConfig.overlay?.auto_inject) {
-      invoke<OverlayStatus>('overlay_status').then(s => overlayStatus.set(s)).catch(() => {})
-    }
-  })
+  // Only check the overlay folder when injection is on (the indicator is the only consumer).
+  // Reactive, not onMount: this panel mounts before loadConfig() resolves, so the config
+  // is still the empty default at mount time.
+  $: if ($appConfig.overlay?.auto_inject && !$overlayStatus) {
+    invoke<OverlayStatus>('overlay_status').then(s => overlayStatus.set(s)).catch(() => {})
+  }
 
   onMount(async () => {
     // Read WebFrontend port for localhost dashboard URL
