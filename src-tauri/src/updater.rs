@@ -273,7 +273,7 @@ fn extract_zip_to(app: &AppHandle, zip_path: &Path, staging_dir: &Path) -> Resul
             app,
             "extracting",
             (i + 1) as f32 / total as f32 * 100.0,
-            Some(entry.name().to_string()),
+            entry.name().ok().map(|n| n.into_owned()),
         );
 
         if entry.is_dir() {
@@ -287,7 +287,7 @@ fn extract_zip_to(app: &AppHandle, zip_path: &Path, staging_dir: &Path) -> Resul
             let mut out_file = std::fs::File::create(&out_path)
                 .map_err(|e| format!("Cannot create file {}: {e}", out_path.display()))?;
             std::io::copy(&mut entry, &mut out_file)
-                .map_err(|e| format!("Cannot extract {}: {e}", entry.name()))?;
+                .map_err(|e| format!("Cannot extract {}: {e}", out_path.display()))?;
         }
     }
 
