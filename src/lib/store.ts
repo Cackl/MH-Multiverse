@@ -220,11 +220,12 @@ export interface LaunchOptions {
   skip_motion_comics: boolean
   no_sound: boolean
   enable_client_log: boolean
-  robocopy: boolean
   no_steam: boolean
+  force_32bit: boolean
   custom_resolution: boolean
   resolution_width: number
   resolution_height: number
+  extra_args: string
 }
 
 
@@ -265,11 +266,12 @@ const defaultLaunchOptions: LaunchOptions = {
   skip_motion_comics: false,
   no_sound: false,
   enable_client_log: false,
-  robocopy: true,
   no_steam: true,
+  force_32bit: false,
   custom_resolution: false,
   resolution_width: 0,
   resolution_height: 0,
+  extra_args: '',
 }
 
 const defaultShutdownConfig: ShutdownConfig = {

@@ -76,15 +76,17 @@ pub struct LaunchOptions {
     #[serde(default)]
     pub enable_client_log: bool,
     #[serde(default = "default_true")]
-    pub robocopy: bool,
-    #[serde(default = "default_true")]
     pub no_steam: bool,
+    #[serde(default)]
+    pub force_32bit: bool,
     #[serde(default)]
     pub custom_resolution: bool,
     #[serde(default)]
     pub resolution_width: u32,
     #[serde(default)]
     pub resolution_height: u32,
+    #[serde(default)]
+    pub extra_args: String,
 }
 
 impl Default for LaunchOptions {
@@ -96,11 +98,12 @@ impl Default for LaunchOptions {
             skip_motion_comics: false,
             no_sound: false,
             enable_client_log: false,
-            robocopy: true,
             no_steam: true,
+            force_32bit: false,
             custom_resolution: false,
             resolution_width: 0,
             resolution_height: 0,
+            extra_args: String::new(),
         }
     }
 }
