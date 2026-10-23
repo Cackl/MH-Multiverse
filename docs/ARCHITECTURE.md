@@ -395,6 +395,16 @@ The stdout reader additionally calls `parse_player_log_event` on every line (reg
 | `overlay_get_flags` | - | `{ terminals, dps, detector_log }` | Read the overlay's control flags from the linked folder |
 | `overlay_set_flag` | `key: String, on: bool` | flags map | Write one allowlisted flag file; applies on the next game launch |
 
+### Profile import (`profile_import/mod.rs`)
+
+Imports server profiles from uploaded JSON files, detected by shape: Bifrost `Bifrost.ServerList.json` (array) plus optional `Bifrost.LaunchConfig.json` (global login, attached to its selected server only if auto-login is on), or the MHO Overlay launcher's `launcher-settings.json` (`servers[]`, per-server logins). Imports always create remote (`is_local: false`) profiles; profiles already present are skipped, matched case-insensitively under a user-chosen strategy (`host + email` default, `host`, `host + name`, or none; under host + email an entry with no email matches any profile on that host). Passwords stay in the backend: the preview only reports whether a login exists, and `import_profiles` re-reads the files. Surfaced as the "Import Server Profiles" card in Settings → Integrations.
+
+| Command | Parameters | Returns | Description |
+|---|---|---|---|
+| `preview_profile_import` | `paths: Vec<String>, include_credentials: bool, match_by: MatchBy` | `Preview` | Parse and sanitise the files; lists candidates (flagged `duplicate`) and rejected entries. Writes nothing |
+| `detect_profile_sources` | - | `Vec<String>` | Paths of known source files that exist: Bifrost JSON found by walking up from the game exe and checking `Bifrost*` subfolders (newest version wins), the overlay launcher settings in LocalAppData |
+| `import_profiles` | `paths: Vec<String>, include_credentials: bool, include: Vec<usize>` | `usize` | Add the profiles at the given positions of the parsed list (the preview rows the user left selected); stores logins only when `include_credentials` |
+
 ### Accounts (`accounts.rs`)
 
 | Command | Parameters | Returns | Description |

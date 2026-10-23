@@ -244,6 +244,21 @@ html, body {
   background: var(--accent-glow-strong);
 }
 
+/* Shared dropdown. Some modals still carry their own scoped copy of this. */
+.field-select {
+  background: var(--bg-0);
+  border: 1px solid var(--border-mid);
+  border-radius: var(--radius-sm);
+  color: var(--text-0);
+  font-family: var(--font-body);
+  font-size: 12px;
+  padding: 6px 10px;
+  outline: none;
+  cursor: pointer;
+}
+.field-select:focus    { border-color: var(--accent-dim); }
+.field-select:disabled { opacity: 0.5; cursor: not-allowed; }
+
 .btn-outline {
   border-color: var(--border-lit);
   color: var(--text-1);

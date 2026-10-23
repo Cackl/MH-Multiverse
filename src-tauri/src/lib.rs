@@ -12,6 +12,7 @@ mod accounts;
 mod paths;
 mod app_update;
 mod overlay;
+mod profile_import;
 
 pub use config::*;
 
@@ -153,6 +154,9 @@ pub fn run() {
             overlay::overlay_set_auto_inject,
             overlay::overlay_get_flags,
             overlay::overlay_set_flag,
+            profile_import::preview_profile_import,
+            profile_import::import_profiles,
+            profile_import::detect_profile_sources,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

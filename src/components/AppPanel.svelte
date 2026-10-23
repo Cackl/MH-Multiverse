@@ -12,6 +12,7 @@
   import { parseReleaseNotes } from '../lib/releaseNotes'
   import PanelSidebar from './PanelSidebar.svelte'
   import OverlayIntegration from './integrations/OverlayIntegration.svelte'
+  import ProfileImport from './integrations/ProfileImport.svelte'
 
   const REPO_URL = 'https://github.com/Cackl/MH-Multiverse'
   const STAGE_LABELS: Record<string, string> = {
@@ -367,6 +368,7 @@
           </div>
           <div class="detail-body">
             <OverlayIntegration />
+            <ProfileImport />
           </div>
         </div>
 

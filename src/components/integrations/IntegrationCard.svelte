@@ -1,3 +1,9 @@
+<script context="module" lang="ts">
+  // Cards start closed on app launch. This set outlives the component, so a card stays open
+  // while you switch tabs, but it is not persisted across launches.
+  const openIds = new Set<string>()
+</script>
+
 <script lang="ts">
   // Shell for one integration on the Integrations page: a collapsible card with a
   // title and a one-line subtitle.
@@ -6,13 +12,12 @@
   export let title: string
   export let subtitle = ''
 
-  const KEY = `integration-open:${id}`
-  let open = true
-  try { open = localStorage.getItem(KEY) !== '0' } catch { /* storage unavailable */ }
+  let open = openIds.has(id)
 
   function toggle() {
     open = !open
-    try { localStorage.setItem(KEY, open ? '1' : '0') } catch { /* storage unavailable */ }
+    if (open) openIds.add(id)
+    else openIds.delete(id)
   }
 </script>
 
