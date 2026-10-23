@@ -94,6 +94,24 @@
     await setLaunchOptions(updated)
   }
 
+  type BoolKey = { [K in keyof LaunchOptions]: LaunchOptions[K] extends boolean ? K : never }[keyof LaunchOptions]
+  // Ordered by how often / how much they matter. `invert`: toggle shows the opposite of the stored flag.
+  const launchToggles: { key: BoolKey; name: string; desc: string; invert?: boolean }[] = [
+    { key: 'auto_login', name: 'Auto Login',
+      desc: 'Passes your password as a launch argument. Note that the client writes it in plain text to its Launch.log' },
+    { key: 'no_steam', invert: true, name: 'Steam Mode',
+      desc: 'Enable to launch via Steam, if your copy of the game is from there. Disable to use Robocopy' },
+    { key: 'force_32bit', name: 'Force 32-bit Client', desc: 'Runs the Win32 executable instead of Win64, if both are installed' },
+    { key: 'skip_startup_movies', name: 'Skip Startup Movies', desc: 'Disables logo movies on launch' },
+    { key: 'skip_motion_comics', name: 'Skip Motion Comics', desc: 'Disables in-game motion comic cutscenes' },
+    { key: 'no_sound', name: 'No Sound', desc: 'Disables all game audio on launch' },
+    { key: 'custom_resolution', name: 'Custom Resolution', desc: 'Forces a resolution not available in-game options' },
+    { key: 'enable_client_log', name: 'Enable Client Log',
+      desc: 'Opens a verbose log window alongside the game. Logs can contain your launch command, including your password' },
+    { key: 'patched_client', name: 'Patched Client',
+      desc: 'Enable if using Crypto137\'s port 8080 client patch. Changes the SiteConfig URL path for local servers' },
+  ]
+
   const themes = [
     { id: '',              label: 'Blue',            accent: '#3ea7c7' },
     { id: 'mh-itembase',   label: 'Item Base',       accent: '#10c3ff' },
@@ -163,171 +181,57 @@
 
             <div class="section-divider"><span>Launch Options</span></div>
 
-            <div class="opt-row">
-              <div class="opt-label">
-                <span class="opt-name">Auto Login</span>
-                <span class="opt-desc">Passes credentials as launch arguments. Does not work if launching through Steam</span>
-              </div>
-              <div
-                class="toggle-switch"
-                class:on={$appConfig.launch_options.auto_login}
-                role="switch"
-                aria-checked={$appConfig.launch_options.auto_login}
-                tabindex="0"
-                on:click={() => updateOpt('auto_login', !$appConfig.launch_options.auto_login)}
-                on:keydown={(e) => e.key === 'Enter' && updateOpt('auto_login', !$appConfig.launch_options.auto_login)}
-              ></div>
-            </div>
-
-            <div class="opt-row">
-              <div class="opt-label">
-                <span class="opt-name">Patched Client</span>
-                <span class="opt-desc">Enable if using Crypto137's port 8080 client patch. Changes the SiteConfig URL path for local servers</span>
-              </div>
-              <div
-                class="toggle-switch"
-                class:on={$appConfig.launch_options.patched_client}
-                role="switch"
-                aria-checked={$appConfig.launch_options.patched_client}
-                tabindex="0"
-                on:click={() => updateOpt('patched_client', !$appConfig.launch_options.patched_client)}
-                on:keydown={(e) => e.key === 'Enter' && updateOpt('patched_client', !$appConfig.launch_options.patched_client)}
-              ></div>
-            </div>
-
-            <div class="opt-row">
-              <div class="opt-label">
-                <span class="opt-name">Custom Resolution</span>
-                <span class="opt-desc">Forces a resolution not available in-game options</span>
-              </div>
-              <div
-                class="toggle-switch"
-                class:on={$appConfig.launch_options.custom_resolution}
-                role="switch"
-                aria-checked={$appConfig.launch_options.custom_resolution}
-                tabindex="0"
-                on:click={() => updateOpt('custom_resolution', !$appConfig.launch_options.custom_resolution)}
-                on:keydown={(e) => e.key === 'Enter' && updateOpt('custom_resolution', !$appConfig.launch_options.custom_resolution)}
-              ></div>
-            </div>
-            {#if $appConfig.launch_options.custom_resolution}
-              <div class="resolution-row">
-                <div class="resolution-field">
-                  <span class="field-label">Width</span>
-                  <input
-                    type="number"
-                    value={$appConfig.launch_options.resolution_width || ''}
-                    placeholder="e.g. 2560"
-                    on:change={(e) => updateOpt('resolution_width', parseInt((e.target as HTMLInputElement).value) || 0)}
-                  />
+            {#each launchToggles as t (t.key)}
+              {@const on = t.invert ? !$appConfig.launch_options[t.key] : $appConfig.launch_options[t.key]}
+              <div class="opt-row">
+                <div class="opt-label">
+                  <span class="opt-name">{t.name}</span>
+                  <span class="opt-desc">{t.desc}</span>
                 </div>
-                <span class="resolution-sep">×</span>
-                <div class="resolution-field">
-                  <span class="field-label">Height</span>
-                  <input
-                    type="number"
-                    value={$appConfig.launch_options.resolution_height || ''}
-                    placeholder="e.g. 1440"
-                    on:change={(e) => updateOpt('resolution_height', parseInt((e.target as HTMLInputElement).value) || 0)}
-                  />
+                <div
+                  class="toggle-switch"
+                  class:on
+                  role="switch"
+                  aria-checked={on}
+                  tabindex="0"
+                  on:click={() => updateOpt(t.key, !$appConfig.launch_options[t.key])}
+                  on:keydown={(e) => e.key === 'Enter' && updateOpt(t.key, !$appConfig.launch_options[t.key])}
+                ></div>
+              </div>
+              {#if t.key === 'custom_resolution' && on}
+                <div class="resolution-row">
+                  <div class="resolution-field">
+                    <span class="field-label">Width</span>
+                    <input
+                      type="number"
+                      value={$appConfig.launch_options.resolution_width || ''}
+                      placeholder="e.g. 2560"
+                      on:change={(e) => updateOpt('resolution_width', parseInt((e.target as HTMLInputElement).value) || 0)}
+                    />
+                  </div>
+                  <span class="resolution-sep">×</span>
+                  <div class="resolution-field">
+                    <span class="field-label">Height</span>
+                    <input
+                      type="number"
+                      value={$appConfig.launch_options.resolution_height || ''}
+                      placeholder="e.g. 1440"
+                      on:change={(e) => updateOpt('resolution_height', parseInt((e.target as HTMLInputElement).value) || 0)}
+                    />
+                  </div>
                 </div>
-              </div>
-            {/if}
+              {/if}
+            {/each}
 
-            <div class="opt-row">
-              <div class="opt-label">
-                <span class="opt-name">Skip Startup Movies</span>
-                <span class="opt-desc">Disables logo movies on launch</span>
-              </div>
-              <div
-                class="toggle-switch"
-                class:on={$appConfig.launch_options.skip_startup_movies}
-                role="switch"
-                aria-checked={$appConfig.launch_options.skip_startup_movies}
-                tabindex="0"
-                on:click={() => updateOpt('skip_startup_movies', !$appConfig.launch_options.skip_startup_movies)}
-                on:keydown={(e) => e.key === 'Enter' && updateOpt('skip_startup_movies', !$appConfig.launch_options.skip_startup_movies)}
-              ></div>
-            </div>
-
-            <div class="opt-row">
-              <div class="opt-label">
-                <span class="opt-name">Skip Motion Comics</span>
-                <span class="opt-desc">Disables in-game motion comic cutscenes</span>
-              </div>
-              <div
-                class="toggle-switch"
-                class:on={$appConfig.launch_options.skip_motion_comics}
-                role="switch"
-                aria-checked={$appConfig.launch_options.skip_motion_comics}
-                tabindex="0"
-                on:click={() => updateOpt('skip_motion_comics', !$appConfig.launch_options.skip_motion_comics)}
-                on:keydown={(e) => e.key === 'Enter' && updateOpt('skip_motion_comics', !$appConfig.launch_options.skip_motion_comics)}
-              ></div>
-            </div>
-
-            <div class="opt-row">
-              <div class="opt-label">
-                <span class="opt-name">No Sound</span>
-                <span class="opt-desc">Disables all game audio on launch</span>
-              </div>
-              <div
-                class="toggle-switch"
-                class:on={$appConfig.launch_options.no_sound}
-                role="switch"
-                aria-checked={$appConfig.launch_options.no_sound}
-                tabindex="0"
-                on:click={() => updateOpt('no_sound', !$appConfig.launch_options.no_sound)}
-                on:keydown={(e) => e.key === 'Enter' && updateOpt('no_sound', !$appConfig.launch_options.no_sound)}
-              ></div>
-            </div>
-
-            <div class="opt-row">
-              <div class="opt-label">
-                <span class="opt-name">Enable Client Log</span>
-                <span class="opt-desc">Opens a verbose log window alongside the game</span>
-              </div>
-              <div
-                class="toggle-switch"
-                class:on={$appConfig.launch_options.enable_client_log}
-                role="switch"
-                aria-checked={$appConfig.launch_options.enable_client_log}
-                tabindex="0"
-                on:click={() => updateOpt('enable_client_log', !$appConfig.launch_options.enable_client_log)}
-                on:keydown={(e) => e.key === 'Enter' && updateOpt('enable_client_log', !$appConfig.launch_options.enable_client_log)}
-              ></div>
-            </div>
-
-            <div class="opt-row">
-              <div class="opt-label">
-                <span class="opt-name">Robocopy</span>
-                <span class="opt-desc">Launches in standalone mode, required for private servers</span>
-              </div>
-              <div
-                class="toggle-switch"
-                class:on={$appConfig.launch_options.robocopy}
-                role="switch"
-                aria-checked={$appConfig.launch_options.robocopy}
-                tabindex="0"
-                on:click={() => updateOpt('robocopy', !$appConfig.launch_options.robocopy)}
-                on:keydown={(e) => e.key === 'Enter' && updateOpt('robocopy', !$appConfig.launch_options.robocopy)}
-              ></div>
-            </div>
-
-            <div class="opt-row">
-              <div class="opt-label">
-                <span class="opt-name">No Steam</span>
-                <span class="opt-desc">Disables Steam integration on launch</span>
-              </div>
-              <div
-                class="toggle-switch"
-                class:on={$appConfig.launch_options.no_steam}
-                role="switch"
-                aria-checked={$appConfig.launch_options.no_steam}
-                tabindex="0"
-                on:click={() => updateOpt('no_steam', !$appConfig.launch_options.no_steam)}
-                on:keydown={(e) => e.key === 'Enter' && updateOpt('no_steam', !$appConfig.launch_options.no_steam)}
-              ></div>
+            <div class="path-group">
+              <span class="field-label">Additional Arguments</span>
+              <input
+                type="text"
+                value={$appConfig.launch_options.extra_args}
+                placeholder="e.g. -nosplash -nomovies"
+                on:change={(e) => updateOpt('extra_args', (e.target as HTMLInputElement).value.trim())}
+              />
+              <span class="opt-desc">Added to the end of the launch command, separated by spaces</span>
             </div>
 
           </div>

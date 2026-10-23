@@ -54,6 +54,28 @@ pub fn normalize_host(raw: String) -> String {
     normalize_host_str(&raw)
 }
 
+/// Same rule as the Overlay launcher: the client ships `Binaries\Win64` and
+/// `Binaries\Win32` side by side; use the sibling exe in the other folder when
+/// 32-bit is forced. Falls back to the chosen exe if the layout doesn't match.
+fn resolve_exe(exe: &str, force_32bit: bool) -> String {
+    if !force_32bit {
+        return exe.to_string();
+    }
+    let path = std::path::Path::new(exe);
+    let win64 = path.parent().filter(|p| {
+        p.file_name().is_some_and(|n| n.eq_ignore_ascii_case("Win64"))
+    });
+    if let (Some(dir), Some(name)) = (win64, path.file_name()) {
+        if let Some(bin) = dir.parent() {
+            let alt = bin.join("Win32").join(name);
+            if alt.is_file() {
+                return alt.to_string_lossy().into_owned();
+            }
+        }
+    }
+    exe.to_string()
+}
+
 #[tauri::command]
 pub fn launch_game(app: tauri::AppHandle, server_id: String) -> Result<(), String> {
     let config = load_config(&app);
@@ -90,8 +112,15 @@ pub fn launch_game(app: tauri::AppHandle, server_id: String) -> Result<(), Strin
         format!("-siteconfigurl={siteconfig_url}"),
     ];
 
-    if opts.no_steam    { args.push("-nosteam".into()); }
-    if opts.robocopy    { args.push("-robocopy".into()); }
+    // Always exactly one mode: -robocopy, -steam and -solidstate are mutually
+    // exclusive and the client exits if the set is wrong.
+    if opts.no_steam {
+        args.push("-robocopy".into());
+        args.push("-nosteam".into());
+    } else {
+        args.push("-steam".into());
+        args.push("-nosolidstate".into());
+    }
     if opts.skip_startup_movies  { args.push("-nostartupmovies".into()); }
     if opts.skip_motion_comics   { args.push("-skipmotioncomics".into()); }
     if opts.no_sound    { args.push("-nosound".into()); }
@@ -102,14 +131,24 @@ pub fn launch_game(app: tauri::AppHandle, server_id: String) -> Result<(), Strin
         args.push(format!("-ResY={}", opts.resolution_height));
     }
 
+    // ponytail: split on whitespace, so a single argument can't contain spaces; add quote parsing if needed
+    args.extend(opts.extra_args.split_whitespace().map(String::from));
+
     if !server.email.is_empty() && opts.auto_login {
         let password = decrypt_password(&server.password_enc, &server.password_nonce)?;
         args.push(format!("-emailaddress={}", server.email));
         args.push(format!("-password={}", password));
     }
 
-    let child = Command::new(&exe)
-        .args(&args)
+    let exe = resolve_exe(&exe, opts.force_32bit);
+    let mut cmd = Command::new(&exe);
+    cmd.args(&args);
+    // Without these the Steam build asks Steam to restart it using Steam's own
+    // launch entry, which discards our arguments.
+    if !opts.no_steam {
+        cmd.env("SteamAppId", "226320").env("SteamGameId", "226320");
+    }
+    let child = cmd
         // Detach - MH Multiverse doesn't own the game process
         .spawn()
         .map_err(|e| format!("Failed to launch game: {e}"))?;
