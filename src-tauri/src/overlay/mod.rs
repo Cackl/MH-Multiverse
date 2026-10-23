@@ -163,7 +163,8 @@ fn clean_path(p: PathBuf) -> String {
     p.to_string_lossy().trim_start_matches(r"\\?\").to_string()
 }
 
-#[tauri::command]
+// async: hashes every overlay file, which would otherwise block the main thread (and the window)
+#[tauri::command(async)]
 pub fn overlay_status(app: tauri::AppHandle) -> OverlayStatus {
     status_of(&load_config(&app).overlay)
 }
