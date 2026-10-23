@@ -33,7 +33,7 @@ tauri-plugin-opener = "2.5.3"
 tauri-plugin-window-state = "2"
 sysinfo = "0.36.1"
 reqwest = { version = "0.12", features = ["stream", "rustls-tls"], default-features = false }
-zip = "2"
+zip = "9"
 chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
 futures-util = "0.3"
 lz4_flex = { version = "0.11", default-features = false, features = ["safe-decode"] }
