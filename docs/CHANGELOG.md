@@ -2,6 +2,41 @@
 ---
 <br>
 
+# Version 1.5.0 Release
+
+## What's Changed
+
+### Integrations - MarvelHeroes Overlay
+- New **Integrations** page in Settings
+- The MarvelHeroes Overlay card can be used to link your copy of [wmascent/Bandit's](https://github.com/wmascent) Overlay mod folder and Trust it. Multiverse stores a hash of the overlay's files, and any change (including the overlay updating itself) blocks use until you trust it again. Multiverse doesn't come with or modify the overlay.
+- Optional Inject on launch: when it's on and the overlay is trusted, Multiverse loads the overlay into the game right after launching it. The files are checked again just before injecting, and a failure never stops the game from starting.
+- Turn the overlay's terminals, DPS and debug-log flags on and off from the card, and see a log of the items its loot filter hides.
+- The Launch page shows an Overlay label next to the Launch button when inject on launch is on. It turns amber if the overlay's files have changed or gone missing.
+
+### Import server profiles from Bifrost and the Overlay launcher
+- New **Import Server Profiles** card under Settings -> Integrations. It reads Bifrost's `Bifrost.ServerList.json` and `Bifrost.LaunchConfig.json`, and the overlay launcher's `launcher-settings.json`. Use Detect to scan expected locations, or Browse to find a file, then review a preview before anything is saved.
+- Existing profiles are matched by host and email, host and name, or host only, and you can include or exclude each server by hand.
+- Saved logins are imported encrypted. Note: if using auto-login, Marvel Heroes Omega's own launch logs include the passwords in plaintext.  
+
+### Steam launch mode
+- For copies of the game from Steam, server switching and auto-login now works. Previously, with "No Steam" off, the client restarted itself through Steam and dropped the launch arguments, so it ignored the selected server and your login.
+- The No Steam toggle is now Steam Mode (on means launch via Steam). Multiverse now always sends exactly one launch mode: `-steam -nosolidstate` with Steam Mode on, or `-robocopy -nosteam` with it off.
+- The Robocopy toggle is gone because of that. If you had Robocopy off, launches now include `-robocopy` as the standalone mode.
+
+### Launch Options
+- New Additional Arguments field for extra launch arguments, separated by spaces.
+- Launch Options are reordered by how often they matter, with Auto Login and Steam Mode first and Patched Client last.
+- Auto Login and Enable Client Log now note that MHO records your password in plain text in its `Launch.log` (in `Documents\My Games\Marvel Heroes\MarvelGame\Logs`), along with the previous launches' backups. Bifrost had a similar warning that Multiverse now displays.
+
+### Security
+- Updated the TLS libraries behind the update check (`rustls`, `rustls-webpki`, `webpki-roots`) and the `zip` library used to extract updates, to clear published security advisories.
+
+### Bug fixes
+- No more white flash while the app window loads.
+
+<br>
+
+---
 # Version 1.4.1 Release
 
 ## What's Changed
