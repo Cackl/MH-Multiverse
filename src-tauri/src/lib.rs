@@ -153,6 +153,7 @@ pub fn run() {
             overlay::overlay_trust,
             overlay::overlay_untrust,
             overlay::overlay_set_auto_inject,
+            overlay::overlay_set_omega_gear,
             overlay::overlay_get_flags,
             overlay::overlay_set_flag,
             profile_import::preview_profile_import,

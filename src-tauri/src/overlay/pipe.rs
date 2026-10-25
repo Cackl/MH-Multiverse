@@ -79,7 +79,9 @@ pub fn clean(s: &str) -> String {
     s.chars().map(|c| if c.is_control() { ' ' } else { c }).take(MAX_TEXT).collect()
 }
 
-/// Rarity is a separate game enum (not in enum-names.bin), so these pairs are embedded.
+/// Rarity codes are 1-based positions in the game's global prototype enum (Calligraphy prototypes plus
+/// the mu_cdata.sip resource prototypes, sorted by PrototypeId), so they can't be rebuilt from
+/// Calligraphy.sip alone; 57781 is Entity/Items/Rarity/R6Omega.prototype in the stock data. These pairs are embedded.
 /// Taken from an analysis of the overlay; 43721/46816/51581 also match the hook's debug log.
 /// Unknown codes are shown as numbers.
 fn rarity_name(code: u64) -> String {
@@ -300,7 +302,7 @@ pub fn parse_line(raw: &[u8], names: &HashMap<u64, String>) -> Option<PipeLine> 
     }
 }
 
-fn status(app: &tauri::AppHandle, msg: &str) {
+pub(super) fn status(app: &tauri::AppHandle, msg: &str) {
     let _ = app.emit("overlay-pipe", vec![PipeLine { event: "_status".into(), text: msg.into(), fields: vec![], hits: vec![] }]);
 }
 

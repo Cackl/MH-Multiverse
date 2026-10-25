@@ -164,6 +164,21 @@
           ></div>
         </div>
       {/each}
+      <div class="opt-row" class:dim={state !== 'trusted' && !overlay.omega_gear}>
+        <div class="opt-label" use:tip={'Only changes the loot filter panel layout. Applies immediately, and again on each launch while it is on. Needs the overlay to have run once so its settings file exists.'}>
+          <span class="opt-name">Omega Gear</span>
+          <span class="opt-desc">Shows the Omega column and Omega Slot 1–5 in the loot filter panel</span>
+        </div>
+        <div
+          class="toggle-switch"
+          class:on={overlay.omega_gear}
+          role="switch"
+          aria-checked={overlay.omega_gear}
+          tabindex="0"
+          on:click={() => call('overlay_set_omega_gear', { enabled: !overlay?.omega_gear })}
+          on:keydown={(e) => e.key === 'Enter' && call('overlay_set_omega_gear', { enabled: !overlay?.omega_gear })}
+        ></div>
+      </div>
     {/if}
   {/if}
 

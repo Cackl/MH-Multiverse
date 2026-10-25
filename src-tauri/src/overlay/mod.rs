@@ -17,6 +17,8 @@ pub(crate) use pipe::sip_candidates;
 mod tests;
 
 const DLL_NAME: &str = "MhClientHook.dll";
+/// The hook's loot-filter settings, under %LOCALAPPDATA%. User data outside the overlay folder, so never hashed.
+const LOOT_CONFIG: &str = "MarvelHeroesOmega.LootFilter/loot-filter-config.json";
 /// Stands in for the hash of a symlink or subfolder found inside a code folder.
 const UNHASHABLE: &str = "!not-a-regular-file";
 
@@ -59,6 +61,9 @@ pub struct OverlayConfig {
     /// Opt-in: inject after launch once trusted.
     #[serde(default)]
     pub auto_inject: bool,
+    /// Opt-in: keep the overlay loot panel's `showOmega` on (Omega column and slots).
+    #[serde(default)]
+    pub omega_gear: bool,
 }
 
 #[derive(Debug, Serialize)]
@@ -67,6 +72,7 @@ pub struct OverlayStatus {
     pub state: &'static str,
     pub dir: String,
     pub auto_inject: bool,
+    pub omega_gear: bool,
     /// "changed: x" / "missing: x" / "added: x" lines when state == changed
     pub changes: Vec<String>,
 }
@@ -144,6 +150,7 @@ fn status_of(cfg: &OverlayConfig) -> OverlayStatus {
         state,
         dir: cfg.dir.clone(),
         auto_inject: cfg.auto_inject,
+        omega_gear: cfg.omega_gear,
         changes,
     };
     if cfg.dir.is_empty() {
@@ -220,6 +227,23 @@ pub fn overlay_set_auto_inject(app: tauri::AppHandle, enabled: bool) -> Result<O
     Ok(status_of(&config.overlay))
 }
 
+/// Saves the setting and applies it now, on or off, so a running game picks it up live.
+/// While on, every injected launch re-applies it; while off, launches leave the file alone.
+/// Turning it on needs a trusted overlay; turning it off is always allowed, to undo our own write.
+#[tauri::command]
+pub fn overlay_set_omega_gear(app: tauri::AppHandle, enabled: bool) -> Result<OverlayStatus, String> {
+    let mut config = load_config(&app);
+    if enabled && status_of(&config.overlay).state != "trusted" {
+        return Err("Trust the overlay before enabling Omega gear.".into());
+    }
+    config.overlay.omega_gear = enabled;
+    save_config(&app, &config)?;
+    if let Some(path) = loot_config_path() {
+        set_show_omega_at(&path, enabled)?;
+    }
+    Ok(status_of(&config.overlay))
+}
+
 // ── injection + flags ──────────────────────────────────────────────────────────
 
 #[derive(Clone, Serialize)]
@@ -239,7 +263,13 @@ pub(crate) fn on_game_spawned(app: &tauri::AppHandle, cfg: OverlayConfig, sips: 
     }
     let app = app.clone();
     let _ = std::thread::Builder::new().name("overlay-inject".into()).spawn(move || {
+        // Once before injecting, for an existing config, and once after: on a first run the hook
+        // creates the file while attaching and picks the second write up through its live reload.
+        sync_show_omega(&app, &cfg);
         let result = inject_into(&cfg, &mut child);
+        if result.is_ok() {
+            sync_show_omega(&app, &cfg);
+        }
         let payload = match result {
             Ok(()) => {
                 pipe::spawn(app.clone(), PathBuf::from(&cfg.dir), sips, child);
@@ -249,6 +279,49 @@ pub(crate) fn on_game_spawned(app: &tauri::AppHandle, cfg: OverlayConfig, sips: 
         };
         let _ = app.emit("overlay-inject", payload);
     });
+}
+
+/// Sets `showOmega` in the hook's loot-filter config, which only changes the in-game panel layout
+/// (Omega rarity column and Omega Slot 1-5 rows). The hook re-reads the file when its write time
+/// changes, so a write after injection applies live.
+/// - A missing file is left missing: the hook seeds the user's config from the default file only when
+///   it is absent, and a stub here would stop that.
+/// - Anything that isn't a JSON object is left untouched and reported.
+/// - An already-correct value is not rewritten, so the write time (the hook's reload trigger) stays put.
+/// - Other keys are kept; serde_json may reorder them.
+fn set_show_omega_at(path: &Path, on: bool) -> Result<(), String> {
+    if !path.exists() {
+        return Ok(());
+    }
+    let text = std::fs::read_to_string(path).map_err(|e| format!("Cannot read loot-filter-config.json: {e}"))?;
+    let mut v: serde_json::Value = serde_json::from_str(text.trim_start_matches('\u{feff}'))
+        .map_err(|e| format!("loot-filter-config.json is not valid JSON: {e}"))?;
+    let obj = v.as_object_mut().ok_or("loot-filter-config.json is not a JSON object")?;
+    if obj.get("showOmega") == Some(&serde_json::Value::Bool(on)) {
+        return Ok(());
+    }
+    obj.insert("showOmega".into(), on.into());
+    let out = serde_json::to_string_pretty(&v).map_err(|e| e.to_string())?;
+    let tmp = path.with_extension("json.tmp");
+    std::fs::write(&tmp, out).map_err(|e| format!("Cannot write loot-filter-config.json: {e}"))?;
+    std::fs::rename(&tmp, path).map_err(|e| format!("Cannot write loot-filter-config.json: {e}"))
+}
+
+fn loot_config_path() -> Option<PathBuf> {
+    std::env::var_os("LOCALAPPDATA").map(|local| Path::new(&local).join(LOOT_CONFIG))
+}
+
+/// Re-applies the Omega gear setting at launch when it is on and the overlay is still trusted (an
+/// overlay in the "changed" state gets no help from us). Never fails the launch: a problem is only
+/// noted in the log.
+fn sync_show_omega(app: &tauri::AppHandle, cfg: &OverlayConfig) {
+    if !cfg.omega_gear || status_of(cfg).state != "trusted" {
+        return;
+    }
+    let Some(path) = loot_config_path() else { return };
+    if let Err(e) = set_show_omega_at(&path, true) {
+        pipe::status(app, &format!("Omega gear setting not applied: {e}"));
+    }
 }
 
 fn inject_into(cfg: &OverlayConfig, child: &mut std::process::Child) -> Result<(), String> {

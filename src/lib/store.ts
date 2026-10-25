@@ -17,6 +17,7 @@ export type OverlayStatus = {
   state: 'not_linked' | 'missing' | 'untrusted' | 'trusted' | 'changed'
   dir: string
   auto_inject: boolean
+  omega_gear: boolean
   changes: string[]
 }
 /** Outcome of the most recent overlay injection attempt (null until one happens). */

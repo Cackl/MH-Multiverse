@@ -211,3 +211,49 @@ fn enum_names_load_and_tolerate_bad_files() {
     std::fs::write(d.join("MhClientHook.enum-names.bin"), b"garbage").unwrap();
     assert!(load_names(&d).is_empty());
 }
+
+#[test]
+fn show_omega_missing_file_is_not_created() {
+    let d = tmp("omega-missing");
+    let p = d.join("loot-filter-config.json");
+    super::set_show_omega_at(&p, true).unwrap();
+    assert!(!p.exists());
+}
+
+#[test]
+fn show_omega_flips_only_that_key() {
+    let d = tmp("omega-flip");
+    let p = d.join("loot-filter-config.json");
+    let read = || serde_json::from_str::<serde_json::Value>(&std::fs::read_to_string(&p).unwrap()).unwrap();
+    std::fs::write(&p, r#"{"showOmega":false,"hideRare":true,"panel":{"x":1}}"#).unwrap();
+    super::set_show_omega_at(&p, true).unwrap();
+    assert_eq!(read(), serde_json::json!({"showOmega":true,"hideRare":true,"panel":{"x":1}}));
+    assert!(!d.join("loot-filter-config.json.tmp").exists());
+    // an absent key is added
+    std::fs::write(&p, r#"{"a":1}"#).unwrap();
+    super::set_show_omega_at(&p, false).unwrap();
+    assert_eq!(read(), serde_json::json!({"a":1,"showOmega":false}));
+}
+
+#[test]
+fn show_omega_unchanged_value_is_not_rewritten() {
+    let d = tmp("omega-same");
+    let p = d.join("loot-filter-config.json");
+    let original = "{ \"showOmega\": true,   \"b\": 2 }"; // odd spacing: a rewrite would normalise it
+    std::fs::write(&p, original).unwrap();
+    let before = std::fs::metadata(&p).unwrap().modified().unwrap();
+    super::set_show_omega_at(&p, true).unwrap();
+    assert_eq!(std::fs::read_to_string(&p).unwrap(), original);
+    assert_eq!(std::fs::metadata(&p).unwrap().modified().unwrap(), before);
+}
+
+#[test]
+fn show_omega_leaves_invalid_files_alone() {
+    let d = tmp("omega-bad");
+    let p = d.join("loot-filter-config.json");
+    for content in ["not json", "[1,2]", "42", ""] {
+        std::fs::write(&p, content).unwrap();
+        assert!(super::set_show_omega_at(&p, true).is_err(), "{content}");
+        assert_eq!(std::fs::read_to_string(&p).unwrap(), content);
+    }
+}
