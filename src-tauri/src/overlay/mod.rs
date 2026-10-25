@@ -12,6 +12,7 @@ use crate::config::{load_config, save_config};
 
 mod inject;
 mod pipe;
+pub(crate) use pipe::sip_candidates;
 #[cfg(test)]
 mod tests;
 
@@ -232,7 +233,7 @@ struct InjectPayload {
 /// settle, re-verifies right before loading, and injects. Never blocks or fails the launch;
 /// the outcome is emitted as an `overlay-inject` event. The thread owns the
 /// `Child`, which keeps the PID from being reused while we work.
-pub(crate) fn on_game_spawned(app: &tauri::AppHandle, cfg: OverlayConfig, mut child: std::process::Child) {
+pub(crate) fn on_game_spawned(app: &tauri::AppHandle, cfg: OverlayConfig, sips: Vec<PathBuf>, mut child: std::process::Child) {
     if !cfg.auto_inject {
         return;
     }
@@ -240,7 +241,7 @@ pub(crate) fn on_game_spawned(app: &tauri::AppHandle, cfg: OverlayConfig, mut ch
     let _ = std::thread::Builder::new().name("overlay-inject".into()).spawn(move || {
         let result = inject_into(&cfg, &mut child);
         if result.is_ok() {
-            pipe::spawn(app.clone(), PathBuf::from(&cfg.dir));
+            pipe::spawn(app.clone(), PathBuf::from(&cfg.dir), sips);
         }
         let payload = match result {
             Ok(()) => InjectPayload { ok: true, message: "Overlay injected.".into() },

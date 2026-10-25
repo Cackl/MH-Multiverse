@@ -150,6 +150,26 @@ fn pipe_parser_shows_terminal_difficulty_mission_and_loot_reason() {
 }
 
 #[test]
+fn pipe_parser_names_and_categorises_from_prototype_paths() {
+    use super::pipe::parse_line;
+    let mut names = std::collections::HashMap::new();
+    for (i, p) in [
+        (1u64, "Entity/Items/Rings/Prototypes/Ring01.prototype"),
+        (2, "Entity/Items/Armor/Prototypes/X23/o2Bodysuit/Bodysuit10.prototype"),
+        (3, "Entity/Items/Misc/Thing.prototype"),
+        (4, "Entity/Characters/Mobs/Ultron.prototype"),
+    ] {
+        names.insert(i, p.to_string());
+    }
+    let f = |i: u32| parse_line(format!(r#"{{"event":"loot_hidden","enumIdx":{i}}}"#).as_bytes(), &names).unwrap().fields;
+    assert_eq!((f(1)[1].as_str(), f(1)[2].as_str()), ("Ring", "Ring01"));
+    assert_eq!((f(2)[1].as_str(), f(2)[2].as_str()), ("Armor", "Bodysuit10"));
+    assert_eq!(f(3)[1], "Item");
+    let d = parse_line(br#"{"event":"player_death","killerEnumIdx":4}"#, &names).unwrap();
+    assert_eq!(d.fields[1], "☠ Killed by Ultron");
+}
+
+#[test]
 fn pipe_parser_builds_death_card() {
     use super::pipe::parse_line;
     let mut names = std::collections::HashMap::new();

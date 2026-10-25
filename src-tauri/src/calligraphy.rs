@@ -292,6 +292,45 @@ fn build_catalogue(sip_path: &str) -> Result<PrototypeCatalogue, String> {
     Ok(PrototypeCatalogue { blueprints, prototypes, by_id, by_path, by_guid })
 }
 
+/// Blueprint types (RuntimeBinding) of every class deriving from EntityPrototype. The game's
+/// EntityPrototype enum indexes exactly the prototypes of these types.
+const ENTITY_BLUEPRINT_TYPES: &[&str] = &[
+    "AgentPrototype", "AgentTeamUpPrototype", "ArmorPrototype", "ArtifactPrototype", "AvatarPrototype",
+    "BagItemPrototype", "CharacterTokenPrototype", "CostumeCorePrototype", "CostumePrototype",
+    "CraftingIngredientPrototype", "CraftingRecipePrototype", "DestructiblePropPrototype",
+    "DestructibleSmartPropPrototype", "EmoteTokenPrototype", "EntityPrototype", "HotspotPrototype",
+    "InventoryStashTokenPrototype", "ItemPrototype", "KismetSequenceEntityPrototype", "LegendaryPrototype",
+    "MatchMetaGamePrototype", "MedalPrototype", "MetaGamePrototype", "MissilePrototype",
+    "MissionMetaGamePrototype", "OrbPrototype", "PlayerPrototype", "PropPrototype", "PvPPrototype",
+    "RelicPrototype", "SmartPropPrototype", "SpawnerPrototype", "TeamUpGearPrototype",
+    "TransitionPrototype", "WorldEntityPrototype",
+];
+
+/// Prototype paths in EntityPrototype enum order: the entry for `enumIdx` n is at `[n - 1]`
+/// (0 means none). The overlay hook reports items and killers by this index.
+pub(crate) fn entity_paths(sip_path: &str) -> Result<Vec<String>, String> {
+    let (pak, entries, start) = load_pak(sip_path)?;
+    let blueprints = parse_blueprint_directory(&extract_pak_file(&pak, &entries, start, "Calligraphy/Blueprint.directory")?)?;
+    let mut prototypes = parse_prototype_directory(&extract_pak_file(&pak, &entries, start, "Calligraphy/Prototype.directory")?)?;
+
+    let is_entity: HashMap<u64, bool> = blueprints
+        .iter()
+        .map(|(id, path)| {
+            let ty = extract_pak_file(&pak, &entries, start, &format!("Calligraphy/{path}"))
+                .ok()
+                .and_then(|d| read_fixed_string16(&d, &mut 4).ok());
+            (*id, ty.is_some_and(|t| ENTITY_BLUEPRINT_TYPES.contains(&t.as_str())))
+        })
+        .collect();
+
+    prototypes.sort_by_key(|p| p.prototype_id);
+    Ok(prototypes
+        .into_iter()
+        .filter(|p| is_entity.get(&p.blueprint_id).copied().unwrap_or(false))
+        .map(|p| p.path)
+        .collect())
+}
+
 fn sip_path_for_server_exe(server_exe: &str) -> Result<String, String> {
     let sip_path = crate::paths::server_dir(server_exe)?
         .join("Data")

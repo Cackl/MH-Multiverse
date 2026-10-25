@@ -121,9 +121,48 @@ pub fn load_names(dir: &Path) -> HashMap<u64, String> {
     out
 }
 
-/// "Bodysuit10" -> "Bodysuit". A heuristic: the enum name minus its trailing number.
-fn category(name: &str) -> &str {
-    name.trim_end_matches(|c: char| c.is_ascii_digit())
+/// Name table values are prototype paths from Calligraphy, or bare names from enum-names.bin.
+fn leaf(value: &str) -> &str {
+    let file = value.rsplit('/').next().unwrap_or(value);
+    file.strip_suffix(".prototype").unwrap_or(file)
+}
+
+/// Path values are matched on their folder, first match wins. Bare names ("Bodysuit10" ->
+/// "Bodysuit") fall back to the name minus its trailing number, a heuristic.
+fn category(value: &str) -> &str {
+    if !value.contains('/') {
+        return value.trim_end_matches(|c: char| c.is_ascii_digit());
+    }
+    const BY_FOLDER: &[(&str, &str)] = &[
+        ("/Insignias/", "Insignia"), ("/Medals/", "Medal"), ("/Rings/", "Ring"), ("/Artifacts/", "Artifact"),
+        ("/TeamUps/", "Team-up"), ("/TeamUpGear/", "Team-up"), ("/Catalysts/", "Catalyst"),
+        ("/Armor/", "Armor"), ("/Genome/", "Genome"),
+    ];
+    BY_FOLDER.iter().find(|(f, _)| value.contains(f)).map_or("Item", |(_, c)| c)
+}
+
+/// enumIdx -> prototype path from the first readable Calligraphy.sip, else bare names from
+/// the overlay's enum-names.bin. The sip covers agents too, so it can name killers.
+/// Built once per connection on the pipe thread; ~70 ms for the full client sip.
+pub fn load_entity_names(sips: &[PathBuf], dir: &Path) -> HashMap<u64, String> {
+    for sip in sips.iter().filter(|p| p.is_file()) {
+        if let Ok(paths) = crate::calligraphy::entity_paths(&sip.to_string_lossy()) {
+            return paths.into_iter().enumerate().map(|(i, p)| (i as u64 + 1, p)).collect();
+        }
+    }
+    load_names(dir)
+}
+
+/// Calligraphy.sip candidates, best first: the client's (the hook's indices come from it),
+/// then the server's copy.
+pub fn sip_candidates(game_exe: &str, server_exe: &str) -> Vec<PathBuf> {
+    const SIP: &str = "Data/Game/Calligraphy.sip";
+    let mut out: Vec<PathBuf> =
+        Path::new(game_exe).ancestors().skip(1).take(5).map(|d| d.join(SIP)).filter(|p| p.is_file()).take(1).collect();
+    if let Ok(d) = crate::paths::server_dir(server_exe) {
+        out.push(d.join(SIP));
+    }
+    out
 }
 
 fn local_time(utc: Option<&str>) -> String {
@@ -177,7 +216,7 @@ fn hit_row(h: &serde_json::Value, names: &HashMap<u64, String>) -> Hit {
         health,
         damage: if lost != 0 { lost.to_string() } else { format!("~{value}") },
         kind: txt(h, "type"),
-        attacker: names.get(&num(h, "idx")).map(|n| clean(n)).unwrap_or_else(|| "unknown".into()),
+        attacker: names.get(&num(h, "idx")).map(|n| clean(leaf(n))).unwrap_or_else(|| "unknown".into()),
         power: txt(h, "power"),
         note,
     }
@@ -190,7 +229,7 @@ fn death_line(v: &serde_json::Value, names: &HashMap<u64, String>) -> PipeLine {
     let killer_idx = num(v, "killerEnumIdx");
     let killer = names.get(&killer_idx);
     let heading = match killer {
-        Some(k) => format!("☠ Killed by {}", clean(k)),
+        Some(k) => format!("☠ Killed by {}", clean(leaf(k))),
         None => "You were killed".into(),
     };
     let mut detail = Vec::new();
@@ -248,7 +287,7 @@ pub fn parse_line(raw: &[u8], names: &HashMap<u64, String>) -> Option<PipeLine> 
             let fields: Vec<String> = [
                 time,
                 name.map(category).unwrap_or("?").to_string(),
-                name.unwrap_or("?").to_string(),
+                name.map(leaf).unwrap_or("?").to_string(),
                 idx.map(|i| i.to_string()).unwrap_or_else(|| "?".into()),
                 v.get("rarity").and_then(|x| x.as_u64()).map(rarity_name).unwrap_or_else(|| "?".into()),
                 reason.to_string(),
@@ -278,14 +317,14 @@ fn connect() -> Option<File> {
 
 /// Connects (for up to 30 s) and forwards events until the pipe closes, which
 /// happens when the game exits. Events are emitted in batches, one per read.
-pub fn spawn(app: tauri::AppHandle, dir: PathBuf) {
+pub fn spawn(app: tauri::AppHandle, dir: PathBuf, sips: Vec<PathBuf>) {
     let _ = std::thread::Builder::new().name("overlay-pipe".into()).spawn(move || {
         let Some(mut pipe) = connect() else {
             status(&app, "Could not connect to the overlay status pipe.");
             return;
         };
         status(&app, "Connected to the overlay status pipe.");
-        let names = load_names(&dir);
+        let names = load_entity_names(&sips, &dir);
         let mut splitter = LineSplitter::default();
         let mut buf = [0u8; 4096];
         loop {
