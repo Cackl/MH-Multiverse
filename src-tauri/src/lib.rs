@@ -117,6 +117,7 @@ pub fn run() {
             updater::delete_backup,
             updater::get_backups_dir,
             app_update::check_app_update,
+            app_update::check_overlay_update,
             app_update::install_app_update,
             calligraphy::search_prototypes,
             calligraphy::lookup_prototype_id,

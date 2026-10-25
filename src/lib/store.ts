@@ -30,6 +30,9 @@ export function appendOverlayLog(lines: Omit<OverlayLine, 'id'>[]) {
 }
 /** Latest overlay status seen by the UI (shared so the Launch page can show the inject indicator). */
 export const overlayStatus = writable<OverlayStatus | null>(null)
+export type OverlayUpdate = { installed: string; latest: string; update_available: boolean; html_url: string }
+/** Result of the manual overlay release check. */
+export const overlayUpdate = writable<OverlayUpdate | null>(null)
 export const overlayInject = writable<{ ok: boolean; message: string } | null>(null)
 export const tuningFocusFile = writable<string | null>(null)
 export const schedulerNow = writable<Date | null>(null)

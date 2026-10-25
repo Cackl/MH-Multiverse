@@ -2,7 +2,8 @@
   import { onMount, tick } from 'svelte'
   import { open } from '@tauri-apps/plugin-dialog'
   import { invoke } from '@tauri-apps/api/core'
-  import { overlayInject, overlayLog, overlayStatus, type OverlayStatus } from '../../lib/store'
+  import { overlayInject, overlayLog, overlayStatus, overlayUpdate, type OverlayStatus, type OverlayUpdate } from '../../lib/store'
+  import { openUrl } from '@tauri-apps/plugin-opener'
   import { tip } from '../../lib/tooltip'
   import IntegrationCard from './IntegrationCard.svelte'
 
@@ -62,6 +63,15 @@
 
   function onTrustButton() {
     call(state === 'trusted' ? 'overlay_untrust' : 'overlay_trust')
+  }
+
+  let checking = false
+  let updateError = ''
+  async function checkUpdate() {
+    checking = true
+    updateError = ''
+    try { overlayUpdate.set(await invoke<OverlayUpdate>('check_overlay_update')) } catch (e) { updateError = String(e) }
+    checking = false
   }
 
   onMount(() => { call('overlay_status'); loadFlags() })
@@ -154,6 +164,20 @@
     {/if}
   {/if}
 
+  {#if state !== 'not_linked' && state !== 'missing'}
+    <div class="opt-desc update-note">
+      <button class="btn btn-sm btn-outline" disabled={checking} on:click={checkUpdate}>{checking ? 'Checking...' : 'Check for overlay update'}</button>
+      {#if updateError}
+        <span class="err">{updateError}</span>
+      {:else if $overlayUpdate?.update_available}
+        Overlay v{$overlayUpdate.latest} is available (installed v{$overlayUpdate.installed}).
+        <button class="btn btn-sm btn-outline" on:click={() => openUrl($overlayUpdate.html_url)}>Release page</button>
+      {:else if $overlayUpdate}
+        Up to date (v{$overlayUpdate.installed}).
+      {/if}
+    </div>
+  {/if}
+
   {#if error}<span class="opt-desc err">{error}</span>{/if}
   {#if $overlayInject}
     <span class="opt-desc" class:err={!$overlayInject.ok}>Last launch: {$overlayInject.message}</span>
@@ -229,6 +253,7 @@
   .opt-row.dim { opacity: 0.5; }
   .log-actions { display: flex; align-items: center; gap: 10px; }
   .err { color: var(--text-error); }
+  .update-note { display: flex; align-items: center; gap: 10px; color: var(--amber); }
   .changes { margin: 4px 0 0; padding-left: 16px; color: var(--amber); }
 
   /* Trust button carries the state: green when trusted, amber when files changed */
