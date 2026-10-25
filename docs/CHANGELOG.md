@@ -2,6 +2,24 @@
 ---
 <br>
 
+# Version 1.5.1 Release
+
+## What's Changed
+
+### MarvelHeroesOmega Overlay Integration Improvements
+- The Overlay Log now shows all events the Overlay does: terminals, difficulty, mission completion and deaths (with a recent-damage table), and loot rows.
+- Items and killers are now named from the client's Calligraphy data, so all item types and agents resolve to names.
+- Multiverse reconnects to the overlay while the game is running if its connection drops, instead of ending the log.
+- New "Check for update" button on the Overlay card. It compares your installed overlay with the latest public release and links to the release page. It never downloads or installs anything.
+- New "Omega Gear" toggle on the Overlay card. It enables the Omega features in the loot filter.
+- Changing the overlay's settings (Terminals, DPS, Omega gear, Debug Logging) now requires a trusted overlay. They are read-only otherwise.
+
+### Bug fixes
+- The server and game executable tooltips now show the full path, wrapped to fit.
+
+<br>
+
+---
 # Version 1.5.0 Release
 
 ## What's Changed
