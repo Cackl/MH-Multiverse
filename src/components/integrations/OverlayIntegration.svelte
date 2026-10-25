@@ -32,7 +32,7 @@
   const FLAGS: { key: string; name: string; desc: string }[] = [
     { key: 'terminals', name: 'Terminals Tracker', desc: 'Shows terminal tracker when opening the Waypoint' },
     { key: 'dps', name: 'DPS Meter', desc: 'Shows the damage meter' },
-    { key: 'detector_log', name: 'Debug Logging', desc: 'Writes overlay log files, separate to Hidden Items' },
+    { key: 'detector_log', name: 'Debug Logging', desc: 'Writes overlay log files, separate to the Overlay Log' },
   ]
 
   async function call(cmd: string, args?: Record<string, unknown>) {
@@ -84,7 +84,7 @@
     try { localStorage.setItem('overlay-log-open', showLog ? '1' : '0') } catch { /* storage unavailable */ }
   }
 
-  $: hiddenCount = $overlayLog.filter(l => l.event === 'loot_hidden').length
+  $: eventCount = $overlayLog.filter(l => l.event !== '_status').length
 
   // Keep the newest row in view unless the user has scrolled up to read.
   let logEl: HTMLDivElement | undefined
@@ -164,30 +164,16 @@
     {/if}
   {/if}
 
-  {#if state !== 'not_linked' && state !== 'missing'}
-    <div class="opt-desc update-note">
-      <button class="btn btn-sm btn-outline" disabled={checking} on:click={checkUpdate}>{checking ? 'Checking...' : 'Check for overlay update'}</button>
-      {#if updateError}
-        <span class="err">{updateError}</span>
-      {:else if $overlayUpdate?.update_available}
-        Overlay v{$overlayUpdate.latest} is available (installed v{$overlayUpdate.installed}).
-        <button class="btn btn-sm btn-outline" on:click={() => openUrl($overlayUpdate.html_url)}>Release page</button>
-      {:else if $overlayUpdate}
-        Up to date (v{$overlayUpdate.installed}).
-      {/if}
-    </div>
-  {/if}
-
   {#if error}<span class="opt-desc err">{error}</span>{/if}
   {#if $overlayInject}
     <span class="opt-desc" class:err={!$overlayInject.ok}>Last launch: {$overlayInject.message}</span>
   {/if}
 
-  <div class="section-divider"><span>Loot Filter</span></div>
+  <div class="section-divider"><span>Log</span></div>
   <div class="opt-row">
     <div class="opt-label">
-      <span class="opt-name">Hidden Items Log</span>
-      <span class="opt-desc">{hiddenCount} hidden this session</span>
+      <span class="opt-name">Overlay Log</span>
+      <span class="opt-desc">{eventCount} event{eventCount === 1 ? '' : 's'} this session</span>
     </div>
     <div class="log-actions">
       {#if showLog}
@@ -243,8 +229,22 @@
           <div class="status-line">{l.text}</div>
         {/if}
       {:else}
-        <div class="status-line">Nothing yet. Items hidden by the loot filter appear here once the game is launched with the overlay injected.</div>
+        <div class="status-line">Nothing yet. Hidden loot, terminals, completed missions and deaths appear here once the game is launched with the overlay injected.</div>
       {/each}
+    </div>
+  {/if}
+
+  {#if state !== 'not_linked' && state !== 'missing'}
+    <div class="opt-desc update-note" class:warn={$overlayUpdate?.update_available && !updateError}>
+      <button class="btn btn-sm btn-outline" disabled={checking} on:click={checkUpdate}>{checking ? 'Checking...' : 'Check for overlay update'}</button>
+      {#if updateError}
+        <span class="err">{updateError}</span>
+      {:else if $overlayUpdate?.update_available}
+        Overlay v{$overlayUpdate.latest} is available (installed v{$overlayUpdate.installed}).
+        <button class="btn btn-sm btn-outline" on:click={() => openUrl($overlayUpdate.html_url)}>Release page</button>
+      {:else if $overlayUpdate}
+        Up to date (v{$overlayUpdate.installed}).
+      {/if}
     </div>
   {/if}
 </IntegrationCard>
@@ -253,7 +253,8 @@
   .opt-row.dim { opacity: 0.5; }
   .log-actions { display: flex; align-items: center; gap: 10px; }
   .err { color: var(--text-error); }
-  .update-note { display: flex; align-items: center; gap: 10px; color: var(--amber); }
+  .update-note { display: flex; align-items: center; gap: 10px; margin-top: 10px; }
+  .update-note.warn { color: var(--amber); }
   .changes { margin: 4px 0 0; padding-left: 16px; color: var(--amber); }
 
   /* Trust button carries the state: green when trusted, amber when files changed */
