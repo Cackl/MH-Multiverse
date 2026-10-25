@@ -1177,6 +1177,7 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
   line-height: 1.5;
   pointer-events: none;
   white-space: pre-line;
+  overflow-wrap: anywhere; /* long unbroken paths */
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
 }
 
