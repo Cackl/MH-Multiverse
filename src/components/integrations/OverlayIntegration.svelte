@@ -3,6 +3,7 @@
   import { open } from '@tauri-apps/plugin-dialog'
   import { invoke } from '@tauri-apps/api/core'
   import { overlayInject, overlayLog, overlayStatus, type OverlayStatus } from '../../lib/store'
+  import { openUrl } from '@tauri-apps/plugin-opener'
   import { tip } from '../../lib/tooltip'
   import IntegrationCard from './IntegrationCard.svelte'
 
@@ -31,7 +32,7 @@
   const FLAGS: { key: string; name: string; desc: string }[] = [
     { key: 'terminals', name: 'Terminals Tracker', desc: 'Shows terminal tracker when opening the Waypoint' },
     { key: 'dps', name: 'DPS Meter', desc: 'Shows the damage meter' },
-    { key: 'detector_log', name: 'Debug Logging', desc: 'Writes overlay log files, separate to Hidden Items' },
+    { key: 'detector_log', name: 'Debug Logging', desc: 'Writes overlay log files, separate to the Overlay Log' },
   ]
 
   async function call(cmd: string, args?: Record<string, unknown>) {
@@ -64,6 +65,18 @@
     call(state === 'trusted' ? 'overlay_untrust' : 'overlay_trust')
   }
 
+  // Local on purpose: the result is dropped when the page is left, so it can't go stale after an update.
+  type OverlayUpdate = { installed: string; latest: string; update_available: boolean; html_url: string }
+  let update: OverlayUpdate | null = null
+  let checking = false
+  let updateError = ''
+  async function checkUpdate() {
+    checking = true
+    updateError = ''
+    try { update = await invoke<OverlayUpdate>('check_overlay_update') } catch (e) { updateError = String(e) }
+    checking = false
+  }
+
   onMount(() => { call('overlay_status'); loadFlags() })
 
   // ── Loot log ──
@@ -74,7 +87,7 @@
     try { localStorage.setItem('overlay-log-open', showLog ? '1' : '0') } catch { /* storage unavailable */ }
   }
 
-  $: hiddenCount = $overlayLog.filter(l => l.event === 'loot_hidden').length
+  $: eventCount = $overlayLog.filter(l => l.event !== '_status').length
 
   // Keep the newest row in view unless the user has scrolled up to read.
   let logEl: HTMLDivElement | undefined
@@ -135,7 +148,7 @@
     {#if state !== 'not_linked' && state !== 'missing'}
       <div class="section-divider"><span>Features (apply on next launch)</span></div>
       {#each FLAGS as f}
-        <div class="opt-row">
+        <div class="opt-row" class:dim={state !== 'trusted'}>
           <div class="opt-label">
             <span class="opt-name">{f.name}</span>
             <span class="opt-desc">{f.desc}</span>
@@ -151,6 +164,21 @@
           ></div>
         </div>
       {/each}
+      <div class="opt-row" class:dim={state !== 'trusted'}>
+        <div class="opt-label" use:tip={'Only changes the loot filter panel layout. Applies immediately, and again on each launch while it is on. Needs the overlay to have run once so its settings file exists.'}>
+          <span class="opt-name">Omega Gear</span>
+          <span class="opt-desc">Shows the Omega column and Omega Slot 1–5 in the loot filter panel</span>
+        </div>
+        <div
+          class="toggle-switch"
+          class:on={overlay.omega_gear}
+          role="switch"
+          aria-checked={overlay.omega_gear}
+          tabindex="0"
+          on:click={() => call('overlay_set_omega_gear', { enabled: !overlay?.omega_gear })}
+          on:keydown={(e) => e.key === 'Enter' && call('overlay_set_omega_gear', { enabled: !overlay?.omega_gear })}
+        ></div>
+      </div>
     {/if}
   {/if}
 
@@ -159,11 +187,11 @@
     <span class="opt-desc" class:err={!$overlayInject.ok}>Last launch: {$overlayInject.message}</span>
   {/if}
 
-  <div class="section-divider"><span>Loot Filter</span></div>
+  <div class="section-divider"><span>Log</span></div>
   <div class="opt-row">
     <div class="opt-label">
-      <span class="opt-name">Hidden Items Log</span>
-      <span class="opt-desc">{hiddenCount} hidden this session</span>
+      <span class="opt-name">Overlay Log</span>
+      <span class="opt-desc">{eventCount} event{eventCount === 1 ? '' : 's'} this session</span>
     </div>
     <div class="log-actions">
       {#if showLog}
@@ -188,20 +216,55 @@
         <span>Time</span><span>Category</span><span>Item</span><span>Code</span><span>Rarity</span>
       </div>
       {#each $overlayLog as l (l.id)}
-        {#if l.event === 'loot_hidden' && l.fields.length === 5}
+        {#if l.event === 'loot_hidden' && l.fields.length === 6}
           <div class="cols">
             <span class="dim-text">{l.fields[0]}</span>
             <span>{l.fields[1]}</span>
             <span title={l.fields[2]}>{l.fields[2]}</span>
             <span class="dim-text">{l.fields[3]}</span>
-            <span class="r r-{l.fields[4].toLowerCase()}">{l.fields[4]}</span>
+            <span class="r r-{l.fields[4].toLowerCase()}" title={l.fields[5]}>{l.fields[4]}</span>
+          </div>
+          {#if l.fields[5]}<div class="sub-line">{l.fields[5]}</div>{/if}
+        {:else if l.event === 'region_entered' && l.fields.length === 3}
+          <div class="banner"><span class="dim-text">{l.fields[0]}</span> Terminal <b>{l.fields[1]}</b> {l.fields[2]}</div>
+        {:else if l.event === 'mission_state'}
+          <div class="status-line ok-text">{l.text}</div>
+        {:else if l.event === 'player_death' && l.fields.length === 3}
+          <div class="death">
+            <div><span class="dim-text">{l.fields[0]}</span> <b>{l.fields[1]}</b> {l.fields[2]}</div>
+            {#if l.hits.length}
+              <table>
+                <tbody>
+                  {#each l.hits as h}
+                    <tr>
+                      <td class="dim-text">{h.time}</td><td>{h.health}</td>
+                      <td title={h.note}>{h.damage}</td><td>{h.kind}</td><td>{h.attacker}</td><td class="dim-text">{h.power}</td>
+                    </tr>
+                  {/each}
+                </tbody>
+              </table>
+            {/if}
           </div>
         {:else}
           <div class="status-line">{l.text}</div>
         {/if}
       {:else}
-        <div class="status-line">Nothing yet. Items hidden by the loot filter appear here once the game is launched with the overlay injected.</div>
+        <div class="status-line">Nothing yet. Hidden loot, terminals, completed missions and deaths appear here once the game is launched with the overlay injected.</div>
       {/each}
+    </div>
+  {/if}
+
+  {#if state !== 'not_linked' && state !== 'missing'}
+    <div class="opt-desc update-note" class:warn={update?.update_available && !updateError}>
+      <button class="btn btn-sm btn-outline" disabled={checking} on:click={checkUpdate}>{checking ? 'Checking...' : 'Check for overlay update'}</button>
+      {#if updateError}
+        <span class="err">{updateError}</span>
+      {:else if update?.update_available}
+        Overlay v{update.latest} is available (installed v{update.installed}).
+        <button class="btn btn-sm btn-outline" on:click={() => openUrl(update.html_url)}>Release page</button>
+      {:else if update}
+        Up to date (v{update.installed}).
+      {/if}
     </div>
   {/if}
 </IntegrationCard>
@@ -210,6 +273,8 @@
   .opt-row.dim { opacity: 0.5; }
   .log-actions { display: flex; align-items: center; gap: 10px; }
   .err { color: var(--text-error); }
+  .update-note { display: flex; align-items: center; gap: 10px; margin-top: 10px; }
+  .update-note.warn { color: var(--amber); }
   .changes { margin: 4px 0 0; padding-left: 16px; color: var(--amber); }
 
   /* Trust button carries the state: green when trusted, amber when files changed */
@@ -246,6 +311,12 @@
   }
   .dim-text { color: var(--text-3); }
   .status-line { padding: 4px 10px; font-size: 11px; color: var(--text-3); }
+  .ok-text { color: var(--green); }
+  .sub-line { padding: 0 10px 2px 86px; font-size: 10px; color: var(--text-3); }
+  .banner { padding: 4px 10px; font-family: var(--font-mono); font-size: 11px; color: var(--accent); }
+  .death { padding: 4px 10px; font-family: var(--font-mono); font-size: 11px; color: var(--text-error); border-left: 2px solid var(--text-error); }
+  .death table { margin-top: 2px; border-collapse: collapse; color: var(--text-2); }
+  .death td { padding: 0 10px 0 0; white-space: nowrap; }
 
   .r { font-weight: 600; }
   .r-common   { color: var(--text-2); }

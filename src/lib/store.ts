@@ -17,10 +17,12 @@ export type OverlayStatus = {
   state: 'not_linked' | 'missing' | 'untrusted' | 'trusted' | 'changed'
   dir: string
   auto_inject: boolean
+  omega_gear: boolean
   changes: string[]
 }
 /** Outcome of the most recent overlay injection attempt (null until one happens). */
-export type OverlayLine = { id: number; event: string; text: string; fields: string[] }
+export type OverlayHit = { time: string; health: string; damage: string; kind: string; attacker: string; power: string; note: string }
+export type OverlayLine = { id: number; event: string; text: string; fields: string[]; hits: OverlayHit[] }
 /** Live overlay events (plain text only), newest last, capped at 500. */
 export const overlayLog = writable<OverlayLine[]>([])
 let overlayLineId = 0

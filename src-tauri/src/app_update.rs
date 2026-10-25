@@ -19,6 +19,8 @@ const APP_VERSION: &str = env!("CARGO_PKG_VERSION");
 /// still work but installs are refused.
 const PUBKEY: &str = "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDlEMTdGMzY2RjE4QzNBRjMKUldUek9venhadk1YbmZHVzRMc0RhT25ZRnErNjN4Z2FxM3lWT0x1dkRTRGFwUDFwRHpaeEcxcU8K";
 
+const OVERLAY_REPO: &str = "wmascent/MarvelHeroesOmega.Overlay.releases";
+const OVERLAY_DLL: &str = "MhClientHook.dll";
 const PORTABLE_ASSET: &str = "mh-multiverse.exe";
 const MAX_DOWNLOAD_BYTES: u64 = 200 * 1024 * 1024;
 const MAX_SIG_BYTES: u64 = 16 * 1024;
@@ -243,7 +245,7 @@ fn pe_file_version(path: &Path) -> Result<Version, String> {
     use windows::Win32::Storage::FileSystem::{
         GetFileVersionInfoSizeW, GetFileVersionInfoW, VerQueryValueW, VS_FIXEDFILEINFO,
     };
-    let err = || "Cannot read the downloaded exe's version".to_string();
+    let err = || "Cannot read the file's version".to_string();
     let p = HSTRING::from(path.as_os_str());
     unsafe {
         let size = GetFileVersionInfoSizeW(&p, None);
@@ -378,6 +380,44 @@ pub async fn check_app_update() -> Result<AppUpdateInfo, String> {
     Ok(build_info(releases, &current))
 }
 
+#[derive(Debug, Clone, Serialize, PartialEq)]
+pub struct OverlayUpdateInfo {
+    pub installed: String,
+    pub latest: String,
+    pub update_available: bool,
+    pub html_url: String,
+}
+
+/// The release tag is the overlay's own version; the installed one is the DLL's version resource
+/// (not the folder name, which stays the same when the overlay updates itself).
+fn overlay_update_info(installed: &Version, release: &GhRelease) -> Result<OverlayUpdateInfo, String> {
+    let latest = parse_tag(&release.tag_name).filter(|_| !release.draft && !release.prerelease);
+    let latest = latest.ok_or_else(|| format!("Unexpected overlay release tag '{}'", release.tag_name))?;
+    Ok(OverlayUpdateInfo {
+        installed: installed.to_string(),
+        update_available: &latest > installed,
+        latest: latest.to_string(),
+        // built here rather than taken from the response, so the UI only ever opens github.com
+        html_url: format!("https://github.com/{OVERLAY_REPO}/releases/tag/{}", release.tag_name),
+    })
+}
+
+/// Compares the linked overlay's DLL version with the latest overlay release. Reads the version
+/// resource only (the DLL is never loaded) and installs nothing; the UI just links to the release.
+/// Only runs on a button press (unauthenticated GitHub calls are limited to 60/hour per IP).
+#[tauri::command]
+pub async fn check_overlay_update(app: AppHandle) -> Result<OverlayUpdateInfo, String> {
+    let dir = crate::config::load_config(&app).overlay.dir;
+    if dir.is_empty() {
+        return Err("No overlay folder linked.".into());
+    }
+    let dll = PathBuf::from(dir).join(OVERLAY_DLL);
+    let installed = pe_file_version(&dll)?;
+    let release: GhRelease =
+        get_json(&client()?, &format!("https://api.github.com/repos/{OVERLAY_REPO}/releases/latest")).await?;
+    overlay_update_info(&installed, &release)
+}
+
 #[tauri::command]
 pub async fn install_app_update(app: AppHandle, version: String) -> Result<(), String> {
     if cfg!(debug_assertions) {
@@ -506,6 +546,17 @@ mod tests {
         assert!(ok("https://release-assets.githubusercontent.com/x"));
         assert!(!ok("http://github.com/x"));
         assert!(!ok("https://github.com.evil.example/x"));
+    }
+
+    #[test]
+    fn overlay_update_compares_dll_version_to_latest_release() {
+        let r = rel("v1.9.1", false, false, "");
+        let old = overlay_update_info(&Version::new(1, 7, 0), &r).unwrap();
+        assert!(old.update_available && old.latest == "1.9.1" && old.installed == "1.7.0");
+        assert!(!overlay_update_info(&Version::new(1, 9, 1), &r).unwrap().update_available);
+        assert!(!overlay_update_info(&Version::new(2, 0, 0), &r).unwrap().update_available);
+        assert!(overlay_update_info(&Version::new(1, 0, 0), &rel("v1.9.2", false, true, "")).is_err()); // prerelease
+        assert!(overlay_update_info(&Version::new(1, 0, 0), &rel("nightly", false, false, "")).is_err());
     }
 
     #[test]

@@ -120,17 +120,76 @@ fn pipe_parser_formats_loot_and_ignores_the_rest() {
     let got = parse_line(line, &names).unwrap();
     assert_eq!(got.event, "loot_hidden");
     assert!(got.text.ends_with(" | Bodysuit | Bodysuit10 | 885 | Cosmic"), "{}", got.text);
-    assert_eq!(got.fields[1..], ["Bodysuit", "Bodysuit10", "885", "Cosmic"]);
+    assert_eq!(got.fields[1..], ["Bodysuit", "Bodysuit10", "885", "Cosmic", "x"]);
     assert!(parse_line(br#"{"event":"loot_hidden","enumIdx":1,"rarity":46816}"#, &names).unwrap().text.ends_with("Epic"));
     // unknown index / rarity fall back to placeholders and the raw number
     let got = parse_line(br#"{"event":"loot_hidden","enumIdx":7,"rarity":5}"#, &names).unwrap();
     assert_eq!(got.text, "--:--:-- | ? | ? | 7 | 5");
-    assert!(parse_line(br#"{"event":"region_entered"}"#, &names).is_none()); // not shown for now
+    assert!(parse_line(br#"{"event":"region_exited","regionId":"1"}"#, &names).is_none()); // not shown
     assert!(parse_line(br#"{"x":1}"#, &names).is_none());
     assert!(parse_line(b"not json", &names).is_none());
     let c = clean("a\x1b[31mred\u{7}\n");
     assert!(!c.chars().any(|ch| ch.is_control()));
     assert_eq!(clean(&"x".repeat(2000)).chars().count(), 512);
+}
+
+#[test]
+fn pipe_parser_shows_terminal_difficulty_mission_and_loot_reason() {
+    use super::pipe::parse_line;
+    let names = std::collections::HashMap::new();
+    let p = |s: &str| parse_line(s.as_bytes(), &names);
+    assert!(p(r#"{"event":"region_entered","regionId":"1"}"#).is_none()); // hub: no terminal
+    assert_eq!(p(r#"{"event":"region_entered","terminal":"Doom","tier":"Heroic"}"#).unwrap().text, "Terminal  Doom  Heroic");
+    assert!(p(r#"{"event":"tier_resolved","regionId":"1"}"#).is_none());
+    assert_eq!(p(r#"{"event":"tier_resolved","tier":"Cosmic"}"#).unwrap().text, "Difficulty: Cosmic");
+    assert!(p(r#"{"event":"mission_state","from":1,"to":2}"#).is_none());
+    assert_eq!(p(r#"{"event":"mission_state","to":4}"#).unwrap().text, "✓ Mission completed");
+    assert_eq!(p(r#"{"event":"mission_state","to":4,"terminal":"Doom"}"#).unwrap().text, "✓ Mission completed — Doom");
+    let loot = |reason: &str| p(&format!(r#"{{"event":"loot_hidden","enumIdx":1,"reason":"{reason}"}}"#)).unwrap().fields[5].clone();
+    assert_eq!((loot("-rarity"), loot("matrix"), loot("static-list"), loot("")), ("rarity".into(), "".into(), "".into(), "".into()));
+}
+
+#[test]
+fn pipe_parser_names_and_categorises_from_prototype_paths() {
+    use super::pipe::parse_line;
+    let mut names = std::collections::HashMap::new();
+    for (i, p) in [
+        (1u64, "Entity/Items/Rings/Prototypes/Ring01.prototype"),
+        (2, "Entity/Items/Armor/Prototypes/X23/o2Bodysuit/Bodysuit10.prototype"),
+        (3, "Entity/Items/Misc/Thing.prototype"),
+        (4, "Entity/Characters/Mobs/Ultron.prototype"),
+    ] {
+        names.insert(i, p.to_string());
+    }
+    let f = |i: u32| parse_line(format!(r#"{{"event":"loot_hidden","enumIdx":{i}}}"#).as_bytes(), &names).unwrap().fields;
+    assert_eq!((f(1)[1].as_str(), f(1)[2].as_str()), ("Ring", "Ring01"));
+    assert_eq!((f(2)[1].as_str(), f(2)[2].as_str()), ("Armor", "Bodysuit10"));
+    assert_eq!(f(3)[1], "Item");
+    let d = parse_line(br#"{"event":"player_death","killerEnumIdx":4}"#, &names).unwrap();
+    assert_eq!(d.fields[1], "☠ Killed by Ultron");
+}
+
+#[test]
+fn pipe_parser_builds_death_card() {
+    use super::pipe::parse_line;
+    let mut names = std::collections::HashMap::new();
+    names.insert(5u64, "Ultron".to_string());
+    names.insert(6u64, "Sentinel".to_string());
+    let line = br#"{"event":"player_death","killerEnumIdx":5,"dmgType":"Energy","dmgValue":1234567,"recent":[
+        {"idx":6,"value":100,"hpLost":0,"msAgo":2500,"hp":0,"hpMax":0,"type":"Physical","power":"Punch"},
+        {"idx":5,"value":200,"hpLost":400,"msAgo":300,"hp":50,"hpMax":200,"type":"Energy","power":"Beam"},
+        {"idx":9,"value":0,"msAgo":1}]}"#;
+    let d = parse_line(line, &names).unwrap();
+    assert_eq!(d.fields[1], "☠ Killed by Ultron");
+    assert_eq!(d.fields[2], "1,234,567 Energy · Beam"); // power from the first hit with hpMax
+    assert_eq!(d.hits.len(), 2); // value == 0 skipped
+    assert_eq!((d.hits[0].time.as_str(), d.hits[0].health.as_str(), d.hits[0].damage.as_str()), ("−2.5s", "", "~100"));
+    assert_eq!((d.hits[1].health.as_str(), d.hits[1].damage.as_str(), d.hits[1].attacker.as_str()), ("50 HP (25%)", "400", "Ultron"));
+    assert!(d.hits[1].note.contains("x2.00"));
+    let u = parse_line(br#"{"event":"player_death","killerEnumIdx":0}"#, &names).unwrap();
+    assert_eq!((u.fields[1].as_str(), u.fields[2].as_str()), ("You were killed", "killer unknown"));
+    let u = parse_line(br#"{"event":"player_death","killerEnumIdx":77}"#, &names).unwrap();
+    assert_eq!(u.fields[2], "enumIdx 77");
 }
 
 #[test]
@@ -151,4 +210,50 @@ fn enum_names_load_and_tolerate_bad_files() {
     assert_eq!((n.len(), n[&2].as_str(), n[&3].as_str()), (2, "Cyberware07", "Cape07"));
     std::fs::write(d.join("MhClientHook.enum-names.bin"), b"garbage").unwrap();
     assert!(load_names(&d).is_empty());
+}
+
+#[test]
+fn show_omega_missing_file_is_not_created() {
+    let d = tmp("omega-missing");
+    let p = d.join("loot-filter-config.json");
+    super::set_show_omega_at(&p, true).unwrap();
+    assert!(!p.exists());
+}
+
+#[test]
+fn show_omega_flips_only_that_key() {
+    let d = tmp("omega-flip");
+    let p = d.join("loot-filter-config.json");
+    let read = || serde_json::from_str::<serde_json::Value>(&std::fs::read_to_string(&p).unwrap()).unwrap();
+    std::fs::write(&p, r#"{"showOmega":false,"hideRare":true,"panel":{"x":1}}"#).unwrap();
+    super::set_show_omega_at(&p, true).unwrap();
+    assert_eq!(read(), serde_json::json!({"showOmega":true,"hideRare":true,"panel":{"x":1}}));
+    assert!(!d.join("loot-filter-config.json.tmp").exists());
+    // an absent key is added
+    std::fs::write(&p, r#"{"a":1}"#).unwrap();
+    super::set_show_omega_at(&p, false).unwrap();
+    assert_eq!(read(), serde_json::json!({"a":1,"showOmega":false}));
+}
+
+#[test]
+fn show_omega_unchanged_value_is_not_rewritten() {
+    let d = tmp("omega-same");
+    let p = d.join("loot-filter-config.json");
+    let original = "{ \"showOmega\": true,   \"b\": 2 }"; // odd spacing: a rewrite would normalise it
+    std::fs::write(&p, original).unwrap();
+    let before = std::fs::metadata(&p).unwrap().modified().unwrap();
+    super::set_show_omega_at(&p, true).unwrap();
+    assert_eq!(std::fs::read_to_string(&p).unwrap(), original);
+    assert_eq!(std::fs::metadata(&p).unwrap().modified().unwrap(), before);
+}
+
+#[test]
+fn show_omega_leaves_invalid_files_alone() {
+    let d = tmp("omega-bad");
+    let p = d.join("loot-filter-config.json");
+    for content in ["not json", "[1,2]", "42", ""] {
+        std::fs::write(&p, content).unwrap();
+        assert!(super::set_show_omega_at(&p, true).is_err(), "{content}");
+        assert_eq!(std::fs::read_to_string(&p).unwrap(), content);
+    }
 }

@@ -153,7 +153,8 @@ pub fn launch_game(app: tauri::AppHandle, server_id: String) -> Result<(), Strin
         .spawn()
         .map_err(|e| format!("Failed to launch game: {e}"))?;
 
-    crate::overlay::on_game_spawned(&app, config.overlay.clone(), child);
+    let sips = crate::overlay::sip_candidates(&config.game_exe, &config.server_exe);
+    crate::overlay::on_game_spawned(&app, config.overlay.clone(), sips, child);
 
     Ok(())
 }
