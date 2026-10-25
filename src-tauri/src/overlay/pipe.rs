@@ -315,9 +315,11 @@ fn connect() -> Option<File> {
     None
 }
 
-/// Connects (for up to 30 s) and forwards events until the pipe closes, which
-/// happens when the game exits. Events are emitted in batches, one per read.
-pub fn spawn(app: tauri::AppHandle, dir: PathBuf, sips: Vec<PathBuf>) {
+/// Connects (for up to 30 s) and forwards events until the game exits. Events are emitted in
+/// batches, one per read. If the pipe drops while the game is still running, reconnect after
+/// 2 s (the hook should accept a new client); events sent in between are lost. Holding the
+/// `Child` is how we tell the two cases apart, and keeps the PID from being reused.
+pub fn spawn(app: tauri::AppHandle, dir: PathBuf, sips: Vec<PathBuf>, mut child: std::process::Child) {
     let _ = std::thread::Builder::new().name("overlay-pipe".into()).spawn(move || {
         let Some(mut pipe) = connect() else {
             status(&app, "Could not connect to the overlay status pipe.");
@@ -325,19 +327,34 @@ pub fn spawn(app: tauri::AppHandle, dir: PathBuf, sips: Vec<PathBuf>) {
         };
         status(&app, "Connected to the overlay status pipe.");
         let names = load_entity_names(&sips, &dir);
-        let mut splitter = LineSplitter::default();
-        let mut buf = [0u8; 4096];
         loop {
-            match pipe.read(&mut buf) {
-                Ok(0) | Err(_) => break,
-                Ok(n) => {
-                    let lines: Vec<PipeLine> =
-                        splitter.feed(&buf[..n]).iter().filter_map(|l| parse_line(l, &names)).collect();
-                    if !lines.is_empty() {
-                        let _ = app.emit("overlay-pipe", lines);
+            let mut splitter = LineSplitter::default();
+            let mut buf = [0u8; 4096];
+            loop {
+                match pipe.read(&mut buf) {
+                    Ok(0) | Err(_) => break,
+                    Ok(n) => {
+                        let lines: Vec<PipeLine> =
+                            splitter.feed(&buf[..n]).iter().filter_map(|l| parse_line(l, &names)).collect();
+                        if !lines.is_empty() {
+                            let _ = app.emit("overlay-pipe", lines);
+                        }
                     }
                 }
             }
+            if !matches!(child.try_wait(), Ok(None)) {
+                break; // game exited (or can't be checked)
+            }
+            status(&app, "Overlay status pipe dropped; reconnecting.");
+            std::thread::sleep(std::time::Duration::from_secs(2));
+            match connect() {
+                Some(p) => pipe = p,
+                None => {
+                    status(&app, "Could not reconnect to the overlay status pipe.");
+                    return;
+                }
+            }
+            status(&app, "Reconnected to the overlay status pipe.");
         }
         status(&app, "Overlay status pipe closed.");
     });

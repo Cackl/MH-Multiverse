@@ -232,7 +232,7 @@ struct InjectPayload {
 /// thread verifies the hashes (refusing if anything changed), waits for the game to
 /// settle, re-verifies right before loading, and injects. Never blocks or fails the launch;
 /// the outcome is emitted as an `overlay-inject` event. The thread owns the
-/// `Child`, which keeps the PID from being reused while we work.
+/// `Child`, which keeps the PID from being reused while we work, and hands it to the pipe reader.
 pub(crate) fn on_game_spawned(app: &tauri::AppHandle, cfg: OverlayConfig, sips: Vec<PathBuf>, mut child: std::process::Child) {
     if !cfg.auto_inject {
         return;
@@ -240,11 +240,11 @@ pub(crate) fn on_game_spawned(app: &tauri::AppHandle, cfg: OverlayConfig, sips: 
     let app = app.clone();
     let _ = std::thread::Builder::new().name("overlay-inject".into()).spawn(move || {
         let result = inject_into(&cfg, &mut child);
-        if result.is_ok() {
-            pipe::spawn(app.clone(), PathBuf::from(&cfg.dir), sips);
-        }
         let payload = match result {
-            Ok(()) => InjectPayload { ok: true, message: "Overlay injected.".into() },
+            Ok(()) => {
+                pipe::spawn(app.clone(), PathBuf::from(&cfg.dir), sips, child);
+                InjectPayload { ok: true, message: "Overlay injected.".into() }
+            }
             Err(m) => InjectPayload { ok: false, message: m },
         };
         let _ = app.emit("overlay-inject", payload);
