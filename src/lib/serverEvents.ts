@@ -14,6 +14,7 @@ import {
   appendOverlayLog,
   type LogLevel,
   type LogLine,
+  type OverlayLine,
 } from './store'
 
 type ServerStoppedPayload = {
@@ -158,7 +159,7 @@ export async function initServerEventBridge(): Promise<void> {
     overlayInject.set(event.payload)
   })
 
-  bridge.unlistenOverlayPipe = await listen<{ event: string; text: string; fields: string[] }[]>('overlay-pipe', (event) => {
+  bridge.unlistenOverlayPipe = await listen<Omit<OverlayLine, 'id'>[]>('overlay-pipe', (event) => {
     appendOverlayLog(event.payload)
   })
 

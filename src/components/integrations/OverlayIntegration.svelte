@@ -188,13 +188,32 @@
         <span>Time</span><span>Category</span><span>Item</span><span>Code</span><span>Rarity</span>
       </div>
       {#each $overlayLog as l (l.id)}
-        {#if l.event === 'loot_hidden' && l.fields.length === 5}
+        {#if l.event === 'loot_hidden' && l.fields.length === 6}
           <div class="cols">
             <span class="dim-text">{l.fields[0]}</span>
             <span>{l.fields[1]}</span>
             <span title={l.fields[2]}>{l.fields[2]}</span>
             <span class="dim-text">{l.fields[3]}</span>
-            <span class="r r-{l.fields[4].toLowerCase()}">{l.fields[4]}</span>
+            <span class="r r-{l.fields[4].toLowerCase()}" title={l.fields[5]}>{l.fields[4]}</span>
+          </div>
+          {#if l.fields[5]}<div class="sub-line">{l.fields[5]}</div>{/if}
+        {:else if l.event === 'region_entered' && l.fields.length === 3}
+          <div class="banner"><span class="dim-text">{l.fields[0]}</span> Terminal <b>{l.fields[1]}</b> {l.fields[2]}</div>
+        {:else if l.event === 'mission_state'}
+          <div class="status-line ok-text">{l.text}</div>
+        {:else if l.event === 'player_death' && l.fields.length === 3}
+          <div class="death">
+            <div><span class="dim-text">{l.fields[0]}</span> <b>{l.fields[1]}</b> {l.fields[2]}</div>
+            {#if l.hits.length}
+              <table>
+                {#each l.hits as h}
+                  <tr>
+                    <td class="dim-text">{h.time}</td><td>{h.health}</td>
+                    <td title={h.note}>{h.damage}</td><td>{h.kind}</td><td>{h.attacker}</td><td class="dim-text">{h.power}</td>
+                  </tr>
+                {/each}
+              </table>
+            {/if}
           </div>
         {:else}
           <div class="status-line">{l.text}</div>
@@ -246,6 +265,12 @@
   }
   .dim-text { color: var(--text-3); }
   .status-line { padding: 4px 10px; font-size: 11px; color: var(--text-3); }
+  .ok-text { color: var(--green); }
+  .sub-line { padding: 0 10px 2px 86px; font-size: 10px; color: var(--text-3); }
+  .banner { padding: 4px 10px; font-family: var(--font-mono); font-size: 11px; color: var(--accent); }
+  .death { padding: 4px 10px; font-family: var(--font-mono); font-size: 11px; color: var(--text-error); border-left: 2px solid var(--text-error); }
+  .death table { margin-top: 2px; border-collapse: collapse; color: var(--text-2); }
+  .death td { padding: 0 10px 0 0; white-space: nowrap; }
 
   .r { font-weight: 600; }
   .r-common   { color: var(--text-2); }

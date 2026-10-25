@@ -120,17 +120,56 @@ fn pipe_parser_formats_loot_and_ignores_the_rest() {
     let got = parse_line(line, &names).unwrap();
     assert_eq!(got.event, "loot_hidden");
     assert!(got.text.ends_with(" | Bodysuit | Bodysuit10 | 885 | Cosmic"), "{}", got.text);
-    assert_eq!(got.fields[1..], ["Bodysuit", "Bodysuit10", "885", "Cosmic"]);
+    assert_eq!(got.fields[1..], ["Bodysuit", "Bodysuit10", "885", "Cosmic", "x"]);
     assert!(parse_line(br#"{"event":"loot_hidden","enumIdx":1,"rarity":46816}"#, &names).unwrap().text.ends_with("Epic"));
     // unknown index / rarity fall back to placeholders and the raw number
     let got = parse_line(br#"{"event":"loot_hidden","enumIdx":7,"rarity":5}"#, &names).unwrap();
     assert_eq!(got.text, "--:--:-- | ? | ? | 7 | 5");
-    assert!(parse_line(br#"{"event":"region_entered"}"#, &names).is_none()); // not shown for now
+    assert!(parse_line(br#"{"event":"region_exited","regionId":"1"}"#, &names).is_none()); // not shown
     assert!(parse_line(br#"{"x":1}"#, &names).is_none());
     assert!(parse_line(b"not json", &names).is_none());
     let c = clean("a\x1b[31mred\u{7}\n");
     assert!(!c.chars().any(|ch| ch.is_control()));
     assert_eq!(clean(&"x".repeat(2000)).chars().count(), 512);
+}
+
+#[test]
+fn pipe_parser_shows_terminal_difficulty_mission_and_loot_reason() {
+    use super::pipe::parse_line;
+    let names = std::collections::HashMap::new();
+    let p = |s: &str| parse_line(s.as_bytes(), &names);
+    assert!(p(r#"{"event":"region_entered","regionId":"1"}"#).is_none()); // hub: no terminal
+    assert_eq!(p(r#"{"event":"region_entered","terminal":"Doom","tier":"Heroic"}"#).unwrap().text, "Terminal  Doom  Heroic");
+    assert!(p(r#"{"event":"tier_resolved","regionId":"1"}"#).is_none());
+    assert_eq!(p(r#"{"event":"tier_resolved","tier":"Cosmic"}"#).unwrap().text, "Difficulty: Cosmic");
+    assert!(p(r#"{"event":"mission_state","from":1,"to":2}"#).is_none());
+    assert_eq!(p(r#"{"event":"mission_state","to":4}"#).unwrap().text, "✓ Mission completed");
+    assert_eq!(p(r#"{"event":"mission_state","to":4,"terminal":"Doom"}"#).unwrap().text, "✓ Mission completed — Doom");
+    let loot = |reason: &str| p(&format!(r#"{{"event":"loot_hidden","enumIdx":1,"reason":"{reason}"}}"#)).unwrap().fields[5].clone();
+    assert_eq!((loot("-rarity"), loot("matrix"), loot("static-list"), loot("")), ("rarity".into(), "".into(), "".into(), "".into()));
+}
+
+#[test]
+fn pipe_parser_builds_death_card() {
+    use super::pipe::parse_line;
+    let mut names = std::collections::HashMap::new();
+    names.insert(5u64, "Ultron".to_string());
+    names.insert(6u64, "Sentinel".to_string());
+    let line = br#"{"event":"player_death","killerEnumIdx":5,"dmgType":"Energy","dmgValue":1234567,"recent":[
+        {"idx":6,"value":100,"hpLost":0,"msAgo":2500,"hp":0,"hpMax":0,"type":"Physical","power":"Punch"},
+        {"idx":5,"value":200,"hpLost":400,"msAgo":300,"hp":50,"hpMax":200,"type":"Energy","power":"Beam"},
+        {"idx":9,"value":0,"msAgo":1}]}"#;
+    let d = parse_line(line, &names).unwrap();
+    assert_eq!(d.fields[1], "☠ Killed by Ultron");
+    assert_eq!(d.fields[2], "1,234,567 Energy · Beam"); // power from the first hit with hpMax
+    assert_eq!(d.hits.len(), 2); // value == 0 skipped
+    assert_eq!((d.hits[0].time.as_str(), d.hits[0].health.as_str(), d.hits[0].damage.as_str()), ("−2.5s", "", "~100"));
+    assert_eq!((d.hits[1].health.as_str(), d.hits[1].damage.as_str(), d.hits[1].attacker.as_str()), ("50 HP (25%)", "400", "Ultron"));
+    assert!(d.hits[1].note.contains("x2.00"));
+    let u = parse_line(br#"{"event":"player_death","killerEnumIdx":0}"#, &names).unwrap();
+    assert_eq!((u.fields[1].as_str(), u.fields[2].as_str()), ("You were killed", "killer unknown"));
+    let u = parse_line(br#"{"event":"player_death","killerEnumIdx":77}"#, &names).unwrap();
+    assert_eq!(u.fields[2], "enumIdx 77");
 }
 
 #[test]

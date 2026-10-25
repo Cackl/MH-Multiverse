@@ -12,9 +12,12 @@ use tauri::Emitter;
 const PIPE: &str = r"\\.\pipe\MhTerminalsHelper";
 const MAX_LINE: usize = 8192;
 const MAX_TEXT: usize = 512;
-/// Only loot-filter events are shown for now. Others the hook sends (region_entered,
-/// tier_resolved, mission_state, player_death, region_exited) are ignored; add here to show them.
-const KNOWN: &[&str] = &["loot_hidden"];
+/// Events shown in the log. Others the hook sends (hello, region_exited, map_open, ...) are ignored.
+const KNOWN: &[&str] = &["loot_hidden", "region_entered", "tier_resolved", "mission_state", "player_death"];
+/// `mission_state.to` value for a completed mission.
+const MISSION_DONE: u64 = 4;
+/// The hook sends about 5 recent hits with a death.
+const MAX_HITS: usize = 8;
 const NAMES_FILE: &str = "MhClientHook.enum-names.bin";
 
 #[derive(Clone, Serialize, Debug, PartialEq)]
@@ -22,8 +25,24 @@ pub struct PipeLine {
     /// one of KNOWN, or "_status" for our own connection notes
     pub event: String,
     pub text: String,
-    /// Column values for rows that have them (loot_hidden: time, category, item, code, rarity).
+    /// Column values for rows that have them (loot_hidden: time, category, item, code, rarity, reason;
+    /// region_entered: time, terminal, tier; player_death: time, heading, detail).
     pub fields: Vec<String>,
+    /// Damage table for player_death.
+    pub hits: Vec<Hit>,
+}
+
+/// One row of a death's recent-damage table.
+#[derive(Clone, Serialize, Debug, PartialEq, Default)]
+pub struct Hit {
+    pub time: String,
+    pub health: String,
+    pub damage: String,
+    pub kind: String,
+    pub attacker: String,
+    pub power: String,
+    /// tooltip explaining the damage figure
+    pub note: String,
 }
 
 /// Splits a byte stream into lines. A line longer than MAX_LINE is dropped whole.
@@ -113,8 +132,83 @@ fn local_time(utc: Option<&str>) -> String {
         .unwrap_or_else(|| "--:--:--".into())
 }
 
+/// Lenient number: a JSON number or a numeric string (the hook sends u64s as strings); anything else is 0.
+fn num(v: &serde_json::Value, key: &str) -> u64 {
+    v.get(key).and_then(|x| x.as_u64().or_else(|| x.as_str().and_then(|s| s.parse().ok()))).unwrap_or(0)
+}
+
+fn signed(v: &serde_json::Value, key: &str) -> i64 {
+    v.get(key).and_then(|x| x.as_i64()).unwrap_or(0)
+}
+
+/// Cleaned hook text; empty when missing or not a string.
+fn txt(v: &serde_json::Value, key: &str) -> String {
+    clean(v.get(key).and_then(|x| x.as_str()).unwrap_or("")).trim().to_string()
+}
+
+fn thousands(n: u64) -> String {
+    let s = n.to_string();
+    let mut out = String::new();
+    for (i, c) in s.chars().enumerate() {
+        if i > 0 && (s.len() - i) % 3 == 0 {
+            out.push(',');
+        }
+        out.push(c);
+    }
+    out
+}
+
+fn hit_row(h: &serde_json::Value, names: &HashMap<u64, String>) -> Hit {
+    let (value, lost, hp, hp_max) = (num(h, "value"), num(h, "hpLost"), signed(h, "hp"), signed(h, "hpMax"));
+    let health = match (hp, hp_max) {
+        (hp, _) if hp <= 0 => String::new(),
+        (hp, max) if max <= 0 => format!("{hp} HP"),
+        (hp, max) => format!("{hp} HP ({}%)", hp * 100 / max),
+    };
+    let note = if lost == 0 {
+        "Real health cost unknown; the shown damage is an estimate.".into()
+    } else if value != 0 && lost != value {
+        format!("Shown {value}, lost {lost}: x{:.2} difficulty multiplier", lost as f64 / value as f64)
+    } else {
+        String::new()
+    };
+    Hit {
+        time: format!("−{:.1}s", num(h, "msAgo") as f64 / 1000.0),
+        health,
+        damage: if lost != 0 { lost.to_string() } else { format!("~{value}") },
+        kind: txt(h, "type"),
+        attacker: names.get(&num(h, "idx")).map(|n| clean(n)).unwrap_or_else(|| "unknown".into()),
+        power: txt(h, "power"),
+        note,
+    }
+}
+
+fn death_line(v: &serde_json::Value, names: &HashMap<u64, String>) -> PipeLine {
+    let recent: Vec<&serde_json::Value> =
+        v.get("recent").and_then(|r| r.as_array()).map(|a| a.iter().take(MAX_HITS).collect()).unwrap_or_default();
+    let hits: Vec<Hit> = recent.iter().filter(|h| num(h, "value") != 0).map(|h| hit_row(h, names)).collect();
+    let killer_idx = num(v, "killerEnumIdx");
+    let killer = names.get(&killer_idx);
+    let heading = match killer {
+        Some(k) => format!("☠ Killed by {}", clean(k)),
+        None => "You were killed".into(),
+    };
+    let mut detail = Vec::new();
+    let (dmg_type, dmg) = (txt(v, "dmgType"), num(v, "dmgValue"));
+    if !dmg_type.is_empty() && dmg != 0 {
+        let power = recent.iter().find(|h| signed(h, "hpMax") > 0).or(recent.first()).map(|h| txt(h, "power")).unwrap_or_default();
+        let base = format!("{} {dmg_type}", thousands(dmg));
+        detail.push(if power.is_empty() { base } else { format!("{base} · {power}") });
+    }
+    if killer.is_none() {
+        detail.push(if killer_idx == 0 { "killer unknown".into() } else { format!("enumIdx {killer_idx}") });
+    }
+    let fields = vec![local_time(v.get("atUtc").and_then(|x| x.as_str())), heading, detail.join("  ")];
+    PipeLine { event: "player_death".into(), text: format!("{}  {}", fields[1], fields[2]).trim_end().to_string(), fields, hits }
+}
+
 /// Returns a display line only for JSON with a known `event`; everything else is ignored.
-/// loot_hidden renders as `time | category | item name | item code | rarity`.
+/// loot_hidden renders as `time | category | item name | item code | rarity` (+ reason as a 6th field).
 pub fn parse_line(raw: &[u8], names: &HashMap<u64, String>) -> Option<PipeLine> {
     let text = String::from_utf8_lossy(raw);
     let v: serde_json::Value = serde_json::from_str(text.trim()).ok()?;
@@ -122,23 +216,53 @@ pub fn parse_line(raw: &[u8], names: &HashMap<u64, String>) -> Option<PipeLine> 
     if !KNOWN.contains(&event) {
         return None;
     }
-    let idx = v.get("enumIdx").and_then(|x| x.as_u64());
-    let name = idx.and_then(|i| names.get(&i)).map(|s| s.as_str());
-    let fields: Vec<String> = [
-        local_time(v.get("atUtc").and_then(|x| x.as_str())),
-        name.map(category).unwrap_or("?").to_string(),
-        name.unwrap_or("?").to_string(),
-        idx.map(|i| i.to_string()).unwrap_or_else(|| "?".into()),
-        v.get("rarity").and_then(|x| x.as_u64()).map(rarity_name).unwrap_or_else(|| "?".into()),
-    ]
-    .iter()
-    .map(|f| clean(f))
-    .collect();
-    Some(PipeLine { event: event.to_string(), text: fields.join(" | "), fields })
+    let time = local_time(v.get("atUtc").and_then(|x| x.as_str()));
+    let line = |text: String, fields: Vec<String>| PipeLine { event: event.to_string(), text, fields, hits: vec![] };
+    match event {
+        "region_entered" => {
+            let (terminal, tier) = (txt(&v, "terminal"), txt(&v, "tier"));
+            if terminal.is_empty() {
+                return None; // hubs and unmapped regions
+            }
+            Some(line(format!("Terminal  {terminal}  {tier}").trim_end().to_string(), vec![time, terminal, tier]))
+        }
+        "tier_resolved" => {
+            let tier = txt(&v, "tier");
+            (!tier.is_empty()).then(|| line(format!("Difficulty: {tier}"), vec![]))
+        }
+        "mission_state" => {
+            if num(&v, "to") != MISSION_DONE {
+                return None;
+            }
+            let terminal = txt(&v, "terminal");
+            let t = if terminal.is_empty() { "✓ Mission completed".into() } else { format!("✓ Mission completed — {terminal}") };
+            Some(line(t, vec![]))
+        }
+        "player_death" => Some(death_line(&v, names)),
+        _ => {
+            let idx = v.get("enumIdx").and_then(|x| x.as_u64());
+            let name = idx.and_then(|i| names.get(&i)).map(|s| s.as_str());
+            let reason = txt(&v, "reason");
+            let reason = reason.trim_start_matches('-').trim();
+            let reason = if matches!(reason, "matrix" | "static-list") { "" } else { reason };
+            let fields: Vec<String> = [
+                time,
+                name.map(category).unwrap_or("?").to_string(),
+                name.unwrap_or("?").to_string(),
+                idx.map(|i| i.to_string()).unwrap_or_else(|| "?".into()),
+                v.get("rarity").and_then(|x| x.as_u64()).map(rarity_name).unwrap_or_else(|| "?".into()),
+                reason.to_string(),
+            ]
+            .iter()
+            .map(|f| clean(f))
+            .collect();
+            Some(line(fields[..5].join(" | "), fields))
+        }
+    }
 }
 
 fn status(app: &tauri::AppHandle, msg: &str) {
-    let _ = app.emit("overlay-pipe", vec![PipeLine { event: "_status".into(), text: msg.into(), fields: vec![] }]);
+    let _ = app.emit("overlay-pipe", vec![PipeLine { event: "_status".into(), text: msg.into(), fields: vec![], hits: vec![] }]);
 }
 
 fn connect() -> Option<File> {
