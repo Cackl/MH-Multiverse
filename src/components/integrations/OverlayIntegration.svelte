@@ -2,7 +2,7 @@
   import { onMount, tick } from 'svelte'
   import { open } from '@tauri-apps/plugin-dialog'
   import { invoke } from '@tauri-apps/api/core'
-  import { overlayInject, overlayLog, overlayStatus, overlayUpdate, type OverlayStatus, type OverlayUpdate } from '../../lib/store'
+  import { overlayInject, overlayLog, overlayStatus, type OverlayStatus } from '../../lib/store'
   import { openUrl } from '@tauri-apps/plugin-opener'
   import { tip } from '../../lib/tooltip'
   import IntegrationCard from './IntegrationCard.svelte'
@@ -65,12 +65,15 @@
     call(state === 'trusted' ? 'overlay_untrust' : 'overlay_trust')
   }
 
+  // Local on purpose: the result is dropped when the page is left, so it can't go stale after an update.
+  type OverlayUpdate = { installed: string; latest: string; update_available: boolean; html_url: string }
+  let update: OverlayUpdate | null = null
   let checking = false
   let updateError = ''
   async function checkUpdate() {
     checking = true
     updateError = ''
-    try { overlayUpdate.set(await invoke<OverlayUpdate>('check_overlay_update')) } catch (e) { updateError = String(e) }
+    try { update = await invoke<OverlayUpdate>('check_overlay_update') } catch (e) { updateError = String(e) }
     checking = false
   }
 
@@ -237,15 +240,15 @@
   {/if}
 
   {#if state !== 'not_linked' && state !== 'missing'}
-    <div class="opt-desc update-note" class:warn={$overlayUpdate?.update_available && !updateError}>
+    <div class="opt-desc update-note" class:warn={update?.update_available && !updateError}>
       <button class="btn btn-sm btn-outline" disabled={checking} on:click={checkUpdate}>{checking ? 'Checking...' : 'Check for overlay update'}</button>
       {#if updateError}
         <span class="err">{updateError}</span>
-      {:else if $overlayUpdate?.update_available}
-        Overlay v{$overlayUpdate.latest} is available (installed v{$overlayUpdate.installed}).
-        <button class="btn btn-sm btn-outline" on:click={() => openUrl($overlayUpdate.html_url)}>Release page</button>
-      {:else if $overlayUpdate}
-        Up to date (v{$overlayUpdate.installed}).
+      {:else if update?.update_available}
+        Overlay v{update.latest} is available (installed v{update.installed}).
+        <button class="btn btn-sm btn-outline" on:click={() => openUrl(update.html_url)}>Release page</button>
+      {:else if update}
+        Up to date (v{update.installed}).
       {/if}
     </div>
   {/if}
