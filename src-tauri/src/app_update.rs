@@ -407,7 +407,11 @@ fn overlay_update_info(installed: &Version, release: &GhRelease) -> Result<Overl
 /// Only runs on a button press (unauthenticated GitHub calls are limited to 60/hour per IP).
 #[tauri::command]
 pub async fn check_overlay_update(app: AppHandle) -> Result<OverlayUpdateInfo, String> {
-    let dll = PathBuf::from(crate::config::load_config(&app).overlay.dir).join(OVERLAY_DLL);
+    let dir = crate::config::load_config(&app).overlay.dir;
+    if dir.is_empty() {
+        return Err("No overlay folder linked.".into());
+    }
+    let dll = PathBuf::from(dir).join(OVERLAY_DLL);
     let installed = pe_file_version(&dll)?;
     let release: GhRelease =
         get_json(&client()?, &format!("https://api.github.com/repos/{OVERLAY_REPO}/releases/latest")).await?;
