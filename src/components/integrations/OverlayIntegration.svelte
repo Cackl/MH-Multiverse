@@ -216,12 +216,14 @@
             <div><span class="dim-text">{l.fields[0]}</span> <b>{l.fields[1]}</b> {l.fields[2]}</div>
             {#if l.hits.length}
               <table>
-                {#each l.hits as h}
-                  <tr>
-                    <td class="dim-text">{h.time}</td><td>{h.health}</td>
-                    <td title={h.note}>{h.damage}</td><td>{h.kind}</td><td>{h.attacker}</td><td class="dim-text">{h.power}</td>
-                  </tr>
-                {/each}
+                <tbody>
+                  {#each l.hits as h}
+                    <tr>
+                      <td class="dim-text">{h.time}</td><td>{h.health}</td>
+                      <td title={h.note}>{h.damage}</td><td>{h.kind}</td><td>{h.attacker}</td><td class="dim-text">{h.power}</td>
+                    </tr>
+                  {/each}
+                </tbody>
               </table>
             {/if}
           </div>
