@@ -148,7 +148,7 @@
     {#if state !== 'not_linked' && state !== 'missing'}
       <div class="section-divider"><span>Features (apply on next launch)</span></div>
       {#each FLAGS as f}
-        <div class="opt-row">
+        <div class="opt-row" class:dim={state !== 'trusted'}>
           <div class="opt-label">
             <span class="opt-name">{f.name}</span>
             <span class="opt-desc">{f.desc}</span>
@@ -164,7 +164,7 @@
           ></div>
         </div>
       {/each}
-      <div class="opt-row" class:dim={state !== 'trusted' && !overlay.omega_gear}>
+      <div class="opt-row" class:dim={state !== 'trusted'}>
         <div class="opt-label" use:tip={'Only changes the loot filter panel layout. Applies immediately, and again on each launch while it is on. Needs the overlay to have run once so its settings file exists.'}>
           <span class="opt-name">Omega Gear</span>
           <span class="opt-desc">Shows the Omega column and Omega Slot 1–5 in the loot filter panel</span>

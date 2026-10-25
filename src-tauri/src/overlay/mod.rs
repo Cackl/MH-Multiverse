@@ -229,12 +229,12 @@ pub fn overlay_set_auto_inject(app: tauri::AppHandle, enabled: bool) -> Result<O
 
 /// Saves the setting and applies it now, on or off, so a running game picks it up live.
 /// While on, every injected launch re-applies it; while off, launches leave the file alone.
-/// Turning it on needs a trusted overlay; turning it off is always allowed, to undo our own write.
+/// Either direction writes into the overlay's settings, so both need a trusted overlay.
 #[tauri::command]
 pub fn overlay_set_omega_gear(app: tauri::AppHandle, enabled: bool) -> Result<OverlayStatus, String> {
     let mut config = load_config(&app);
-    if enabled && status_of(&config.overlay).state != "trusted" {
-        return Err("Trust the overlay before enabling Omega gear.".into());
+    if status_of(&config.overlay).state != "trusted" {
+        return Err("Trust the overlay before changing Omega gear.".into());
     }
     config.overlay.omega_gear = enabled;
     save_config(&app, &config)?;
@@ -411,6 +411,9 @@ pub fn overlay_get_flags(app: tauri::AppHandle) -> Result<BTreeMap<&'static str,
 
 #[tauri::command]
 pub fn overlay_set_flag(app: tauri::AppHandle, key: String, on: bool) -> Result<BTreeMap<&'static str, bool>, String> {
+    if status_of(&load_config(&app).overlay).state != "trusted" {
+        return Err("Trust the overlay before changing its features.".into());
+    }
     let dir = linked_dir(&app)?;
     let (_, file, _) = USER_FLAGS.iter().find(|(k, _, _)| *k == key).ok_or("Unknown flag.")?;
     write_flag(&dir, file, on)?;
