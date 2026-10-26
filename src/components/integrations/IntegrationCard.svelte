@@ -2,6 +2,9 @@
   // Cards start closed on app launch. This set outlives the component, so a card stays open
   // while you switch tabs, but it is not persisted across launches.
   const openIds = new Set<string>()
+
+  // Lets other pages deep-link here: call before the card mounts.
+  export function openCard(id: string) { openIds.add(id) }
 </script>
 
 <script lang="ts">

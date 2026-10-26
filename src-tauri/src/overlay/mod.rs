@@ -6,9 +6,10 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
-use tauri::Emitter;
+use tauri::{Emitter, Manager};
 
 use crate::config::{load_config, save_config};
+use crate::launcher::{Game, LaunchedGame};
 
 mod inject;
 mod pipe;
@@ -255,24 +256,48 @@ struct InjectPayload {
 /// Called right after the game is spawned. When injection is enabled, a background
 /// thread verifies the hashes (refusing if anything changed), waits for the game to
 /// settle, re-verifies right before loading, and injects. Never blocks or fails the launch;
-/// the outcome is emitted as an `overlay-inject` event. The thread owns the
-/// `Child`, which keeps the PID from being reused while we work, and hands it to the pipe reader.
-pub(crate) fn on_game_spawned(app: &tauri::AppHandle, cfg: OverlayConfig, sips: Vec<PathBuf>, mut child: std::process::Child) {
-    if !cfg.auto_inject {
-        return;
+/// the outcome is emitted as an `overlay-inject` event.
+pub(crate) fn on_game_spawned(app: &tauri::AppHandle, cfg: OverlayConfig, sips: Vec<PathBuf>, game: Game) {
+    if cfg.auto_inject {
+        run_inject(app, cfg, sips, game, true);
     }
+}
+
+/// Injects into the game this app launched, for when "Inject on Launch" is off. Same trust
+/// checks as a launch; the outcome arrives as `overlay-inject`.
+#[tauri::command]
+pub fn overlay_inject_now(app: tauri::AppHandle) -> Result<(), String> {
+    let game = app.state::<LaunchedGame>().get().ok_or("Launch the game from MH Multiverse first.")?;
+    if !game.is_running() {
+        return Err("The game is not running.".into());
+    }
+    let config = load_config(&app);
+    let sips = sip_candidates(&config.game_exe, &config.server_exe);
+    run_inject(&app, config.overlay.clone(), sips, game, false);
+    Ok(())
+}
+
+/// `fresh_launch` arms the hook's loading gate; a game that is already past boot skips it.
+/// The pipe thread keeps the game handle to know when the game has exited.
+fn run_inject(app: &tauri::AppHandle, cfg: OverlayConfig, sips: Vec<PathBuf>, game: Game, fresh_launch: bool) {
     let app = app.clone();
     let _ = std::thread::Builder::new().name("overlay-inject".into()).spawn(move || {
+        let pid = game.pid;
+        let mut alive = move || game.is_running();
         // Once before injecting, for an existing config, and once after: on a first run the hook
         // creates the file while attaching and picks the second write up through its live reload.
         sync_show_omega(&app, &cfg);
-        let result = inject_into(&cfg, &mut child);
+        let result = if !fresh_launch && inject::module_loaded(pid, DLL_NAME) {
+            Err("The overlay is already loaded in the running game.".into())
+        } else {
+            inject_into(&cfg, pid, fresh_launch, &mut alive)
+        };
         if result.is_ok() {
             sync_show_omega(&app, &cfg);
         }
         let payload = match result {
             Ok(()) => {
-                pipe::spawn(app.clone(), PathBuf::from(&cfg.dir), sips, child);
+                pipe::spawn(app.clone(), PathBuf::from(&cfg.dir), sips, alive);
                 InjectPayload { ok: true, message: "Overlay injected.".into() }
             }
             Err(m) => InjectPayload { ok: false, message: m },
@@ -324,20 +349,19 @@ fn sync_show_omega(app: &tauri::AppHandle, cfg: &OverlayConfig) {
     }
 }
 
-fn inject_into(cfg: &OverlayConfig, child: &mut std::process::Child) -> Result<(), String> {
+fn inject_into(cfg: &OverlayConfig, pid: u32, fresh_launch: bool, mut alive: impl FnMut() -> bool) -> Result<(), String> {
     use inject::InjectError;
     if status_of(cfg).state != "trusted" {
         return Err("The overlay files changed since they were trusted; not injecting. Re-trust it in Settings.".into());
     }
     let dir = PathBuf::from(&cfg.dir);
     // '0' on a fresh launch so the hook arms its loading gate (a stale '1' would skip it)
-    write_flag(&dir, "MhClientHook.skip-boot-loading-gate.flag", false)?;
+    write_flag(&dir, "MhClientHook.skip-boot-loading-gate.flag", !fresh_launch)?;
     let dll = dir.join(DLL_NAME);
-    let pid = child.id();
 
     let _ = inject::wait_input_idle(pid);
     for attempt in 1..=5 {
-        if let Ok(Some(_)) = child.try_wait() {
+        if !alive() {
             return Err("The game exited before the overlay could be injected.".into());
         }
         // verify right before loading; anything changed since Trust is refused

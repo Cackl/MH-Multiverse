@@ -5,11 +5,12 @@
   import {
     appConfig, activeServerId,
     selectServer, deleteServer,
-    gameRunning, overlayStatus, type OverlayStatus,
+    gameRunning, overlayStatus, type OverlayStatus, activeTab, settingsSection,
     type Server
   } from '../lib/store'
   import { tip } from '../lib/tooltip'
   import ServerModal from './ServerModal.svelte'
+  import { openCard } from './integrations/IntegrationCard.svelte'
   import PanelSidebar from './PanelSidebar.svelte'
 
   $: activeServer = $appConfig.servers.find(s => s.id === $activeServerId) ?? null
@@ -124,6 +125,12 @@
     await openUrl(`${scheme}://${host}/`)
   }
 
+
+  function openOverlaySettings() {
+    openCard('overlay')
+    settingsSection.set('integrations')
+    activeTab.set('settings')
+  }
 </script>
 
 {#if showModal}
@@ -230,13 +237,14 @@
         {/if}
         <button class="btn btn-secondary" on:click={openDashboard}>Dashboard</button>
         {#if $overlayStatus?.auto_inject}
-          <span
+          <button
             class="overlay-note"
             class:warn={$overlayStatus.state !== 'trusted'}
+            on:click={openOverlaySettings}
             use:tip={$overlayStatus.state === 'trusted'
               ? 'The overlay will be injected when the game launches.'
               : 'Overlay injection is on, but the overlay files changed or are missing, so it will not be injected. Re-trust it in Settings → Integrations.'}
-          ><span class="overlay-dot"></span>Overlay</span>
+          ><span class="overlay-dot"></span>Overlay</button>
         {/if}
         <button
           class="btn btn-launch"
@@ -458,8 +466,13 @@
     letter-spacing: 0.12em;
     text-transform: uppercase;
     color: var(--text-3);
-    cursor: default;
+    cursor: pointer;
+    background: none;
+    border: 0;
+    padding: 0;
   }
+  .overlay-note:hover { color: var(--text-1); }
+  .overlay-note.warn:hover { color: var(--amber); }
   .overlay-note + .btn-launch { margin-left: 0; }
   .overlay-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
   .overlay-note.warn { color: var(--amber); }
