@@ -2,6 +2,18 @@
 ---
 <br>
 
+# Version 1.5.2 Release
+
+## What's Changed
+
+### MarvelHeroesOmega Overlay Integration Improvements - Cont.
+- The Overlay label on the Launch page is now a button. Click it to jump to Settings -> Integrations with the Overlay card open.
+- New "Inject now" button on the Overlay card, next to the Inject on Launch toggle. It loads the overlay into a running game when Inject on Launch is off. The game must have been launched by Multiverse, and the overlay must be trusted.
+- When an overlay update is found, a new "Overlay Folder" button next to "Release page" opens your linked overlay folder. For now, updating from within Multiverse is deferred.
+
+<br>
+
+---
 # Version 1.5.1 Release
 
 ## What's Changed

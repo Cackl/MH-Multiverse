@@ -44,7 +44,7 @@ mh-multiverse/
 │       ├── TitleBar.svelte        Custom window chrome (drag region, min/max/close)
 │       ├── Rail.svelte            Left nav rail (MHO / Local / App groups)
 │       ├── PanelSidebar.svelte    Reusable sidebar layout wrapper
-│       ├── LaunchPanel.svelte     Server profiles, credentials, game launch (shows an "Overlay" indicator when inject-on-launch is on)
+│       ├── LaunchPanel.svelte     Server profiles, credentials, game launch (shows an "Overlay" indicator when inject-on-launch is on; clicking it opens the Overlay card in Settings)
 │       ├── ServerPanel.svelte     Server start/stop, log viewer, command input, online players
 │       ├── PlayersBlade.svelte    Searchable list of players connected to the server
 │       ├── PlayerCard.svelte      Per-player moderation/admin card (kick, ban, user level, info)
@@ -61,8 +61,8 @@ mh-multiverse/
 │       ├── PatchEditorModal.svelte   Per-file patch entry editor
 │       ├── OpsPanel.svelte        Server update, backup create/restore/delete
 │       ├── integrations/          Integrations page building blocks
-│       │   ├── IntegrationCard.svelte     Collapsible card shell (title, subtitle); one per integration
-│       │   └── OverlayIntegration.svelte  MarvelHeroesOmega Overlay card: folder/trust, inject toggle, flags, loot log
+│       │   ├── IntegrationCard.svelte     Collapsible card shell (title, subtitle); one per integration; openCard(id) pre-opens one for deep links
+│       │   └── OverlayIntegration.svelte  MarvelHeroesOmega Overlay card: folder/trust, inject toggle and Inject now, flags, loot log
 │       ├── ServerModal.svelte     Add/edit server dialog; tabbed Manual / Import Account / Restore Backup
 │       └── AppPanel.svelte        Settings: exe paths, launch options, themes, integrations
 │                                  (overlay link/trust/flags/loot log), about
@@ -83,7 +83,7 @@ mh-multiverse/
 │   │   ├── events.rs             Events.json / EventSchedule.json read/write; override file
 │   │   │                         management (load, save, reset, merge) for both definitions
 │   │   │                         and schedule rules
-│   │   ├── launcher.rs           launch_game (spawn with args), game_is_running (sysinfo poll)
+│   │   ├── launcher.rs           launch_game (spawn with args), LaunchedGame (last launched game), game_is_running (sysinfo poll)
 │   │   ├── ini.rs                Config.ini / ConfigOverride.ini read/write with diff-only saving
 │   │   ├── tuning.rs             LiveTuningData*.json scan/read/write/create/toggle
 │   │   ├── patches.rs            PatchData*.json scan/load/save/create/toggle
@@ -99,7 +99,7 @@ mh-multiverse/
 │   │   │                         Download/ folder scanning, ID remapping, Add/Replace modes
 │   │   ├── overlay/              Third-party overlay integration (see Rust Modules)
 │   │   │   ├── mod.rs            OverlayConfig/TrustRecord, hashing, trust + flag commands,
-│   │   │   │                     post-launch injection orchestration
+│   │   │   │                     post-launch injection and Inject now orchestration
 │   │   │   ├── inject.rs         LoadLibraryW remote-thread injection by PID
 │   │   │   ├── pipe.rs           Status pipe reader, line splitting/sanitising, event formatting, enumIdx name table
 │   │   │   └── tests.rs          Unit tests (compiled only under `cargo test`)
@@ -170,7 +170,7 @@ Six listeners are registered:
 | `server-started` | Emitted after successful spawn | Sets `serverRunning`, starts uptime timer |
 | `server-stopped` | Emitted on process exit (normal or crash) | Clears `serverRunning`/`apacheRunning`, stops uptime, logs exit code |
 | `player-event` | Emitted by `server.rs` on player login/logout/clear | Consumed by `ServerPanel` to update the online player list |
-| `overlay-inject` | Emitted by `overlay/mod.rs` when a post-launch injection finishes | Sets the `overlayInject` store (shown in Settings → Integrations) |
+| `overlay-inject` | Emitted by `overlay/mod.rs` when an injection (post-launch or Inject now) finishes | Sets the `overlayInject` store (shown in Settings → Integrations) |
 | `overlay-pipe` | Emitted by `overlay/pipe.rs` per read of the overlay's status pipe | Appended to the `overlayLog` store (capped at 500 rows) |
 
 `server-started` and `server-stopped` use a logTimestamp() function to mirror the formatting used for MHServerEmu entries
@@ -205,7 +205,7 @@ Panels follow a consistent layout: `PanelSidebar` on the left (file/item list wi
 
 ### Managed State
 
-Five state objects are registered via `.manage()` in `lib.rs`:
+Seven state objects are registered via `.manage()` in `lib.rs`:
 
 | State | Type | Purpose |
 |---|---|---|
@@ -214,6 +214,8 @@ Five state objects are registered via `.manage()` in `lib.rs`:
 | `DbPath` | `Arc<Mutex<Option<PathBuf>>>` | Path to `Account.db`, derived from `server_exe` and updated whenever `set_server_exe` is called |
 | `CatalogueState` | `Mutex<Option<(String, PrototypeCatalogue)>>` | Cached Calligraphy.sip parse result, keyed by sip file path |
 | `DisplayNameState` | Embedded + lazy-loaded maps | Prototype path → display name resolution (embedded JSON + optional per-server override file) |
+| `GameProcessState` | `Mutex<sysinfo::System>` | Reused across `game_is_running` polls so each poll refreshes processes instead of building a new `System` |
+| `LaunchedGame` | `Mutex<Option<Game>>` | The game this app last launched (PID plus its `Child`, so the PID cannot be reused). Set on every launch, whether or not injection is on; used by overlay injection |
 
 ### Rust Modules
 
@@ -225,14 +227,15 @@ The stdout reader additionally calls `parse_player_log_event` on every line (reg
 
 **`events.rs`** - File I/O for `Events.json` / `EventsOverride.json` and `EventSchedule.json` / `EventScheduleOverride.json` in `Data/Game/LiveTuning/`. Both file pairs follow the same override pattern: the override file takes precedence if it exists, otherwise the default file is read. `Events.json` is a JSON object keyed by event ID; `EventSchedule.json` is a JSON array. Read functions deserialise into `EventDefinition` and `ScheduleRule` structs respectively. Write functions always target the override file. `reset_*_override` copies the default file over the override; `merge_*_override` adds any entries present in the default but missing from the override (by ID for events, by name for rules), without overwriting existing override entries.
 
-**`launcher.rs`** - Spawns the game client as a detached process with command-line arguments derived from the active server profile and launch options. Credentials are decrypted from the config at launch time. For local servers, the siteconfigurl host is derived at launch time from WebFrontend.Port in Config.ini via ini::read_merged_value. For remote servers, normalize_host strips any scheme and path from the stored host before building the URL; use_https determines the scheme. game_is_running uses sysinfo to check for a MarvelHeroesOmega.exe process. After a successful spawn, `launch_game` hands the `Child` and a copy of the overlay config to `overlay::on_game_spawned`, which returns immediately unless overlay injection is enabled and trusted.
+**`launcher.rs`** - Spawns the game client as a detached process with command-line arguments derived from the active server profile and launch options. Credentials are decrypted from the config at launch time. For local servers, the siteconfigurl host is derived at launch time from WebFrontend.Port in Config.ini via ini::read_merged_value. For remote servers, normalize_host strips any scheme and path from the stored host before building the URL; use_https determines the scheme. game_is_running uses sysinfo to check for a MarvelHeroesOmega.exe process. After a successful spawn, `launch_game` stores the game as a `Game` (PID plus the `Child`) in `LaunchedGame`, then hands it and a copy of the overlay config to `overlay::on_game_spawned`, which returns immediately unless overlay injection is enabled and trusted. `game_is_running` finds the game by name and so also sees clients started elsewhere; `LaunchedGame` knows only our own launch.
 
 **`overlay/`** - Integrates the third-party MarvelHeroesOmega Overlay (closed source, not part of this project; none of its files are bundled or redistributed). Multiverse never runs any overlay executable: the overlay is a native DLL (`MhClientHook.dll`) that runs inside the game process, so it lives and dies with the game.
 - *Trust (TOFU)*: the user links the overlay folder (`overlay_set_dir`, canonicalised, must contain `MhClientHook.dll`) and presses Trust. `scan_set` hashes (SHA-256) a fixed allowlist: the DLL, `terminals.bin`, `enum-names.bin`, the loot-filter default JSON, and the portraits/icons/fonts/textures folders. Flags, panel layout JSON, legacy exes and the overlay's updater are never hashed. The per-file hashes and a combined set hash are stored in `multiverse.json`. A symlink or subfolder inside an asset folder cannot be hashed: Trust refuses it, and one appearing later shows as `added`. Status is derived live: `not_linked`, `missing`, `untrusted`, `trusted`, or `changed` (with `changed:`/`missing:`/`added:` lines). There is no known-hash list in the repo. Changing folder or untrusting also switches injection off.
-- *Injection*: opt-in (`auto_inject`, default off, only settable while trusted). `on_game_spawned` starts a background thread (it does no hashing on the caller's thread) that owns the game's `Child` (so the PID cannot be reused), refuses immediately if the files no longer match (reported via `overlay-inject`), writes `skip-boot-loading-gate.flag` as `0` (a stale `1` would skip the loading gate), waits up to 15 s for the game to go input-idle, then re-verifies the hashes immediately before each attempt and refuses if anything changed. `inject.rs` opens the process with the minimum rights (create-thread, query, VM-operation, VM-write, synchronize), writes the UTF-16 DLL path, runs `LoadLibraryW` on a remote thread and waits 5 s; an exit code of 0 means the load failed. A timeout is retried (up to 5 times); between attempts it waits up to 2 s (10 s after the last) for the module to show up, since a slow hook can finish loading late. An exit code of 0 is double-checked against the process's module list, because it is only the low 32 bits of the module handle. Failures never block the game launch; the outcome is reported via `overlay-inject`.
+- *Injection*: opt-in (`auto_inject`, default off, only settable while trusted). `on_game_spawned` starts a background thread (it does no hashing on the caller's thread) that holds the shared `Game` (so the PID cannot be reused), refuses immediately if the files no longer match (reported via `overlay-inject`), writes `skip-boot-loading-gate.flag` as `0` on a fresh launch (a stale `1` would skip the loading gate), waits up to 15 s for the game to go input-idle, then re-verifies the hashes immediately before each attempt and refuses if anything changed. `inject.rs` opens the process with the minimum rights (create-thread, query, VM-operation, VM-write, synchronize), writes the UTF-16 DLL path, runs `LoadLibraryW` on a remote thread and waits 5 s; an exit code of 0 means the load failed. A timeout is retried (up to 5 times); between attempts it waits up to 2 s (10 s after the last) for the module to show up, since a slow hook can finish loading late. An exit code of 0 is double-checked against the process's module list, because it is only the low 32 bits of the module handle. Failures never block the game launch; the outcome is reported via `overlay-inject`.
+- *Inject now*: `overlay_inject_now` runs the same injection on the game in `LaunchedGame` when injection on launch is off. It refuses if no game was launched by this app or it has exited, and reports "already loaded" instead of injecting twice. Because the game is already past boot it writes `skip-boot-loading-gate.flag` as `1` (inferred from the flag's name; unverified against the hook).
 - *Flags*: `overlay_get_flags`/`overlay_set_flag` read and atomically write the one-byte `'1'`/`'0'` files the hook reads next to the DLL (terminals, DPS, debug logging; keys are allowlisted; refused unless the overlay is trusted). A missing file reads as the hook's default (terminals/DPS on, logging off). The hook reads them at load, so changes apply on the next game launch.
-- *Status pipe*: after a successful injection `pipe.rs` connects (retrying for 30 s) to the hook's `\\.\pipe\MhTerminalsHelper` and reads JSON lines until the game exits. `pipe::spawn` holds the game's `Child`: if the pipe drops while the game is still running it waits 2 s and reconnects (events in between are lost). The pipe's access rules are unverified, so every line is untrusted: lines over 8 KB are dropped, control characters are replaced, text is capped at 512 characters, and only allowlisted `event` names pass: `loot_hidden`, `region_entered` (only with a terminal), `tier_resolved` (only with a tier), `mission_state` (only when completed) and `player_death`. A `loot_hidden` event is rendered as `time | category | item name | item code | rarity` plus the filter reason. Death events carry a recent-damage table (`hits`). The hook's `enumIdx` values (items, killers, attackers) are the game's EntityPrototype enum index, rebuilt on the pipe thread from the client's `Data/Game/Calligraphy.sip` (the server's copy as fallback; `calligraphy::entity_paths`: prototypes whose blueprint type derives from EntityPrototype, sorted by PrototypeId, 1-based). Names are the prototype file name and the category comes from the path folder. If no sip is readable, names fall back to `enum-names.bin` in the linked folder (items only, category = name minus trailing digits). Rarity codes map through an embedded table (unknown codes are shown as numbers).
-- *Overlay update check*: `app_update::check_overlay_update` compares the linked folder's `MhClientHook.dll` version resource (read, never loaded; not the folder name) with the latest release of the overlay's public GitHub repo. It only reports; the card links to the release page and installs nothing. It runs only when the user presses the button on the Overlay card. After the user updates, the normal trust check reports the changed files.
+- *Status pipe*: after a successful injection `pipe.rs` connects (retrying for 30 s) to the hook's `\\.\pipe\MhTerminalsHelper` and reads JSON lines until the game exits. `pipe::spawn` holds a liveness check backed by the `Game`: if the pipe drops while the game is still running it waits 2 s and reconnects (events in between are lost). The pipe's access rules are unverified, so every line is untrusted: lines over 8 KB are dropped, control characters are replaced, text is capped at 512 characters, and only allowlisted `event` names pass: `loot_hidden`, `region_entered` (only with a terminal), `tier_resolved` (only with a tier), `mission_state` (only when completed) and `player_death`. A `loot_hidden` event is rendered as `time | category | item name | item code | rarity` plus the filter reason. Death events carry a recent-damage table (`hits`). The hook's `enumIdx` values (items, killers, attackers) are the game's EntityPrototype enum index, rebuilt on the pipe thread from the client's `Data/Game/Calligraphy.sip` (the server's copy as fallback; `calligraphy::entity_paths`: prototypes whose blueprint type derives from EntityPrototype, sorted by PrototypeId, 1-based). Names are the prototype file name and the category comes from the path folder. If no sip is readable, names fall back to `enum-names.bin` in the linked folder (items only, category = name minus trailing digits). Rarity codes map through an embedded table (unknown codes are shown as numbers).
+- *Overlay update check*: `app_update::check_overlay_update` compares the linked folder's `MhClientHook.dll` version resource (read, never loaded; not the folder name) with the latest release of the overlay's public GitHub repo. It only reports; the card links to the release page and to the linked folder, and installs nothing. It runs only when the user presses the button on the Overlay card. After the user updates, the normal trust check reports the changed files.
 - *Omega gear*: one toggle on the Overlay card (`overlay_set_omega_gear`, stored as `overlay.omega_gear`) controls `showOmega` in `%LOCALAPPDATA%\MarvelHeroesOmega.LootFilter\loot-filter-config.json`, the hook's loot panel layout (the Omega column and Omega Slot 1-5; hiding and pipe events don't depend on it). Toggling writes the value immediately, either way; either direction needs a trusted overlay. While it is on and the overlay is trusted, each injected launch re-applies it once before injecting and once after, since the hook reloads the file when its write time changes. With it off, or with the overlay changed or untrusted, launches never touch the file. The file is never created (the hook seeds it only when absent), an unchanged value is not rewritten, and an unparsable or non-object file is left alone and reported. It is user data outside the overlay folder, so it is not part of the trust hashes.
 - *Why no copy*: an earlier design copied the trusted files into an app-owned folder and loaded from there. It was dropped: a same-user process can write to both locations, so the copy only narrowed a timing race, and it broke the overlay's own settings handling. The check now happens right before injection instead.
 
@@ -390,12 +393,13 @@ The stdout reader additionally calls `parse_player_log_event` on every line (reg
 
 | Command | Parameters | Returns | Description |
 |---|---|---|---|
-| `overlay_status` | - | `OverlayStatus` | `{ state, dir, auto_inject, changes[] }`; state is computed by re-hashing the linked folder |
+| `overlay_status` | - | `OverlayStatus` | `{ state, dir, auto_inject, omega_gear, changes[] }`; state is computed by re-hashing the linked folder |
 | `overlay_set_dir` | `dir: String` | `OverlayStatus` | Link a folder (must contain `MhClientHook.dll`); clears trust and injection |
 | `overlay_trust` | - | `OverlayStatus` | Hash the code set and store the record in `multiverse.json` |
 | `overlay_untrust` | - | `OverlayStatus` | Drop the trust record and turn injection off |
 | `overlay_set_auto_inject` | `enabled: bool` | `OverlayStatus` | Toggle injection after launch; refused unless state is `trusted` |
 | `overlay_set_omega_gear` | `enabled: bool` | `OverlayStatus` | Save the setting and write `showOmega` now; refused unless state is `trusted` |
+| `overlay_inject_now` | - | - | Inject into the game in `LaunchedGame`; refused if none or it has exited; the result arrives as `overlay-inject` |
 | `overlay_get_flags` | - | `{ terminals, dps, detector_log }` | Read the overlay's control flags from the linked folder |
 | `overlay_set_flag` | `key: String, on: bool` | flags map | Write one allowlisted flag file; refused unless state is `trusted`; applies on the next game launch |
 
@@ -427,6 +431,7 @@ Imports server profiles from uploaded JSON files, detected by shape: Bifrost `Bi
 | Export | Type | Description |
 |---|---|---|
 | `activeTab` | `writable<Tab>` | Current top-level tab |
+| `settingsSection` | `writable<SettingsSection>` | Settings section to open next (`client` / `theme` / `integrations` / `about`); read once by `AppPanel` on mount, then reset to `client`. Set by the Launch page overlay indicator |
 | `activeDataTab` | `writable<DataTab>` | Current data sub-tab (`events` / `tuning` / `store` / `patches`) |
 | `serverRunning` | `writable<boolean>` | MHServerEmu process state |
 | `gameRunning` | `writable<boolean>` | MarvelHeroesOmega.exe process state |
@@ -487,7 +492,7 @@ Imports server profiles from uploaded JSON files, detected by shape: Bifrost `Bi
 | `player-event` | `PlayerEventPayload` | `server.rs` stdout reader | Player login, logout, or full session clear on server stop |
 | `update-progress` | `UpdateProgressPayload` | `updater.rs` | Update stage + percentage (downloading, extracting, installing, restoring, done) |
 | `app-update-progress` | `{ stage, pct }` | `app_update.rs` | App self-update stage (downloading, verifying, installing) |
-| `overlay-inject` | `{ ok: bool, message: string }` | `overlay/mod.rs` injection thread | Result of the post-launch overlay injection |
+| `overlay-inject` | `{ ok: bool, message: string }` | `overlay/mod.rs` injection thread | Result of an overlay injection (post-launch or Inject now) |
 | `overlay-pipe` | `{ event: string, text: string, fields: string[], hits: OverlayHit[] }[]` | `overlay/pipe.rs` reader thread | Display rows from the overlay status pipe; `event` is `loot_hidden` (`fields` = time, category, item, code, rarity, reason), `region_entered` (time, terminal, tier), `tier_resolved`/`mission_state` (text only), `player_death` (`fields` = time, heading, detail; `hits` = damage rows) or `_status` (connection notes, no fields) |
 
 `PlayerEventPayload` shape: `{ kind: "login" | "logout" | "clear", session_id: string | null, username: string | null, count: number }`.
@@ -710,12 +715,12 @@ Settings → Integrations
   overlay_set_auto_inject(true)            (only while status == trusted)
 
 launch_game
-  → spawn game (Child kept)
-  → overlay::on_game_spawned(config.overlay, child)
+  → spawn game, store Game (PID + Child) in LaunchedGame
+  → overlay::on_game_spawned(config.overlay, game)
       no-op unless auto_inject
       thread "overlay-inject":
         status != trusted?      → fail ("changed since trusted")
-        write skip-boot-loading-gate.flag = '0'
+        write skip-boot-loading-gate.flag = '0'   ('1' for Inject now)
         WaitForInputIdle(game, 15 s)
         repeat (max 5):
           game exited?            → fail
@@ -730,7 +735,7 @@ launch_game
         pipe closes when the game exits → "closed" status line
 ```
 
-If the game is restarted outside Multiverse, the overlay is not re-injected; relaunch from Multiverse.
+If the game is restarted outside Multiverse, the overlay is not re-injected, and Inject now cannot find it; relaunch from Multiverse.
 
 ### Account Import and Restore
 
