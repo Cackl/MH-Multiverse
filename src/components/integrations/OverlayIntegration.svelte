@@ -277,7 +277,7 @@
         {#if overlay?.dir}
           <button class="btn btn-sm btn-outline" on:click={() => openPath(overlay!.dir)}>Overlay Folder</button>
         {/if}
-        <button class="btn btn-sm btn-outline" on:click={() => openUrl(update.html_url)}>Release page</button>
+        <button class="btn btn-sm btn-outline" on:click={() => openUrl(update!.html_url)}>Release page</button>
       {:else if update}
         Up to date (v{update.installed}).
       {/if}
