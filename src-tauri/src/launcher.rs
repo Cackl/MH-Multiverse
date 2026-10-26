@@ -1,5 +1,6 @@
-use std::process::Command;
-use std::sync::Mutex;
+use std::process::{Child, Command};
+use std::sync::{Arc, Mutex};
+use tauri::Manager;
 use crate::config::{load_config, decrypt_password};
 use sysinfo::System;
 
@@ -11,6 +12,38 @@ pub struct GameProcessState(pub Mutex<System>);
 impl GameProcessState {
     pub fn new() -> Self {
         Self(Mutex::new(System::new()))
+    }
+}
+
+/// A game process this app launched. Holding the `Child` keeps its PID from being reused.
+#[derive(Clone)]
+pub struct Game {
+    pub pid: u32,
+    child: Arc<Mutex<Child>>,
+}
+
+impl Game {
+    pub fn is_running(&self) -> bool {
+        self.child.lock().is_ok_and(|mut c| matches!(c.try_wait(), Ok(None)))
+    }
+}
+
+/// The game this app last launched, if any. Unlike `GameProcessState`, which finds the game by
+/// name, this knows only our own launch, so it can't mistake another instance for it.
+#[derive(Default)]
+pub struct LaunchedGame(Mutex<Option<Game>>);
+
+impl LaunchedGame {
+    fn set(&self, child: Child) -> Game {
+        let game = Game { pid: child.id(), child: Arc::new(Mutex::new(child)) };
+        if let Ok(mut g) = self.0.lock() {
+            *g = Some(game.clone());
+        }
+        game
+    }
+
+    pub fn get(&self) -> Option<Game> {
+        self.0.lock().ok().and_then(|g| g.clone())
     }
 }
 
@@ -154,7 +187,8 @@ pub fn launch_game(app: tauri::AppHandle, server_id: String) -> Result<(), Strin
         .map_err(|e| format!("Failed to launch game: {e}"))?;
 
     let sips = crate::overlay::sip_candidates(&config.game_exe, &config.server_exe);
-    crate::overlay::on_game_spawned(&app, config.overlay.clone(), sips, child);
+    let game = app.state::<LaunchedGame>().set(child);
+    crate::overlay::on_game_spawned(&app, config.overlay.clone(), sips, game);
 
     Ok(())
 }

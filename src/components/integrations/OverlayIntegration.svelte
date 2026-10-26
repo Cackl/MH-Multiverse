@@ -2,8 +2,8 @@
   import { onMount, tick } from 'svelte'
   import { open } from '@tauri-apps/plugin-dialog'
   import { invoke } from '@tauri-apps/api/core'
-  import { overlayInject, overlayLog, overlayStatus, type OverlayStatus } from '../../lib/store'
-  import { openUrl } from '@tauri-apps/plugin-opener'
+  import { gameRunning, overlayInject, overlayLog, overlayStatus, type OverlayStatus } from '../../lib/store'
+  import { openPath, openUrl } from '@tauri-apps/plugin-opener'
   import { tip } from '../../lib/tooltip'
   import IntegrationCard from './IntegrationCard.svelte'
 
@@ -34,6 +34,11 @@
     { key: 'dps', name: 'DPS Meter', desc: 'Shows the damage meter' },
     { key: 'detector_log', name: 'Debug Logging', desc: 'Writes overlay log files, separate to the Overlay Log' },
   ]
+
+  async function injectNow() {
+    error = ''
+    try { await invoke('overlay_inject_now') } catch (e) { error = String(e) }
+  }
 
   async function call(cmd: string, args?: Record<string, unknown>) {
     error = ''
@@ -130,19 +135,27 @@
 
   {#if overlay}
     <div class="opt-row" class:dim={state !== 'trusted'}>
-      <div class="opt-label" use:tip={'If the game is restarted outside MH Multiverse, the overlay is not loaded again.'}>
+      <div class="opt-label">
         <span class="opt-name">Inject on Launch</span>
         <span class="opt-desc">Loads the overlay into the game after Launch. Requires a trusted overlay</span>
       </div>
-      <div
-        class="toggle-switch"
-        class:on={overlay.auto_inject}
-        role="switch"
-        aria-checked={overlay.auto_inject}
-        tabindex="0"
-        on:click={() => call('overlay_set_auto_inject', { enabled: !overlay?.auto_inject })}
-        on:keydown={(e) => e.key === 'Enter' && call('overlay_set_auto_inject', { enabled: !overlay?.auto_inject })}
-      ></div>
+      <div class="log-actions">
+        <button
+          class="btn btn-sm btn-outline"
+          disabled={state !== 'trusted' || !$gameRunning}
+          use:tip={'Starts the overlay now. Game must be launched by MH Multiverse.'}
+          on:click={injectNow}
+        >Inject now</button>
+        <div
+          class="toggle-switch"
+          class:on={overlay.auto_inject}
+          role="switch"
+          aria-checked={overlay.auto_inject}
+          tabindex="0"
+          on:click={() => call('overlay_set_auto_inject', { enabled: !overlay?.auto_inject })}
+          on:keydown={(e) => e.key === 'Enter' && call('overlay_set_auto_inject', { enabled: !overlay?.auto_inject })}
+        ></div>
+      </div>
     </div>
 
     {#if state !== 'not_linked' && state !== 'missing'}
@@ -184,7 +197,7 @@
 
   {#if error}<span class="opt-desc err">{error}</span>{/if}
   {#if $overlayInject}
-    <span class="opt-desc" class:err={!$overlayInject.ok}>Last launch: {$overlayInject.message}</span>
+    <span class="opt-desc" class:err={!$overlayInject.ok}>Last injection: {$overlayInject.message}</span>
   {/if}
 
   <div class="section-divider"><span>Log</span></div>
@@ -261,6 +274,9 @@
         <span class="err">{updateError}</span>
       {:else if update?.update_available}
         Overlay v{update.latest} is available (installed v{update.installed}).
+        {#if overlay?.dir}
+          <button class="btn btn-sm btn-outline" on:click={() => openPath(overlay!.dir)}>Overlay Folder</button>
+        {/if}
         <button class="btn btn-sm btn-outline" on:click={() => openUrl(update.html_url)}>Release page</button>
       {:else if update}
         Up to date (v{update.installed}).

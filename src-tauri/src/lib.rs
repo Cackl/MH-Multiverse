@@ -48,6 +48,7 @@ pub fn run() {
         .manage(calligraphy::CatalogueState(Mutex::new(None)))
         .manage(store::DisplayNameState::new())
         .manage(launcher::GameProcessState::new())
+        .manage(launcher::LaunchedGame::default())
         .setup(|app| {
             app.handle().plugin(tauri_plugin_dialog::init())?;
             app.handle().plugin(tauri_plugin_opener::init())?;
@@ -153,6 +154,7 @@ pub fn run() {
             overlay::overlay_trust,
             overlay::overlay_untrust,
             overlay::overlay_set_auto_inject,
+            overlay::overlay_inject_now,
             overlay::overlay_set_omega_gear,
             overlay::overlay_get_flags,
             overlay::overlay_set_flag,
