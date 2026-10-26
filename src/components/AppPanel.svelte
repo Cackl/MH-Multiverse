@@ -5,9 +5,9 @@
   import { listen, type UnlistenFn } from '@tauri-apps/api/event'
   import { openUrl } from '@tauri-apps/plugin-opener'
   import {
-    appConfig, setGameExe, setServerExe, activeTheme, setTheme, setLaunchOptions, type LaunchOptions,
+    appConfig, type SettingsSection, setGameExe, setServerExe, activeTheme, setTheme, setLaunchOptions, type LaunchOptions,
     appUpdate, appUpdateError, appUpdateCheckedAt, checkAppUpdate, showUpdateBadge,
-    updateRemindLater, dismissedUpdate, serverRunning,
+    updateRemindLater, dismissedUpdate, serverRunning, settingsSection,
   } from '../lib/store'
   import { parseReleaseNotes } from '../lib/releaseNotes'
   import { tip } from '../lib/tooltip'
@@ -58,8 +58,10 @@
 
   onDestroy(() => unlistenProgress?.())
 
-  type Section = 'client' | 'theme' | 'integrations' | 'about'
-  let activeSection: Section = 'client'
+  type Section = SettingsSection
+  // Backed by a store so other pages can deep-link to a section.
+  let activeSection: Section = $settingsSection
+  settingsSection.set('client')
 
   const navItems: { id: Section; label: string }[] = [
     { id: 'client', label: 'Marvel Heroes Omega' },
