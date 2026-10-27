@@ -272,3 +272,22 @@ fn open_db_missing_file_errors_without_creating_it() {
     assert!(err.contains("Account.db not found"), "unexpected error: {err}");
     assert!(!path.exists(), "open_db must not create Account.db");
 }
+
+#[test]
+fn db_path_defaults_to_account_db() {
+    let (_tmp, server_exe) = empty_server();
+    let p = db_path(&server_exe).unwrap();
+    assert!(p.ends_with("Data/Account.db"), "{p:?}");
+}
+
+#[test]
+fn db_path_honours_sqlite_filename_override() {
+    let (tmp, server_exe) = empty_server();
+    fs::write(
+        tmp.path().join("ConfigOverride.ini"),
+        "[SQLiteDBManager]\nFileName=Custom.db\n",
+    )
+    .unwrap();
+    let p = db_path(&server_exe).unwrap();
+    assert!(p.ends_with("Data/Custom.db"), "{p:?}");
+}

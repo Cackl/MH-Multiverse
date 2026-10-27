@@ -131,7 +131,12 @@ pub struct ImportOverrides {
 pub(crate) fn db_path(server_exe: &str) -> Result<PathBuf, String> {
     Ok(crate::paths::server_dir(server_exe)?
         .join("Data")
-        .join("Account.db"))
+        .join(crate::ini::read_merged_value(
+            server_exe,
+            "SQLiteDBManager",
+            "FileName",
+            "Account.db",
+        )))
 }
 
 fn open_db(server_exe: &str) -> Result<Connection, String> {
