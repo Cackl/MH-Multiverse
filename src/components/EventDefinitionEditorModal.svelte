@@ -1,5 +1,6 @@
 <script lang="ts">
   import { invoke } from '@tauri-apps/api/core'
+  import { askConfirm } from '../lib/store'
   import type { TuningFileInfo, EventDefinition } from '../lib/tuningMeta'
 
   // ── Types ───────────────────────────────────────────────────────────────────
@@ -29,6 +30,9 @@
   let missions:     string[] = [...(definition?.instanced_missions ?? [])]
 
   let newMission = ''
+
+  const initialState = JSON.stringify([id, display_name, file_path, daily_gift, is_hidden, missions, newMission])
+  $: dirty = JSON.stringify([id, display_name, file_path, daily_gift, is_hidden, missions, newMission]) !== initialState
   let idError    = ''
   let nameError  = ''
 
@@ -135,10 +139,21 @@
     })
   }
 
+  // ── Close guard ────────────────────────────────────────────────────────────
+
+  async function tryClose() {
+    if (!dirty || await askConfirm({
+      title: 'Discard changes?',
+      message: 'This definition has unsaved changes. Discard them?',
+      okLabel: 'Discard',
+      cancelLabel: 'Keep editing',
+    })) onClose()
+  }
+
   function handleKeydown(e: KeyboardEvent) {
     if (e.key === 'Escape') {
       if (protoSuggestOpen) { protoSuggestOpen = false; return }
-      onClose()
+      tryClose()
     }
   }
 </script>
@@ -148,7 +163,7 @@
 <div
   class="modal-backdrop"
   role="presentation"
-  on:click={onClose}
+  on:click={tryClose}
 >
   <div
     class="modal-card"
@@ -161,7 +176,7 @@
     <!-- Header -->
     <div class="modal-header">
       <span class="modal-title">{isNew ? 'New Event Definition' : 'Edit Event Definition'}</span>
-      <button class="btn-icon" on:click={onClose} title="Close">
+      <button class="btn-icon" on:click={tryClose} title="Close">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <line x1="18" y1="6" x2="6" y2="18"/>
           <line x1="6" y1="6" x2="18" y2="18"/>
@@ -329,7 +344,7 @@
 
     <!-- Footer -->
     <div class="modal-footer">
-      <button class="btn btn-sm btn-outline" on:click={onClose}>Cancel</button>
+      <button class="btn btn-sm btn-outline" on:click={tryClose}>Cancel</button>
       <button class="btn btn-sm btn-accent" on:click={handleSave}>
         {isNew ? 'Create' : 'Save'}
       </button>

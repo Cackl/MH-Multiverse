@@ -1,5 +1,6 @@
 <script lang="ts">
   import { invoke } from '@tauri-apps/api/core'
+  import { askConfirm } from '../lib/store'
   import type { PatchEntry } from '../lib/patchesMeta'
 
   // ── Props ──────────────────────────────────────────────────────────────────
@@ -62,6 +63,9 @@
 
   // Delete confirm
   let deleteConfirming = false
+
+  const initialState = JSON.stringify([draft, valueStr])
+  $: dirty = JSON.stringify([draft, valueStr]) !== initialState
 
   // ── Derived ────────────────────────────────────────────────────────────────
 
@@ -152,13 +156,25 @@
     onDelete()
   }
 
+
+  // ── Close guard ────────────────────────────────────────────────────────────
+
+  async function tryClose() {
+    if (!dirty || await askConfirm({
+      title: 'Discard changes?',
+      message: 'This entry has unsaved changes. Discard them?',
+      okLabel: 'Discard',
+      cancelLabel: 'Keep editing',
+    })) onClose()
+  }
+
   // ── Keyboard / click-outside ───────────────────────────────────────────────
 
   function onKeydown(e: KeyboardEvent) {
     if (e.key === 'Escape') {
       if (protoDropOpen)    { protoDropOpen = false; return }
       if (deleteConfirming) { deleteConfirming = false; return }
-      onClose()
+      tryClose()
     }
   }
 
@@ -174,7 +190,7 @@
 <div
   class="modal-backdrop"
   role="presentation"
-  on:click={e => { if (e.target === e.currentTarget) onClose() }}
+  on:click={e => { if (e.target === e.currentTarget) tryClose() }}
 >
   <div class="editor-modal" role="dialog" aria-modal="true" tabindex="-1">
 
@@ -189,7 +205,7 @@
         </svg>
         <span class="modal-display-name">{isNew ? 'New Patch Entry' : 'Edit Patch Entry'}</span>
       </div>
-      <button class="close-btn" aria-label="Close" on:click={onClose}>
+      <button class="close-btn" aria-label="Close" on:click={tryClose}>
         <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5">
           <line x1="3.5" y1="3.5" x2="10.5" y2="10.5"/>
           <line x1="10.5" y1="3.5" x2="3.5" y2="10.5"/>
@@ -347,7 +363,7 @@
         {/if}
       </div>
       <div class="footer-actions">
-        <button class="btn btn-sm btn-outline" on:click={onClose}>Cancel</button>
+        <button class="btn btn-sm btn-outline" on:click={tryClose}>Cancel</button>
         <button
           class="btn btn-sm btn-accent"
           disabled={!canSave}

@@ -11,11 +11,11 @@
   }
 
   function onKeydown(e: KeyboardEvent) {
-    if ($confirmRequest && e.key === 'Escape') { e.preventDefault(); answer(false) }
+    if ($confirmRequest && e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); answer(false) }
   }
 </script>
 
-<svelte:window on:keydown={onKeydown} />
+<svelte:window on:keydown|capture={onKeydown} />
 
 {#if $confirmRequest}
   <!-- svelte-ignore a11y-click-events-have-key-events a11y-no-static-element-interactions -->
