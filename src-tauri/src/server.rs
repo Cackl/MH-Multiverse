@@ -176,9 +176,7 @@ impl DbPath {
     /// Derive and store the Account.db path from a server_exe path.
     /// Layout: <server_exe_dir>/Data/Account.db
     pub fn set_from_server_exe(&self, server_exe: &str) {
-        let path = std::path::Path::new(server_exe)
-            .parent()
-            .map(|dir| dir.join("Data").join("Account.db"));
+        let path = crate::accounts::db_path(server_exe).ok();
         if let Ok(mut guard) = self.0.lock() {
             *guard = path;
         }

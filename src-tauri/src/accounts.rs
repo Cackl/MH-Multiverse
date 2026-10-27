@@ -128,7 +128,7 @@ pub struct ImportOverrides {
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
-fn db_path(server_exe: &str) -> Result<PathBuf, String> {
+pub(crate) fn db_path(server_exe: &str) -> Result<PathBuf, String> {
     Ok(crate::paths::server_dir(server_exe)?
         .join("Data")
         .join("Account.db"))
