@@ -646,3 +646,7 @@ fn count<P: rusqlite::types::ToSql>(
     conn.query_row(sql, [param], |r| r.get::<_, i64>(0))
         .map_err(|e| e.to_string())
 }
+
+#[cfg(test)]
+#[path = "../../tests/rust/test_accounts.rs"]
+mod tests;

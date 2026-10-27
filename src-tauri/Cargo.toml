@@ -44,3 +44,6 @@ sha2    = "0.10"
 rand    = "0.8"
 minisign-verify = "0.2.5"
 semver = "1.0.28"
+
+[dev-dependencies]
+tempfile = "3"

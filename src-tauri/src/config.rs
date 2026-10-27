@@ -411,3 +411,7 @@ pub fn set_console_presets(app: tauri::AppHandle, presets: Vec<String>) -> Resul
     config.console_presets = presets;
     save_config(&app, &config)
 }
+
+#[cfg(test)]
+#[path = "../../tests/rust/test_config.rs"]
+mod tests;

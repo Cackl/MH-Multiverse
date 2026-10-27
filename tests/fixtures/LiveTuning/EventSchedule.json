@@ -1,0 +1,16 @@
+[
+  {
+    "Name": "ArmorIncursionAlwaysOn",
+    "IsEnabled": true,
+    "Type": "AlwaysOn",
+    "Events": ["ArmorIncursion"]
+  },
+  {
+    "Name": "CosmicChaosWeekly",
+    "IsEnabled": true,
+    "Type": "WeeklyRotation",
+    "StartDayOfWeek": "Monday",
+    "DurationDays": 7,
+    "Events": ["CosmicChaos"]
+  }
+]

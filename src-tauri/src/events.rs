@@ -390,3 +390,7 @@ pub fn merge_schedule_override(server_exe: String) -> Result<ScheduleData, Strin
         using_override: true,
     })
 }
+
+#[cfg(test)]
+#[path = "../../tests/rust/test_events.rs"]
+mod tests;

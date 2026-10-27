@@ -13,6 +13,8 @@ mod paths;
 mod app_update;
 mod overlay;
 mod profile_import;
+#[cfg(test)]
+mod test_helpers;
 
 pub use config::*;
 

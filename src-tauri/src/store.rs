@@ -877,3 +877,7 @@ pub fn save_thumbnail(
 
     Ok(backup_path.to_string_lossy().to_string())
 }
+
+#[cfg(test)]
+#[path = "../../tests/rust/test_store.rs"]
+mod tests;

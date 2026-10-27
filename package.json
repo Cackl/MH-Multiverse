@@ -10,7 +10,11 @@
     "check": "svelte-check --tsconfig ./tsconfig.app.json && tsc -p tsconfig.node.json",
     "tauri": "tauri",
     "bump-version": "node scripts/bump-version.js",
-    "sign-release": "node scripts/sign-release.js"
+    "sign-release": "node scripts/sign-release.js",
+    "test": "vitest run --config tests/frontend/vitest.config.ts",
+    "test:watch": "vitest --config tests/frontend/vitest.config.ts",
+    "test:rust": "cd src-tauri && cargo test",
+    "test:all": "npm run test:rust && npm run test"
   },
   "devDependencies": {
     "@sveltejs/vite-plugin-svelte": "^7.0.0",
@@ -20,7 +24,8 @@
     "svelte": "^5.53.12",
     "svelte-check": "^4.4.5",
     "typescript": "~5.9.3",
-    "vite": "^8.0.1"
+    "vite": "^8.0.1",
+    "vitest": "^4.1.11"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.10.1",

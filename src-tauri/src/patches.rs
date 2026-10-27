@@ -212,3 +212,7 @@ pub fn set_patch_file_enabled(
 pub fn get_patches_dir(server_exe: String) -> Result<String, String> {
     patches_dir(&server_exe).map(|p| p.to_string_lossy().to_string())
 }
+
+#[cfg(test)]
+#[path = "../../tests/rust/test_patches.rs"]
+mod tests;

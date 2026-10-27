@@ -447,3 +447,7 @@ pub fn toggle_tuning_file(
 
     Ok(())
 }
+
+#[cfg(test)]
+#[path = "../../tests/rust/test_tuning.rs"]
+mod tests;

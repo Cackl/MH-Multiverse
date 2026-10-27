@@ -550,3 +550,7 @@ pub fn lookup_prototype_id(
         .map(|id| id.to_string())
         .ok_or_else(|| format!("Prototype '{}' not found in catalogue", prototype_path))
 }
+
+#[cfg(test)]
+#[path = "../../tests/rust/test_calligraphy.rs"]
+mod tests;

@@ -1,0 +1,4 @@
+[
+  { "Prototype": null, "Setting": "eGTV_XPGain", "Value": 2.0 },
+  { "Prototype": "Entity/Characters/Prototypes/Doombot.prototype", "Setting": "eWETV_MobHealth", "Value": 0.5 }
+]

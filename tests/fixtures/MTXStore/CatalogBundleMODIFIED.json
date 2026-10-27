@@ -1,0 +1,30 @@
+[
+  {
+    "SkuId": 1001,
+    "GuidItems": [
+      { "PrototypeGuid": 111, "ItemPrototypeRuntimeIdForClient": 16313827754993193555, "Quantity": 2 }
+    ],
+    "AdditionalGuidItems": [],
+    "LocalizedEntries": [
+      { "LanguageId": "en_us", "Description": "A starter bundle (modified)", "Title": "Starter Bundle", "ReleaseDate": "", "ItemPrice": 450 }
+    ],
+    "InfoUrls": [{ "LanguageId": "en_us", "Url": "", "ImageData": "" }],
+    "ContentData": [{ "LanguageId": "en_us", "Url": "", "ImageData": "" }],
+    "Type": { "Name": "Bundle", "Order": 5 },
+    "TypeModifiers": [{ "Name": "Giftable", "Order": 5 }]
+  },
+  {
+    "SkuId": 1003,
+    "GuidItems": [
+      { "PrototypeGuid": 333, "ItemPrototypeRuntimeIdForClient": 333333, "Quantity": 1 }
+    ],
+    "AdditionalGuidItems": [],
+    "LocalizedEntries": [
+      { "LanguageId": "en_us", "Description": "A new costume", "Title": "New Costume", "ReleaseDate": "", "ItemPrice": 800 }
+    ],
+    "InfoUrls": [],
+    "ContentData": [],
+    "Type": { "Name": "Costume", "Order": 5 },
+    "TypeModifiers": []
+  }
+]

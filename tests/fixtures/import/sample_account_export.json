@@ -1,0 +1,30 @@
+{
+  "Id": 9999,
+  "Email": "imported@test.local",
+  "PlayerName": "ImportedPlayer",
+  "PasswordHash": "AAECAw==",
+  "Salt": "AAECAw==",
+  "UserLevel": 0,
+  "Flags": 0,
+  "Player": {
+    "DbGuid": 555,
+    "ArchiveData": "AAECAw==",
+    "StartTarget": 100,
+    "AOIVolume": 2600,
+    "GazillioniteBalance": 0,
+    "LastLogoutTime": 1700000000
+  },
+  "Avatars": [
+    { "DbGuid": 556, "ContainerDbGuid": 555, "InventoryProtoGuid": 1, "Slot": 0, "EntityProtoGuid": 2, "ArchiveData": "AAECAw==" }
+  ],
+  "TeamUps": [
+    { "DbGuid": 557, "ContainerDbGuid": 555, "InventoryProtoGuid": 1, "Slot": 0, "EntityProtoGuid": 3, "ArchiveData": "AAECAw==" }
+  ],
+  "Items": [
+    { "DbGuid": 558, "ContainerDbGuid": 556, "InventoryProtoGuid": 1, "Slot": 0, "EntityProtoGuid": 4, "ArchiveData": "AAECAw==" },
+    { "DbGuid": 559, "ContainerDbGuid": 555, "InventoryProtoGuid": 1, "Slot": 1, "EntityProtoGuid": 5, "ArchiveData": "AAECAw==" }
+  ],
+  "ControlledEntities": [
+    { "DbGuid": 560, "ContainerDbGuid": 555, "InventoryProtoGuid": 1, "Slot": 0, "EntityProtoGuid": 6, "ArchiveData": "AAECAw==" }
+  ]
+}
