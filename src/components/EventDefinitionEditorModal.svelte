@@ -187,7 +187,7 @@
             />
           {:else}
             <div class="field-readonly">{id}</div>
-            <span class="field-hint">ID cannot be changed — it is referenced by schedule rules.</span>
+            <span class="field-hint">ID cannot be changed because it is referenced by schedule rules.</span>
           {/if}
           {#if idError}
             <span class="field-error">{idError}</span>
@@ -233,7 +233,7 @@
                 <line x1="12" y1="8" x2="12" y2="12"/>
                 <line x1="12" y1="16" x2="12.01" y2="16"/>
               </svg>
-              {autoEnabledFile.canonical_name} was off — now enabled
+              {autoEnabledFile.canonical_name} was off and is now enabled
             </div>
           {/if}
         </div>
@@ -249,7 +249,7 @@
             type="text"
             bind:this={giftInputEl}
             bind:value={daily_gift}
-            placeholder="Prototype path — type to search"
+            placeholder="Prototype path (type to search)"
             autocomplete="off"
             spellcheck="false"
             on:input={() => onProtoInput('gift', daily_gift, giftInputEl)}
@@ -304,7 +304,7 @@
               type="text"
               bind:this={missionInputEl}
               bind:value={newMission}
-              placeholder="Prototype path — type to search"
+              placeholder="Prototype path (type to search)"
               autocomplete="off"
               spellcheck="false"
               on:input={() => onProtoInput('mission', newMission, missionInputEl)}

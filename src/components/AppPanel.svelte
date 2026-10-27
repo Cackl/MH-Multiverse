@@ -19,7 +19,7 @@
   const STAGE_LABELS: Record<string, string> = {
     downloading: 'Downloading',
     verifying: 'Verifying signature',
-    installing: 'Installing — restarting shortly',
+    installing: 'Installing, restarting shortly',
   }
 
   let checking = false
@@ -345,7 +345,7 @@
               <div class="release-notes">
                 {#each $appUpdate.notes as note, i (note.version)}
                   <details open={i === 0}>
-                    <summary>v{note.version}{note.breaking ? ' — breaking changes' : ''} <span class="update-sub">{formatDate(note.published_at)}</span></summary>
+                    <summary>v{note.version}{note.breaking ? ' (breaking changes)' : ''} <span class="update-sub">{formatDate(note.published_at)}</span></summary>
                     <div class="notes-body">
                       {#each parseReleaseNotes(note.body) as block}
                         {#if block.kind === 'hr'}

@@ -436,7 +436,7 @@
       {:else if entries.length === 0}
         <div class="entry-status">
           {isNew
-            ? 'No entries yet — add one below or copy from a bundled file.'
+            ? 'No entries yet. Add one below or copy from a bundled file.'
             : 'No entries in this file. Add one below.'}
         </div>
       {:else if filteredEntries.length === 0}
@@ -516,7 +516,7 @@
           bind:value={newPrototype}
           on:input={onProtoInput}
           on:focus={() => { if (newPrototype.length >= 2 && !isGlobalSetting) searchPrototypes(newPrototype) }}
-          placeholder={isGlobalSetting ? 'Not required (Global setting)' : 'Prototype path — type to search'}
+          placeholder={isGlobalSetting ? 'Not required (Global setting)' : 'Prototype path (type to search)'}
           disabled={isGlobalSetting}
           autocomplete="off"
           spellcheck="false"
@@ -589,7 +589,7 @@
     <!-- ── Footer ── -->
     <div class="modal-footer">
       {#if closeBlocked}
-        <span class="feedback-error">Unsaved changes — save or discard before closing.</span>
+        <span class="feedback-error">Unsaved changes. Save or discard before closing.</span>
         <div class="footer-actions">
           <button class="btn btn-sm btn-red" on:click={onClose}>Discard & Close</button>
           <button class="btn btn-sm btn-accent btn-pulse" on:click={saveEntries} disabled={saving}>

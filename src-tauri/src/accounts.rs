@@ -144,7 +144,8 @@ pub(crate) fn db_path(server_exe: &str) -> Result<PathBuf, String> {
 fn open_db(server_exe: &str) -> Result<Connection, String> {
     let path = db_path(server_exe)?;
     if !path.exists() {
-        return Err("Account.db not found — start the server once to create it.".into());
+        let name = path.file_name().map(|n| n.to_string_lossy()).unwrap_or_default();
+        return Err(format!("{name} not found. Start the server once to create it."));
     }
     // No CREATE flag: the server owns this file, and an empty one made here
     // would be picked up by MHServerEmu as an existing (schema-less) database.

@@ -269,7 +269,7 @@ fn open_db_missing_file_errors_without_creating_it() {
     // Data/ ships with MHServerEmu; only the DB is absent before first start.
     fs::create_dir_all(path.parent().unwrap()).unwrap();
     let err = open_db(&server_exe).unwrap_err();
-    assert!(err.contains("Account.db not found"), "unexpected error: {err}");
+    assert!(err.contains("Account.db not found."), "unexpected error: {err}");
     assert!(!path.exists(), "open_db must not create Account.db");
 }
 
@@ -323,4 +323,19 @@ fn db_path_rejects_filenames_that_escape_data_dir() {
 fn db_path_allows_plain_and_subfolder_filenames() {
     assert!(db_path_with_filename("Other.db").unwrap().ends_with("Data/Other.db"));
     assert!(db_path_with_filename("Backup/Other.db").unwrap().ends_with("Data/Backup/Other.db"));
+}
+
+#[test]
+fn open_db_missing_file_error_names_the_configured_file() {
+    let (tmp, server_exe) = empty_server();
+    fs::write(
+        tmp.path().join("ConfigOverride.ini"),
+        "[SQLiteDBManager]
+FileName=Custom.db
+",
+    )
+    .unwrap();
+    fs::create_dir_all(tmp.path().join("Data")).unwrap();
+    let err = open_db(&server_exe).unwrap_err();
+    assert!(err.contains("Custom.db not found."), "unexpected error: {err}");
 }

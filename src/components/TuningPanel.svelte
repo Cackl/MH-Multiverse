@@ -597,7 +597,7 @@
                       role="switch"
                       aria-checked={file.enabled}
                       tabindex="0"
-                      title={!file.toggleable ? 'Unknown prefix — cannot toggle' : undefined}
+                      title={!file.toggleable ? 'Unknown prefix, cannot toggle' : undefined}
                       on:click={() => toggleFile(file)}
                       on:keydown={e => e.key === 'Enter' && toggleFile(file)}
                     ></div>
@@ -675,7 +675,7 @@
                       role="switch"
                       aria-checked={file.enabled}
                       tabindex="0"
-                      title={!file.toggleable ? 'Unknown prefix — cannot toggle' : undefined}
+                      title={!file.toggleable ? 'Unknown prefix, cannot toggle' : undefined}
                       on:click={() => toggleFile(file)}
                       on:keydown={e => e.key === 'Enter' && toggleFile(file)}
                     ></div>

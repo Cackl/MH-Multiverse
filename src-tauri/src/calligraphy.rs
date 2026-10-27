@@ -52,7 +52,7 @@ pub struct CatalogueState(pub Mutex<Option<(String, PrototypeCatalogue)>>);
 // ── Binary helpers ────────────────────────────────────────────────────────────
 
 fn eod_err(pos: usize) -> String {
-    format!("Unexpected end of data at offset {pos} — file may be truncated or corrupt")
+    format!("Unexpected end of data at offset {pos}. File may be truncated or corrupt")
 }
 
 fn read_u8(data: &[u8], pos: &mut usize) -> Result<u8, String> {
@@ -131,14 +131,14 @@ fn load_pak(sip_path: &str) -> Result<(Vec<u8>, HashMap<String, PakEntry>, usize
     let signature = read_u32_le(&data, &mut pos)?;
     if signature != PAK_SIGNATURE {
         return Err(format!(
-            "Invalid Calligraphy.sip signature 0x{signature:X} — expected 0x{PAK_SIGNATURE:X}"
+            "Invalid Calligraphy.sip signature 0x{signature:X}, expected 0x{PAK_SIGNATURE:X}"
         ));
     }
 
     let version = read_u32_le(&data, &mut pos)?;
     if version != PAK_VERSION {
         return Err(format!(
-            "Unexpected Calligraphy.sip version {version} — expected {PAK_VERSION}"
+            "Unexpected Calligraphy.sip version {version}, expected {PAK_VERSION}"
         ));
     }
 

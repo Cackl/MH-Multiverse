@@ -489,7 +489,7 @@ pub async fn start_server(
             &addr.parse().map_err(|e| format!("Invalid address: {e}"))?,
             std::time::Duration::from_millis(200),
         ).is_ok() {
-            let msg = format!("Port {port} is already in use — WebFrontend cannot start. Free the port or change WebFrontend.Port in Config.ini.");
+            let msg = format!("Port {port} is already in use. WebFrontend cannot start. Free the port or change WebFrontend.Port in Config.ini.");
             let _ = app.emit("server-log", vec![LogLinePayload {
                 time: log_timestamp(),
                 level: "fatal".into(),
