@@ -68,6 +68,17 @@ const BLUEPRINT_HINT_PREFIXES: [string, string | null][] = [
 
 assertPrefixOrder(BLUEPRINT_HINT_PREFIXES, 'BLUEPRINT_HINT_PREFIXES')
 
+// Parses a tuning value from an <input type="number"> (a number, or null/''
+// when empty) or a plain string. Returns null for blank or non-numeric input,
+// so a real 0 is never confused with "no value".
+export function parseTuningValue(raw: string | number | null | undefined): number | null {
+  if (raw === null || raw === undefined) return null
+  const text = String(raw).trim()
+  if (text === '') return null
+  const n = Number(text)
+  return Number.isFinite(n) ? n : null
+}
+
 export function blueprintHintForSetting(setting: string): string | null {
   for (const [prefix, hint] of BLUEPRINT_HINT_PREFIXES) {
     if (setting.startsWith(prefix)) return hint

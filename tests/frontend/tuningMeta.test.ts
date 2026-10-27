@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { categoryForSetting, blueprintHintForSetting, CATEGORY_PREFIXES, KNOWN_CORE } from '../../src/lib/tuningMeta'
+import { categoryForSetting, blueprintHintForSetting, parseTuningValue, CATEGORY_PREFIXES, KNOWN_CORE } from '../../src/lib/tuningMeta'
 
 describe('categoryForSetting', () => {
   it('all prefixes map to their declared category', () => {
@@ -36,6 +36,22 @@ describe('blueprintHintForSetting path shape', () => {
     for (const p of prefixes) {
       const hint = blueprintHintForSetting(p + 'X')
       if (hint !== null) expect(hint, p).toMatch(/^[A-Za-z]+(\/[A-Za-z]+)*\/$/)
+    }
+  })
+})
+
+describe('parseTuningValue', () => {
+  it('keeps 0 as 0', () => {
+    expect(parseTuningValue('0')).toBe(0)
+    expect(parseTuningValue(0)).toBe(0)
+  })
+  it('parses decimals and negatives', () => {
+    expect(parseTuningValue('1.5')).toBe(1.5)
+    expect(parseTuningValue(-2)).toBe(-2)
+  })
+  it('returns null for blank or non-numeric input', () => {
+    for (const bad of ['', '  ', null, undefined, 'abc', '1abc', 'NaN', 'Infinity']) {
+      expect(parseTuningValue(bad as never), String(bad)).toBeNull()
     }
   })
 })
