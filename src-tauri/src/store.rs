@@ -309,6 +309,16 @@ fn write_atomic(path: &Path, contents: &str) -> Result<(), String> {
     Ok(())
 }
 
+/// Like `write_atomic`, but first snapshots an existing file to `<path>.bak`
+/// (overwriting the previous snapshot) so the last version can be recovered.
+pub(crate) fn write_with_backup(path: &Path, contents: &str) -> Result<(), String> {
+    if path.exists() {
+        let bak = path.with_extension("json.bak");
+        fs::copy(path, &bak).map_err(|e| format!("Backup failed: {e}"))?;
+    }
+    write_atomic(path, contents)
+}
+
 // ── Display name resolution (internal) ───────────────────────────────────────
 
 /// Resolve a prototype runtime ID (as a decimal string) to a display name,

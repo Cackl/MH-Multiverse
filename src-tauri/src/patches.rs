@@ -161,7 +161,7 @@ pub fn save_patch_file(
     let text = serde_json::to_string_pretty(&entries)
         .map_err(|e| format!("Cannot serialise entries: {e}"))?;
 
-    fs::write(&path, text)
+    crate::store::write_with_backup(&path, &text)
         .map_err(|e| format!("Cannot write {file_name}: {e}"))
 }
 

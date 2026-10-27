@@ -337,7 +337,7 @@ pub fn write_tuning_file(
     let contents = serde_json::to_string_pretty(&raw)
         .map_err(|e| format!("JSON serialisation error: {e}"))?;
 
-    std::fs::write(&path, contents)
+    crate::store::write_with_backup(&path, &contents)
         .map_err(|e| format!("Cannot write {}: {e}", path.display()))?;
 
     Ok(())

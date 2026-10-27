@@ -57,11 +57,9 @@ fn scan_skips_reserved_files() {
 fn scan_sorts_toggleable_first() {
     let (_tmp, server_exe) = setup();
     let files = scan_tuning_files(server_exe, false).unwrap();
-    let last_toggleable = files.iter().rposition(|f| f.toggleable);
-    let first_non_toggleable = files.iter().position(|f| !f.toggleable);
-    if let (Some(last_t), Some(first_n)) = (last_toggleable, first_non_toggleable) {
-        assert!(last_t < first_n, "toggleable files must sort before non-toggleable ones");
-    }
+    let last_toggleable = files.iter().rposition(|f| f.toggleable).expect("fixture has toggleable files");
+    let first_other = files.iter().position(|f| !f.toggleable).expect("fixture has non-toggleable files");
+    assert!(last_toggleable < first_other, "toggleable files must sort before non-toggleable ones");
 }
 
 #[test]
@@ -227,12 +225,27 @@ fn create_rejects_invalid_filename() {
 #[test]
 fn create_writes_new_file() {
     let (_tmp, server_exe) = setup();
-    let dir = live_tuning_dir(&server_exe).unwrap();
     create_tuning_file(
-        server_exe,
+        server_exe.clone(),
         "LiveTuningDataNew.json".to_string(),
-        vec![TuningEntry { prototype: String::new(), setting: "eGTV_XPGain".to_string(), value: 1.0 }],
+        vec![TuningEntry { prototype: String::new(), setting: "eGTV_XPGain".to_string(), value: 2.5 }],
     )
     .unwrap();
-    assert!(dir.join("LiveTuningDataNew.json").exists());
+    let entries = read_tuning_file(server_exe, "LiveTuningDataNew.json".to_string()).unwrap();
+    assert_eq!(entries.len(), 1);
+    assert_eq!(entries[0].setting, "eGTV_XPGain");
+    assert_eq!(entries[0].value, 2.5);
+}
+
+#[test]
+fn write_keeps_backup_of_previous_contents() {
+    let (_tmp, server_exe) = setup();
+    let name = "LiveTuningDataBugFixes.json".to_string();
+    let file = live_tuning_dir(&server_exe).unwrap().join(&name);
+    let before = fs::read_to_string(&file).unwrap();
+
+    write_tuning_file(server_exe, name, vec![]).unwrap();
+
+    assert_eq!(fs::read_to_string(file.with_extension("json.bak")).unwrap(), before);
+    assert_eq!(fs::read_to_string(&file).unwrap().trim(), "[]");
 }

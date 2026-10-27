@@ -1,15 +1,10 @@
 <script lang="ts">
-  import { activeTab, activeDataTab, serverRunning, apacheRunning, gameRunning, showUpdateBadge, type Tab, type DataTab } from '../lib/store'
+  import { activeTab, activeDataTab, serverRunning, apacheRunning, gameRunning, showUpdateBadge, goTab, goDataTab, type Tab, type DataTab } from '../lib/store'
 
-  function go(tab: Tab) {
-    activeTab.set(tab)
-  }
+  const go = (tab: Tab) => goTab(tab)
 
   // Switches to the Data rail entry, restoring whichever sub-tab was last active.
-  function goData(sub: DataTab) {
-    activeTab.set('data')
-    activeDataTab.set(sub)
-  }
+  const goData = (sub: DataTab) => goDataTab(sub)
 </script>
 
 <nav class="rail">

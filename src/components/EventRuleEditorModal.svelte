@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { onDestroy } from 'svelte'
+  import { setUnsaved } from '../lib/store'
   import type { EventDefinition, ScheduleRule } from '../lib/tuningMeta'
 
   // ── Props ───────────────────────────────────────────────────────────────────
@@ -56,6 +58,9 @@
   $: needsDate      = rule_type === 'SpecialDate'    || rule_type === 'SpecialDateLunar'
   $: isRotation     = rule_type === 'WeeklyRotation'
   $: availableToAdd = allEvents.filter(e => !events.includes(e.id))
+
+  $: setUnsaved('event-rule', isDirty ? 'Event rule' : null)
+  onDestroy(() => setUnsaved('event-rule', null))
 
   $: isDirty =
     name          !== _orig.name          ||

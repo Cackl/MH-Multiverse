@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte'
   import { invoke } from '@tauri-apps/api/core'
-  import { categoryForSetting, KNOWN_CORE, KNOWN_EVENTS, KNOWN_SETTINGS, blueprintHintForSetting, type KnownSetting } from '../lib/tuningMeta'
+  import { categoryForSetting, KNOWN_CORE, KNOWN_EVENTS, KNOWN_SETTINGS, blueprintHintForSetting, parseTuningValue, type KnownSetting } from '../lib/tuningMeta'
 
   // ── Props ──────────────────────────────────────────────────────────────────
 
@@ -36,6 +36,7 @@
 
   let saving = false
   let saveError = ''
+  let addError = ''
   let saveSuccess = false
 
   let categoryFilter = ''
@@ -80,6 +81,7 @@
     return matchCat && matchSearch
   })
 
+  $: if (newSetting || newPrototype) addError = ''
   $: dirty = isNew
     ? entries.length > 0
     : entries.length !== savedEntries.length ||
@@ -195,6 +197,12 @@
     }
   }
 
+  // "Save & Close" in the close guard: only close if the save went through.
+  async function saveAndClose() {
+    await saveEntries()
+    if (!saveError) onClose()
+  }
+
   // ── Reload ─────────────────────────────────────────────────────────────────
 
   async function reloadLiveTuning() {
@@ -244,11 +252,17 @@
   function addEntry() {
     const trimmedSetting = newSetting.trim()
     if (!trimmedSetting) return
-    entries = [...entries, {
-      prototype: newPrototype.trim(),
-      setting: trimmedSetting,
-      value: parseFloat(newValue) || 1,
-    }]
+    const trimmedProto = newPrototype.trim()
+    // Blank keeps the "1" placeholder; anything else must be a real number.
+    const value = String(newValue ?? '').trim() === '' ? 1 : parseTuningValue(newValue)
+    if (value === null) { addError = 'Value must be a number.'; return }
+    // Rows are keyed by prototype|setting, so a duplicate would crash the list.
+    if (entries.some(e => e.prototype === trimmedProto && e.setting === trimmedSetting)) {
+      addError = 'This setting is already in the file for that prototype.'
+      return
+    }
+    addError = ''
+    entries = [...entries, { prototype: trimmedProto, setting: trimmedSetting, value }]
     newPrototype = ''
     newSetting = ''
     newValue = ''
@@ -262,7 +276,9 @@
   }
 
   function updateValue(entry: TuningEntry, val: string) {
-    entry.value = parseFloat(val) || 0
+    // Blank/invalid input keeps the old value (re-render restores the field).
+    const parsed = parseTuningValue(val)
+    if (parsed !== null) entry.value = parsed
     entries = [...entries]
   }
 
@@ -585,14 +601,15 @@
         Add
       </button>
     </div>
+    {#if addError}<div class="feedback-error add-error">{addError}</div>{/if}
 
     <!-- ── Footer ── -->
     <div class="modal-footer">
       {#if closeBlocked}
-        <span class="feedback-error">Unsaved changes. Save or discard before closing.</span>
+        <span class="feedback-error">{saveError || 'Unsaved changes. Save or discard before closing.'}</span>
         <div class="footer-actions">
           <button class="btn btn-sm btn-red" on:click={onClose}>Discard & Close</button>
-          <button class="btn btn-sm btn-accent btn-pulse" on:click={saveEntries} disabled={saving}>
+          <button class="btn btn-sm btn-accent btn-pulse" on:click={saveAndClose} disabled={saving}>
             {saving ? 'Saving...' : 'Save & Close'}
           </button>
         </div>
@@ -840,6 +857,7 @@
     letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-3);
   }
   .entry-status.error { color: var(--text-error); text-transform: none; font-family: var(--font-body); letter-spacing: 0; }
+  .add-error { padding: 4px 16px 0; font-size: 11px; }
 
   .entry-table { width: 100%; border-collapse: collapse; font-size: 12px; table-layout: fixed; }
 

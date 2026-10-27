@@ -740,7 +740,7 @@
                   <td class="col-source">
                     <div class="source-cell">
                       <span class="source-name">
-                        {entry.source_file.replace(/^Catalog/, '').replace(/\.json$/, '')}
+                        {entry.source_file.replace(/^Catalog/, '').replace(/\.json$/, '') || entry.source_file}
                       </span>
                       {#if entry.from_modified}
                         <span class="modified-badge">M</span>
@@ -772,6 +772,7 @@
     entry={editingEntry}
     serverExe={$appConfig.server_exe}
     catalogFiles={catalogFiles}
+    allEntries={entries}
     onClose={() => editingEntry = null}
     onSaved={handleSaved}
     onDeleted={handleDeleted}
@@ -784,6 +785,7 @@
     entry={null}
     serverExe={$appConfig.server_exe}
     catalogFiles={catalogFiles}
+    allEntries={entries}
     onClose={() => creatingNew = false}
     onSaved={handleCreated}
     onDeleted={() => {}}

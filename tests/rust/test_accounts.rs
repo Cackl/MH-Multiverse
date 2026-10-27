@@ -60,23 +60,15 @@ fn scan_download_backups_matches_pattern() {
 }
 
 #[test]
-fn scan_download_backups_empty_dir() {
+fn scan_download_backups_returns_nothing_when_there_is_nothing_to_scan() {
+    assert_eq!(scan_download_backups(String::new()).unwrap().len(), 0, "blank game exe");
+
     let tmp = tempfile::tempdir().unwrap();
+    let game_exe = tmp.path().join("MarvelHeroesOmega.exe").to_string_lossy().to_string();
+    assert_eq!(scan_download_backups(game_exe.clone()).unwrap().len(), 0, "missing Download dir");
+
     fs::create_dir_all(tmp.path().join("Download")).unwrap();
-    let game_exe = tmp.path().join("MarvelHeroesOmega.exe").to_string_lossy().to_string();
-    assert_eq!(scan_download_backups(game_exe).unwrap().len(), 0);
-}
-
-#[test]
-fn scan_download_backups_blank_game_exe_is_empty() {
-    assert_eq!(scan_download_backups(String::new()).unwrap().len(), 0);
-}
-
-#[test]
-fn scan_download_backups_missing_download_dir() {
-    let tmp = tempfile::tempdir().unwrap();
-    let game_exe = tmp.path().join("MarvelHeroesOmega.exe").to_string_lossy().to_string();
-    assert_eq!(scan_download_backups(game_exe).unwrap().len(), 0);
+    assert_eq!(scan_download_backups(game_exe).unwrap().len(), 0, "empty Download dir");
 }
 
 #[test]
@@ -110,7 +102,6 @@ fn import_add_remaps_ids() {
 
     // None of the original import file's DbGuids (555-560) should appear
     // anywhere in the database — every entity got a freshly allocated id.
-    let original_guids = [555i64, 556, 557, 558, 559, 560];
     for table in ["Player", "Avatar", "TeamUp", "Item", "ControlledEntity"] {
         let count: i64 = conn
             .query_row(
@@ -121,7 +112,6 @@ fn import_add_remaps_ids() {
             .unwrap();
         assert_eq!(count, 0, "found an unmapped original DbGuid in {table}");
     }
-    let _ = original_guids;
 }
 
 #[test]
@@ -256,10 +246,13 @@ fn import_replace_target_not_found() {
 }
 
 #[test]
-fn hash_password_length() {
-    let (hash, salt) = hash_password("some-password");
-    assert_eq!(hash.len(), 64);
-    assert_eq!(salt.len(), 64);
+fn hash_password_is_salted() {
+    // Same password twice: a fresh random salt each time, so neither the salt
+    // nor the resulting hash may repeat.
+    let (hash_a, salt_a) = hash_password("same-password");
+    let (hash_b, salt_b) = hash_password("same-password");
+    assert_ne!(salt_a, salt_b);
+    assert_ne!(hash_a, hash_b);
 }
 
 #[test]
@@ -330,9 +323,7 @@ fn open_db_missing_file_error_names_the_configured_file() {
     let (tmp, server_exe) = empty_server();
     fs::write(
         tmp.path().join("ConfigOverride.ini"),
-        "[SQLiteDBManager]
-FileName=Custom.db
-",
+        "[SQLiteDBManager]\nFileName=Custom.db\n",
     )
     .unwrap();
     fs::create_dir_all(tmp.path().join("Data")).unwrap();

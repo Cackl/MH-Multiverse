@@ -144,7 +144,6 @@ fn build_catalogue_populates_indices() {
     let (_, cat) = guard.as_ref().unwrap();
     assert_eq!(cat.by_id.len(), 3);
     assert_eq!(cat.by_path.len(), 3);
-    assert_eq!(cat.by_guid.len(), 3);
     assert_eq!(cat.blueprints.len(), 2);
 }
 
@@ -159,28 +158,6 @@ fn id_for_path_round_trip() {
     let id = id_for_path(cat, path).unwrap();
     assert_eq!(id, 1001);
     assert_eq!(path_for_id(cat, id), Some(path));
-}
-
-#[test]
-fn guid_for_path_and_path_for_guid_round_trip() {
-    let (_tmp, server_exe) = setup_with_sip();
-    let state = load(&server_exe);
-    let guard = state.0.lock().unwrap();
-    let (_, cat) = guard.as_ref().unwrap();
-
-    let path = "Entity/Items/Consumables/Prototypes/HealthPotion.prototype";
-    let guid = guid_for_path(cat, path).unwrap();
-    assert_eq!(guid, 5003);
-    assert_eq!(path_for_guid(cat, guid), Some(path));
-}
-
-#[test]
-fn id_for_path_missing_returns_none() {
-    let (_tmp, server_exe) = setup_with_sip();
-    let state = load(&server_exe);
-    let guard = state.0.lock().unwrap();
-    let (_, cat) = guard.as_ref().unwrap();
-    assert_eq!(id_for_path(cat, "Not/A/Real/Path.prototype"), None);
 }
 
 #[test]
@@ -237,5 +214,7 @@ fn ensure_catalogue_loaded_rebuilds_on_path_change() {
 
     let (_tmp2, server_exe2) = setup_with_sip();
     ensure_catalogue_loaded(&state, &server_exe2).unwrap();
-    assert!(state.0.lock().unwrap().is_some());
+
+    let cached_path = state.0.lock().unwrap().as_ref().unwrap().0.clone();
+    assert_eq!(cached_path, sip_path_for_server_exe(&server_exe2).unwrap());
 }

@@ -1,8 +1,8 @@
 <script lang="ts">
-  import { onMount, tick } from 'svelte'
+  import { onMount, onDestroy, tick } from 'svelte'
   import { openPath } from '@tauri-apps/plugin-opener'
   import { invoke } from '@tauri-apps/api/core'
-  import { appConfig, setConsolePresets, serverRunning, setShutdownConfig, logFilterThreshold, type ShutdownConfig } from '../lib/store'
+  import { appConfig, setUnsaved, setConsolePresets, serverRunning, setShutdownConfig, logFilterThreshold, type ShutdownConfig } from '../lib/store'
   import { FALLBACK_COMMANDS } from '../lib/serverCommands'
   import { CONFIG_SCHEMA, type Field } from '../lib/configMeta'
   import PanelSidebar from './PanelSidebar.svelte'
@@ -55,6 +55,8 @@
     (values[f.section]?.[f.key] ?? '') !== (savedValues[f.section]?.[f.key] ?? '')
   )
   $: presets = [...($appConfig.console_presets ?? [])]
+  $: setUnsaved('config', dirty ? 'Config' : null)
+  onDestroy(() => setUnsaved('config', null))
 
   // -- Load / save --
 

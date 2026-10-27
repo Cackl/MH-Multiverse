@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { activeDataTab, type DataTab } from '../lib/store'
+  import { activeDataTab, goDataTab, type DataTab } from '../lib/store'
   import TuningPanel from './TuningPanel.svelte'
   import StorePanel  from './StorePanel.svelte'
   import PatchesPanel from './PatchesPanel.svelte'
@@ -23,7 +23,7 @@
         class:active={$activeDataTab === tab.id}
         role="tab"
         aria-selected={$activeDataTab === tab.id}
-        on:click={() => activeDataTab.set(tab.id)}
+        on:click={() => goDataTab(tab.id)}
       >
         {tab.label}
       </button>

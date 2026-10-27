@@ -15,13 +15,7 @@ fn encrypt_decrypt_round_trip() {
 }
 
 #[test]
-fn encrypt_empty_returns_empty() {
-    let (enc, nonce) = encrypt_password("").unwrap();
-    assert_eq!(enc, "");
-    assert_eq!(nonce, "");
-}
-
-#[test]
-fn decrypt_empty_returns_empty() {
+fn empty_password_stays_empty() {
+    assert_eq!(encrypt_password("").unwrap(), (String::new(), String::new()));
     assert_eq!(decrypt_password("", "").unwrap(), "");
 }

@@ -26,7 +26,16 @@ npm run test:all    # both
   public API.
 - `frontend/*.test.ts` — one file per `src/lib/*.ts` module with actual logic
   (files that are pure static data, like `configMeta.ts`/`serverCommands.ts`,
-  have nothing to unit test and are skipped).
+  have nothing to unit test and are skipped). They run in a plain `node`
+  environment with no DOM, so UI behaviour worth testing (for example the
+  unsaved-changes guard and confirm requests in `store.ts`) lives in `src/lib`
+  and the Svelte files stay thin callers.
+- `frontend/setup.ts` — stubs the Tauri `invoke`/`listen` modules and
+  `localStorage` for every frontend test; override `invoke` per test with
+  `vi.mock()` when a test needs a specific reply.
+- Some modules keep their tests beside the code instead of in `rust/`:
+  inline in `app_update.rs`, and in `tests.rs` files under `overlay/` and
+  `profile_import/`.
 
 ## What's deliberately not covered
 
@@ -57,8 +66,7 @@ npm run test:all    # both
 - Fixing a bug: write the test first (red), fix the code (green).
 - New Tauri command: add a Rust unit test for the inner logic it delegates to.
 - New file format handling: add a round-trip test against a fixture.
-- Changing `slugify()` in either Rust (`store.rs`) or TS
-  (`StoreEditorModal.svelte`): both `slugify_parity` (Rust) and
-  `slugify-parity.test.ts` (frontend) must still pass — they're intentionally
-  two synced copies, not one shared implementation (see R-4 in
-  `Future Updates/MH-Multiverse-Code-Review-Followups-2026-09-15.md`).
+- New UI behaviour with real logic in it: put the logic in `src/lib/*.ts` and
+  test it there; Svelte components can't be rendered by this harness.
+- Bundle slugs now come from the frontend only (the Rust `slugify()` and its
+  parity test were removed), so there is no cross-language copy to keep in sync.

@@ -3,7 +3,7 @@
   import { invoke } from '@tauri-apps/api/core'
   import { openPath } from '@tauri-apps/plugin-opener'
   import { appConfig } from '../lib/store'
-  import { activeDataTab, tuningFocusFile } from '../lib/store'
+  import { activeDataTab, tuningFocusFile, confirmLeave } from '../lib/store'
   import { get } from 'svelte/store'
   import { eventTimezoneOffset } from '../lib/store'
   import type { TuningFileInfo, EventDefinition, EventsData, ScheduleRule, ScheduleData } from '../lib/tuningMeta'
@@ -330,8 +330,8 @@
 
   onMount(() => { if ($appConfig.server_exe) loadData() })
 
-  function openInTuning(filePath: string) {
-    if (!filePath) return
+  async function openInTuning(filePath: string) {
+    if (!filePath || !(await confirmLeave())) return
     tuningFocusFile.set(filePath)
     activeDataTab.set('tuning')
   }

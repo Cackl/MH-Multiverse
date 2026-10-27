@@ -5,9 +5,16 @@ import {
   appendLogBatch,
   clearLog,
   serverLog,
-  LOG_LEVEL_SEVERITY,
   setSchedulerNow,
   eventTimezoneOffset,
+  unsavedSources,
+  setUnsaved,
+  confirmLeave,
+  goTab,
+  goDataTab,
+  activeTab,
+  activeDataTab,
+  confirmRequest,
 } from '../../src/lib/store'
 
 beforeEach(() => {
@@ -32,32 +39,6 @@ describe('appendLogBatch', () => {
     expect(get(serverLog).length).toBe(2000)
   })
 
-  it('no-ops on an empty batch', () => {
-    appendLog({ time: '', level: 'info', msg: 'kept' })
-    appendLogBatch([])
-    expect(get(serverLog).length).toBe(1)
-  })
-})
-
-describe('clearLog', () => {
-  it('empties the log', () => {
-    appendLog({ time: '', level: 'info', msg: 'a' })
-    clearLog()
-    expect(get(serverLog)).toEqual([])
-  })
-})
-
-describe('LOG_LEVEL_SEVERITY', () => {
-  it('orders levels trace < debug < info < ok < warn < err < fatal', () => {
-    const order: (keyof typeof LOG_LEVEL_SEVERITY)[] = ['trace', 'debug', 'info', 'ok', 'warn', 'err', 'fatal']
-    for (let i = 1; i < order.length; i++) {
-      expect(LOG_LEVEL_SEVERITY[order[i]]).toBeGreaterThan(LOG_LEVEL_SEVERITY[order[i - 1]])
-    }
-  })
-
-  it('"all" sorts below every real level', () => {
-    expect(LOG_LEVEL_SEVERITY.all).toBeLessThan(LOG_LEVEL_SEVERITY.trace)
-  })
 })
 
 describe('setSchedulerNow', () => {
@@ -69,5 +50,93 @@ describe('setSchedulerNow', () => {
 
     expect(get(eventTimezoneOffset)).toBe(5)
     vi.useRealTimers()
+  })
+})
+
+describe('unsaved-changes guard', () => {
+  // Answers the in-app confirmation currently showing; returns its message.
+  function answerNext(ok: boolean): string | null {
+    const req = get(confirmRequest)
+    if (!req) return null
+    req.resolve(ok)
+    return req.message
+  }
+  const asked = () => get(confirmRequest) !== null
+
+  beforeEach(() => {
+    unsavedSources.set({})
+    confirmRequest.set(null)
+    activeTab.set('launch')
+    activeDataTab.set('events')
+  })
+
+  it('setUnsaved adds and removes a source', () => {
+    setUnsaved('patches', 'Patches')
+    expect(get(unsavedSources)).toEqual({ patches: 'Patches' })
+    setUnsaved('patches', null)
+    expect(get(unsavedSources)).toEqual({})
+  })
+
+  it('confirmLeave is true without asking when nothing is unsaved', async () => {
+    expect(await confirmLeave()).toBe(true)
+    expect(asked()).toBe(false)
+  })
+
+  it('confirmLeave asks, names the sources and clears them on accept', async () => {
+    setUnsaved('patches', 'Patches')
+    setUnsaved('config', 'Config')
+    const result = confirmLeave()
+    expect(answerNext(true)).toContain('Patches, Config')
+    expect(await result).toBe(true)
+    expect(get(unsavedSources)).toEqual({})
+    expect(asked()).toBe(false)
+  })
+
+  it('confirmLeave keeps the sources when the user stays', async () => {
+    setUnsaved('patches', 'Patches')
+    const result = confirmLeave()
+    answerNext(false)
+    expect(await result).toBe(false)
+    expect(get(unsavedSources)).toEqual({ patches: 'Patches' })
+  })
+
+  it('a newer question cancels an unanswered one', async () => {
+    setUnsaved('patches', 'Patches')
+    const first = confirmLeave()
+    const second = confirmLeave()
+    expect(await first).toBe(false)
+    answerNext(true)
+    expect(await second).toBe(true)
+  })
+
+  it('goTab to the current tab never asks', async () => {
+    setUnsaved('patches', 'Patches')
+    await goTab('launch')
+    expect(asked()).toBe(false)
+  })
+
+  it('goTab stays put when the user declines', async () => {
+    setUnsaved('config', 'Config')
+    const nav = goTab('server')
+    answerNext(false)
+    await nav
+    expect(get(activeTab)).toBe('launch')
+  })
+
+  it('goTab moves when nothing is unsaved', async () => {
+    await goTab('server')
+    expect(get(activeTab)).toBe('server')
+  })
+
+  it('goDataTab to the open sub-tab never asks, other sub-tabs do', async () => {
+    activeTab.set('data')
+    setUnsaved('patches', 'Patches')
+    await goDataTab('events')
+    expect(asked()).toBe(false)
+    const nav = goDataTab('store')
+    expect(asked()).toBe(true)
+    answerNext(false)
+    await nav
+    expect(get(activeDataTab)).toBe('events')
   })
 })

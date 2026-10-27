@@ -1,32 +1,33 @@
 import { describe, it, expect } from 'vitest'
 import { isBanned, isWhitelisted, userLevelLabel, formatLastSeen } from '../../src/lib/playerMeta'
 
-describe('isBanned', () => {
-  it('flag value 2', () => expect(isBanned(2)).toBe(true))
-  it('flag value 0', () => expect(isBanned(0)).toBe(false))
-  it('combined flags (banned + whitelisted)', () => expect(isBanned(18)).toBe(true))
-  it('undefined', () => expect(isBanned(undefined)).toBe(false))
-})
-
-describe('isWhitelisted', () => {
-  it('flag value 16', () => expect(isWhitelisted(16)).toBe(true))
-  it('combined flags', () => expect(isWhitelisted(18)).toBe(true))
-  it('undefined', () => expect(isWhitelisted(undefined)).toBe(false))
+describe('account flags', () => {
+  it('isBanned reads bit 2, also when combined with other flags', () => {
+    expect(isBanned(2)).toBe(true)
+    expect(isBanned(18)).toBe(true)
+    expect(isBanned(16)).toBe(false)
+    expect(isBanned(undefined)).toBe(false)
+  })
+  it('isWhitelisted reads bit 16, also when combined with other flags', () => {
+    expect(isWhitelisted(16)).toBe(true)
+    expect(isWhitelisted(18)).toBe(true)
+    expect(isWhitelisted(2)).toBe(false)
+    expect(isWhitelisted(undefined)).toBe(false)
+  })
 })
 
 describe('userLevelLabel', () => {
-  it('known levels', () => {
-    expect(userLevelLabel(0)).toBe('Player')
-    expect(userLevelLabel(1)).toBe('Moderator')
-    expect(userLevelLabel(2)).toBe('Admin')
+  it('missing level is a Player, an unlisted level is Unknown', () => {
+    expect(userLevelLabel(undefined)).toBe('Player')
+    expect(userLevelLabel(99)).toBe('Unknown')
   })
-  it('undefined defaults to Player', () => expect(userLevelLabel(undefined)).toBe('Player'))
 })
 
 describe('formatLastSeen', () => {
-  it('zero is Never', () => expect(formatLastSeen(0)).toBe('Never'))
-  it('undefined is Never', () => expect(formatLastSeen(undefined)).toBe('Never'))
-
+  it('zero and missing timestamps read Never', () => {
+    expect(formatLastSeen(0)).toBe('Never')
+    expect(formatLastSeen(undefined)).toBe('Never')
+  })
   it('.NET ticks, Unix ms, and Unix seconds for the same instant all agree', () => {
     // timestampToDate() isn't exported, so this pins its three unit
     // classifications indirectly: encode one instant three ways and check

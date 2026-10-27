@@ -46,11 +46,27 @@ fn serialize_ini_round_trip() {
 
 #[test]
 fn serialize_ini_sorted() {
-    let content = "[B]\nY=2\nX=1\n\n[A]\nZ=1\n";
-    let data = parse_ini(content);
-    let out = serialize_ini(&data);
-    assert!(out.find("[A]").unwrap() < out.find("[B]").unwrap());
-    assert!(out.find("X=1").unwrap() < out.find("Y=2").unwrap());
+    // IniData is a HashMap with a random iteration order per run, so use enough
+    // sections and keys that sorted output cannot come out by chance.
+    let mut content = String::new();
+    for name in ["H", "G", "F", "E", "D", "C", "B", "A"] {
+        content.push_str(&format!("[{name}]
+Z=1
+Y=2
+X=3
+W=4
+
+"));
+    }
+    let out = serialize_ini(&parse_ini(&content));
+
+    let sections: Vec<&str> = out.lines().filter(|l| l.starts_with('[')).collect();
+    let mut sorted = sections.clone();
+    sorted.sort();
+    assert_eq!(sections, sorted);
+
+    let first_keys: Vec<&str> = out.lines().skip(1).take(4).map(|l| l.split('=').next().unwrap()).collect();
+    assert_eq!(first_keys, ["W", "X", "Y", "Z"]);
 }
 
 #[test]
