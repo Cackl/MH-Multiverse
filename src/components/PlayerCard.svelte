@@ -70,19 +70,19 @@
 
   async function executeBan() {
     confirmAction = null
-    if (!player.email) { showFeedback(false, 'No email on record — cannot ban this player'); return }
+    if (!player.email) { showFeedback(false, 'No email on record, cannot ban this player'); return }
     const ok = await runCommand(`!account ban ${player.email}`)
     if (ok) showFeedback(true, `Banned ${player.username} (${player.email})`)
   }
 
   async function executeUnban() {
-    if (!player.email) { showFeedback(false, 'No email on record — cannot unban this player'); return }
+    if (!player.email) { showFeedback(false, 'No email on record, cannot unban this player'); return }
     const ok = await runCommand(`!account unban ${player.email}`)
     if (ok) showFeedback(true, `Unbanned ${player.username}`)
   }
 
   async function executeSetLevel() {
-    if (!player.email) { showFeedback(false, 'No email on record — cannot change user level'); return }
+    if (!player.email) { showFeedback(false, 'No email on record, cannot change user level'); return }
     setLevelPending = false
     const ok = await runCommand(`!account userlevel ${player.email} ${setLevelValue}`)
     if (ok) showFeedback(true, `Set ${player.username} to ${userLevelLabel(setLevelValue)}`)
@@ -183,7 +183,7 @@
             class="btn btn-ghost"
             disabled={commandRunning}
             on:click={executeClientInfo}
-            title="Client Info — output goes to server console"
+            title="Client Info (output goes to server console)"
             >Client Info</button>
           </div>
         </div>

@@ -289,7 +289,7 @@ pub fn reset_events_override(server_exe: String) -> Result<EventsData, String> {
     let (override_path, default_path) = events_file_paths(&dir);
 
     if !default_path.exists() {
-        return Err("Events.json not found — cannot reset override".to_string());
+        return Err("Events.json not found, cannot reset override".to_string());
     }
 
     std::fs::copy(&default_path, &override_path)
@@ -308,7 +308,7 @@ pub fn reset_schedule_override(server_exe: String) -> Result<ScheduleData, Strin
     let (override_path, default_path) = schedule_file_paths(&dir);
 
     if !default_path.exists() {
-        return Err("EventSchedule.json not found — cannot reset override".to_string());
+        return Err("EventSchedule.json not found, cannot reset override".to_string());
     }
 
     std::fs::copy(&default_path, &override_path)
@@ -327,7 +327,7 @@ pub fn merge_events_override(server_exe: String) -> Result<EventsData, String> {
     let (override_path, default_path) = events_file_paths(&dir);
 
     if !default_path.exists() {
-        return Err("Events.json not found — cannot merge".to_string());
+        return Err("Events.json not found, cannot merge".to_string());
     }
 
     let defaults = read_events_from_path(&default_path)?;
@@ -359,7 +359,7 @@ pub fn merge_schedule_override(server_exe: String) -> Result<ScheduleData, Strin
     let (override_path, default_path) = schedule_file_paths(&dir);
 
     if !default_path.exists() {
-        return Err("EventSchedule.json not found — cannot merge".to_string());
+        return Err("EventSchedule.json not found, cannot merge".to_string());
     }
 
     let defaults = read_schedule_from_path(&default_path)?;

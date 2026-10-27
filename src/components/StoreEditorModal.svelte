@@ -1151,10 +1151,10 @@
               {:else if pickerError}
                 <div class="picker-empty error">{pickerError}</div>
               {:else if filteredPickerResults.length === 0 && pickerResults.length > 0}
-                <div class="picker-empty">All results hidden — uncheck filters to show.</div>
+                <div class="picker-empty">All results hidden. Uncheck filters to show.</div>
               {:else if filteredPickerResults.length === 0}
                 <div class="picker-empty">
-                  {selectedCategory ? 'No results — type to search within this category.' : ''}
+                  {selectedCategory ? 'No results. Type to search within this category.' : ''}
                 </div>
               {:else}
                 {#each filteredPickerResults as result}
@@ -1231,7 +1231,7 @@
     <div class="modal-footer">
 
       {#if closeBlocked}
-        <span class="feedback-error">Unsaved changes — save or discard before closing.</span>
+        <span class="feedback-error">Unsaved changes. Save or discard before closing.</span>
         <div class="footer-actions">
           <button class="btn btn-sm btn-red" on:click={onClose}>Discard & Close</button>
           <button

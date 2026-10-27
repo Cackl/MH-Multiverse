@@ -261,3 +261,81 @@ fn hash_password_length() {
     assert_eq!(hash.len(), 64);
     assert_eq!(salt.len(), 64);
 }
+
+#[test]
+fn open_db_missing_file_errors_without_creating_it() {
+    let (_tmp, server_exe) = empty_server();
+    let path = db_path(&server_exe).unwrap();
+    // Data/ ships with MHServerEmu; only the DB is absent before first start.
+    fs::create_dir_all(path.parent().unwrap()).unwrap();
+    let err = open_db(&server_exe).unwrap_err();
+    assert!(err.contains("Account.db not found."), "unexpected error: {err}");
+    assert!(!path.exists(), "open_db must not create Account.db");
+}
+
+#[test]
+fn db_path_defaults_to_account_db() {
+    let (_tmp, server_exe) = empty_server();
+    let p = db_path(&server_exe).unwrap();
+    assert!(p.ends_with("Data/Account.db"), "{p:?}");
+}
+
+#[test]
+fn db_path_honours_sqlite_filename_override() {
+    let (tmp, server_exe) = empty_server();
+    fs::write(
+        tmp.path().join("ConfigOverride.ini"),
+        "[SQLiteDBManager]\nFileName=Custom.db\n",
+    )
+    .unwrap();
+    let p = db_path(&server_exe).unwrap();
+    assert!(p.ends_with("Data/Custom.db"), "{p:?}");
+}
+
+fn db_path_with_filename(filename: &str) -> Result<PathBuf, String> {
+    let (tmp, server_exe) = empty_server();
+    fs::write(
+        tmp.path().join("ConfigOverride.ini"),
+        format!("[SQLiteDBManager]\nFileName={filename}\n"),
+    )
+    .unwrap();
+    db_path(&server_exe)
+}
+
+#[test]
+fn db_path_rejects_filenames_that_escape_data_dir() {
+    for bad in [
+        "",
+        "..",
+        "../Other.db",
+        "sub/../../Other.db",
+        "C:/Other.db",
+        "C:Other.db",
+        "/Other.db",
+        r"\\host\share\Other.db",
+    ] {
+        let err = db_path_with_filename(bad).unwrap_err();
+        assert!(err.contains("FileName"), "{bad:?} -> {err}");
+    }
+}
+
+#[test]
+fn db_path_allows_plain_and_subfolder_filenames() {
+    assert!(db_path_with_filename("Other.db").unwrap().ends_with("Data/Other.db"));
+    assert!(db_path_with_filename("Backup/Other.db").unwrap().ends_with("Data/Backup/Other.db"));
+}
+
+#[test]
+fn open_db_missing_file_error_names_the_configured_file() {
+    let (tmp, server_exe) = empty_server();
+    fs::write(
+        tmp.path().join("ConfigOverride.ini"),
+        "[SQLiteDBManager]
+FileName=Custom.db
+",
+    )
+    .unwrap();
+    fs::create_dir_all(tmp.path().join("Data")).unwrap();
+    let err = open_db(&server_exe).unwrap_err();
+    assert!(err.contains("Custom.db not found."), "unexpected error: {err}");
+}

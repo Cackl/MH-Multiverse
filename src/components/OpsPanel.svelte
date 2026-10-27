@@ -47,7 +47,7 @@
     { id: 'ConfigOverride.ini',   label: 'ConfigOverride.ini', description: 'Local configuration overrides' },
   ]
 
-  const FULL_DATA_TARGET = { id: 'Data', label: 'Full Data Folder', description: 'Entire Data directory — includes everything below' }
+  const FULL_DATA_TARGET = { id: 'Data', label: 'Full Data Folder', description: 'Entire Data directory, includes everything below' }
 
   const DATA_TARGETS = [
     { id: 'Data/Game/LiveTuning', label: 'Live Tuning',    description: 'LiveTuning JSON files' },

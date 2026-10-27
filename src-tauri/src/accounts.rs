@@ -22,13 +22,13 @@
 
 use std::collections::HashMap;
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
 use pbkdf2::pbkdf2_hmac;
 use rand::RngCore;
 use regex::Regex;
-use rusqlite::{params, Connection};
+use rusqlite::{params, Connection, OpenFlags};
 use serde::{Deserialize, Serialize};
 use sha2::Sha512;
 use tauri::State;
@@ -128,14 +128,28 @@ pub struct ImportOverrides {
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
-fn db_path(server_exe: &str) -> Result<PathBuf, String> {
-    Ok(crate::paths::server_dir(server_exe)?
-        .join("Data")
-        .join("Account.db"))
+pub(crate) fn db_path(server_exe: &str) -> Result<PathBuf, String> {
+    let name = crate::ini::read_merged_value(server_exe, "SQLiteDBManager", "FileName", "Account.db");
+    // Plain names and subfolders only: an absolute, drive, UNC or `..` value
+    // would escape Data/ (and a UNC path makes Windows open a network share).
+    let plain = Path::new(&name).components().all(|c| matches!(c, Component::Normal(_)));
+    if name.is_empty() || !plain {
+        return Err(format!(
+            "Invalid [SQLiteDBManager] FileName '{name}': must be a file name relative to Data/."
+        ));
+    }
+    Ok(crate::paths::server_dir(server_exe)?.join("Data").join(name))
 }
 
 fn open_db(server_exe: &str) -> Result<Connection, String> {
-    let conn = Connection::open(db_path(server_exe)?)
+    let path = db_path(server_exe)?;
+    if !path.exists() {
+        let name = path.file_name().map(|n| n.to_string_lossy()).unwrap_or_default();
+        return Err(format!("{name} not found. Start the server once to create it."));
+    }
+    // No CREATE flag: the server owns this file, and an empty one made here
+    // would be picked up by MHServerEmu as an existing (schema-less) database.
+    let conn = Connection::open_with_flags(&path, OpenFlags::SQLITE_OPEN_READ_WRITE)
         .map_err(|e| format!("Failed to open database: {e}"))?;
     // The Item table has three FOREIGN KEY constraints on ContainerDbGuid
     // (Player, Avatar, TeamUp). SQLite checks all of them independently,

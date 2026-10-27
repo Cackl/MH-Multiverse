@@ -1,5 +1,5 @@
 use regex::Regex;
-use rusqlite::{params, Connection};
+use rusqlite::{params, Connection, OpenFlags};
 use std::collections::HashMap;
 use std::io::{BufRead, BufReader};
 use std::path::PathBuf;
@@ -174,11 +174,9 @@ impl DbPath {
     }
 
     /// Derive and store the Account.db path from a server_exe path.
-    /// Layout: <server_exe_dir>/Data/Account.db
+    /// Layout: <server_exe_dir>/Data/<[SQLiteDBManager] FileName>
     pub fn set_from_server_exe(&self, server_exe: &str) {
-        let path = std::path::Path::new(server_exe)
-            .parent()
-            .map(|dir| dir.join("Data").join("Account.db"));
+        let path = crate::accounts::db_path(server_exe).ok();
         if let Ok(mut guard) = self.0.lock() {
             *guard = path;
         }
@@ -261,13 +259,12 @@ struct AccountInfo {
 }
 
 /// Look up account info by PlayerName. Opens a fresh connection to the DB on
-/// every call and only ever issues SELECT queries against it - nothing
-/// enforces that at the connection level, it's just the only thing this
-/// function does. Safe to call repeatedly because SQLite handles concurrent
-/// connections to the same file fine; the server holds its own separate one.
+/// every call, read-only (so it can neither write nor create the file). Safe
+/// to call repeatedly because SQLite handles concurrent connections to the
+/// same file fine; the server holds its own separate one.
 /// Returns None on any error so the caller always gets a valid PlayerSession.
 fn lookup_account(db_path: &PathBuf, username: &str) -> Option<AccountInfo> {
-    let conn = Connection::open(db_path).ok()?;
+    let conn = Connection::open_with_flags(db_path, OpenFlags::SQLITE_OPEN_READ_ONLY).ok()?;
 
     let info = conn.query_row(
         "SELECT
@@ -492,7 +489,7 @@ pub async fn start_server(
             &addr.parse().map_err(|e| format!("Invalid address: {e}"))?,
             std::time::Duration::from_millis(200),
         ).is_ok() {
-            let msg = format!("Port {port} is already in use — WebFrontend cannot start. Free the port or change WebFrontend.Port in Config.ini.");
+            let msg = format!("Port {port} is already in use. WebFrontend cannot start. Free the port or change WebFrontend.Port in Config.ini.");
             let _ = app.emit("server-log", vec![LogLinePayload {
                 time: log_timestamp(),
                 level: "fatal".into(),
