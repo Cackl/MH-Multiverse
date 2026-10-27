@@ -10,6 +10,7 @@
   import { activeTab, loadConfig, startGameRunningPoll, checkAppUpdate } from './lib/store'
   import { initServerEventBridge } from './lib/serverEvents'
   import DataPanel from './components/DataPanel.svelte'
+  import ConfirmDialog from './components/ConfirmDialog.svelte'
 
   onMount(async () => {
     startGameRunningPoll()
@@ -42,6 +43,8 @@
     </div>
   </div>
 </div>
+
+<ConfirmDialog />
 
 <style>
   .chrome {

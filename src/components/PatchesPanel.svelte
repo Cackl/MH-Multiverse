@@ -1,8 +1,8 @@
 <script lang="ts">
-  import { onMount } from 'svelte'
+  import { onMount, onDestroy } from 'svelte'
   import { invoke } from '@tauri-apps/api/core'
   import { openPath } from '@tauri-apps/plugin-opener'
-  import { appConfig } from '../lib/store'
+  import { appConfig, setUnsaved } from '../lib/store'
   import type { PatchFileInfo, PatchEntry } from '../lib/patchesMeta'
   import PanelSidebar from './PanelSidebar.svelte'
   import PatchEditorModal from './PatchEditorModal.svelte'
@@ -43,6 +43,8 @@
   // ── Derived ────────────────────────────────────────────────────────────────
 
   $: isDirty       = JSON.stringify(entries) !== JSON.stringify(dirtyEntries)
+  $: setUnsaved('patches', isDirty ? 'Patches' : null)
+  onDestroy(() => setUnsaved('patches', null))
   $: enabledCount  = dirtyEntries.filter(e => e.Enabled).length
   $: disabledCount = dirtyEntries.length - enabledCount
   $: activeFiles   = files.filter(f => f.enabled).length

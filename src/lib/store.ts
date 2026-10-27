@@ -9,6 +9,74 @@ export const activeTab = writable<Tab>('launch')
 export type SettingsSection = 'client' | 'theme' | 'integrations' | 'about'
 export const settingsSection = writable<SettingsSection>('client')
 export const activeDataTab = writable<DataTab>('events')
+
+// Editors that currently hold unsaved edits, keyed by source. Switching tab
+// unmounts the panel, so navigation goes through confirmLeave first.
+export const unsavedSources = writable<Record<string, string>>({})
+
+export function setUnsaved(key: string, label: string | null) {
+  unsavedSources.update(s => {
+    if (label === null) {
+      if (!(key in s)) return s
+      const { [key]: _removed, ...rest } = s
+      return rest
+    }
+    return s[key] === label ? s : { ...s, [key]: label }
+  })
+}
+
+// The pending in-app confirmation, rendered by ConfirmDialog.svelte.
+export type ConfirmRequest = {
+  title: string
+  message: string
+  okLabel: string
+  cancelLabel: string
+  resolve: (ok: boolean) => void
+}
+export const confirmRequest = writable<ConfirmRequest | null>(null)
+
+export function askConfirm(opts: Omit<ConfirmRequest, 'resolve'>): Promise<boolean> {
+  get(confirmRequest)?.resolve(false) // a newer question replaces an unanswered one
+  return new Promise(resolve => {
+    const request: ConfirmRequest = {
+      ...opts,
+      resolve: ok => {
+        // Only clear if still ours; a replacement may already be showing.
+        if (get(confirmRequest) === request) confirmRequest.set(null)
+        resolve(ok)
+      },
+    }
+    confirmRequest.set(request)
+  })
+}
+
+// True when it's safe to navigate away: nothing unsaved, or the user agreed to
+// discard it.
+export async function confirmLeave(): Promise<boolean> {
+  const labels = Object.values(get(unsavedSources))
+  if (labels.length === 0) return true
+  const ok = await askConfirm({
+    title: 'Unsaved changes',
+    message: `You have unsaved changes in ${labels.join(', ')}. Leave and discard them?`,
+    okLabel: 'Discard',
+    cancelLabel: 'Stay',
+  })
+  if (ok) unsavedSources.set({})
+  return ok
+}
+
+export async function goTab(tab: Tab) {
+  if (tab === get(activeTab)) return
+  if (await confirmLeave()) activeTab.set(tab)
+}
+
+// Switches to the Data rail entry on `sub`, from wherever we are.
+export async function goDataTab(sub: DataTab) {
+  if (get(activeTab) === 'data' && sub === get(activeDataTab)) return
+  if (!(await confirmLeave())) return
+  activeTab.set('data')
+  activeDataTab.set(sub)
+}
 export const serverRunning = writable<boolean>(false)
 export const gameRunning = writable<boolean>(false)
 export const apacheRunning = writable<boolean>(false)
