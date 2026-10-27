@@ -524,6 +524,12 @@
     }
   }
 
+  // "Save & Close" in the close guard: only close if the save went through.
+  async function saveAndClose() {
+    await save()
+    if (!saveError) onClose()
+  }
+
   // ── Delete ────────────────────────────────────────────────────────────────
 
   let deleteConfirming = false
@@ -1231,12 +1237,12 @@
     <div class="modal-footer">
 
       {#if closeBlocked}
-        <span class="feedback-error">Unsaved changes. Save or discard before closing.</span>
+        <span class="feedback-error">{saveError || 'Unsaved changes. Save or discard before closing.'}</span>
         <div class="footer-actions">
           <button class="btn btn-sm btn-red" on:click={onClose}>Discard & Close</button>
           <button
             class="btn btn-sm btn-accent btn-pulse"
-            on:click={save}
+            on:click={saveAndClose}
             disabled={saving}
           >{saving ? 'Saving…' : 'Save & Close'}</button>
         </div>
