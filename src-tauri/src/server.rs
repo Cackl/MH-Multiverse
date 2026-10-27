@@ -1,5 +1,5 @@
 use regex::Regex;
-use rusqlite::{params, Connection};
+use rusqlite::{params, Connection, OpenFlags};
 use std::collections::HashMap;
 use std::io::{BufRead, BufReader};
 use std::path::PathBuf;
@@ -261,13 +261,12 @@ struct AccountInfo {
 }
 
 /// Look up account info by PlayerName. Opens a fresh connection to the DB on
-/// every call and only ever issues SELECT queries against it - nothing
-/// enforces that at the connection level, it's just the only thing this
-/// function does. Safe to call repeatedly because SQLite handles concurrent
-/// connections to the same file fine; the server holds its own separate one.
+/// every call, read-only (so it can neither write nor create the file). Safe
+/// to call repeatedly because SQLite handles concurrent connections to the
+/// same file fine; the server holds its own separate one.
 /// Returns None on any error so the caller always gets a valid PlayerSession.
 fn lookup_account(db_path: &PathBuf, username: &str) -> Option<AccountInfo> {
-    let conn = Connection::open(db_path).ok()?;
+    let conn = Connection::open_with_flags(db_path, OpenFlags::SQLITE_OPEN_READ_ONLY).ok()?;
 
     let info = conn.query_row(
         "SELECT

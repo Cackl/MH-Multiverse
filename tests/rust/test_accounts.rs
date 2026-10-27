@@ -261,3 +261,14 @@ fn hash_password_length() {
     assert_eq!(hash.len(), 64);
     assert_eq!(salt.len(), 64);
 }
+
+#[test]
+fn open_db_missing_file_errors_without_creating_it() {
+    let (_tmp, server_exe) = empty_server();
+    let path = db_path(&server_exe).unwrap();
+    // Data/ ships with MHServerEmu; only the DB is absent before first start.
+    fs::create_dir_all(path.parent().unwrap()).unwrap();
+    let err = open_db(&server_exe).unwrap_err();
+    assert!(err.contains("Account.db not found"), "unexpected error: {err}");
+    assert!(!path.exists(), "open_db must not create Account.db");
+}

@@ -28,7 +28,7 @@ use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
 use pbkdf2::pbkdf2_hmac;
 use rand::RngCore;
 use regex::Regex;
-use rusqlite::{params, Connection};
+use rusqlite::{params, Connection, OpenFlags};
 use serde::{Deserialize, Serialize};
 use sha2::Sha512;
 use tauri::State;
@@ -135,7 +135,13 @@ fn db_path(server_exe: &str) -> Result<PathBuf, String> {
 }
 
 fn open_db(server_exe: &str) -> Result<Connection, String> {
-    let conn = Connection::open(db_path(server_exe)?)
+    let path = db_path(server_exe)?;
+    if !path.exists() {
+        return Err("Account.db not found — start the server once to create it.".into());
+    }
+    // No CREATE flag: the server owns this file, and an empty one made here
+    // would be picked up by MHServerEmu as an existing (schema-less) database.
+    let conn = Connection::open_with_flags(&path, OpenFlags::SQLITE_OPEN_READ_WRITE)
         .map_err(|e| format!("Failed to open database: {e}"))?;
     // The Item table has three FOREIGN KEY constraints on ContainerDbGuid
     // (Player, Avatar, TeamUp). SQLite checks all of them independently,
