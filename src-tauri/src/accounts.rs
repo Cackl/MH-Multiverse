@@ -22,7 +22,7 @@
 
 use std::collections::HashMap;
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
 use pbkdf2::pbkdf2_hmac;
@@ -129,14 +129,16 @@ pub struct ImportOverrides {
 // ── Helpers ────────────────────────────────────────────────────────────────
 
 pub(crate) fn db_path(server_exe: &str) -> Result<PathBuf, String> {
-    Ok(crate::paths::server_dir(server_exe)?
-        .join("Data")
-        .join(crate::ini::read_merged_value(
-            server_exe,
-            "SQLiteDBManager",
-            "FileName",
-            "Account.db",
-        )))
+    let name = crate::ini::read_merged_value(server_exe, "SQLiteDBManager", "FileName", "Account.db");
+    // Plain names and subfolders only: an absolute, drive, UNC or `..` value
+    // would escape Data/ (and a UNC path makes Windows open a network share).
+    let plain = Path::new(&name).components().all(|c| matches!(c, Component::Normal(_)));
+    if name.is_empty() || !plain {
+        return Err(format!(
+            "Invalid [SQLiteDBManager] FileName '{name}': must be a file name relative to Data/."
+        ));
+    }
+    Ok(crate::paths::server_dir(server_exe)?.join("Data").join(name))
 }
 
 fn open_db(server_exe: &str) -> Result<Connection, String> {

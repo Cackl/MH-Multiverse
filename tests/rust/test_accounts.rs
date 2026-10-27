@@ -291,3 +291,36 @@ fn db_path_honours_sqlite_filename_override() {
     let p = db_path(&server_exe).unwrap();
     assert!(p.ends_with("Data/Custom.db"), "{p:?}");
 }
+
+fn db_path_with_filename(filename: &str) -> Result<PathBuf, String> {
+    let (tmp, server_exe) = empty_server();
+    fs::write(
+        tmp.path().join("ConfigOverride.ini"),
+        format!("[SQLiteDBManager]\nFileName={filename}\n"),
+    )
+    .unwrap();
+    db_path(&server_exe)
+}
+
+#[test]
+fn db_path_rejects_filenames_that_escape_data_dir() {
+    for bad in [
+        "",
+        "..",
+        "../Other.db",
+        "sub/../../Other.db",
+        "C:/Other.db",
+        "C:Other.db",
+        "/Other.db",
+        r"\\host\share\Other.db",
+    ] {
+        let err = db_path_with_filename(bad).unwrap_err();
+        assert!(err.contains("FileName"), "{bad:?} -> {err}");
+    }
+}
+
+#[test]
+fn db_path_allows_plain_and_subfolder_filenames() {
+    assert!(db_path_with_filename("Other.db").unwrap().ends_with("Data/Other.db"));
+    assert!(db_path_with_filename("Backup/Other.db").unwrap().ends_with("Data/Backup/Other.db"));
+}
