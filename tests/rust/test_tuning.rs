@@ -236,3 +236,16 @@ fn create_writes_new_file() {
     .unwrap();
     assert!(dir.join("LiveTuningDataNew.json").exists());
 }
+
+#[test]
+fn write_keeps_backup_of_previous_contents() {
+    let (_tmp, server_exe) = setup();
+    let name = "LiveTuningDataBugFixes.json".to_string();
+    let file = live_tuning_dir(&server_exe).unwrap().join(&name);
+    let before = fs::read_to_string(&file).unwrap();
+
+    write_tuning_file(server_exe, name, vec![]).unwrap();
+
+    assert_eq!(fs::read_to_string(file.with_extension("json.bak")).unwrap(), before);
+    assert_eq!(fs::read_to_string(&file).unwrap().trim(), "[]");
+}

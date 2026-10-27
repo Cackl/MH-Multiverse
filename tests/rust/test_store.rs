@@ -152,3 +152,17 @@ fn save_thumbnail_rejects_invalid_base64() {
     .unwrap_err();
     assert!(err.contains("Invalid base64"));
 }
+
+#[test]
+fn write_with_backup_snapshots_previous_contents() {
+    let tmp = tempfile::tempdir().unwrap();
+    let path = tmp.path().join("X.json");
+
+    write_with_backup(&path, "one").unwrap();
+    assert!(!tmp.path().join("X.json.bak").exists(), "nothing to back up on first write");
+
+    write_with_backup(&path, "two").unwrap();
+    assert_eq!(fs::read_to_string(&path).unwrap(), "two");
+    assert_eq!(fs::read_to_string(tmp.path().join("X.json.bak")).unwrap(), "one");
+    assert!(!tmp.path().join("X.json.tmp").exists(), "temp file must not be left behind");
+}

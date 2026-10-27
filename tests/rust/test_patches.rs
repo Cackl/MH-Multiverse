@@ -85,3 +85,16 @@ fn create_writes_new_enabled_file() {
     let f = files.iter().find(|f| f.file_name == "PatchDataNew.json").unwrap();
     assert!(f.enabled);
 }
+
+#[test]
+fn save_keeps_backup_of_previous_contents() {
+    let (_tmp, server_exe) = setup();
+    let name = "PatchDataBugFixes.json".to_string();
+    let file = patches_dir(&server_exe).unwrap().join(&name);
+    let before = std::fs::read_to_string(&file).unwrap();
+
+    save_patch_file(server_exe, name, true, vec![]).unwrap();
+
+    assert_eq!(std::fs::read_to_string(file.with_extension("json.bak")).unwrap(), before);
+    assert_eq!(std::fs::read_to_string(&file).unwrap().trim(), "[]");
+}
