@@ -772,6 +772,7 @@
     entry={editingEntry}
     serverExe={$appConfig.server_exe}
     catalogFiles={catalogFiles}
+    allEntries={entries}
     onClose={() => editingEntry = null}
     onSaved={handleSaved}
     onDeleted={handleDeleted}
@@ -784,6 +785,7 @@
     entry={null}
     serverExe={$appConfig.server_exe}
     catalogFiles={catalogFiles}
+    allEntries={entries}
     onClose={() => creatingNew = false}
     onSaved={handleCreated}
     onDeleted={() => {}}
