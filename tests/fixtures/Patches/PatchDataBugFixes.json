@@ -1,0 +1,7 @@
+[
+  { "Enabled": true, "Prototype": "Entity/Avatar/Prototypes/Thing.prototype", "Path": "SomeField", "Description": "String value fix", "ValueType": "String", "Value": "hello" },
+  { "Enabled": true, "Prototype": "Entity/Avatar/Prototypes/Thing.prototype", "Path": "SomeNumber", "Description": "Number value fix", "ValueType": "Int32", "Value": 42 },
+  { "Enabled": false, "Prototype": "Entity/Avatar/Prototypes/Thing.prototype", "Path": "SomeFlag", "Description": "", "ValueType": "Bool", "Value": true },
+  { "Enabled": true, "Prototype": "Entity/Avatar/Prototypes/Thing.prototype", "Path": "SomeArray", "Description": "Array value fix", "ValueType": "Array", "Value": [1, 2, 3] },
+  { "Enabled": true, "Prototype": "Entity/Avatar/Prototypes/Thing.prototype", "Path": "SomeObject", "Description": "Object value fix", "ValueType": "Object", "Value": { "X": 1, "Y": 2 } }
+]

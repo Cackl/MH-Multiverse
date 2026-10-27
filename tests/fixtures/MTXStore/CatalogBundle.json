@@ -1,0 +1,30 @@
+[
+  {
+    "SkuId": 1001,
+    "GuidItems": [
+      { "PrototypeGuid": 111, "ItemPrototypeRuntimeIdForClient": 16313827754993193555, "Quantity": 1 }
+    ],
+    "AdditionalGuidItems": [],
+    "LocalizedEntries": [
+      { "LanguageId": "en_us", "Description": "A starter bundle", "Title": "Starter Bundle", "ReleaseDate": "", "ItemPrice": 500 }
+    ],
+    "InfoUrls": [{ "LanguageId": "en_us", "Url": "", "ImageData": "" }],
+    "ContentData": [{ "LanguageId": "en_us", "Url": "", "ImageData": "" }],
+    "Type": { "Name": "Bundle", "Order": 5 },
+    "TypeModifiers": [{ "Name": "Giftable", "Order": 5 }]
+  },
+  {
+    "SkuId": 1002,
+    "GuidItems": [
+      { "PrototypeGuid": 222, "ItemPrototypeRuntimeIdForClient": 222222, "Quantity": 3 }
+    ],
+    "AdditionalGuidItems": [],
+    "LocalizedEntries": [
+      { "LanguageId": "en_us", "Description": "A boost", "Title": "XP Boost", "ReleaseDate": "", "ItemPrice": 100 }
+    ],
+    "InfoUrls": [],
+    "ContentData": [],
+    "Type": { "Name": "Boost", "Order": 1 },
+    "TypeModifiers": []
+  }
+]

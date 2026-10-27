@@ -13,3 +13,7 @@ pub(crate) fn server_dir(server_exe: &str) -> Result<PathBuf, String> {
         .map(|p| p.to_path_buf())
         .ok_or_else(|| "Cannot determine server directory from exe path".to_string())
 }
+
+#[cfg(test)]
+#[path = "../../tests/rust/test_paths.rs"]
+mod tests;

@@ -1,0 +1,3 @@
+[
+  { "Enabled": false, "Prototype": "Entity/Avatar/Prototypes/OtherThing.prototype", "Path": "SomeField", "Description": "Disabled by default", "ValueType": "String", "Value": "off" }
+]

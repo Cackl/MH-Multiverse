@@ -239,3 +239,7 @@ pub fn get_config_dir(server_exe: String) -> Result<String, String> {
 
     Ok(dir.to_string_lossy().to_string())
 }
+
+#[cfg(test)]
+#[path = "../../tests/rust/test_ini.rs"]
+mod tests;

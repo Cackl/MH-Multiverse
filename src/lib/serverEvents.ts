@@ -80,7 +80,7 @@ function toLogLevel(level: string): LogLevel {
   }
 }
 
-function normalizeLogBatch(lines: RawLogEventPayload): Omit<LogLine, 'id'>[] {
+export function normalizeLogBatch(lines: RawLogEventPayload): Omit<LogLine, 'id'>[] {
   return lines.map((line) => ({
     time: line.time ?? '',
     level: toLogLevel(line.level),
@@ -90,7 +90,7 @@ function normalizeLogBatch(lines: RawLogEventPayload): Omit<LogLine, 'id'>[] {
 
 const NOW_REGEX = /Checking Live Tuning events \(now=\[(.*?)\]\)/
 
-function parseServerNowAsUtc(raw: string): Date | null {
+export function parseServerNowAsUtc(raw: string): Date | null {
   // Input format: "04/10/2026 03:28:24"
   const m = raw.match(/^(\d{2})\/(\d{2})\/(\d{4}) (\d{2}:\d{2}:\d{2})$/)
   if (!m) return null
@@ -98,7 +98,7 @@ function parseServerNowAsUtc(raw: string): Date | null {
   return new Date(`${m[3]}-${m[1]}-${m[2]}T${m[4]}Z`)
 }
 
-function extractSchedulerNow(msg: string): Date | null {
+export function extractSchedulerNow(msg: string): Date | null {
   const match = msg.match(NOW_REGEX)
   if (!match) return null
   return parseServerNowAsUtc(match[1])

@@ -192,3 +192,7 @@ pub fn launch_game(app: tauri::AppHandle, server_id: String) -> Result<(), Strin
 
     Ok(())
 }
+
+#[cfg(test)]
+#[path = "../../tests/rust/test_launcher.rs"]
+mod tests;

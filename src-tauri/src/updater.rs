@@ -515,3 +515,7 @@ pub fn get_backups_dir(server_exe: String) -> Result<String, String> {
         .ok_or_else(|| "Backups path contains invalid UTF-8".to_string())
         .map(|s| s.to_string())
 }
+
+#[cfg(test)]
+#[path = "../../tests/rust/test_updater.rs"]
+mod tests;

@@ -1,0 +1,16 @@
+{
+  "ArmorIncursion": {
+    "DisplayName": "Armor Incursion",
+    "FilePath": "Events/Weekly/LiveTuningDataArmorIncursion.json",
+    "DailyGift": null,
+    "InstancedMissions": null,
+    "IsHidden": false
+  },
+  "CosmicChaos": {
+    "DisplayName": "Cosmic Chaos",
+    "FilePath": "LiveTuningDataCosmicChaos.json",
+    "DailyGift": "Entity/Items/Consumables/Prototypes/CosmicChaosGift.prototype",
+    "InstancedMissions": ["Missions/Events/CosmicChaos/CosmicChaosInstance.prototype"],
+    "IsHidden": true
+  }
+}
