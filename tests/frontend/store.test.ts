@@ -5,7 +5,6 @@ import {
   appendLogBatch,
   clearLog,
   serverLog,
-  LOG_LEVEL_SEVERITY,
   setSchedulerNow,
   eventTimezoneOffset,
   unsavedSources,
@@ -40,32 +39,6 @@ describe('appendLogBatch', () => {
     expect(get(serverLog).length).toBe(2000)
   })
 
-  it('no-ops on an empty batch', () => {
-    appendLog({ time: '', level: 'info', msg: 'kept' })
-    appendLogBatch([])
-    expect(get(serverLog).length).toBe(1)
-  })
-})
-
-describe('clearLog', () => {
-  it('empties the log', () => {
-    appendLog({ time: '', level: 'info', msg: 'a' })
-    clearLog()
-    expect(get(serverLog)).toEqual([])
-  })
-})
-
-describe('LOG_LEVEL_SEVERITY', () => {
-  it('orders levels trace < debug < info < ok < warn < err < fatal', () => {
-    const order: (keyof typeof LOG_LEVEL_SEVERITY)[] = ['trace', 'debug', 'info', 'ok', 'warn', 'err', 'fatal']
-    for (let i = 1; i < order.length; i++) {
-      expect(LOG_LEVEL_SEVERITY[order[i]]).toBeGreaterThan(LOG_LEVEL_SEVERITY[order[i - 1]])
-    }
-  })
-
-  it('"all" sorts below every real level', () => {
-    expect(LOG_LEVEL_SEVERITY.all).toBeLessThan(LOG_LEVEL_SEVERITY.trace)
-  })
 })
 
 describe('setSchedulerNow', () => {

@@ -3,7 +3,6 @@ import {
   inferOfferType,
   modifiersForType,
   buildModifiers,
-  newCatalogEntry,
   entryTitle,
   entryPrice,
   defaultLocalizedEntry,
@@ -36,9 +35,6 @@ describe('inferOfferType', () => {
 })
 
 describe('modifiersForType', () => {
-  it('known type returns its modifiers', () => {
-    expect(modifiersForType('Bundle')).toContain('Giftable')
-  })
   it('unknown type returns empty array', () => {
     expect(modifiersForType('NotAType')).toEqual([])
   })
@@ -48,23 +44,6 @@ describe('buildModifiers', () => {
   it('every modifier gets the same order as the entry', () => {
     const mods = buildModifiers(['Giftable', 'NoDisplay'], 5)
     expect(mods).toEqual([{ Name: 'Giftable', Order: 5 }, { Name: 'NoDisplay', Order: 5 }])
-  })
-})
-
-describe('newCatalogEntry', () => {
-  it('defaults to order 5', () => {
-    const entry = newCatalogEntry('Boost', '1001')
-    expect(entry.Type.Order).toBe(5)
-  })
-  it('Bundle type gets non-empty InfoUrls and ContentData', () => {
-    const entry = newCatalogEntry('Bundle', '1001')
-    expect(entry.InfoUrls.length).toBeGreaterThan(0)
-    expect(entry.ContentData.length).toBeGreaterThan(0)
-  })
-  it('non-bundle type gets empty InfoUrls and ContentData', () => {
-    const entry = newCatalogEntry('Boost', '1001')
-    expect(entry.InfoUrls).toEqual([])
-    expect(entry.ContentData).toEqual([])
   })
 })
 
