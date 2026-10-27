@@ -23,10 +23,20 @@ describe('blueprintHintForSetting', () => {
     expect(blueprintHintForSetting('eGTV_XPGain')).toBeNull()
   })
   it('World Entity settings hint WorldEntity', () => {
-    expect(blueprintHintForSetting('eWETV_Enabled')).toBe('WorldEntity')
+    expect(blueprintHintForSetting('eWETV_Enabled')).toBe('Entity/')
   })
   it('unknown prefix returns null', () => {
     expect(blueprintHintForSetting('eXYZTV_Nonsense')).toBeNull()
+  })
+})
+
+describe('blueprintHintForSetting path shape', () => {
+  const prefixes = ['eWETV_', 'ePTV_', 'eRTV_', 'eRT_', 'eLTTV_', 'eMTV_', 'eCTV_', 'eAETV_', 'eATV_', 'ePOTV_', 'ePETV_']
+  it('returns null or a path prefix ending in / for every targeted prefix', () => {
+    for (const p of prefixes) {
+      const hint = blueprintHintForSetting(p + 'X')
+      if (hint !== null) expect(hint, p).toMatch(/^[A-Za-z]+(\/[A-Za-z]+)*\/$/)
+    }
   })
 })
 

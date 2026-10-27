@@ -113,7 +113,7 @@ export function inferOfferType(entry: CatalogEntry): OfferType {
 /**
  * A browseable prototype category for the item picker.
  *
- * `Path` is a Calligraphy blueprint path prefix used as `blueprintHint` in
+ * `Path` is a Calligraphy prototype path prefix used as `blueprintHint` in
  * `search_prototypes`. Multiple paths may be pipe-separated (|) for categories
  * that span more than one prototype subtree (e.g. Test Gear).
  *

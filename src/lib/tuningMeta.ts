@@ -46,23 +46,24 @@ export function categoryForSetting(setting: string): string {
   return 'Other'
 }
 
-// Maps a setting prefix to a substring matched case-insensitively against
-// blueprint file paths in Calligraphy.sip. Used to scope prototype searches
-// to the correct blueprint category. Maps to null for Global settings (no
-// prototype required) and for unknown prefixes (search across all blueprints).
+// Maps a setting prefix to a Calligraphy prototype path prefix (pipe-separated
+// for several), used as `blueprintHint` to scope prototype searches; the
+// backend prefix-matches it, case-insensitively, against paths in
+// Calligraphy.sip. Maps to null for Global settings (no prototype required) and
+// where the target's location is unverified (search all prototypes).
 const BLUEPRINT_HINT_PREFIXES: [string, string | null][] = [
   ['eGTV_',  null], // Global — no prototype
-  ['eWETV_', 'WorldEntity'],
-  ['ePTV_',  'Power'],
-  ['eRTV_',  'Region'],
-  ['eRT_',   'Region'],
-  ['eLTTV_', 'LootTable'],
-  ['eMTV_',  'Mission'],
-  ['eCTV_',  'Condition'],
-  ['eAETV_', 'Avatar'],
-  ['eATV_',  'Area'],
-  ['ePOTV_', 'PopulationObject'],
-  ['ePETV_', 'PublicEvent'],
+  ['eWETV_', 'Entity/'],
+  ['ePTV_',  'Powers/'],
+  ['eRTV_',  'Regions/'],
+  ['eRT_',   'Regions/'],
+  ['eLTTV_', 'Loot/Tables/'],
+  ['eMTV_',  'Missions/'],
+  ['eCTV_',  null], // Condition — no standalone prototype folder found
+  ['eAETV_', 'Entity/Characters/Avatars/'],
+  ['eATV_',  'Regions/'],
+  ['ePOTV_', 'Populations/'],
+  ['ePETV_', 'Events/PublicEvents/'],
 ]
 
 assertPrefixOrder(BLUEPRINT_HINT_PREFIXES, 'BLUEPRINT_HINT_PREFIXES')
