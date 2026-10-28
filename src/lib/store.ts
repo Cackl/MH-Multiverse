@@ -393,8 +393,10 @@ export async function loadConfig(): Promise<void> {
 }
 
 export async function upsertServer(server: Server, password: string): Promise<void> {
+  const isNew = !get(appConfig).servers.some(s => s.id === server.id)
   const updated = await invoke<AppConfig>('upsert_server', { server, password })
   appConfig.set(updated)
+  if (isNew) await selectServer(server.id)
 }
 
 export async function deleteServer(serverId: string): Promise<void> {

@@ -2,6 +2,7 @@
   import { tick, onMount } from 'svelte'
   import { invoke } from '@tauri-apps/api/core'
   import { openUrl } from '@tauri-apps/plugin-opener'
+  import { tip } from '../lib/tooltip'
   import {
     serverRunning,
     appConfig,
@@ -293,7 +294,7 @@
     if (afterBase.includes(' ')) return []
     const typed = afterBase.toLowerCase()
     return $appConfig.servers
-      .filter(s => isLocalhost(s.host) && s.email)
+      .filter(s => (s.is_local || isLocalhost(s.host)) && s.email)
       .map(s => s.email)
       .filter(e => e.toLowerCase().startsWith(typed))
   })()
@@ -333,7 +334,7 @@
             </button>
           {/if}
         {:else}
-          <button class="btn btn-sm btn-green" on:click={startServer} disabled={starting || !$appConfig.server_exe} title={!$appConfig.server_exe ? 'Set server exe in App settings' : ''}>
+          <button class="btn btn-sm btn-green" on:click={startServer} disabled={starting || !$appConfig.server_exe} use:tip={!$appConfig.server_exe ? 'Set server exe in Settings' : ''}>
             <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" style="width:10px;height:10px;"><polygon points="4,2 12,7 4,12"/></svg>
             {starting ? 'Starting...' : 'Server'}
           </button>
@@ -345,7 +346,7 @@
               Apache
             </button>
           {:else}
-            <button class="btn btn-sm btn-outline" on:click={startApache} disabled={startingApache || !$appConfig.server_exe}>
+            <button class="btn btn-sm btn-outline" on:click={startApache} disabled={startingApache || !$appConfig.server_exe} use:tip={!$appConfig.server_exe ? 'Set server exe in Settings' : ''}>
               <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" style="width:10px;height:10px;"><polygon points="4,2 12,7 4,12"/></svg>
               Apache
             </button>

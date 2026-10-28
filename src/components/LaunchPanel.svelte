@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount, onDestroy } from 'svelte'
+  import { onDestroy } from 'svelte'
   import { invoke } from '@tauri-apps/api/core'
   import { openUrl } from '@tauri-apps/plugin-opener'
   import {
@@ -53,19 +53,18 @@
     invoke<OverlayStatus>('overlay_status').then(s => overlayStatus.set(s)).catch(() => {})
   }
 
-  onMount(async () => {
-    // Read WebFrontend port for localhost dashboard URL
-    if ($appConfig.server_exe) {
-      try {
-        const state = await invoke<{ values: Record<string, Record<string, string>> }>('read_config', { serverExe: $appConfig.server_exe })
-        const raw = state.values['WebFrontend']?.['Port']
-        const parsed = raw ? parseInt(raw, 10) : NaN
-        if (!isNaN(parsed) && parsed > 0) dashboardPort = parsed
-        const rawPath = state.values['WebFrontend']?.['DashboardUrlPath']
-        if (rawPath?.trim()) dashboardPath = rawPath.trim()
-      } catch {}
-    }
-  })
+  // Read WebFrontend port for the localhost dashboard URL. Reactive for the same reason as above.
+  async function readDashboardConfig(serverExe: string) {
+    try {
+      const state = await invoke<{ values: Record<string, Record<string, string>> }>('read_config', { serverExe })
+      const raw = state.values['WebFrontend']?.['Port']
+      const parsed = raw ? parseInt(raw, 10) : NaN
+      if (!isNaN(parsed) && parsed > 0) dashboardPort = parsed
+      const rawPath = state.values['WebFrontend']?.['DashboardUrlPath']
+      if (rawPath?.trim()) dashboardPath = rawPath.trim()
+    } catch {}
+  }
+  $: if ($appConfig.server_exe) readDashboardConfig($appConfig.server_exe)
 
   onDestroy(() => {
     cancelDelete()
@@ -267,7 +266,7 @@
           {#if $appConfig.servers.length === 0}
            <button class="empty-state-button" type="button" aria-label="Add Server" on:click={openAdd}>Add a server</button> to get started
           {:else} 
-          'Select a server'
+          Select a server
           {/if}
         </div>
       </div>
