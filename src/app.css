@@ -526,7 +526,7 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 
   /* Accent */
   --accent:             #0f6f8d;
-  --accent-bright:      #1388ad;
+  --accent-bright:      #007398;
   --accent-dim:         #466f7b;
   --accent-glow:        rgba(15, 111, 141, 0.08);
   --accent-glow-strong: rgba(19, 136, 173, 0.14);
@@ -535,7 +535,7 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
   --red:           #a43b31;
   --red-dim:       rgba(164, 59, 49, 0.12);
   --green:         #1f7a49;
-  --green-bright:  #238454;
+  --green-bright:  #197a4a;
   --green-dim:     rgba(31, 122, 73, 0.12);
   --blue:          #1f5fae;
   --blue-dim:      rgba(31, 95, 174, 0.10);
@@ -557,8 +557,8 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
   --text-warning: #865f00;
 
   /* Amber (countdown, warnings) */
-  --amber:        #9c7300;
-  --amber-bright: #b88900;
+  --amber:        #8c6300;
+  --amber-bright: #906100;
   --amber-dim:    rgba(156, 115, 0, 0.12);
 
   /* Purple (debug log, custom tags) */
@@ -660,7 +660,7 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 
   /* Accent */
   --accent:         #b31618;
-  --accent-bright:  #e03a3d;
+  --accent-bright:  #e45255;
   --accent-dim:     #7e0f11;
   --accent-glow:        rgba(179, 22, 24, 0.08);
   --accent-glow-strong: rgba(224, 58, 61, 0.16);
