@@ -41,8 +41,6 @@ pub(crate) struct PrototypeCatalogue {
     by_id: HashMap<u64, String>,
     /// prototype file path → prototype runtime id; inverse of by_id.
     by_path: HashMap<String, u64>,
-    /// prototype guid → prototype file path; used for PrototypeGuid patch value lookups.
-    by_guid: HashMap<u64, String>,
 }
 
 /// Cached catalogue keyed by the sip path it was built from.
@@ -283,13 +281,7 @@ fn build_catalogue(sip_path: &str) -> Result<PrototypeCatalogue, String> {
         .map(|p| (p.path.clone(), p.prototype_id))
         .collect();
 
-    // by_guid supports PrototypeGuid patch value lookups (e.g. cell marker EntityGuid fields).
-    let by_guid: HashMap<u64, String> = prototypes
-        .iter()
-        .map(|p| (p.prototype_guid, p.path.clone()))
-        .collect();
-
-    Ok(PrototypeCatalogue { blueprints, prototypes, by_id, by_path, by_guid })
+    Ok(PrototypeCatalogue { blueprints, prototypes, by_id, by_path })
 }
 
 /// Blueprint types (RuntimeBinding) of every class deriving from EntityPrototype. The game's
@@ -395,26 +387,6 @@ pub(crate) fn path_for_id(catalogue: &PrototypeCatalogue, id: u64) -> Option<&st
 /// path back to the `ItemPrototypeRuntimeIdForClient` needed by catalog entries.
 pub(crate) fn id_for_path(catalogue: &PrototypeCatalogue, path: &str) -> Option<u64> {
     catalogue.by_path.get(path).copied()
-}
-
-/// Look up the prototype GUID for a given prototype file path.
-///
-/// Returns `None` if the path is not in the catalogue.
-/// Used when building patch entries with `ValueType: PrototypeGuid`
-/// (e.g. cell marker `EntityGuid` fields).
-pub(crate) fn guid_for_path(catalogue: &PrototypeCatalogue, path: &str) -> Option<u64> {
-    catalogue
-        .prototypes
-        .iter()
-        .find(|p| p.path == path)
-        .map(|p| p.prototype_guid)
-}
-
-/// Look up the prototype file path for a given prototype GUID.
-///
-/// Returns `None` if the GUID is not in the catalogue.
-pub(crate) fn path_for_guid(catalogue: &PrototypeCatalogue, guid: u64) -> Option<&str> {
-    catalogue.by_guid.get(&guid).map(|s| s.as_str())
 }
 
 // ── Tauri command ─────────────────────────────────────────────────────────────
