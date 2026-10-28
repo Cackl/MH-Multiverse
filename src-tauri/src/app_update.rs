@@ -6,7 +6,6 @@
 //! version check stops an old genuine release being replayed under a newer tag.
 
 use base64::Engine;
-use futures_util::StreamExt;
 use semver::Version;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
@@ -187,15 +186,14 @@ async fn download(
     if asset.size == 0 || asset.size > max {
         return Err(format!("Unexpected size for {}: {} bytes", asset.name, asset.size));
     }
-    let resp = client.get(url).send().await.map_err(|e| format!("Download failed: {e}"))?;
+    let mut resp = client.get(url).send().await.map_err(|e| format!("Download failed: {e}"))?;
     if !resp.status().is_success() {
         return Err(format!("Download failed with HTTP {}", resp.status()));
     }
 
     let mut data = Vec::with_capacity(asset.size as usize);
-    let mut stream = resp.bytes_stream();
-    while let Some(chunk) = stream.next().await {
-        data.extend_from_slice(&chunk.map_err(|e| format!("Download interrupted: {e}"))?);
+    while let Some(chunk) = resp.chunk().await.map_err(|e| format!("Download interrupted: {e}"))? {
+        data.extend_from_slice(&chunk);
         if data.len() as u64 > asset.size {
             return Err("Download is larger than GitHub advertised".into());
         }
