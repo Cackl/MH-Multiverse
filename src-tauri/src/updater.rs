@@ -1,5 +1,4 @@
 use chrono::{DateTime, Duration, Local, Utc};
-use futures_util::StreamExt;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -287,7 +286,7 @@ async fn download_with_progress(app: &AppHandle, url: &str, dest: &Path) -> Resu
         .build()
         .map_err(|e| format!("Cannot create HTTP client: {e}"))?;
 
-    let response = client.get(url).send().await
+    let mut response = client.get(url).send().await
         .map_err(|e| format!("Download request failed: {e}"))?;
 
     if !response.status().is_success() {
@@ -300,10 +299,9 @@ async fn download_with_progress(app: &AppHandle, url: &str, dest: &Path) -> Resu
     let mut file = tokio::fs::File::create(dest).await
         .map_err(|e| format!("Cannot create download file: {e}"))?;
 
-    let mut stream = response.bytes_stream();
-
-    while let Some(chunk_result) = stream.next().await {
-        let chunk = chunk_result.map_err(|e| format!("Download stream error: {e}"))?;
+    while let Some(chunk) = response.chunk().await
+        .map_err(|e| format!("Download stream error: {e}"))?
+    {
         downloaded += chunk.len() as u64;
 
         file.write_all(&chunk).await
