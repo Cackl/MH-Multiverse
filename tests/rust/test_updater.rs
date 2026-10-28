@@ -183,3 +183,43 @@ fn candidate_dates_are_today_then_yesterday_in_utc() {
         assert_eq!(candidate_dates(now), expected, "at {now}");
     }
 }
+
+#[test]
+fn build_date_comes_from_the_nightly_stamp() {
+    let cases = [
+        ("1.0.3+build20261027131155", Some("20261027")),
+        ("1.0.2+build20260901123337", Some("20260901")),
+        ("1.0.2+build20260901", Some("20260901")),
+        ("1.0.2", None),
+        ("", None),
+        ("1.0.2+build", None),
+        ("1.0.2+build2026", None),
+        ("1.0.2+buildabcdefgh", None),
+        ("1.0.2+g1a2b3c4d", None),
+    ];
+    for (version, expected) in cases {
+        assert_eq!(build_date_from_version(version).as_deref(), expected, "for {version:?}");
+    }
+}
+
+#[test]
+fn up_to_date_needs_an_installed_build_at_least_as_new() {
+    let cases = [
+        (Some("20261027"), "20261027", true),
+        (Some("20261028"), "20261027", true),
+        (Some("20261026"), "20261027", false),
+        (Some("20251231"), "20260101", false),
+        // no stamp (e.g. built from source): never blocks an update
+        (None, "20261027", false),
+    ];
+    for (installed, build_date, expected) in cases {
+        assert_eq!(is_up_to_date(installed, build_date), expected, "{installed:?} vs {build_date}");
+    }
+}
+
+#[test]
+fn missing_or_unversioned_exe_has_no_build_date() {
+    let (_tmp, server_exe) = empty_server();
+    assert_eq!(installed_build_date(&server_exe), None);
+    assert_eq!(installed_build_date("C:/definitely/not/here/MHServerEmu.exe"), None);
+}

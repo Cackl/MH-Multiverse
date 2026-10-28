@@ -16,6 +16,12 @@ pub struct UpdateInfo {
     pub build_date: String,
     pub download_url: String,
     pub available: bool,
+    /// Build date (YYYYMMDD) stamped into the installed MHServerEmu.exe, when it has one.
+    #[serde(default)]
+    pub installed_build_date: Option<String>,
+    /// The installed build is at least as new as `build_date`, so updating would change nothing.
+    #[serde(default)]
+    pub up_to_date: bool,
 }
 
 
@@ -78,6 +84,52 @@ async fn newest_build(client: &reqwest::Client) -> Option<(String, String)> {
         }
     }
     None
+}
+
+/// The exe's ProductVersion string, e.g. "1.0.3+build20261027131155". The numeric file version
+/// drops the "+build" stamp that identifies a nightly.
+fn product_version(path: &Path) -> Option<String> {
+    use windows::core::{w, HSTRING};
+    use windows::Win32::Storage::FileSystem::{GetFileVersionInfoSizeW, GetFileVersionInfoW, VerQueryValueW};
+    let p = HSTRING::from(path.as_os_str());
+    unsafe {
+        let size = GetFileVersionInfoSizeW(&p, None);
+        if size == 0 {
+            return None;
+        }
+        let mut buf = vec![0u8; size as usize];
+        GetFileVersionInfoW(&p, None, size, buf.as_mut_ptr().cast()).ok()?;
+        // The string table is keyed by the file's first (language, codepage) pair.
+        let mut ptr = std::ptr::null_mut();
+        let mut len = 0u32;
+        if !VerQueryValueW(buf.as_ptr().cast(), w!("\\VarFileInfo\\Translation"), &mut ptr, &mut len).as_bool() || len < 4 {
+            return None;
+        }
+        let lang = std::slice::from_raw_parts(ptr as *const u16, 2);
+        let key = HSTRING::from(format!("\\StringFileInfo\\{:04x}{:04x}\\ProductVersion", lang[0], lang[1]));
+        if !VerQueryValueW(buf.as_ptr().cast(), &key, &mut ptr, &mut len).as_bool() || len == 0 {
+            return None;
+        }
+        let text = std::slice::from_raw_parts(ptr as *const u16, len as usize);
+        Some(String::from_utf16_lossy(text).trim_end_matches('\0').to_string())
+    }
+}
+
+/// Build date (YYYYMMDD) from a ProductVersion like "1.0.3+build20261027131155".
+fn build_date_from_version(version: &str) -> Option<String> {
+    let date = version.split_once("+build")?.1.get(..8)?;
+    date.bytes().all(|b| b.is_ascii_digit()).then(|| date.to_string())
+}
+
+/// Build date of the installed server, or None when its exe has no nightly stamp (e.g. a build
+/// from source), in which case updates are never blocked.
+fn installed_build_date(server_exe: &str) -> Option<String> {
+    build_date_from_version(&product_version(Path::new(server_exe))?)
+}
+
+/// Both dates are YYYYMMDD, so string order is date order.
+fn is_up_to_date(installed: Option<&str>, build_date: &str) -> bool {
+    installed.is_some_and(|installed| installed >= build_date)
 }
 
 fn emit_progress(app: &AppHandle, stage: &str, pct: f32, message: Option<String>) {
@@ -316,6 +368,7 @@ fn extract_zip_to(app: &AppHandle, zip_path: &Path, staging_dir: &Path) -> Resul
 
 async fn run_update_inner(
     app: &AppHandle,
+    server_exe: &str,
     server_dir: &Path,
     zip_path: &Path,
     staging_dir: &Path,
@@ -326,9 +379,12 @@ async fn run_update_inner(
     }
 
     // Resolve the build before backing up, so a missing build leaves nothing behind
-    let (_, url) = newest_build(&client()?)
+    let (build_date, url) = newest_build(&client()?)
         .await
         .ok_or("No nightly build is available yet. Try again later.")?;
+    if is_up_to_date(installed_build_date(server_exe).as_deref(), &build_date) {
+        return Err(format!("This server already has the {build_date} build or a newer one."));
+    }
 
     // Pre-update backup
     let backup_manifest: Option<BackupManifest> = {
@@ -399,12 +455,25 @@ async fn run_update_inner(
 // ── Tauri commands ────────────────────────────────────────────────────────────
 
 #[tauri::command]
-pub async fn check_update_available() -> Result<UpdateInfo, String> {
+pub async fn check_update_available(server_exe: Option<String>) -> Result<UpdateInfo, String> {
+    let installed_build_date = server_exe.as_deref().and_then(installed_build_date);
     Ok(match newest_build(&client()?).await {
-        Some((build_date, download_url)) => UpdateInfo { build_date, download_url, available: true },
+        Some((build_date, download_url)) => UpdateInfo {
+            up_to_date: is_up_to_date(installed_build_date.as_deref(), &build_date),
+            installed_build_date,
+            build_date,
+            download_url,
+            available: true,
+        },
         None => {
             let [build_date, _] = candidate_dates(Utc::now());
-            UpdateInfo { download_url: build_download_url(&build_date), build_date, available: false }
+            UpdateInfo {
+                download_url: build_download_url(&build_date),
+                build_date,
+                available: false,
+                installed_build_date,
+                up_to_date: false,
+            }
         }
     })
 }
@@ -419,7 +488,7 @@ pub async fn run_update(
     let zip_path = server_dir.join("_update.zip");
     let staging_dir = server_dir.join("_update_staging");
 
-    let result = run_update_inner(&app, &server_dir, &zip_path, &staging_dir, backup_targets).await;
+    let result = run_update_inner(&app, &server_exe, &server_dir, &zip_path, &staging_dir, backup_targets).await;
 
     // Always clean up temp files regardless of outcome
     let _ = std::fs::remove_file(&zip_path);
