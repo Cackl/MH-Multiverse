@@ -929,7 +929,7 @@
     font-weight: 600;
     letter-spacing: 0.08em;
     text-transform: uppercase;
-    color: var(--accent-dim);
+    color: var(--accent);
     background: var(--accent-glow);
     border: 1px solid var(--accent-dim);
     border-radius: 2px;

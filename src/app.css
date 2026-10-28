@@ -956,7 +956,7 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
   font-weight: 600;
   letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: var(--accent-dim);
+  color: var(--accent);
   padding: 12px 0 8px;
   border-bottom: 1px solid var(--border);
   margin-bottom: 14px;

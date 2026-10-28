@@ -667,7 +667,7 @@
   .log-msg.log-raw { color: var(--console-text-dim); white-space: pre; }
   .log-msg.info   { color: var(--text-1); }
   .log-msg.ok     { color: var(--green-bright); }
-  .log-msg.warn   { color: var(--accent-dim); }
+  .log-msg.warn   { color: var(--accent); }
   .log-msg.err    { color: var(--text-error); }
   .log-msg.fatal  { color: #ff4444; font-weight: 600; }
 
@@ -697,7 +697,7 @@
     padding: 0 0 0 14px;
     font-family: var(--font-mono);
     font-size: 12px;
-    color: var(--accent-dim);
+    color: var(--accent);
     user-select: none;
   }
 
@@ -742,7 +742,7 @@
   }
   .cmd-chip:hover:not(:disabled) {
     border-color: var(--accent-dim);
-    color: var(--accent-dim);
+    color: var(--accent);
     background: var(--accent-glow);
   }
   .cmd-chip:disabled { opacity: 0.4; cursor: not-allowed; }

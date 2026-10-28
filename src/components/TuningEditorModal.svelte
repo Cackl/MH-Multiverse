@@ -1016,7 +1016,7 @@
     font-size: 9px;
     letter-spacing: 0.08em;
     text-transform: uppercase;
-    color: var(--accent-dim);
+    color: var(--accent);
   }
 
   /* ── Setting autocomplete ── */
@@ -1049,7 +1049,7 @@
   .setting-opt-name { font-family: var(--font-mono); font-size: 12px; color: var(--text-0); }
   .setting-opt-cat {
     font-family: var(--font-head); font-size: 9px;
-    letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent-dim);
+    letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent);
   }
   .setting-opt-desc { font-size: 11px; color: var(--text-2); line-height: 1.4; }
 

@@ -1140,7 +1140,7 @@
     padding: 0 0 0 10px;
     font-family: var(--font-mono);
     font-size: 12px;
-    color: var(--accent-dim);
+    color: var(--accent);
     user-select: none;
     flex-shrink: 0;
   }

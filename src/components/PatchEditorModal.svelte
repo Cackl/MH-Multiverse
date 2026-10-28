@@ -544,7 +544,7 @@
   .value-feedback { font-size: 10px; font-family: var(--font-body); }
   .value-error    { color: var(--text-error); }
   .value-hint     { color: var(--text-3); }
-  .value-hint em  { color: var(--accent-dim); font-style: normal; }
+  .value-hint em  { color: var(--accent); font-style: normal; }
 
   /* ── Prototype search ── */
   .proto-wrap {
@@ -626,7 +626,7 @@
     font-size: 9px;
     letter-spacing: 0.08em;
     text-transform: uppercase;
-    color: var(--accent-dim);
+    color: var(--accent);
   }
 
   /* ── Footer ── */

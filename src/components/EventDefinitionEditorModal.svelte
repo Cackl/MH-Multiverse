@@ -665,7 +665,7 @@
     font-size: 9px;
     letter-spacing: 0.08em;
     text-transform: uppercase;
-    color: var(--accent-dim);
+    color: var(--accent);
   }
 
   /* ── Footer ── */

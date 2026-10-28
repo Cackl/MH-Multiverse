@@ -1057,7 +1057,7 @@
     text-transform: uppercase;
     color: var(--text-3);
   }
-  .tuning-card.enabled .toggle-label { color: var(--accent-dim); }
+  .tuning-card.enabled .toggle-label { color: var(--accent); }
 
   .managed-by-label {
     font-family: var(--font-head);
