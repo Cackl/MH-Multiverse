@@ -267,7 +267,7 @@
           {#if $appConfig.servers.length === 0}
            <button class="empty-state-button" type="button" aria-label="Add Server" on:click={openAdd}>Add a server</button> to get started
           {:else} 
-          'Select a server'
+          Select a server
           {/if}
         </div>
       </div>
