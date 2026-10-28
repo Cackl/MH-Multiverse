@@ -166,3 +166,20 @@ fn get_backups_dir_creates_directory() {
     let path = get_backups_dir(server_exe).unwrap();
     assert!(Path::new(&path).is_dir());
 }
+
+#[test]
+fn candidate_dates_are_today_then_yesterday_in_utc() {
+    use chrono::TimeZone;
+    // (y, m, d, h, min, expected). Times either side of the old 07:15 cutoff must agree.
+    let cases = [
+        (2026, 10, 28, 7, 55, ["20261028", "20261027"]),
+        (2026, 10, 28, 7, 14, ["20261028", "20261027"]),
+        (2026, 10, 28, 23, 59, ["20261028", "20261027"]),
+        (2026, 3, 1, 0, 30, ["20260301", "20260228"]),
+        (2026, 1, 1, 0, 30, ["20260101", "20251231"]),
+    ];
+    for (y, mo, d, h, mi, expected) in cases {
+        let now = Utc.with_ymd_and_hms(y, mo, d, h, mi, 0).unwrap();
+        assert_eq!(candidate_dates(now), expected, "at {now}");
+    }
+}

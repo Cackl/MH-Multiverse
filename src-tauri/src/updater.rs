@@ -1,4 +1,4 @@
-use chrono::{Duration, Local, Timelike, Utc};
+use chrono::{DateTime, Duration, Local, Utc};
 use futures_util::StreamExt;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
@@ -42,22 +42,42 @@ fn server_dir_from_exe(server_exe: &str) -> Result<PathBuf, String> {
     crate::paths::server_dir(server_exe)
 }
 
-fn target_build_date() -> String {
-    let now = Utc::now();
-    let seconds_of_day = now.hour() * 3600 + now.minute() * 60 + now.second();
-    let cutoff = 7 * 3600 + 15 * 60; // 07:15 UTC — when nightly build completes
-    let target = if seconds_of_day < cutoff {
-        now - Duration::days(1)
-    } else {
-        now
-    };
-    target.format("%Y%m%d").to_string()
+/// Build dates to try, newest first: today and yesterday (UTC). The nightly for a date appears
+/// partway through that UTC day, so until then yesterday's is the newest build.
+fn candidate_dates(now: DateTime<Utc>) -> [String; 2] {
+    let fmt = |t: DateTime<Utc>| t.format("%Y%m%d").to_string();
+    [fmt(now), fmt(now - Duration::days(1))]
 }
 
 fn build_download_url(build_date: &str) -> String {
     format!(
         "https://nightly.link/Crypto137/MHServerEmu/workflows/nightly-release-windows-x64/master/MHServerEmu-nightly-{build_date}-Release-windows-x64.zip"
     )
+}
+
+fn client() -> Result<reqwest::Client, String> {
+    reqwest::Client::builder()
+        .user_agent(format!("mh-multiverse/{APP_VERSION}"))
+        .build()
+        .map_err(|e| format!("Cannot create HTTP client: {e}"))
+}
+
+/// The newest nightly that exists, as (build date, download url).
+async fn newest_build(client: &reqwest::Client) -> Option<(String, String)> {
+    for build_date in candidate_dates(Utc::now()) {
+        let url = build_download_url(&build_date);
+        let exists = client
+            .get(&url)
+            .header("Range", "bytes=0-0")
+            .send()
+            .await
+            .map(|r| r.status().is_success() || r.status().as_u16() == 206)
+            .unwrap_or(false);
+        if exists {
+            return Some((build_date, url));
+        }
+    }
+    None
 }
 
 fn emit_progress(app: &AppHandle, stage: &str, pct: f32, message: Option<String>) {
@@ -305,6 +325,11 @@ async fn run_update_inner(
         return Err("Cannot update while the server is running. Stop the server first.".into());
     }
 
+    // Resolve the build before backing up, so a missing build leaves nothing behind
+    let (_, url) = newest_build(&client()?)
+        .await
+        .ok_or("No nightly build is available yet. Try again later.")?;
+
     // Pre-update backup
     let backup_manifest: Option<BackupManifest> = {
         let targets = backup_targets;
@@ -324,8 +349,6 @@ async fn run_update_inner(
     };
 
     // Download
-    let build_date = target_build_date();
-    let url = build_download_url(&build_date);
     emit_progress(app, "downloading", 0.0, None);
     download_with_progress(app, &url, zip_path).await?;
 
@@ -377,23 +400,13 @@ async fn run_update_inner(
 
 #[tauri::command]
 pub async fn check_update_available() -> Result<UpdateInfo, String> {
-    let build_date = target_build_date();
-    let download_url = build_download_url(&build_date);
-
-    let client = reqwest::Client::builder()
-        .user_agent(format!("mh-multiverse/{APP_VERSION}"))
-        .build()
-        .map_err(|e| format!("Cannot create HTTP client: {e}"))?;
-
-    let available = client
-        .get(&download_url)
-        .header("Range", "bytes=0-0")
-        .send()
-        .await
-        .map(|r| r.status().is_success() || r.status().as_u16() == 206)
-        .unwrap_or(false);
-
-    Ok(UpdateInfo { build_date, download_url, available })
+    Ok(match newest_build(&client()?).await {
+        Some((build_date, download_url)) => UpdateInfo { build_date, download_url, available: true },
+        None => {
+            let [build_date, _] = candidate_dates(Utc::now());
+            UpdateInfo { download_url: build_download_url(&build_date), build_date, available: false }
+        }
+    })
 }
 
 #[tauri::command]
