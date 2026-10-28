@@ -293,7 +293,7 @@
     if (afterBase.includes(' ')) return []
     const typed = afterBase.toLowerCase()
     return $appConfig.servers
-      .filter(s => isLocalhost(s.host) && s.email)
+      .filter(s => (s.is_local || isLocalhost(s.host)) && s.email)
       .map(s => s.email)
       .filter(e => e.toLowerCase().startsWith(typed))
   })()
