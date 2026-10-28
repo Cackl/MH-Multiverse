@@ -114,8 +114,8 @@
   /* Text */
   --text-0: #edf1f5;
   --text-1: #b0bac4;
-  --text-2: #7e8fa0;
-  --text-3: #455460;
+  --text-2: #8c9dae;
+  --text-3: #798793;
 
   /* Typography */
   --font-head: 'Chakra Petch', sans-serif;
@@ -508,7 +508,7 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
   --text-0: #f7fcff;
   --text-1: #cfe2f0;
   --text-2: #95b2c6;
-  --text-3: #5d7990;
+  --text-3: #8099ad;
 
   --panel-grad-top: rgba(16, 195, 255, 0.06);
   --sidebar-bg: rgba(4, 16, 26, 0.5);
@@ -547,8 +547,8 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
   /* Text */
   --text-0: #16212b;
   --text-1: #334250;
-  --text-2: #5f7182;
-  --text-3: #7f90a0;
+  --text-2: #415364;
+  --text-3: #566574;
 
   /* Semantic text colours */
   --text-error:   #952f26;
@@ -616,8 +616,8 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
   /* Text */
   --text-0: #edf1f5;
   --text-1: #b0bac4;
-  --text-2: #7e8fa0;
-  --text-3: #455460;
+  --text-2: #8c9dae;
+  --text-3: #798793;
 
   /* Semantic text colours */
   --text-error:   var(--red);
@@ -681,8 +681,8 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
   /* Text */
   --text-0: #edf1f5;
   --text-1: #b0bac4;
-  --text-2: #7e8fa0;
-  --text-3: #455460;
+  --text-2: #8c9dae;
+  --text-3: #798793;
 
   /* Semantic text colours */
   --text-error:   var(--red);
@@ -747,7 +747,7 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
   --text-0: #f3f3f3;
   --text-1: #d4d4d4;
   --text-2: #b3b3b3;
-  --text-3: #8f8f8f;
+  --text-3: #949494;
 
   /* Semantic text colours */
   --text-error:   var(--red);
