@@ -132,7 +132,7 @@
   --sidebar-wide:   280px;
 
   /* Semantic text colours */
-  --text-error:   var(--red);
+  --text-error:   #dc6255;
   --text-success: var(--green-bright);
   --text-warning: #e6b820;
 
@@ -495,6 +495,7 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 
   --red:           #ff6262;
   --red-dim:       rgba(255, 98, 98, 0.14);
+  --text-error:    var(--red);
   --green:         #2edf90;
   --green-bright:  #67f5b5;
   --green-dim:     rgba(46, 223, 144, 0.14);
@@ -620,7 +621,7 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
   --text-3: #798793;
 
   /* Semantic text colours */
-  --text-error:   var(--red);
+  --text-error:   #d96759;
   --text-success: var(--green-bright);
   --text-warning: #e0ab2f;
 
@@ -685,7 +686,7 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
   --text-3: #798793;
 
   /* Semantic text colours */
-  --text-error:   var(--red);
+  --text-error:   #d96759;
   --text-success: var(--green-bright);
   --text-warning: #e0ab2f;
 
@@ -750,7 +751,7 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
   --text-3: #949494;
 
   /* Semantic text colours */
-  --text-error:   var(--red);
+  --text-error:   #f87474;
   --text-success: var(--green-bright);
   --text-warning: #f0c674;
 
@@ -819,7 +820,7 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
   --text-3: #8f9bb0;
 
   /* Semantic text */
-  --text-error:   var(--red);
+  --text-error:   #f36969;
   --text-success: var(--green-bright);
   --text-warning: #f0c674;
 
