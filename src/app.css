@@ -510,13 +510,6 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
   --text-2: #95b2c6;
   --text-3: #5d7990;
 
-  --font-head: 'Chakra Petch', sans-serif;
-  --font-body: 'IBM Plex Sans', sans-serif;
-  --font-mono: 'IBM Plex Mono', monospace;
-
-  --rail-w:     56px;
-  --radius-sm:  3px;
-  --radius-md:  6px;
   --panel-grad-top: rgba(16, 195, 255, 0.06);
   --sidebar-bg: rgba(4, 16, 26, 0.5);
 }
@@ -557,20 +550,6 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
   --text-2: #5f7182;
   --text-3: #7f90a0;
 
-  /* Typography */
-  --font-head: 'Chakra Petch', sans-serif;
-  --font-body: 'IBM Plex Sans', sans-serif;
-  --font-mono: 'IBM Plex Mono', monospace;
-
-  /* Geometry */
-  --rail-w:     56px;
-  --radius-sm:  3px;
-  --radius-md:  6px;
-
-  /* Sidebar widths */
-  --sidebar-narrow: 200px;
-  --sidebar-wide:   280px;
-
   /* Semantic text colours */
   --text-error:   #952f26;
   --text-success: #1b6f43;
@@ -588,16 +567,8 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
   /* Favourite highlight */
   --colour-favourite: var(--amber-bright);
 
-  /* Z-index scale */
-  --z-panel:    1;
-  --z-dropdown: 10;
-  --z-tooltip:  100;
-  --z-modal:    200;
-  --z-titlebar: 300;
-
   /* Panel background gradient */
   --panel-grad-top: rgba(15, 111, 141, 0.05);
-  --panel-grad-mid: 40%;
 
   /* Sidebar background */
   --sidebar-bg: rgba(244, 248, 252, 0.62);
@@ -648,20 +619,6 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
   --text-2: #7e8fa0;
   --text-3: #455460;
 
-  /* Typography */
-  --font-head: 'Chakra Petch', sans-serif;
-  --font-body: 'IBM Plex Sans', sans-serif;
-  --font-mono: 'IBM Plex Mono', monospace;
-
-  /* Geometry */
-  --rail-w:     56px;
-  --radius-sm:  3px;
-  --radius-md:  6px;
-
-  /* Sidebar widths */
-  --sidebar-narrow: 200px;
-  --sidebar-wide:   280px;
-
   /* Semantic text colours */
   --text-error:   var(--red);
   --text-success: var(--green-bright);
@@ -679,16 +636,8 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
   /* Favourite highlight */
   --colour-favourite: var(--amber-bright);
 
-  /* Z-index scale */
-  --z-panel:    1;
-  --z-dropdown: 10;
-  --z-tooltip:  100;
-  --z-modal:    200;
-  --z-titlebar: 300;
-
   /* Panel background gradient */
   --panel-grad-top: rgba(214, 106, 31, 0.07);
-  --panel-grad-mid: 40%;
 
   /* Sidebar background */
   --sidebar-bg: rgba(8, 9, 12, 0.5);
@@ -735,20 +684,6 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
   --text-2: #7e8fa0;
   --text-3: #455460;
 
-  /* Typography */
-  --font-head: 'Chakra Petch', sans-serif;
-  --font-body: 'IBM Plex Sans', sans-serif;
-  --font-mono: 'IBM Plex Mono', monospace;
-
-  /* Geometry */
-  --rail-w:     56px;
-  --radius-sm:  3px;
-  --radius-md:  6px;
-
-  /* Sidebar widths */
-  --sidebar-narrow: 200px;
-  --sidebar-wide:   280px;
-
   /* Semantic text colours */
   --text-error:   var(--red);
   --text-success: var(--green-bright);
@@ -766,16 +701,8 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
   /* Favourite highlight */
   --colour-favourite: var(--amber-bright);
 
-  /* Z-index scale */
-  --z-panel:    1;
-  --z-dropdown: 10;
-  --z-tooltip:  100;
-  --z-modal:    200;
-  --z-titlebar: 300;
-
   /* Panel background gradient */
   --panel-grad-top: rgba(214, 31, 31, 0.07);
-  --panel-grad-mid: 40%;
 
   /* Sidebar background */
   --sidebar-bg: rgba(8, 9, 12, 0.5);
@@ -822,20 +749,6 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
   --text-2: #b3b3b3;
   --text-3: #8f8f8f;
 
-  /* Typography */
-  --font-head: 'Chakra Petch', sans-serif;
-  --font-body: 'IBM Plex Sans', sans-serif;
-  --font-mono: 'IBM Plex Mono', monospace;
-
-  /* Geometry */
-  --rail-w:     56px;
-  --radius-sm:  3px;
-  --radius-md:  6px;
-
-  /* Sidebar widths */
-  --sidebar-narrow: 200px;
-  --sidebar-wide:   280px;
-
   /* Semantic text colours */
   --text-error:   var(--red);
   --text-success: var(--green-bright);
@@ -853,16 +766,8 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
   /* Favourite highlight */
   --colour-favourite: var(--amber-bright);
 
-  /* Z-index scale */
-  --z-panel:    1;
-  --z-dropdown: 10;
-  --z-tooltip:  100;
-  --z-modal:    200;
-  --z-titlebar: 300;
-
   /* Panel background gradient */
   --panel-grad-top: rgba(86, 156, 214, 0.08);
-  --panel-grad-mid: 40%;
 
   /* Sidebar background */
   --sidebar-bg: rgba(30, 30, 30, 0.82);
@@ -913,20 +818,6 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
   --text-2: #b6c2d4;
   --text-3: #8f9bb0;
 
-  /* Typography */
-  --font-head: 'Chakra Petch', sans-serif;
-  --font-body: 'IBM Plex Sans', sans-serif;
-  --font-mono: 'IBM Plex Mono', monospace;
-
-  /* Geometry */
-  --rail-w:     56px;
-  --radius-sm:  3px;
-  --radius-md:  6px;
-
-  /* Sidebar widths */
-  --sidebar-narrow: 200px;
-  --sidebar-wide:   280px;
-
   /* Semantic text */
   --text-error:   var(--red);
   --text-success: var(--green-bright);
@@ -945,15 +836,9 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
   --colour-favourite: var(--amber-bright);
 
   /* Z-index */
-  --z-panel:    1;
-  --z-dropdown: 10;
-  --z-tooltip:  100;
-  --z-modal:    200;
-  --z-titlebar: 300;
 
   /* Panel gradient */
   --panel-grad-top: rgba(86, 156, 214, 0.10);
-  --panel-grad-mid: 40%;
 
   /* Sidebar */
   --sidebar-bg: rgba(15, 18, 24, 0.75);
