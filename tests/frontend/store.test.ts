@@ -1,5 +1,9 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { get } from 'svelte/store'
+
+const invokeMock = vi.hoisted(() => vi.fn())
+vi.mock('@tauri-apps/api/core', () => ({ invoke: invokeMock }))
+
 import {
   appendLog,
   appendLogBatch,
@@ -15,6 +19,11 @@ import {
   activeTab,
   activeDataTab,
   confirmRequest,
+  appConfig,
+  activeServerId,
+  upsertServer,
+  type AppConfig,
+  type Server,
 } from '../../src/lib/store'
 
 beforeEach(() => {
@@ -138,5 +147,40 @@ describe('unsaved-changes guard', () => {
     answerNext(false)
     await nav
     expect(get(activeDataTab)).toBe('events')
+  })
+})
+
+describe('upsertServer selection', () => {
+  const srv = (id: string): Server => ({ id, name: id, host: '', email: '', is_local: true, use_https: false })
+  const withServers = (...ids: string[]): AppConfig => ({ ...get(appConfig), servers: ids.map(srv) })
+
+  beforeEach(() => {
+    invokeMock.mockReset()
+    appConfig.set(withServers('a', 'b'))
+    activeServerId.set('a')
+  })
+
+  // upsert_server returns the updated config; set_active_server returns nothing.
+  function backendReturns(servers: AppConfig) {
+    invokeMock.mockImplementation(async (cmd: string) => (cmd === 'upsert_server' ? servers : undefined))
+  }
+
+  it.each([
+    ['a new server is selected', 'c', 'c'],
+    ['an edited server keeps the current selection', 'b', 'a'],
+  ])('%s', async (_name, id, expected) => {
+    backendReturns(withServers('a', 'b', 'c'))
+    await upsertServer(srv(id), 'pw')
+    expect(get(activeServerId)).toBe(expected)
+  })
+
+  it.each([
+    ['persists the selection of a new server', 'c', true],
+    ['does not persist anything for an edit', 'b', false],
+  ])('%s', async (_name, id, persisted) => {
+    backendReturns(withServers('a', 'b', 'c'))
+    await upsertServer(srv(id), 'pw')
+    const calls = invokeMock.mock.calls.filter(([cmd]) => cmd === 'set_active_server')
+    expect(calls).toEqual(persisted ? [['set_active_server', { serverId: id }]] : [])
   })
 })
