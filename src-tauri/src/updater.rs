@@ -2,6 +2,7 @@ use chrono::{DateTime, Duration, Local, Utc};
 use futures_util::StreamExt;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
 use tauri::{AppHandle, Emitter, Manager};
 use tokio::io::AsyncWriteExt;
 
@@ -478,12 +479,35 @@ pub async fn check_update_available(server_exe: Option<String>) -> Result<Update
     })
 }
 
+static UPDATE_RUNNING: AtomicBool = AtomicBool::new(false);
+
+/// Held while an update runs. Two runs would share `_update.zip` and the staging folder, and the
+/// UI can't prevent it: leaving the tab resets its own "updating" flag while the run continues.
+struct UpdateLock;
+
+impl UpdateLock {
+    fn acquire() -> Option<Self> {
+        UPDATE_RUNNING
+            .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
+            .ok()
+            .map(|_| Self)
+    }
+}
+
+impl Drop for UpdateLock {
+    fn drop(&mut self) {
+        UPDATE_RUNNING.store(false, Ordering::SeqCst);
+    }
+}
+
 #[tauri::command]
 pub async fn run_update(
     app: AppHandle,
     server_exe: String,
     backup_targets: Vec<String>,
 ) -> Result<(), String> {
+    // Before anything else: the cleanup below would delete the running update's files
+    let _lock = UpdateLock::acquire().ok_or("An update is already running.")?;
     let server_dir = server_dir_from_exe(&server_exe)?;
     let zip_path = server_dir.join("_update.zip");
     let staging_dir = server_dir.join("_update_staging");

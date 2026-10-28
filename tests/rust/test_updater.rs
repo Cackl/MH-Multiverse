@@ -218,6 +218,14 @@ fn up_to_date_needs_an_installed_build_at_least_as_new() {
 }
 
 #[test]
+fn only_one_update_can_run_at_a_time() {
+    let first = UpdateLock::acquire().expect("lock is free");
+    assert!(UpdateLock::acquire().is_none(), "a second run while the first holds the lock");
+    drop(first);
+    assert!(UpdateLock::acquire().is_some(), "free again once the first run ends");
+}
+
+#[test]
 fn missing_or_unversioned_exe_has_no_build_date() {
     let (_tmp, server_exe) = empty_server();
     assert_eq!(installed_build_date(&server_exe), None);
