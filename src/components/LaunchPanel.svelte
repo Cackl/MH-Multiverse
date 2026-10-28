@@ -488,14 +488,14 @@
     border: 1px solid var(--accent);
     color: #fff;
     text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
-    box-shadow: 0 0 20px rgba(62, 199, 199, 0.15), 0 2px 8px rgba(0, 0, 0, 0.3);
+    box-shadow: 0 0 20px color-mix(in srgb, var(--accent) 15%, transparent), 0 2px 8px rgba(0, 0, 0, 0.3);
     border-radius: var(--radius-sm);
     cursor: pointer;
     transition: all 0.14s;
   }
   .btn-launch:hover:not(:disabled) {
     background: linear-gradient(135deg, var(--accent) 0%, var(--accent-bright) 100%);
-    box-shadow: 0 0 30px rgba(62, 194, 199, 0.25), 0 2px 12px rgba(0, 0, 0, 0.4);
+    box-shadow: 0 0 30px color-mix(in srgb, var(--accent-bright) 25%, transparent), 0 2px 12px rgba(0, 0, 0, 0.4);
   }
   .btn-launch:disabled {
     opacity: 0.35;
