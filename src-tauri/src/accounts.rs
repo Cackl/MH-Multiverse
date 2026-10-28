@@ -40,7 +40,6 @@ use crate::server::ServerState;
 #[derive(Deserialize)]
 #[serde(rename_all = "PascalCase")]
 struct ImportJson {
-    id: i64,
     email: String,
     player_name: String,
     password_hash: String,
