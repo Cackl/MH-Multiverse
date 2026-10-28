@@ -12,6 +12,8 @@
     build_date: string
     download_url: string
     available: boolean
+    installed_build_date?: string | null
+    up_to_date?: boolean
   }
 
   interface UpdateProgress {
@@ -96,7 +98,7 @@
     checkError = ''
     updateInfo = null
     try {
-      updateInfo = await invoke<UpdateInfo>('check_update_available')
+      updateInfo = await invoke<UpdateInfo>('check_update_available', { serverExe: $appConfig.server_exe })
     } catch (e) {
       checkError = String(e)
     } finally {
@@ -105,7 +107,7 @@
   }
 
   async function runUpdate() {
-    if (!hasServerExe || !updateInfo?.available || updating || $serverRunning) return
+    if (!hasServerExe || !updateInfo?.available || updateInfo.up_to_date || updating || $serverRunning) return
     updating = true
     updateError = ''
     updateSuccess = false
@@ -118,6 +120,7 @@
       updateSuccess = true
       updateProgress = null
       await loadBackups()
+      await checkForUpdate()
     } catch (e) {
       updateError = String(e)
       updateProgress = null
@@ -337,12 +340,20 @@
               <span class="info-value dim">—</span>
             {/if}
           </div>
+          {#if updateInfo?.installed_build_date}
+            <div class="info-row">
+              <span class="info-label">Installed</span>
+              <span class="info-value mono">{updateInfo.installed_build_date.replace(/(\d{4})(\d{2})(\d{2})/, '$1-$2-$3')}</span>
+            </div>
+          {/if}
           <div class="info-row">
             <span class="info-label">Status</span>
             {#if checking}
               <span class="status-pill checking">Checking</span>
             {:else if checkError}
               <span class="status-pill unavailable">Error</span>
+            {:else if updateInfo?.up_to_date}
+              <span class="status-pill unavailable">Up to date</span>
             {:else if updateInfo?.available}
               <span class="status-pill available">Available</span>
             {:else if updateInfo}
@@ -377,7 +388,7 @@
         <button
           class="btn btn-accent btn-sm update-btn"
           on:click={runUpdate}
-          disabled={updating || $serverRunning || !updateInfo?.available}
+          disabled={updating || $serverRunning || !updateInfo?.available || updateInfo.up_to_date}
         >
           {#if updating}
             Updating...
