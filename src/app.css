@@ -661,8 +661,8 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
   --accent:         #b31618;
   --accent-bright:  #e03a3d;
   --accent-dim:     #7e0f11;
-  --accent-glow:        rgba(214, 106, 31, 0.08);
-  --accent-glow-strong: rgba(242, 138, 46, 0.16);
+  --accent-glow:        rgba(179, 22, 24, 0.08);
+  --accent-glow-strong: rgba(224, 58, 61, 0.16);
 
   /* Semantic */
   --red:           #c94a3a;
