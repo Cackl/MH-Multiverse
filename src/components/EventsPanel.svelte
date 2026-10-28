@@ -603,7 +603,6 @@
                         <span class="active-card-name">{item.rule.name}</span>
                       </div>
                       <div class="active-card-meta">
-                        <!-- <span class="active-card-type">Weekly rotation active</span> -->
                         {#if rotationActiveName}
                           <span class="active-card-type">Now: {rotationActiveName}</span>
                         {/if}
