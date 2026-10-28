@@ -266,16 +266,6 @@
     await openUrl(`http://localhost:${dashboardPort}${dashboardPath}`)
   }
 
-  // const presets = [
-  //   '!commands',
-  //   '!account userlevel',
-  //   '!server status',
-  //   '!server broadcast',
-  //   '!server shutdown',
-  //   '!lookup item',
-  //   '!lookup costume',
-  // ]
-
   function applyPreset(cmd: string) {
     command = cmd
     acUpdate(cmd)

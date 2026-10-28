@@ -2,8 +2,8 @@
   import { onMount } from 'svelte'
   import { invoke } from '@tauri-apps/api/core'
   import { openPath } from '@tauri-apps/plugin-opener'
-  import { appConfig, serverRunning, setTuningTags, setTuningFavourites, activeDataTab, tuningFocusFile } from '../lib/store'
-  import { categoryForSetting, KNOWN_CORE, KNOWN_EVENTS, CATEGORY_PREFIXES, type TuningFileInfo, type EventDefinition, type EventsData } from '../lib/tuningMeta'
+  import { appConfig, serverRunning, setTuningTags, setTuningFavourites, tuningFocusFile } from '../lib/store'
+  import { KNOWN_CORE, KNOWN_EVENTS, type TuningFileInfo, type EventDefinition, type EventsData } from '../lib/tuningMeta'
   import PanelSidebar from './PanelSidebar.svelte'
   import TuningEditorModal from './TuningEditorModal.svelte'
 

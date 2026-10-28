@@ -2,23 +2,6 @@
 //
 // Account import: parse a !account download JSON export, remap all IDs to
 // avoid collisions, and write the data into Account.db.
-//
-// NOTE: `import_account` calls `crate::server::server_process_is_running`.
-// Add the following function to server.rs (see CHANGES.md for context):
-//
-//   pub fn server_process_is_running(state: &crate::server::ServerState) -> bool {
-//       state.0.lock()
-//           .map(|mut proc| {
-//               proc.child
-//                   .as_mut()
-//                   .map(|child: &mut std::process::Child| child.try_wait().ok().flatten().is_none())
-//                   .unwrap_or(false)
-//           })
-//           .unwrap_or(false)
-//   }
-//
-// If you prefer not to add this function, remove the server-running guard
-// in import_account and rely solely on the frontend's $serverRunning check.
 
 use std::collections::HashMap;
 use std::fs;
@@ -40,7 +23,6 @@ use crate::server::ServerState;
 #[derive(Deserialize)]
 #[serde(rename_all = "PascalCase")]
 struct ImportJson {
-    id: i64,
     email: String,
     player_name: String,
     password_hash: String,

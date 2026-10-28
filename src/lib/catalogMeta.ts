@@ -79,8 +79,6 @@ export const ITEM_TYPE_NAMES = [
   'TeamUp',
 ] as const
 
-export type ItemTypeName = (typeof ITEM_TYPE_NAMES)[number]
-
 export function typeNames(): string[] {
   return [...ITEM_TYPE_NAMES]
 }
@@ -207,28 +205,6 @@ export function buildModifiers(modifierNames: string[], order: number): NamedIte
   return modifierNames.map(name => ({ Name: name, Order: order }))
 }
 
-// ─── Prototype search hints ───────────────────────────────────────────────────
-
-/**
- * Maps item type names to a Calligraphy blueprint path substring.
- * Passed as blueprint_hint to search_prototypes in the GuidItem prototype
- * search dropdown to scope results to a relevant category.
- */
-const BLUEPRINT_HINTS: Partial<Record<string, string>> = {
-  Hero:    'Avatar',
-  Costume: 'Costume',
-  TeamUp:  'TeamUp',
-  Boost:   'Consumable',
-  Chest:   'Consumable',
-  Service: 'Inventory',
-  // Bundle has no single blueprint scope — leave undefined to search all types
-}
-
-/** Returns a blueprint hint substring for the prototype search, or undefined for Bundle. */
-export function blueprintHintForType(typeName: string): string | undefined {
-  return BLUEPRINT_HINTS[typeName]
-}
-
 // ─── Entry factories ──────────────────────────────────────────────────────────
 
 export function defaultLocalizedEntry(): LocalizedEntry {
@@ -238,37 +214,6 @@ export function defaultLocalizedEntry(): LocalizedEntry {
     Title: '',
     ReleaseDate: '',
     ItemPrice: 1,
-  }
-}
-
-export function defaultUrlEntry(): UrlEntry {
-  return { LanguageId: 'en_us', Url: '', ImageData: '' }
-}
-
-/**
- * Build a skeleton CatalogEntry for a new item ready to be filled in by
- * the editor modal.
- *
- * @param typeName - Item type (e.g. "Boost", "Bundle")
- * @param skuId    - From get_next_sku_id
- * @param order    - Per-entry display sort order. Defaults to 5 (standard visible
- *                   store item). Use 0 for fully hidden, 1 for hidden-from-store.
- */
-export function newCatalogEntry(
-  typeName: string,
-  skuId: string,
-  order: number = 5,
-): CatalogEntry {
-  const isBundle = typeName === 'Bundle'
-  return {
-    SkuId: skuId,
-    GuidItems: [],
-    AdditionalGuidItems: [],
-    LocalizedEntries: [defaultLocalizedEntry()],
-    InfoUrls: isBundle ? [defaultUrlEntry()] : [],
-    ContentData: isBundle ? [defaultUrlEntry()] : [],
-    Type: { Name: typeName, Order: order },
-    TypeModifiers: [],
   }
 }
 
