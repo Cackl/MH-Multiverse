@@ -266,7 +266,7 @@
   .level-badge,
   .banned-badge {
     font-family: var(--font-head);
-    font-size: 8px;
+    font-size: var(--fs-min);
     font-weight: 700;
     letter-spacing: 0.1em;
     text-transform: uppercase;
@@ -277,7 +277,7 @@
   }
   .whitelisted-badge {
     font-family: var(--font-head);
-    font-size: 8px;
+    font-size: var(--fs-min);
     font-weight: 700;
     letter-spacing: 0.1em;
     text-transform: uppercase;

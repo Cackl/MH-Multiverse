@@ -925,7 +925,7 @@
 
   .type-badge {
     font-family: var(--font-head);
-    font-size: 8px;
+    font-size: var(--fs-min);
     font-weight: 600;
     letter-spacing: 0.08em;
     text-transform: uppercase;
