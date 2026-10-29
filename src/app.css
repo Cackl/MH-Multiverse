@@ -504,7 +504,7 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 
   --border:     #184562;
   --border-mid: #1f6f9d;
-  --border-lit: #2fbeee;
+  --border-lit: #28a0ca;
 
   --text-0: #f7fcff;
   --text-1: #cfe2f0;
