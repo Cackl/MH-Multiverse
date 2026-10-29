@@ -121,7 +121,7 @@
 
   .rail-group-label {
     font-family: var(--font-head);
-    font-size: 8px;
+    font-size: var(--fs-rail);
     font-weight: 600;
     letter-spacing: 0.14em;
     text-transform: uppercase;
@@ -163,9 +163,9 @@
 
   .rail-tab .rail-label {
     font-family: var(--font-head);
-    font-size: 8px;
+    font-size: var(--fs-rail);
     font-weight: 600;
-    letter-spacing: 0.08em;
+    letter-spacing: 0.02em;
     text-transform: uppercase;
     line-height: 1;
   }
@@ -237,8 +237,9 @@
 
   .status-dot-label {
     font-family: var(--font-head);
-    font-size: 7px;
-    letter-spacing: 0.1em;
+    font-size: var(--fs-rail);
+    font-weight: 600;
+    letter-spacing: 0.04em;
     text-transform: uppercase;
     color: var(--text-3);
   }
