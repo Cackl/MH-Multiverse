@@ -109,7 +109,7 @@
   /* Borders */
   --border:     #252836;
   --border-mid: #2f3347;
-  --border-lit: #3d4260;
+  --border-lit: #595e7c;
 
   /* Text */
   --text-0: #edf1f5;
@@ -543,7 +543,7 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
   /* Borders */
   --border:     #c3d0dc;
   --border-mid: #aebecd;
-  --border-lit: #8fa3b7;
+  --border-lit: #7b8fa3;
 
   /* Text */
   --text-0: #16212b;
@@ -612,7 +612,7 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
   /* Borders */
   --border:     #252836;
   --border-mid: #2f3347;
-  --border-lit: #3d4260;
+  --border-lit: #595e7c;
 
   /* Text */
   --text-0: #edf1f5;
@@ -677,7 +677,7 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
   /* Borders */
   --border:     #252836;
   --border-mid: #2f3347;
-  --border-lit: #3d4260;
+  --border-lit: #595e7c;
 
   /* Text */
   --text-0: #edf1f5;
@@ -742,7 +742,7 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
   /* Borders */
   --border:     #3c3c3c;
   --border-mid: #4a4a4a;
-  --border-lit: #5e5e5e;
+  --border-lit: #6d6d6d;
 
   /* Text */
   --text-0: #f3f3f3;
@@ -811,7 +811,7 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
   /* Borders */
   --border:     #2f3a52;
   --border-mid: #3a4763;
-  --border-lit: #4a5a7a;
+  --border-lit: #556585;
 
   /* Text */
   --text-0: #f3f6fb;
