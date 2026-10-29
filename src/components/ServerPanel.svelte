@@ -587,7 +587,7 @@
   :global(.filter-chip.active)               { color: var(--text-0); border-color: var(--border-lit); background: var(--bg-3); }
   :global(.filter-chip.chip-purple.active)   { color: var(--purple);       border-color: rgba(130,100,180,0.4); background: var(--purple-dim); }
   :global(.filter-chip.chip-blue.active)     { color: var(--blue);         border-color: rgba(46,134,193,0.4);  background: var(--blue-dim); }
-  :global(.filter-chip.chip-amber.active)    { color: var(--amber-bright); border-color: rgba(200,146,10,0.4);  background: var(--amber-dim); }
+  :global(.filter-chip.chip-amber.active)    { color: var(--amber-bright); border-color: color-mix(in srgb, var(--amber) 40%, transparent);  background: var(--amber-dim); }
   :global(.filter-chip.chip-red.active)      { color: var(--text-error);   border-color: color-mix(in srgb, var(--red) 40%, transparent);   background: var(--red-dim); }
 
   .btn.active {
@@ -597,14 +597,14 @@
   }
 
   .btn-countdown {
-    border-color: rgba(200, 146, 10, 0.4);
+    border-color: color-mix(in srgb, var(--amber) 40%, transparent);
     color: var(--amber-bright);
-    background: rgba(200, 146, 10, 0.1);
+    background: color-mix(in srgb, var(--amber) 10%, transparent);
     min-width: 100px;
   }
   .btn-countdown:hover {
-    border-color: rgba(200, 146, 10, 0.7);
-    background: rgba(200, 146, 10, 0.18);
+    border-color: color-mix(in srgb, var(--amber) 70%, transparent);
+    background: color-mix(in srgb, var(--amber) 18%, transparent);
   }
 
   /* -- Console area (log + blade overlay container) -- */

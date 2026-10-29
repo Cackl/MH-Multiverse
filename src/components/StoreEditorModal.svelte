@@ -1676,7 +1676,7 @@
     text-transform: uppercase;
     color: var(--amber-bright);
     background: var(--amber-dim);
-    border: 1px solid rgba(200,146,10,0.35);
+    border: 1px solid color-mix(in srgb, var(--amber) 35%, transparent);
     padding: 1px 5px;
     border-radius: 2px;
     flex-shrink: 0;
@@ -1835,8 +1835,8 @@
 
   .mod-chip.unsupported {
     border-style: dashed;
-    border-color: rgba(200,146,10,0.35);
-    background: rgba(200,146,10,0.08);
+    border-color: color-mix(in srgb, var(--amber) 35%, transparent);
+    background: color-mix(in srgb, var(--amber) 8%, transparent);
     color: var(--amber-bright);
   }
 

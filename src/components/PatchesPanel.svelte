@@ -1001,7 +1001,7 @@
     height: 36px;
     border-radius: 50%;
     background: var(--amber-dim);
-    border: 1px solid rgba(200, 146, 10, 0.25);
+    border: 1px solid color-mix(in srgb, var(--amber) 25%, transparent);
     flex-shrink: 0;
   }
   .confirm-icon svg {

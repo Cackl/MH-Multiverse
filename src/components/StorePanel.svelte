@@ -1304,9 +1304,9 @@
     white-space: nowrap;
     display: inline-block;
   }
-  .type-badge-boost   { color: var(--amber-bright);  border-color: rgba(200,146,10,0.35);  background: var(--amber-dim); }
+  .type-badge-boost   { color: var(--amber-bright);  border-color: color-mix(in srgb, var(--amber) 35%, transparent);  background: var(--amber-dim); }
   .type-badge-bundle  { color: var(--accent-bright); border-color: var(--accent-dim);      background: var(--accent-glow); }
-  .type-badge-chest   { color: var(--amber-bright);  border-color: rgba(200,146,10,0.35);  background: var(--amber-dim); }
+  .type-badge-chest   { color: var(--amber-bright);  border-color: color-mix(in srgb, var(--amber) 35%, transparent);  background: var(--amber-dim); }
   .type-badge-costume { color: var(--purple);        border-color: rgba(130,100,180,0.3);  background: var(--purple-dim); }
   .type-badge-hero    { color: var(--blue);          border-color: rgba(46,134,193,0.3);   background: var(--blue-dim); }
   .type-badge-service { color: var(--green-bright);  border-color: color-mix(in srgb, var(--green) 30%, transparent);    background: var(--green-dim); }
@@ -1319,7 +1319,7 @@
     font-weight: 600;
     color: var(--amber-bright);
     background: var(--amber-dim);
-    border: 1px solid rgba(200,146,10,0.35);
+    border: 1px solid color-mix(in srgb, var(--amber) 35%, transparent);
     padding: 1px 5px;
     border-radius: 2px;
     flex-shrink: 0;

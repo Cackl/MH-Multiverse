@@ -958,7 +958,7 @@
     color: var(--amber-bright);
   }
   .import-note.note-warning .note-icon {
-    border-color: rgba(200, 146, 10, 0.4);
+    border-color: color-mix(in srgb, var(--amber) 40%, transparent);
     color: var(--amber-bright);
   }
   .note-icon {
@@ -1054,7 +1054,7 @@
   .warning-notice {
     padding: 8px 12px;
     background: var(--amber-dim);
-    border: 1px solid rgba(200,146,10,0.3);
+    border: 1px solid color-mix(in srgb, var(--amber) 30%, transparent);
     border-radius: var(--radius-sm);
     font-size: 12px;
     color: var(--amber-bright);

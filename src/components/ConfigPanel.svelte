@@ -984,7 +984,7 @@
   .running-warn {
     padding: 8px 20px;
     background: var(--amber-dim);
-    border-bottom: 1px solid rgba(200, 146, 10, 0.2);
+    border-bottom: 1px solid color-mix(in srgb, var(--amber) 20%, transparent);
     font-size: 12px;
     color: var(--amber);
     font-family: var(--font-head);

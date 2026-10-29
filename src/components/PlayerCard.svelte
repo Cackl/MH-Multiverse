@@ -471,7 +471,7 @@
 
   .btn:disabled { opacity: 0.4; cursor: not-allowed; }
 
-  .btn-warn   { color: var(--amber-bright); background: var(--amber-dim); border-color: rgba(200, 146, 10, 0.35); }
+  .btn-warn   { color: var(--amber-bright); background: var(--amber-dim); border-color: color-mix(in srgb, var(--amber) 35%, transparent); }
   .btn-danger { color: var(--text-error); background: rgba(200, 50, 50, 0.1); border-color: rgba(200, 50, 50, 0.4); }
   .btn-ok     { color: var(--green-bright); background: var(--green-dim); border-color: color-mix(in srgb, var(--green) 30%, transparent); }
   .btn-accent { color: var(--accent-bright); background: var(--accent-glow); border-color: var(--accent-dim); }

@@ -754,7 +754,7 @@
     gap: 8px;
     padding: 8px 12px;
     background: var(--amber-dim);
-    border: 1px solid rgba(200,146,10,0.3);
+    border: 1px solid color-mix(in srgb, var(--amber) 30%, transparent);
     border-radius: var(--radius-sm);
     font-size: 12px;
     color: var(--amber-bright);
@@ -933,7 +933,7 @@
   }
   .backup-label-badge.pre-update {
     color: var(--amber-bright);
-    border-color: rgba(200,146,10,0.3);
+    border-color: color-mix(in srgb, var(--amber) 30%, transparent);
     background: var(--amber-dim);
   }
 
