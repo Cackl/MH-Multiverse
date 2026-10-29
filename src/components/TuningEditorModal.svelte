@@ -786,7 +786,7 @@
 
   .copy-from-label {
     font-family: var(--font-head);
-    font-size: 9px;
+    font-size: var(--fs-min);
     font-weight: 600;
     letter-spacing: 0.12em;
     text-transform: uppercase;
@@ -796,7 +796,7 @@
 
   .copy-loading {
     font-family: var(--font-head);
-    font-size: 10px;
+    font-size: var(--fs-min);
     letter-spacing: 0.08em;
     text-transform: uppercase;
     color: var(--text-3);
@@ -843,7 +843,7 @@
   .search-input::placeholder { color: var(--text-3); font-family: var(--font-body); }
 
   .entry-count {
-    font-family: var(--font-head); font-size: 9px;
+    font-family: var(--font-head); font-size: var(--fs-min);
     letter-spacing: 0.1em; text-transform: uppercase;
     color: var(--text-3); white-space: nowrap; flex-shrink: 0;
   }
@@ -862,7 +862,7 @@
   .entry-table { width: 100%; border-collapse: collapse; font-size: 12px; table-layout: fixed; }
 
   .entry-table thead th {
-    font-family: var(--font-head); font-size: 9px; font-weight: 600;
+    font-family: var(--font-head); font-size: var(--fs-min); font-weight: 600;
     letter-spacing: 0.12em; text-transform: uppercase; color: var(--text-3);
     padding: 7px 14px; border-bottom: 1px solid var(--border);
     text-align: left; position: sticky; top: 0; background: var(--bg-1); white-space: nowrap;
@@ -905,7 +905,7 @@
   }
 
   .cat-badge {
-    font-family: var(--font-head); font-size: 9px; font-weight: 600;
+    font-family: var(--font-head); font-size: var(--fs-min); font-weight: 600;
     letter-spacing: 0.06em; text-transform: uppercase;
     color: var(--text-3); background: var(--bg-3);
     border: 1px solid var(--border-mid); padding: 2px 6px; border-radius: 2px; white-space: nowrap;
@@ -966,7 +966,7 @@
   .input-dimmed { opacity: 0.45; cursor: not-allowed; }
 
   .proto-hint {
-    font-size: 10px;
+    font-size: var(--fs-min);
     color: var(--text-3);
     padding: 2px 2px 0;
   }
@@ -1013,7 +1013,7 @@
 
   .proto-opt-bp {
     font-family: var(--font-head);
-    font-size: 9px;
+    font-size: var(--fs-min);
     letter-spacing: 0.08em;
     text-transform: uppercase;
     color: var(--accent);
@@ -1048,7 +1048,7 @@
 
   .setting-opt-name { font-family: var(--font-mono); font-size: 12px; color: var(--text-0); }
   .setting-opt-cat {
-    font-family: var(--font-head); font-size: 9px;
+    font-family: var(--font-head); font-size: var(--fs-min);
     letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent);
   }
   .setting-opt-desc { font-size: 11px; color: var(--text-2); line-height: 1.4; }

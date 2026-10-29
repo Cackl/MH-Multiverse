@@ -650,7 +650,7 @@
   .progress-meta { display: flex; justify-content: space-between; align-items: center; }
   .progress-stage {
     font-family: var(--font-head);
-    font-size: 10px;
+    font-size: var(--fs-min);
     letter-spacing: 0.08em;
     text-transform: uppercase;
     color: var(--text-2);

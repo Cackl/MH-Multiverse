@@ -463,7 +463,7 @@
     align-items: center;
     gap: 6px;
     font-family: var(--font-head);
-    font-size: 10px;
+    font-size: var(--fs-min);
     font-weight: 600;
     letter-spacing: 0.12em;
     text-transform: uppercase;

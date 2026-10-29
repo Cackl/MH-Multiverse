@@ -321,7 +321,7 @@
 
   .header-session {
     font-family: var(--font-mono);
-    font-size: 10px;
+    font-size: var(--fs-min);
     color: var(--text-3);
   }
 
@@ -360,7 +360,7 @@
 
   .section-label {
     font-family: var(--font-head);
-    font-size: 9px;
+    font-size: var(--fs-min);
     font-weight: 700;
     letter-spacing: 0.14em;
     text-transform: uppercase;
@@ -391,7 +391,7 @@
 
   .field-label {
     font-family: var(--font-head);
-    font-size: 10px;
+    font-size: var(--fs-min);
     letter-spacing: 0.08em;
     text-transform: uppercase;
     color: var(--text-2);
@@ -435,7 +435,7 @@
 
   .info-grid dt {
     font-family: var(--font-head);
-    font-size: 9px;
+    font-size: var(--fs-min);
     font-weight: 700;
     letter-spacing: 0.1em;
     text-transform: uppercase;
@@ -456,7 +456,7 @@
   /* ── Buttons ── */
   .btn {
     font-family: var(--font-head);
-    font-size: 10px;
+    font-size: var(--fs-min);
     font-weight: 700;
     letter-spacing: 0.1em;
     text-transform: uppercase;

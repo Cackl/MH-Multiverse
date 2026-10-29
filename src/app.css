@@ -151,6 +151,11 @@
   /* Off/disabled rows that still carry readable text (kept high enough for the contrast test) */
   --dimmed-opacity: 0.65;
 
+  /* Smallest text sizes; --font-scale is the hook for a future font-size setting */
+  --font-scale: 1;
+  --fs-min:     calc(10px * var(--font-scale));
+  --fs-rail:    calc(9px * var(--font-scale));
+
   /* Z-index scale */
   --z-panel:    1;
   --z-dropdown: 10;
@@ -196,7 +201,7 @@ html, body {
 /* ── Section title (reusable) ── */
 .section-title {
   font-family: var(--font-head);
-  font-size: 10px;
+  font-size: var(--fs-min);
   font-weight: 600;
   letter-spacing: 0.16em;
   text-transform: uppercase;
@@ -235,7 +240,7 @@ html, body {
 .btn:disabled { opacity: 0.35; cursor: not-allowed; }
 .btn svg { width: 14px; height: 14px; }
 
-.btn-sm { padding: 5px 12px; font-size: 10px; }
+.btn-sm { padding: 5px 12px; font-size: var(--fs-min); }
 
 .btn-accent {
   border-color: var(--accent-dim);
@@ -368,7 +373,7 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 /* ── Field label ── */
 .field-label {
   font-family: var(--font-head);
-  font-size: 9px;
+  font-size: var(--fs-min);
   font-weight: 600;
   letter-spacing: 0.14em;
   text-transform: uppercase;
@@ -379,7 +384,7 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 /* ── Badge ── */
 .badge {
   font-family: var(--font-head);
-  font-size: 9px;
+  font-size: var(--fs-min);
   font-weight: 600;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -443,7 +448,7 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 }
 .check-row .check-label {
   font-family: var(--font-head);
-  font-size: 9px;
+  font-size: var(--fs-min);
   font-weight: 600;
   letter-spacing: 0.1em;
   text-transform: uppercase;
@@ -879,7 +884,7 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
   align-items: center;
   gap: 6px;
   font-family: var(--font-head);
-  font-size: 10px;
+  font-size: var(--fs-min);
   letter-spacing: 0.1em;
   text-transform: uppercase;
   color: var(--accent-bright);
@@ -970,7 +975,7 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 /* ── Filter chip ── */
 .filter-chip {
   font-family: var(--font-head);
-  font-size: 10px;
+  font-size: var(--fs-min);
   font-weight: 600;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -1072,7 +1077,7 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 
 .section-divider span {
   font-family: var(--font-head);
-  font-size: 9px;
+  font-size: var(--fs-min);
   font-weight: 600;
   letter-spacing: 0.16em;
   text-transform: uppercase;

@@ -698,7 +698,7 @@
     align-items: flex-start;
     gap: 6px;
     padding: 8px 12px 10px;
-    font-size: 10px;
+    font-size: var(--fs-min);
     color: var(--text-3);
     border-bottom: 1px solid var(--border);
     line-height: 1.4;
@@ -725,7 +725,7 @@
 
   .stat-label {
     font-family: var(--font-head);
-    font-size: 9px;
+    font-size: var(--fs-min);
     letter-spacing: 0.08em;
     text-transform: uppercase;
     color: var(--text-3);
@@ -740,7 +740,7 @@
   .file-notice {
     padding: 16px 14px;
     font-family: var(--font-head);
-    font-size: 10px;
+    font-size: var(--fs-min);
     letter-spacing: 0.08em;
     text-transform: uppercase;
     color: var(--text-2);
@@ -766,7 +766,7 @@
 
   .file-group-label {
     font-family: var(--font-head);
-    font-size: 9px;
+    font-size: var(--fs-min);
     letter-spacing: 0.12em;
     text-transform: uppercase;
     color: var(--text-3);
@@ -823,7 +823,7 @@
 
   .entry-count {
     font-family: var(--font-mono);
-    font-size: 10px;
+    font-size: var(--fs-min);
     color: var(--text-3);
     flex-shrink: 0;
   }
@@ -868,7 +868,7 @@
 
   .entry-list thead th {
     font-family: var(--font-head);
-    font-size: 9px;
+    font-size: var(--fs-min);
     font-weight: 600;
     letter-spacing: 0.1em;
     text-transform: uppercase;
@@ -891,7 +891,7 @@
 
   .sort-ind {
     font-family: var(--font-body);
-    font-size: 9px;
+    font-size: var(--fs-min);
     color: var(--text-3);
     margin-left: 3px;
   }
@@ -921,7 +921,7 @@
 
   .cell-truncate { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .cell-desc     { color: var(--text-1); }
-  .cell-mono     { font-family: var(--font-mono); font-size: 10px; color: var(--text-2); }
+  .cell-mono     { font-family: var(--font-mono); font-size: var(--fs-min); color: var(--text-2); }
 
   .type-badge {
     font-family: var(--font-head);
@@ -961,7 +961,7 @@
     border-radius: var(--radius-sm);
     color: var(--text-3);
     cursor: pointer;
-    font-size: 10px;
+    font-size: var(--fs-min);
     line-height: 1;
     transition: all 0.1s;
     flex-shrink: 0;

@@ -151,7 +151,7 @@
 
   .blade-title {
     font-family: var(--font-head);
-    font-size: 10px;
+    font-size: var(--fs-min);
     font-weight: 700;
     letter-spacing: 0.12em;
     text-transform: uppercase;
@@ -256,7 +256,7 @@
 
   .session-mono {
     font-family: var(--font-body);
-    font-size: 10px;
+    font-size: var(--fs-min);
     color: var(--text-3);
     white-space: nowrap;
     overflow: hidden;

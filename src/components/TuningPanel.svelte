@@ -773,7 +773,7 @@
 
   .stat-label {
     font-family: var(--font-head);
-    font-size: 9px;
+    font-size: var(--fs-min);
     letter-spacing: 0.08em;
     text-transform: uppercase;
     color: var(--text-3);
@@ -794,7 +794,7 @@
   .file-notice {
     padding: 16px 14px;
     font-family: var(--font-head);
-    font-size: 10px;
+    font-size: var(--fs-min);
     letter-spacing: 0.08em;
     text-transform: uppercase;
     color: var(--text-2);
@@ -807,7 +807,7 @@
 
   .file-group-label {
     font-family: var(--font-head);
-    font-size: 9px;
+    font-size: var(--fs-min);
     letter-spacing: 0.12em;
     text-transform: uppercase;
     color: var(--text-3);
@@ -853,7 +853,7 @@
 
   .file-tag {
     font-family: var(--font-head);
-    font-size: 9px;
+    font-size: var(--fs-min);
     font-weight: 600;
     letter-spacing: 0.08em;
     text-transform: uppercase;
@@ -940,7 +940,7 @@
 
   .file-count {
     font-family: var(--font-head);
-    font-size: 9px;
+    font-size: var(--fs-min);
     letter-spacing: 0.1em;
     text-transform: uppercase;
     color: var(--text-3);
@@ -961,7 +961,7 @@
     align-items: center;
     gap: 6px;
     font-family: var(--font-head);
-    font-size: 9px;
+    font-size: var(--fs-min);
     font-weight: 600;
     letter-spacing: 0.14em;
     text-transform: uppercase;
@@ -1032,7 +1032,7 @@
 
   .card-filename {
     font-family: var(--font-mono);
-    font-size: 10px;
+    font-size: var(--fs-min);
     color: var(--text-3);
     white-space: nowrap;
     overflow: hidden;
@@ -1052,7 +1052,7 @@
 
   .toggle-label {
     font-family: var(--font-head);
-    font-size: 9px;
+    font-size: var(--fs-min);
     letter-spacing: 0.1em;
     text-transform: uppercase;
     color: var(--text-3);
@@ -1061,7 +1061,7 @@
 
   .managed-by-label {
     font-family: var(--font-head);
-    font-size: 9px;
+    font-size: var(--fs-min);
     letter-spacing: 0.06em;
     text-transform: uppercase;
     color: var(--green-bright);
@@ -1112,7 +1112,7 @@
 
   .card-tag-add {
     font-family: var(--font-head);
-    font-size: 9px;
+    font-size: var(--fs-min);
     font-weight: 600;
     letter-spacing: 0.08em;
     text-transform: uppercase;
@@ -1129,7 +1129,7 @@
 
   .tag-opt {
     font-family: var(--font-head);
-    font-size: 9px;
+    font-size: var(--fs-min);
     font-weight: 600;
     letter-spacing: 0.06em;
     text-transform: uppercase;

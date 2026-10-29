@@ -187,7 +187,7 @@
     background: var(--bg-3);
     border-bottom: 1px solid var(--border-mid);
     font-family: var(--font-head);
-    font-size: 9px;
+    font-size: var(--fs-min);
     letter-spacing: 0.1em;
     text-transform: uppercase;
     color: var(--text-3);
@@ -215,14 +215,14 @@
   .srv-sub {
     color: var(--text-3);
     font-family: var(--font-mono);
-    font-size: 10px;
+    font-size: var(--fs-min);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
   .chip {
     font-family: var(--font-head);
-    font-size: 9px;
+    font-size: var(--fs-min);
     letter-spacing: 0.08em;
     text-transform: uppercase;
     color: var(--green);

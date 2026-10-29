@@ -1358,7 +1358,7 @@
 
   .meta-badge {
     font-family: var(--font-mono);
-    font-size: 10px;
+    font-size: var(--fs-min);
     color: var(--text-2);
     background: var(--bg-3);
     border: 1px solid var(--border-mid);
@@ -1430,7 +1430,7 @@
 
   .bogo-target-label {
     font-family: var(--font-head);
-    font-size: 9px;
+    font-size: var(--fs-min);
     font-weight: 600;
     letter-spacing: 0.1em;
     text-transform: uppercase;
@@ -1440,7 +1440,7 @@
 
   .target-btn {
     font-family: var(--font-head);
-    font-size: 10px;
+    font-size: var(--fs-min);
     font-weight: 600;
     letter-spacing: 0.06em;
     text-transform: uppercase;
@@ -1476,7 +1476,7 @@
 
   .items-subsection-title {
     font-family: var(--font-head);
-    font-size: 9px;
+    font-size: var(--fs-min);
     font-weight: 600;
     letter-spacing: 0.12em;
     text-transform: uppercase;
@@ -1502,7 +1502,7 @@
 
   .category-list-header {
     font-family: var(--font-head);
-    font-size: 9px;
+    font-size: var(--fs-min);
     font-weight: 600;
     letter-spacing: 0.12em;
     text-transform: uppercase;
@@ -1589,7 +1589,7 @@
   .picker-empty {
     padding: 20px 16px;
     font-family: var(--font-head);
-    font-size: 10px;
+    font-size: var(--fs-min);
     letter-spacing: 0.08em;
     text-transform: uppercase;
     color: var(--text-3);
@@ -1632,7 +1632,7 @@
   }
   .result-bp {
     font-family: var(--font-head);
-    font-size: 9px;
+    font-size: var(--fs-min);
     letter-spacing: 0.08em;
     text-transform: uppercase;
     color: var(--accent);
@@ -1671,7 +1671,7 @@
 
   .picker-status-flag {
     font-family: var(--font-head);
-    font-size: 9px;
+    font-size: var(--fs-min);
     letter-spacing: 0.08em;
     text-transform: uppercase;
     color: var(--amber-bright);
@@ -1691,7 +1691,7 @@
 
   .section-label {
     font-family: var(--font-head);
-    font-size: 9px;
+    font-size: var(--fs-min);
     font-weight: 600;
     letter-spacing: 0.14em;
     text-transform: uppercase;
@@ -1707,7 +1707,7 @@
     border: 1px solid var(--border-mid);
     color: var(--text-2);
     font-family: var(--font-mono);
-    font-size: 10px;
+    font-size: var(--fs-min);
     letter-spacing: 0;
     text-transform: none;
     padding: 1px 6px;
@@ -1725,7 +1725,7 @@
     align-items: center;
     gap: 5px;
     font-family: var(--font-head);
-    font-size: 10px;
+    font-size: var(--fs-min);
     font-weight: 600;
     letter-spacing: 0.06em;
     text-transform: uppercase;
@@ -1755,7 +1755,7 @@
 
   .field-label {
     font-family: var(--font-head);
-    font-size: 9px;
+    font-size: var(--fs-min);
     font-weight: 600;
     letter-spacing: 0.1em;
     text-transform: uppercase;
@@ -1771,7 +1771,7 @@
     background: var(--bg-3);
     border: 1px solid var(--border-mid);
     border-radius: 50%;
-    font-size: 9px;
+    font-size: var(--fs-min);
     color: var(--text-3);
     cursor: default;
     flex-shrink: 0;
@@ -1842,7 +1842,7 @@
 
   .mod-chip-tag {
     font-family: var(--font-head);
-    font-size: 9px;
+    font-size: var(--fs-min);
     letter-spacing: 0.08em;
     text-transform: uppercase;
     color: var(--amber-bright);
@@ -1869,7 +1869,7 @@
 
   .items-table thead th {
     font-family: var(--font-head);
-    font-size: 9px;
+    font-size: var(--fs-min);
     font-weight: 600;
     letter-spacing: 0.12em;
     text-transform: uppercase;
@@ -1926,7 +1926,7 @@
 
   .empty-note {
     font-family: var(--font-head);
-    font-size: 10px;
+    font-size: var(--fs-min);
     letter-spacing: 0.08em;
     text-transform: uppercase;
     color: var(--text-3);
@@ -1953,7 +1953,7 @@
 
   .dirty-badge {
     font-family: var(--font-head);
-    font-size: 9px;
+    font-size: var(--fs-min);
     letter-spacing: 0.08em;
     text-transform: uppercase;
     color: var(--text-3);

@@ -560,7 +560,7 @@
 
   .filter-label {
     font-family: var(--font-head);
-    font-size: 9px;
+    font-size: var(--fs-min);
     letter-spacing: 0.14em;
     text-transform: uppercase;
     color: var(--text-3);
@@ -570,7 +570,7 @@
   /* filter-chip — self-contained so panel works before app.css update */
   :global(.filter-chip) {
     font-family: var(--font-head);
-    font-size: 10px;
+    font-size: var(--fs-min);
     font-weight: 600;
     letter-spacing: 0.08em;
     text-transform: uppercase;
@@ -643,7 +643,7 @@
 
   .log-lvl {
     font-family: var(--font-head);
-    font-size: 9px;
+    font-size: var(--fs-min);
     font-weight: 600;
     letter-spacing: 0.06em;
     padding: 1px 5px;
@@ -730,7 +730,7 @@
 
   .cmd-chip {
     font-family: var(--font-mono);
-    font-size: 10px;
+    font-size: var(--fs-min);
     padding: 3px 8px;
     background: var(--bg-3);
     border: 1px solid var(--border-mid);
@@ -777,7 +777,7 @@
 
   .ac-hint {
     font-family: var(--font-head);
-    font-size: 9px;
+    font-size: var(--fs-min);
     letter-spacing: 0.1em;
     text-transform: uppercase;
     color: var(--text-3);

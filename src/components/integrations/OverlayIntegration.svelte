@@ -319,7 +319,7 @@
     top: 0;
     background: var(--bg-3);
     font-family: var(--font-head);
-    font-size: 9px;
+    font-size: var(--fs-min);
     letter-spacing: 0.1em;
     text-transform: uppercase;
     color: var(--text-3);
@@ -328,7 +328,7 @@
   .dim-text { color: var(--text-3); }
   .status-line { padding: 4px 10px; font-size: 11px; color: var(--text-3); }
   .ok-text { color: var(--green); }
-  .sub-line { padding: 0 10px 2px 86px; font-size: 10px; color: var(--text-3); }
+  .sub-line { padding: 0 10px 2px 86px; font-size: var(--fs-min); color: var(--text-3); }
   .banner { padding: 4px 10px; font-family: var(--font-mono); font-size: 11px; color: var(--accent); }
   .death { padding: 4px 10px; font-family: var(--font-mono); font-size: 11px; color: var(--text-error); border-left: 2px solid var(--text-error); }
   .death table { margin-top: 2px; border-collapse: collapse; color: var(--text-2); }

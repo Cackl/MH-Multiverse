@@ -865,7 +865,7 @@
 
   .hint {
     font-family: var(--font-body);
-    font-size: 10px;
+    font-size: var(--fs-min);
     color: var(--text-3);
     text-transform: none;
     letter-spacing: 0;
@@ -916,7 +916,7 @@
   }
   .check-label {
     font-family: var(--font-head);
-    font-size: 9px;
+    font-size: var(--fs-min);
     font-weight: 600;
     letter-spacing: 0.1em;
     text-transform: uppercase;
@@ -931,7 +931,7 @@
     border: 1px solid var(--border-lit);
     background: var(--bg-3);
     color: var(--text-3);
-    font-size: 9px;
+    font-size: var(--fs-min);
     cursor: help;
     display: flex;
     align-items: center;
@@ -971,7 +971,7 @@
     align-items: center;
     justify-content: center;
     font-style: normal;
-    font-size: 10px;
+    font-size: var(--fs-min);
     color: var(--text-3);
   }
 
@@ -1034,7 +1034,7 @@
   }
   .summary-label {
     font-family: var(--font-head);
-    font-size: 9px;
+    font-size: var(--fs-min);
     font-weight: 600;
     letter-spacing: 0.1em;
     text-transform: uppercase;

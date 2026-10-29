@@ -833,7 +833,7 @@
 
   .stat-label {
     font-family: var(--font-head);
-    font-size: 9px;
+    font-size: var(--fs-min);
     letter-spacing: 0.08em;
     text-transform: uppercase;
     color: var(--text-3);
@@ -848,7 +848,7 @@
   .file-notice {
     padding: 16px 14px;
     font-family: var(--font-head);
-    font-size: 10px;
+    font-size: var(--fs-min);
     letter-spacing: 0.08em;
     text-transform: uppercase;
     color: var(--text-2);
@@ -896,7 +896,7 @@
 
   .file-sub {
     font-family: var(--font-body);
-    font-size: 10px;
+    font-size: var(--fs-min);
     color: var(--text-3);
   }
 
@@ -1014,7 +1014,7 @@
 
   .entry-count {
     font-family: var(--font-head);
-    font-size: 9px;
+    font-size: var(--fs-min);
     letter-spacing: 0.1em;
     text-transform: uppercase;
     color: var(--text-3);
@@ -1039,7 +1039,7 @@
 
   .batch-label {
     font-family: var(--font-head);
-    font-size: 10px;
+    font-size: var(--fs-min);
     font-weight: 600;
     letter-spacing: 0.1em;
     text-transform: uppercase;
@@ -1083,7 +1083,7 @@
 
   .batch-action-label {
     font-family: var(--font-head);
-    font-size: 10px;
+    font-size: var(--fs-min);
     letter-spacing: 0.08em;
     text-transform: uppercase;
     color: var(--text-2);
@@ -1167,7 +1167,7 @@
     padding: 7px 12px;
     text-align: left;
     font-family: var(--font-head);
-    font-size: 9px;
+    font-size: var(--fs-min);
     font-weight: 600;
     letter-spacing: 0.12em;
     text-transform: uppercase;
@@ -1183,7 +1183,7 @@
   .catalog-table thead th.sortable:hover { color: var(--text-1); }
 
   .sort-ind {
-    font-size: 9px;
+    font-size: var(--fs-min);
     margin-left: 3px;
     opacity: 0.25;
   }
@@ -1254,7 +1254,7 @@
   .catalog-table thead th.col-name,
   .catalog-table thead th.col-price {
     font-family: var(--font-head);
-    font-size: 9px;
+    font-size: var(--fs-min);
     color: var(--text-3);
     text-align: left;
   }
@@ -1294,7 +1294,7 @@
   /* ── Type badge ── */
   .type-badge {
     font-family: var(--font-head);
-    font-size: 9px;
+    font-size: var(--fs-min);
     font-weight: 600;
     letter-spacing: 0.08em;
     text-transform: uppercase;
@@ -1315,7 +1315,7 @@
   /* ── Modified badge ── */
   .modified-badge {
     font-family: var(--font-mono);
-    font-size: 9px;
+    font-size: var(--fs-min);
     font-weight: 600;
     color: var(--amber-bright);
     background: var(--amber-dim);
