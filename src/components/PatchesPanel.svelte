@@ -762,7 +762,7 @@
   .file-item:hover  { background: var(--bg-3); border-color: var(--border-mid); }
   .file-item.active { background: var(--accent-glow); border-color: var(--accent-dim); }
   .file-item.active .file-name { color: var(--accent-bright); }
-  .file-item-off    { opacity: 0.55; }
+  .file-item-off    { opacity: var(--dimmed-opacity); }
 
   .file-group-label {
     font-family: var(--font-head);
@@ -911,7 +911,7 @@
     transition: background 0.08s;
   }
   .list-row:hover { background: var(--bg-2); }
-  .list-row.row-disabled { opacity: 0.5; }
+  .list-row.row-disabled { opacity: var(--dimmed-opacity); }
 
   .entry-list td {
     padding: 6px 10px;

@@ -238,7 +238,7 @@
   .player-row:hover { background: var(--bg-3); border-color: var(--border-mid); }
   .player-row.selected { background: var(--accent-glow); border-color: var(--accent-dim); }
   .player-row.selected:hover { background: var(--accent-glow); border-color: var(--accent-dim); }
-  .player-row.banned { opacity: 0.55; }
+  .player-row.banned { opacity: var(--dimmed-opacity); }
 
   .player-row-top {
     display: flex;

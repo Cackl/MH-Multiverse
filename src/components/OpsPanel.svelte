@@ -821,7 +821,7 @@
     margin-left: 6px;
     transition: opacity 0.15s;
   }
-  .target-children.muted { opacity: 0.4; }
+  .target-children.muted { opacity: var(--dimmed-opacity); }
 
   .target-row.child { padding: 6px 10px; }
   .target-row.disabled { cursor: default; pointer-events: none; }

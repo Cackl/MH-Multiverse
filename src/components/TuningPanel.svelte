@@ -830,7 +830,7 @@
   }
   .file-item:hover { background: var(--bg-3); border-color: var(--border-mid); }
   .file-item.editing { background: var(--accent-glow); border-color: var(--accent-dim); }
-  .file-item-off { opacity: 0.55; }
+  .file-item-off { opacity: var(--dimmed-opacity); }
 
   .file-info {
     display: flex;

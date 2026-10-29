@@ -209,7 +209,7 @@
     cursor: pointer;
   }
   .srv:hover { background: var(--bg-2); }
-  .srv.off .srv-main { opacity: 0.5; }
+  .srv.off .srv-main { opacity: var(--dimmed-opacity); }
   .srv-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
   .srv-name { color: var(--text-0); font-size: 12px; }
   .srv-sub {

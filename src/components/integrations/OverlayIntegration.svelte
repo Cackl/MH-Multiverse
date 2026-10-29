@@ -286,7 +286,7 @@
 </IntegrationCard>
 
 <style>
-  .opt-row.dim { opacity: 0.5; }
+  .opt-row.dim { opacity: var(--dimmed-opacity); }
   .log-actions { display: flex; align-items: center; gap: 10px; }
   .err { color: var(--text-error); }
   .update-note { display: flex; align-items: center; gap: 10px; margin-top: 10px; }

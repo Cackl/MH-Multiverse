@@ -148,6 +148,9 @@
   /* Favourite highlight */
   --colour-favourite: var(--amber-bright);
 
+  /* Off/disabled rows that still carry readable text (kept high enough for the contrast test) */
+  --dimmed-opacity: 0.65;
+
   /* Z-index scale */
   --z-panel:    1;
   --z-dropdown: 10;

@@ -821,7 +821,7 @@
   .rule-item:hover         { background: var(--bg-3); border-color: var(--border-mid); }
   .rule-item.active        { background: var(--accent-glow); border-color: var(--accent-dim); }
   .rule-item.active .rule-name { color: var(--accent-bright); }
-  .rule-item.rule-disabled { opacity: 0.5; }
+  .rule-item.rule-disabled { opacity: var(--dimmed-opacity); }
 
   .rule-name {
     font-family: var(--font-head);
