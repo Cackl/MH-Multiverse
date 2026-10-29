@@ -273,13 +273,13 @@ html, body {
 }
 
 .btn-red {
-  border-color: rgba(192, 57, 43, 0.3);
+  border-color: color-mix(in srgb, var(--red) 30%, transparent);
   color: var(--text-error);
   background: var(--red-dim);
 }
 .btn-red:hover:not(:disabled) {
   border-color: var(--red);
-  background: rgba(192, 57, 43, 0.22);
+  background: color-mix(in srgb, var(--red) 22%, transparent);
 }
 
 .btn-green {
@@ -996,7 +996,7 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 .filter-chip.chip-purple.active  { color: var(--purple);        border-color: rgba(130,100,180,0.4);           background: var(--purple-dim); }
 .filter-chip.chip-green.active   { color: var(--green-bright);  border-color: rgba(39,174,96,0.4);             background: var(--green-dim); }
 .filter-chip.chip-amber.active   { color: var(--amber-bright);  border-color: rgba(200,146,10,0.4);            background: var(--amber-dim); }
-.filter-chip.chip-red.active     { color: var(--text-error);              border-color: rgba(192,57,43,0.4);             background: var(--red-dim); }
+.filter-chip.chip-red.active     { color: var(--text-error);              border-color: color-mix(in srgb, var(--red) 40%, transparent);             background: var(--red-dim); }
 /* Hover tooltip created by the `tip` action (src/lib/tooltip.ts); same look as ConfigPanel's .tooltip */
 .mhm-tooltip {
   position: fixed;

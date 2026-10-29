@@ -588,7 +588,7 @@
   :global(.filter-chip.chip-purple.active)   { color: var(--purple);       border-color: rgba(130,100,180,0.4); background: var(--purple-dim); }
   :global(.filter-chip.chip-blue.active)     { color: var(--blue);         border-color: rgba(46,134,193,0.4);  background: var(--blue-dim); }
   :global(.filter-chip.chip-amber.active)    { color: var(--amber-bright); border-color: rgba(200,146,10,0.4);  background: var(--amber-dim); }
-  :global(.filter-chip.chip-red.active)      { color: var(--text-error);   border-color: rgba(192,57,43,0.4);   background: var(--red-dim); }
+  :global(.filter-chip.chip-red.active)      { color: var(--text-error);   border-color: color-mix(in srgb, var(--red) 40%, transparent);   background: var(--red-dim); }
 
   .btn.active {
     border-color: var(--accent-dim);
@@ -658,7 +658,7 @@
   .log-lvl.info { color: var(--blue); background: var(--blue-dim); border: 1px solid rgba(46, 134, 193, 0.25); }
   .log-lvl.ok   { color: var(--green-bright); background: var(--green-dim); border: 1px solid rgba(39, 174, 96, 0.25); }
   .log-lvl.warn { color: var(--amber); background: rgba(212, 160, 23, 0.1); border: 1px solid rgba(212, 160, 23, 0.25); }
-  .log-lvl.err  { color: var(--text-error); background: var(--red-dim); border: 1px solid rgba(192, 57, 43, 0.25); }
+  .log-lvl.err  { color: var(--text-error); background: var(--red-dim); border: 1px solid color-mix(in srgb, var(--red) 25%, transparent); }
   .log-lvl.fatal { color: #ff4444; background: rgba(180, 30, 30, 0.15); border: 1px solid rgba(180, 30, 30, 0.35); font-weight: 700; }
 
   .log-msg        { color: var(--console-text); word-break: break-word; min-width: 0; }

@@ -876,13 +876,13 @@
     font-size: 12px;
     color: #e74c3c;
     padding: 8px 10px;
-    border: 1px solid rgba(192, 57, 43, 0.4);
+    border: 1px solid color-mix(in srgb, var(--red) 40%, transparent);
     background: var(--red-dim);
     border-radius: var(--radius-sm);
   }
 
   .field-error {
-    border-color: rgba(192, 57, 43, 0.6);
+    border-color: color-mix(in srgb, var(--red) 60%, transparent);
   }
 
   .field-error-msg {

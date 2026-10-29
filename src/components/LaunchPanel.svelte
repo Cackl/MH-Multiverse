@@ -509,7 +509,7 @@
     font-size: 12px;
     color: var(--text-error);
     padding: 6px 10px;
-    border: 1px solid rgba(192, 57, 43, 0.4);
+    border: 1px solid color-mix(in srgb, var(--red) 40%, transparent);
     background: var(--red-dim);
     border-radius: var(--radius-sm);
   }
