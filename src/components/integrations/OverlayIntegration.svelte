@@ -294,7 +294,7 @@
   .changes { margin: 4px 0 0; padding-left: 16px; color: var(--amber); }
 
   /* Trust button carries the state: green when trusted, amber when files changed */
-  .trust-btn.ok   { color: var(--green-bright); border-color: rgba(39, 174, 96, 0.5); }
+  .trust-btn.ok   { color: var(--green-bright); border-color: color-mix(in srgb, var(--green) 50%, transparent); }
   .trust-btn.warn { color: var(--amber);        border-color: rgba(212, 160, 23, 0.5); }
 
   .log {

@@ -656,7 +656,7 @@
   .log-lvl.trace { color: #8a8aa0; background: rgba(120, 120, 140, 0.1); border: 1px solid rgba(120, 120, 140, 0.2); }
   .log-lvl.debug { color: var(--purple); background: var(--purple-dim); border: 1px solid rgba(130, 100, 180, 0.2); }
   .log-lvl.info { color: var(--blue); background: var(--blue-dim); border: 1px solid rgba(46, 134, 193, 0.25); }
-  .log-lvl.ok   { color: var(--green-bright); background: var(--green-dim); border: 1px solid rgba(39, 174, 96, 0.25); }
+  .log-lvl.ok   { color: var(--green-bright); background: var(--green-dim); border: 1px solid color-mix(in srgb, var(--green) 25%, transparent); }
   .log-lvl.warn { color: var(--amber); background: rgba(212, 160, 23, 0.1); border: 1px solid rgba(212, 160, 23, 0.25); }
   .log-lvl.err  { color: var(--text-error); background: var(--red-dim); border: 1px solid color-mix(in srgb, var(--red) 25%, transparent); }
   .log-lvl.fatal { color: #ff4444; background: rgba(180, 30, 30, 0.15); border: 1px solid rgba(180, 30, 30, 0.35); font-weight: 700; }

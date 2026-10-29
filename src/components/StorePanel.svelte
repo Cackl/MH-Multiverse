@@ -1309,7 +1309,7 @@
   .type-badge-chest   { color: var(--amber-bright);  border-color: rgba(200,146,10,0.35);  background: var(--amber-dim); }
   .type-badge-costume { color: var(--purple);        border-color: rgba(130,100,180,0.3);  background: var(--purple-dim); }
   .type-badge-hero    { color: var(--blue);          border-color: rgba(46,134,193,0.3);   background: var(--blue-dim); }
-  .type-badge-service { color: var(--green-bright);  border-color: rgba(39,174,96,0.3);    background: var(--green-dim); }
+  .type-badge-service { color: var(--green-bright);  border-color: color-mix(in srgb, var(--green) 30%, transparent);    background: var(--green-dim); }
   .type-badge-teamup  { color: var(--purple);        border-color: rgba(130,100,180,0.3);  background: var(--purple-dim); }
 
   /* ── Modified badge ── */

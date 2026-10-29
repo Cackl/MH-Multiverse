@@ -411,7 +411,7 @@
   .feedback-ok {
     color: var(--green-bright);
     background: var(--green-dim);
-    border-color: rgba(39, 174, 96, 0.2);
+    border-color: color-mix(in srgb, var(--green) 20%, transparent);
   }
 
   .feedback-err {
@@ -473,7 +473,7 @@
 
   .btn-warn   { color: var(--amber-bright); background: var(--amber-dim); border-color: rgba(200, 146, 10, 0.35); }
   .btn-danger { color: var(--text-error); background: rgba(200, 50, 50, 0.1); border-color: rgba(200, 50, 50, 0.4); }
-  .btn-ok     { color: var(--green-bright); background: var(--green-dim); border-color: rgba(39, 174, 96, 0.3); }
+  .btn-ok     { color: var(--green-bright); background: var(--green-dim); border-color: color-mix(in srgb, var(--green) 30%, transparent); }
   .btn-accent { color: var(--accent-bright); background: var(--accent-glow); border-color: var(--accent-dim); }
   .btn-ghost  { color: var(--text-2); background: transparent; border-color: var(--border-mid); }
 

@@ -163,7 +163,7 @@
     font-size: 11px;
     color: var(--green-bright);
     background: var(--green-dim);
-    border: 1px solid rgba(39, 174, 96, 0.25);
+    border: 1px solid color-mix(in srgb, var(--green) 25%, transparent);
     border-radius: 3px;
     padding: 1px 5px;
     line-height: 1.4;

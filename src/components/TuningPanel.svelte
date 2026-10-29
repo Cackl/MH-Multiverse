@@ -888,7 +888,7 @@
 
   /* ── Tag colour classes ── */
   .tag-core   { color: var(--blue);          border-color: rgba(46,134,193,0.3);   background: var(--blue-dim); }
-  .tag-event  { color: var(--green-bright);  border-color: rgba(39,174,96,0.4);    background: var(--green-dim); }
+  .tag-event  { color: var(--green-bright);  border-color: color-mix(in srgb, var(--green) 40%, transparent);    background: var(--green-dim); }
   .tag-custom { color: var(--purple);        border-color: rgba(130,100,180,0.35); background: var(--purple-dim); }
   .tag-none   { color: var(--text-3);        border-color: var(--border); }
 

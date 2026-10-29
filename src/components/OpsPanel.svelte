@@ -738,7 +738,7 @@
     border-radius: 2px;
     border: 1px solid transparent;
   }
-  .status-pill.available   { color: var(--green-bright); border-color: rgba(39,174,96,0.4); background: var(--green-dim); }
+  .status-pill.available   { color: var(--green-bright); border-color: color-mix(in srgb, var(--green) 40%, transparent); background: var(--green-dim); }
   .status-pill.unavailable { color: var(--text-3);       border-color: var(--border-mid);   background: var(--bg-3); }
   .status-pill.checking    { color: var(--text-2);       border-color: var(--border-mid);   background: var(--bg-3); }
 
