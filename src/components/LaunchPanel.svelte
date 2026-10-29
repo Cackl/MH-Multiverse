@@ -414,6 +414,9 @@
     gap: 5px;
   }
 
+  /* The AES-256 badge makes the Password box taller than Username; a shared minimum keeps them level. */
+  .detail-fields .field-value { min-height: 36px; }
+
   .field-empty {
     color: var(--text-3);
     font-style: italic;
