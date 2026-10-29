@@ -874,7 +874,7 @@
 
   .error {
     font-size: 12px;
-    color: #e74c3c;
+    color: var(--text-error);
     padding: 8px 10px;
     border: 1px solid color-mix(in srgb, var(--red) 40%, transparent);
     background: var(--red-dim);
@@ -887,7 +887,7 @@
 
   .field-error-msg {
     font-size: 11px;
-    color: #e74c3c;
+    color: var(--text-error);
   }
 
   .modal-footer {
