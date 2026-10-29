@@ -108,7 +108,7 @@
 
   /* Borders */
   --border:     #252836;
-  --border-mid: #2f3347;
+  --border-mid: #5a5d6d;
   --border-lit: #595e7c;
 
   /* Text */
@@ -542,7 +542,7 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 
   /* Borders */
   --border:     #c3d0dc;
-  --border-mid: #aebecd;
+  --border-mid: #7c90a5;
   --border-lit: #7b8fa3;
 
   /* Text */
@@ -611,7 +611,7 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 
   /* Borders */
   --border:     #252836;
-  --border-mid: #2f3347;
+  --border-mid: #5a5d6d;
   --border-lit: #595e7c;
 
   /* Text */
@@ -676,7 +676,7 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 
   /* Borders */
   --border:     #252836;
-  --border-mid: #2f3347;
+  --border-mid: #5a5d6d;
   --border-lit: #595e7c;
 
   /* Text */
@@ -741,7 +741,7 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 
   /* Borders */
   --border:     #3c3c3c;
-  --border-mid: #4a4a4a;
+  --border-mid: #696969;
   --border-lit: #6d6d6d;
 
   /* Text */
@@ -810,7 +810,7 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 
   /* Borders */
   --border:     #2f3a52;
-  --border-mid: #3a4763;
+  --border-mid: #566179;
   --border-lit: #556585;
 
   /* Text */
