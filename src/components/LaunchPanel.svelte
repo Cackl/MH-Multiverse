@@ -414,6 +414,9 @@
     gap: 5px;
   }
 
+  /* The AES-256 badge makes the Password box taller than Username; a shared minimum keeps them level. */
+  .detail-fields .field-value { min-height: 36px; }
+
   .field-empty {
     color: var(--text-3);
     font-style: italic;
@@ -460,7 +463,7 @@
     align-items: center;
     gap: 6px;
     font-family: var(--font-head);
-    font-size: 10px;
+    font-size: var(--fs-min);
     font-weight: 600;
     letter-spacing: 0.12em;
     text-transform: uppercase;
@@ -488,14 +491,14 @@
     border: 1px solid var(--accent);
     color: #fff;
     text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
-    box-shadow: 0 0 20px rgba(62, 199, 199, 0.15), 0 2px 8px rgba(0, 0, 0, 0.3);
+    box-shadow: 0 0 20px color-mix(in srgb, var(--accent) 15%, transparent), 0 2px 8px rgba(0, 0, 0, 0.3);
     border-radius: var(--radius-sm);
     cursor: pointer;
     transition: all 0.14s;
   }
   .btn-launch:hover:not(:disabled) {
     background: linear-gradient(135deg, var(--accent) 0%, var(--accent-bright) 100%);
-    box-shadow: 0 0 30px rgba(62, 194, 199, 0.25), 0 2px 12px rgba(0, 0, 0, 0.4);
+    box-shadow: 0 0 30px color-mix(in srgb, var(--accent-bright) 25%, transparent), 0 2px 12px rgba(0, 0, 0, 0.4);
   }
   .btn-launch:disabled {
     opacity: 0.35;
@@ -506,7 +509,7 @@
     font-size: 12px;
     color: var(--text-error);
     padding: 6px 10px;
-    border: 1px solid rgba(192, 57, 43, 0.4);
+    border: 1px solid color-mix(in srgb, var(--red) 40%, transparent);
     background: var(--red-dim);
     border-radius: var(--radius-sm);
   }

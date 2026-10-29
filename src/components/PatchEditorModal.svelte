@@ -470,7 +470,7 @@
 
   .field-label {
     font-family: var(--font-head);
-    font-size: 9px;
+    font-size: var(--fs-min);
     font-weight: 600;
     letter-spacing: 0.14em;
     text-transform: uppercase;
@@ -541,10 +541,10 @@
     gap: 4px;
   }
 
-  .value-feedback { font-size: 10px; font-family: var(--font-body); }
+  .value-feedback { font-size: var(--fs-min); font-family: var(--font-body); }
   .value-error    { color: var(--text-error); }
   .value-hint     { color: var(--text-3); }
-  .value-hint em  { color: var(--accent-dim); font-style: normal; }
+  .value-hint em  { color: var(--accent); font-style: normal; }
 
   /* ── Prototype search ── */
   .proto-wrap {
@@ -564,7 +564,7 @@
 
   .proto-hint {
     font-family: var(--font-head);
-    font-size: 9px;
+    font-size: var(--fs-min);
     letter-spacing: 0.08em;
     text-transform: uppercase;
     color: var(--text-3);
@@ -614,7 +614,7 @@
 
   .proto-opt-path {
     font-family: var(--font-mono);
-    font-size: 10px;
+    font-size: var(--fs-min);
     color: var(--text-2);
     white-space: nowrap;
     overflow: hidden;
@@ -623,10 +623,10 @@
 
   .proto-opt-bp {
     font-family: var(--font-head);
-    font-size: 9px;
+    font-size: var(--fs-min);
     letter-spacing: 0.08em;
     text-transform: uppercase;
-    color: var(--accent-dim);
+    color: var(--accent);
   }
 
   /* ── Footer ── */
@@ -656,7 +656,7 @@
 
   .delete-label {
     font-family: var(--font-head);
-    font-size: 10px;
+    font-size: var(--fs-min);
     letter-spacing: 0.08em;
     text-transform: uppercase;
     color: var(--text-error);

@@ -434,7 +434,7 @@
 
   .field-label {
     font-family: var(--font-head);
-    font-size: 10px;
+    font-size: var(--fs-min);
     font-weight: 600;
     letter-spacing: 0.08em;
     text-transform: uppercase;
@@ -492,13 +492,13 @@
 
   .field-hint {
     font-family: var(--font-body);
-    font-size: 10px;
+    font-size: var(--fs-min);
     color: var(--text-3);
   }
 
   .field-path {
     font-family: var(--font-mono);
-    font-size: 10px;
+    font-size: var(--fs-min);
     color: var(--text-3);
   }
 
@@ -515,7 +515,7 @@
     align-items: center;
     gap: 6px;
     font-family: var(--font-body);
-    font-size: 10px;
+    font-size: var(--fs-min);
     color: var(--accent-bright);
     background: var(--accent-glow);
     border: 1px solid var(--accent-dim);
@@ -555,7 +555,7 @@
 
   .toggle-hint {
     font-family: var(--font-head);
-    font-size: 10px;
+    font-size: var(--fs-min);
     letter-spacing: 0.06em;
     color: var(--text-3);
   }
@@ -582,7 +582,7 @@
   .mission-path {
     flex: 1;
     font-family: var(--font-mono);
-    font-size: 10px;
+    font-size: var(--fs-min);
     color: var(--text-2);
     word-break: break-all;
     line-height: 1.4;
@@ -617,7 +617,7 @@
 
   .proto-hint {
     font-family: var(--font-body);
-    font-size: 10px;
+    font-size: var(--fs-min);
     color: var(--text-3);
   }
   .proto-hint.error { color: var(--text-error); }
@@ -662,10 +662,10 @@
 
   .proto-opt-bp {
     font-family: var(--font-head);
-    font-size: 9px;
+    font-size: var(--fs-min);
     letter-spacing: 0.08em;
     text-transform: uppercase;
-    color: var(--accent-dim);
+    color: var(--accent);
   }
 
   /* ── Footer ── */

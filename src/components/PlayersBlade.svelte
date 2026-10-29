@@ -151,7 +151,7 @@
 
   .blade-title {
     font-family: var(--font-head);
-    font-size: 10px;
+    font-size: var(--fs-min);
     font-weight: 700;
     letter-spacing: 0.12em;
     text-transform: uppercase;
@@ -163,7 +163,7 @@
     font-size: 11px;
     color: var(--green-bright);
     background: var(--green-dim);
-    border: 1px solid rgba(39, 174, 96, 0.25);
+    border: 1px solid color-mix(in srgb, var(--green) 25%, transparent);
     border-radius: 3px;
     padding: 1px 5px;
     line-height: 1.4;
@@ -238,7 +238,7 @@
   .player-row:hover { background: var(--bg-3); border-color: var(--border-mid); }
   .player-row.selected { background: var(--accent-glow); border-color: var(--accent-dim); }
   .player-row.selected:hover { background: var(--accent-glow); border-color: var(--accent-dim); }
-  .player-row.banned { opacity: 0.55; }
+  .player-row.banned { opacity: var(--dimmed-opacity); }
 
   .player-row-top {
     display: flex;
@@ -256,7 +256,7 @@
 
   .session-mono {
     font-family: var(--font-body);
-    font-size: 10px;
+    font-size: var(--fs-min);
     color: var(--text-3);
     white-space: nowrap;
     overflow: hidden;
@@ -266,7 +266,7 @@
   .level-badge,
   .banned-badge {
     font-family: var(--font-head);
-    font-size: 8px;
+    font-size: var(--fs-min);
     font-weight: 700;
     letter-spacing: 0.1em;
     text-transform: uppercase;
@@ -277,7 +277,7 @@
   }
   .whitelisted-badge {
     font-family: var(--font-head);
-    font-size: 8px;
+    font-size: var(--fs-min);
     font-weight: 700;
     letter-spacing: 0.1em;
     text-transform: uppercase;

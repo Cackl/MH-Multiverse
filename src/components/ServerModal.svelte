@@ -751,7 +751,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    z-index: 100;
+    z-index: var(--z-modal);
     backdrop-filter: blur(2px);
   }
 
@@ -865,7 +865,7 @@
 
   .hint {
     font-family: var(--font-body);
-    font-size: 10px;
+    font-size: var(--fs-min);
     color: var(--text-3);
     text-transform: none;
     letter-spacing: 0;
@@ -874,20 +874,20 @@
 
   .error {
     font-size: 12px;
-    color: #e74c3c;
+    color: var(--text-error);
     padding: 8px 10px;
-    border: 1px solid rgba(192, 57, 43, 0.4);
+    border: 1px solid color-mix(in srgb, var(--red) 40%, transparent);
     background: var(--red-dim);
     border-radius: var(--radius-sm);
   }
 
   .field-error {
-    border-color: rgba(192, 57, 43, 0.6);
+    border-color: color-mix(in srgb, var(--red) 60%, transparent);
   }
 
   .field-error-msg {
     font-size: 11px;
-    color: #e74c3c;
+    color: var(--text-error);
   }
 
   .modal-footer {
@@ -916,7 +916,7 @@
   }
   .check-label {
     font-family: var(--font-head);
-    font-size: 9px;
+    font-size: var(--fs-min);
     font-weight: 600;
     letter-spacing: 0.1em;
     text-transform: uppercase;
@@ -931,7 +931,7 @@
     border: 1px solid var(--border-lit);
     background: var(--bg-3);
     color: var(--text-3);
-    font-size: 9px;
+    font-size: var(--fs-min);
     cursor: help;
     display: flex;
     align-items: center;
@@ -958,7 +958,7 @@
     color: var(--amber-bright);
   }
   .import-note.note-warning .note-icon {
-    border-color: rgba(200, 146, 10, 0.4);
+    border-color: color-mix(in srgb, var(--amber) 40%, transparent);
     color: var(--amber-bright);
   }
   .note-icon {
@@ -971,7 +971,7 @@
     align-items: center;
     justify-content: center;
     font-style: normal;
-    font-size: 10px;
+    font-size: var(--fs-min);
     color: var(--text-3);
   }
 
@@ -1034,7 +1034,7 @@
   }
   .summary-label {
     font-family: var(--font-head);
-    font-size: 9px;
+    font-size: var(--fs-min);
     font-weight: 600;
     letter-spacing: 0.1em;
     text-transform: uppercase;
@@ -1054,7 +1054,7 @@
   .warning-notice {
     padding: 8px 12px;
     background: var(--amber-dim);
-    border: 1px solid rgba(200,146,10,0.3);
+    border: 1px solid color-mix(in srgb, var(--amber) 30%, transparent);
     border-radius: var(--radius-sm);
     font-size: 12px;
     color: var(--amber-bright);

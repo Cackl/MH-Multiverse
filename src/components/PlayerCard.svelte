@@ -321,7 +321,7 @@
 
   .header-session {
     font-family: var(--font-mono);
-    font-size: 10px;
+    font-size: var(--fs-min);
     color: var(--text-3);
   }
 
@@ -329,7 +329,7 @@
   .level-badge,
   .banned-badge {
     font-family: var(--font-head);
-    font-size: 8px;
+    font-size: var(--fs-min);
     font-weight: 700;
     letter-spacing: 0.1em;
     text-transform: uppercase;
@@ -360,7 +360,7 @@
 
   .section-label {
     font-family: var(--font-head);
-    font-size: 9px;
+    font-size: var(--fs-min);
     font-weight: 700;
     letter-spacing: 0.14em;
     text-transform: uppercase;
@@ -391,7 +391,7 @@
 
   .field-label {
     font-family: var(--font-head);
-    font-size: 10px;
+    font-size: var(--fs-min);
     letter-spacing: 0.08em;
     text-transform: uppercase;
     color: var(--text-2);
@@ -411,7 +411,7 @@
   .feedback-ok {
     color: var(--green-bright);
     background: var(--green-dim);
-    border-color: rgba(39, 174, 96, 0.2);
+    border-color: color-mix(in srgb, var(--green) 20%, transparent);
   }
 
   .feedback-err {
@@ -435,7 +435,7 @@
 
   .info-grid dt {
     font-family: var(--font-head);
-    font-size: 9px;
+    font-size: var(--fs-min);
     font-weight: 700;
     letter-spacing: 0.1em;
     text-transform: uppercase;
@@ -456,7 +456,7 @@
   /* ── Buttons ── */
   .btn {
     font-family: var(--font-head);
-    font-size: 10px;
+    font-size: var(--fs-min);
     font-weight: 700;
     letter-spacing: 0.1em;
     text-transform: uppercase;
@@ -471,9 +471,9 @@
 
   .btn:disabled { opacity: 0.4; cursor: not-allowed; }
 
-  .btn-warn   { color: var(--amber-bright); background: var(--amber-dim); border-color: rgba(200, 146, 10, 0.35); }
+  .btn-warn   { color: var(--amber-bright); background: var(--amber-dim); border-color: color-mix(in srgb, var(--amber) 35%, transparent); }
   .btn-danger { color: var(--text-error); background: rgba(200, 50, 50, 0.1); border-color: rgba(200, 50, 50, 0.4); }
-  .btn-ok     { color: var(--green-bright); background: var(--green-dim); border-color: rgba(39, 174, 96, 0.3); }
+  .btn-ok     { color: var(--green-bright); background: var(--green-dim); border-color: color-mix(in srgb, var(--green) 30%, transparent); }
   .btn-accent { color: var(--accent-bright); background: var(--accent-glow); border-color: var(--accent-dim); }
   .btn-ghost  { color: var(--text-2); background: transparent; border-color: var(--border-mid); }
 

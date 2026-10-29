@@ -698,7 +698,7 @@
     align-items: flex-start;
     gap: 6px;
     padding: 8px 12px 10px;
-    font-size: 10px;
+    font-size: var(--fs-min);
     color: var(--text-3);
     border-bottom: 1px solid var(--border);
     line-height: 1.4;
@@ -725,7 +725,7 @@
 
   .stat-label {
     font-family: var(--font-head);
-    font-size: 9px;
+    font-size: var(--fs-min);
     letter-spacing: 0.08em;
     text-transform: uppercase;
     color: var(--text-3);
@@ -740,7 +740,7 @@
   .file-notice {
     padding: 16px 14px;
     font-family: var(--font-head);
-    font-size: 10px;
+    font-size: var(--fs-min);
     letter-spacing: 0.08em;
     text-transform: uppercase;
     color: var(--text-2);
@@ -762,11 +762,11 @@
   .file-item:hover  { background: var(--bg-3); border-color: var(--border-mid); }
   .file-item.active { background: var(--accent-glow); border-color: var(--accent-dim); }
   .file-item.active .file-name { color: var(--accent-bright); }
-  .file-item-off    { opacity: 0.55; }
+  .file-item-off    { opacity: var(--dimmed-opacity); }
 
   .file-group-label {
     font-family: var(--font-head);
-    font-size: 9px;
+    font-size: var(--fs-min);
     letter-spacing: 0.12em;
     text-transform: uppercase;
     color: var(--text-3);
@@ -823,7 +823,7 @@
 
   .entry-count {
     font-family: var(--font-mono);
-    font-size: 10px;
+    font-size: var(--fs-min);
     color: var(--text-3);
     flex-shrink: 0;
   }
@@ -868,7 +868,7 @@
 
   .entry-list thead th {
     font-family: var(--font-head);
-    font-size: 9px;
+    font-size: var(--fs-min);
     font-weight: 600;
     letter-spacing: 0.1em;
     text-transform: uppercase;
@@ -891,7 +891,7 @@
 
   .sort-ind {
     font-family: var(--font-body);
-    font-size: 9px;
+    font-size: var(--fs-min);
     color: var(--text-3);
     margin-left: 3px;
   }
@@ -911,7 +911,7 @@
     transition: background 0.08s;
   }
   .list-row:hover { background: var(--bg-2); }
-  .list-row.row-disabled { opacity: 0.5; }
+  .list-row.row-disabled { opacity: var(--dimmed-opacity); }
 
   .entry-list td {
     padding: 6px 10px;
@@ -921,15 +921,15 @@
 
   .cell-truncate { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .cell-desc     { color: var(--text-1); }
-  .cell-mono     { font-family: var(--font-mono); font-size: 10px; color: var(--text-2); }
+  .cell-mono     { font-family: var(--font-mono); font-size: var(--fs-min); color: var(--text-2); }
 
   .type-badge {
     font-family: var(--font-head);
-    font-size: 8px;
+    font-size: var(--fs-min);
     font-weight: 600;
     letter-spacing: 0.08em;
     text-transform: uppercase;
-    color: var(--accent-dim);
+    color: var(--accent);
     background: var(--accent-glow);
     border: 1px solid var(--accent-dim);
     border-radius: 2px;
@@ -961,7 +961,7 @@
     border-radius: var(--radius-sm);
     color: var(--text-3);
     cursor: pointer;
-    font-size: 10px;
+    font-size: var(--fs-min);
     line-height: 1;
     transition: all 0.1s;
     flex-shrink: 0;
@@ -1001,7 +1001,7 @@
     height: 36px;
     border-radius: 50%;
     background: var(--amber-dim);
-    border: 1px solid rgba(200, 146, 10, 0.25);
+    border: 1px solid color-mix(in srgb, var(--amber) 25%, transparent);
     flex-shrink: 0;
   }
   .confirm-icon svg {

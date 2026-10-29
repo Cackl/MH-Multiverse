@@ -858,7 +858,7 @@
 
   .config-field-label {
     font-family: var(--font-head);
-    font-size: 10px;
+    font-size: var(--fs-min);
     font-weight: 600;
     letter-spacing: 0.1em;
     text-transform: uppercase;
@@ -926,7 +926,7 @@
     border: 1px solid var(--border-lit);
     background: var(--bg-3);
     color: var(--text-3);
-    font-size: 9px;
+    font-size: var(--fs-min);
     cursor: help;
     display: flex;
     align-items: center;
@@ -984,7 +984,7 @@
   .running-warn {
     padding: 8px 20px;
     background: var(--amber-dim);
-    border-bottom: 1px solid rgba(200, 146, 10, 0.2);
+    border-bottom: 1px solid color-mix(in srgb, var(--amber) 20%, transparent);
     font-size: 12px;
     color: var(--amber);
     font-family: var(--font-head);
@@ -1000,7 +1000,7 @@
   }
 
   .config-field-hint {
-    font-size: 10px;
+    font-size: var(--fs-min);
     color: var(--text-3);
     font-family: var(--font-body);
     margin-top: 2px;
@@ -1140,7 +1140,7 @@
     padding: 0 0 0 10px;
     font-family: var(--font-mono);
     font-size: 12px;
-    color: var(--accent-dim);
+    color: var(--accent);
     user-select: none;
     flex-shrink: 0;
   }
@@ -1191,7 +1191,7 @@
   }
   .pac-hint {
     font-family: var(--font-head);
-    font-size: 9px;
+    font-size: var(--fs-min);
     letter-spacing: 0.1em;
     text-transform: uppercase;
     color: var(--text-3);

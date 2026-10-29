@@ -116,9 +116,9 @@
   ]
 
   const themes = [
-    { id: '',              label: 'Blue',            accent: '#3ea7c7' },
+    { id: '',              label: 'Blue',            accent: '#10c3ff' },
     { id: 'mh-itembase',   label: 'Item Base',       accent: '#10c3ff' },
-    { id: 'light',         label: 'Light',           accent: '#f4f7fa' },
+    { id: 'light',         label: 'Light',           accent: '#0f6f8d' },
     { id: 'phoenix',       label: 'Phoenix',         accent: '#d96a1d' },
     { id: 'tahiti',        label: 'Tahiti',          accent: '#b31618' },
     { id: 'grey',          label: 'Grey',            accent: '#8f8f8f' },
@@ -650,7 +650,7 @@
   .progress-meta { display: flex; justify-content: space-between; align-items: center; }
   .progress-stage {
     font-family: var(--font-head);
-    font-size: 10px;
+    font-size: var(--fs-min);
     letter-spacing: 0.08em;
     text-transform: uppercase;
     color: var(--text-2);

@@ -67,7 +67,7 @@
 
   .data-tab {
     font-family: var(--font-head);
-    font-size: 10px;
+    font-size: var(--fs-min);
     font-weight: 600;
     letter-spacing: 0.1em;
     text-transform: uppercase;

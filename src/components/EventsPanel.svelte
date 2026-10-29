@@ -776,7 +776,7 @@
   .sidebar-notice {
     padding: 16px 14px;
     font-family: var(--font-head);
-    font-size: 10px;
+    font-size: var(--fs-min);
     letter-spacing: 0.08em;
     text-transform: uppercase;
     color: var(--text-2);
@@ -796,7 +796,7 @@
 
   .rule-group-label {
     font-family: var(--font-head);
-    font-size: 9px;
+    font-size: var(--fs-min);
     letter-spacing: 0.12em;
     text-transform: uppercase;
     color: var(--text-2);
@@ -821,7 +821,7 @@
   .rule-item:hover         { background: var(--bg-3); border-color: var(--border-mid); }
   .rule-item.active        { background: var(--accent-glow); border-color: var(--accent-dim); }
   .rule-item.active .rule-name { color: var(--accent-bright); }
-  .rule-item.rule-disabled { opacity: 0.5; }
+  .rule-item.rule-disabled { opacity: var(--dimmed-opacity); }
 
   .rule-name {
     font-family: var(--font-head);
@@ -859,7 +859,7 @@
 
   .override-title {
     font-family: var(--font-head);
-    font-size: 9px;
+    font-size: var(--fs-min);
     font-weight: 600;
     letter-spacing: 0.12em;
     text-transform: uppercase;
@@ -875,14 +875,14 @@
 
   .override-label {
     font-family: var(--font-head);
-    font-size: 10px;
+    font-size: var(--fs-min);
     color: var(--text-2);
     min-width: 52px;
   }
 
   .override-badge {
     font-family: var(--font-head);
-    font-size: 9px;
+    font-size: var(--fs-min);
     font-weight: 600;
     letter-spacing: 0.06em;
     text-transform: uppercase;
@@ -899,26 +899,26 @@
     background: var(--accent-glow);
   }
 
-  .override-btn { padding: 2px 7px; font-size: 9px; margin-left: auto; }
+  .override-btn { padding: 2px 7px; font-size: var(--fs-min); margin-left: auto; }
   .override-btn + .override-btn { margin-left: 0; }
 
   .override-error {
     font-family: var(--font-body);
-    font-size: 10px;
+    font-size: var(--fs-min);
     color: var(--text-error);
     padding-top: 2px;
   }
 
   .override-ok {
     font-family: var(--font-body);
-    font-size: 10px;
+    font-size: var(--fs-min);
     color: var(--green-bright);
     padding-top: 2px;
   }
 
   .confirm-prompt {
     font-family: var(--font-head);
-    font-size: 9px;
+    font-size: var(--fs-min);
     letter-spacing: 0.04em;
     color: var(--text-1);
   }
@@ -989,7 +989,7 @@
 
   .editor-type-label {
     font-family: var(--font-head);
-    font-size: 9px;
+    font-size: var(--fs-min);
     letter-spacing: 0.08em;
     text-transform: uppercase;
     color: var(--text-3);
@@ -1027,7 +1027,7 @@
 
   .dash-section-title {
     font-family: var(--font-head);
-    font-size: 10px;
+    font-size: var(--fs-min);
     font-weight: 700;
     letter-spacing: 0.12em;
     text-transform: uppercase;
@@ -1036,7 +1036,7 @@
 
   .dash-count {
     font-family: var(--font-mono);
-    font-size: 10px;
+    font-size: var(--fs-min);
     color: var(--text-3);
     background: var(--bg-3);
     border: 1px solid var(--border-mid);
@@ -1125,20 +1125,20 @@
 
   .active-card-type {
     font-family: var(--font-head);
-    font-size: 9px;
+    font-size: var(--fs-min);
     letter-spacing: 0.06em;
     color: var(--accent-bright);
   }
 
   .active-card-sub {
     font-family: var(--font-body);
-    font-size: 10px;
+    font-size: var(--fs-min);
     color: var(--text-3);
   }
 
   .active-card-sub-event {
     font-family: var(--font-body);
-    font-size: 10px;
+    font-size: var(--fs-min);
     color: var(--text-2);
   }
 
@@ -1147,7 +1147,7 @@
     align-items: center;
     gap: 4px;
     font-family: var(--font-head);
-    font-size: 9px;
+    font-size: var(--fs-min);
     letter-spacing: 0.06em;
     color: var(--text-2);
   }
@@ -1155,7 +1155,7 @@
 
   .active-card-rule {
     font-family: var(--font-head);
-    font-size: 9px;
+    font-size: var(--fs-min);
     letter-spacing: 0.06em;
     color: var(--text-1);
   }
@@ -1201,7 +1201,7 @@
 
   .def-path {
     font-family: var(--font-mono);
-    font-size: 9px;
+    font-size: var(--fs-min);
     color: var(--text-3);
     white-space: nowrap;
     overflow: hidden;
@@ -1210,7 +1210,7 @@
 
   .def-badge {
     font-family: var(--font-head);
-    font-size: 9px;
+    font-size: var(--fs-min);
     font-weight: 600;
     letter-spacing: 0.06em;
     text-transform: uppercase;

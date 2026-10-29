@@ -773,7 +773,7 @@
 
   .stat-label {
     font-family: var(--font-head);
-    font-size: 9px;
+    font-size: var(--fs-min);
     letter-spacing: 0.08em;
     text-transform: uppercase;
     color: var(--text-3);
@@ -794,7 +794,7 @@
   .file-notice {
     padding: 16px 14px;
     font-family: var(--font-head);
-    font-size: 10px;
+    font-size: var(--fs-min);
     letter-spacing: 0.08em;
     text-transform: uppercase;
     color: var(--text-2);
@@ -807,7 +807,7 @@
 
   .file-group-label {
     font-family: var(--font-head);
-    font-size: 9px;
+    font-size: var(--fs-min);
     letter-spacing: 0.12em;
     text-transform: uppercase;
     color: var(--text-3);
@@ -830,7 +830,7 @@
   }
   .file-item:hover { background: var(--bg-3); border-color: var(--border-mid); }
   .file-item.editing { background: var(--accent-glow); border-color: var(--accent-dim); }
-  .file-item-off { opacity: 0.55; }
+  .file-item-off { opacity: var(--dimmed-opacity); }
 
   .file-info {
     display: flex;
@@ -853,7 +853,7 @@
 
   .file-tag {
     font-family: var(--font-head);
-    font-size: 9px;
+    font-size: var(--fs-min);
     font-weight: 600;
     letter-spacing: 0.08em;
     text-transform: uppercase;
@@ -888,7 +888,7 @@
 
   /* ── Tag colour classes ── */
   .tag-core   { color: var(--blue);          border-color: rgba(46,134,193,0.3);   background: var(--blue-dim); }
-  .tag-event  { color: var(--green-bright);  border-color: rgba(39,174,96,0.4);    background: var(--green-dim); }
+  .tag-event  { color: var(--green-bright);  border-color: color-mix(in srgb, var(--green) 40%, transparent);    background: var(--green-dim); }
   .tag-custom { color: var(--purple);        border-color: rgba(130,100,180,0.35); background: var(--purple-dim); }
   .tag-none   { color: var(--text-3);        border-color: var(--border); }
 
@@ -940,7 +940,7 @@
 
   .file-count {
     font-family: var(--font-head);
-    font-size: 9px;
+    font-size: var(--fs-min);
     letter-spacing: 0.1em;
     text-transform: uppercase;
     color: var(--text-3);
@@ -961,7 +961,7 @@
     align-items: center;
     gap: 6px;
     font-family: var(--font-head);
-    font-size: 9px;
+    font-size: var(--fs-min);
     font-weight: 600;
     letter-spacing: 0.14em;
     text-transform: uppercase;
@@ -1032,7 +1032,7 @@
 
   .card-filename {
     font-family: var(--font-mono);
-    font-size: 10px;
+    font-size: var(--fs-min);
     color: var(--text-3);
     white-space: nowrap;
     overflow: hidden;
@@ -1052,16 +1052,16 @@
 
   .toggle-label {
     font-family: var(--font-head);
-    font-size: 9px;
+    font-size: var(--fs-min);
     letter-spacing: 0.1em;
     text-transform: uppercase;
     color: var(--text-3);
   }
-  .tuning-card.enabled .toggle-label { color: var(--accent-dim); }
+  .tuning-card.enabled .toggle-label { color: var(--accent); }
 
   .managed-by-label {
     font-family: var(--font-head);
-    font-size: 9px;
+    font-size: var(--fs-min);
     letter-spacing: 0.06em;
     text-transform: uppercase;
     color: var(--green-bright);
@@ -1112,7 +1112,7 @@
 
   .card-tag-add {
     font-family: var(--font-head);
-    font-size: 9px;
+    font-size: var(--fs-min);
     font-weight: 600;
     letter-spacing: 0.08em;
     text-transform: uppercase;
@@ -1129,7 +1129,7 @@
 
   .tag-opt {
     font-family: var(--font-head);
-    font-size: 9px;
+    font-size: var(--fs-min);
     font-weight: 600;
     letter-spacing: 0.06em;
     text-transform: uppercase;

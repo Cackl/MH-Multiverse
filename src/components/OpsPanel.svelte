@@ -503,7 +503,7 @@
               <span class="feedback-error" style="font-size:11px;">{backupError}</span>
             {/if}
             {#if openDirError}
-              <span class="inline-error" style="font-size:10px;">{openDirError}</span>
+              <span class="inline-error" style="font-size:var(--fs-min);">{openDirError}</span>
             {/if}
             <button
               class="btn-icon"
@@ -705,7 +705,7 @@
 
   .info-label {
     font-family: var(--font-head);
-    font-size: 9px;
+    font-size: var(--fs-min);
     font-weight: 600;
     letter-spacing: 0.12em;
     text-transform: uppercase;
@@ -722,7 +722,7 @@
   .info-value.dim  { color: var(--text-3); }
 
   .url-value {
-    font-size: 10px;
+    font-size: var(--fs-min);
     color: var(--text-3);
     word-break: break-all;
     line-height: 1.4;
@@ -730,7 +730,7 @@
 
   .status-pill {
     font-family: var(--font-head);
-    font-size: 9px;
+    font-size: var(--fs-min);
     font-weight: 600;
     letter-spacing: 0.1em;
     text-transform: uppercase;
@@ -738,7 +738,7 @@
     border-radius: 2px;
     border: 1px solid transparent;
   }
-  .status-pill.available   { color: var(--green-bright); border-color: rgba(39,174,96,0.4); background: var(--green-dim); }
+  .status-pill.available   { color: var(--green-bright); border-color: color-mix(in srgb, var(--green) 40%, transparent); background: var(--green-dim); }
   .status-pill.unavailable { color: var(--text-3);       border-color: var(--border-mid);   background: var(--bg-3); }
   .status-pill.checking    { color: var(--text-2);       border-color: var(--border-mid);   background: var(--bg-3); }
 
@@ -754,7 +754,7 @@
     gap: 8px;
     padding: 8px 12px;
     background: var(--amber-dim);
-    border: 1px solid rgba(200,146,10,0.3);
+    border: 1px solid color-mix(in srgb, var(--amber) 30%, transparent);
     border-radius: var(--radius-sm);
     font-size: 12px;
     color: var(--amber-bright);
@@ -794,7 +794,7 @@
 
   .progress-stage {
     font-family: var(--font-head);
-    font-size: 10px;
+    font-size: var(--fs-min);
     letter-spacing: 0.08em;
     text-transform: uppercase;
     color: var(--text-2);
@@ -821,7 +821,7 @@
     margin-left: 6px;
     transition: opacity 0.15s;
   }
-  .target-children.muted { opacity: 0.4; }
+  .target-children.muted { opacity: var(--dimmed-opacity); }
 
   .target-row.child { padding: 6px 10px; }
   .target-row.disabled { cursor: default; pointer-events: none; }
@@ -882,7 +882,7 @@
   /* ── Backup history ── */
   .backup-notice {
     font-family: var(--font-head);
-    font-size: 10px;
+    font-size: var(--fs-min);
     letter-spacing: 0.08em;
     text-transform: uppercase;
     color: var(--text-3);
@@ -921,7 +921,7 @@
 
   .backup-label-badge {
     font-family: var(--font-head);
-    font-size: 9px;
+    font-size: var(--fs-min);
     font-weight: 600;
     letter-spacing: 0.08em;
     text-transform: uppercase;
@@ -933,7 +933,7 @@
   }
   .backup-label-badge.pre-update {
     color: var(--amber-bright);
-    border-color: rgba(200,146,10,0.3);
+    border-color: color-mix(in srgb, var(--amber) 30%, transparent);
     background: var(--amber-dim);
   }
 
@@ -975,7 +975,7 @@
     align-items: flex-start;
     gap: 6px;
     padding: 8px 12px 10px;
-    font-size: 10px;
+    font-size: var(--fs-min);
     color: var(--text-3);
     border-top: 1px solid var(--border);
     line-height: 1.4;

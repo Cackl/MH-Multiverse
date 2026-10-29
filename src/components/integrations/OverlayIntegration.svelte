@@ -286,7 +286,7 @@
 </IntegrationCard>
 
 <style>
-  .opt-row.dim { opacity: 0.5; }
+  .opt-row.dim { opacity: var(--dimmed-opacity); }
   .log-actions { display: flex; align-items: center; gap: 10px; }
   .err { color: var(--text-error); }
   .update-note { display: flex; align-items: center; gap: 10px; margin-top: 10px; }
@@ -294,7 +294,7 @@
   .changes { margin: 4px 0 0; padding-left: 16px; color: var(--amber); }
 
   /* Trust button carries the state: green when trusted, amber when files changed */
-  .trust-btn.ok   { color: var(--green-bright); border-color: rgba(39, 174, 96, 0.5); }
+  .trust-btn.ok   { color: var(--green-bright); border-color: color-mix(in srgb, var(--green) 50%, transparent); }
   .trust-btn.warn { color: var(--amber);        border-color: rgba(212, 160, 23, 0.5); }
 
   .log {
@@ -319,7 +319,7 @@
     top: 0;
     background: var(--bg-3);
     font-family: var(--font-head);
-    font-size: 9px;
+    font-size: var(--fs-min);
     letter-spacing: 0.1em;
     text-transform: uppercase;
     color: var(--text-3);
@@ -328,7 +328,7 @@
   .dim-text { color: var(--text-3); }
   .status-line { padding: 4px 10px; font-size: 11px; color: var(--text-3); }
   .ok-text { color: var(--green); }
-  .sub-line { padding: 0 10px 2px 86px; font-size: 10px; color: var(--text-3); }
+  .sub-line { padding: 0 10px 2px 86px; font-size: var(--fs-min); color: var(--text-3); }
   .banner { padding: 4px 10px; font-family: var(--font-mono); font-size: 11px; color: var(--accent); }
   .death { padding: 4px 10px; font-family: var(--font-mono); font-size: 11px; color: var(--text-error); border-left: 2px solid var(--text-error); }
   .death table { margin-top: 2px; border-collapse: collapse; color: var(--text-2); }

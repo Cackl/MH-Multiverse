@@ -187,7 +187,7 @@
     background: var(--bg-3);
     border-bottom: 1px solid var(--border-mid);
     font-family: var(--font-head);
-    font-size: 9px;
+    font-size: var(--fs-min);
     letter-spacing: 0.1em;
     text-transform: uppercase;
     color: var(--text-3);
@@ -209,20 +209,20 @@
     cursor: pointer;
   }
   .srv:hover { background: var(--bg-2); }
-  .srv.off .srv-main { opacity: 0.5; }
+  .srv.off .srv-main { opacity: var(--dimmed-opacity); }
   .srv-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
   .srv-name { color: var(--text-0); font-size: 12px; }
   .srv-sub {
     color: var(--text-3);
     font-family: var(--font-mono);
-    font-size: 10px;
+    font-size: var(--fs-min);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
   .chip {
     font-family: var(--font-head);
-    font-size: 9px;
+    font-size: var(--fs-min);
     letter-spacing: 0.08em;
     text-transform: uppercase;
     color: var(--green);

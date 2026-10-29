@@ -560,7 +560,7 @@
 
   .filter-label {
     font-family: var(--font-head);
-    font-size: 9px;
+    font-size: var(--fs-min);
     letter-spacing: 0.14em;
     text-transform: uppercase;
     color: var(--text-3);
@@ -570,7 +570,7 @@
   /* filter-chip — self-contained so panel works before app.css update */
   :global(.filter-chip) {
     font-family: var(--font-head);
-    font-size: 10px;
+    font-size: var(--fs-min);
     font-weight: 600;
     letter-spacing: 0.08em;
     text-transform: uppercase;
@@ -587,8 +587,8 @@
   :global(.filter-chip.active)               { color: var(--text-0); border-color: var(--border-lit); background: var(--bg-3); }
   :global(.filter-chip.chip-purple.active)   { color: var(--purple);       border-color: rgba(130,100,180,0.4); background: var(--purple-dim); }
   :global(.filter-chip.chip-blue.active)     { color: var(--blue);         border-color: rgba(46,134,193,0.4);  background: var(--blue-dim); }
-  :global(.filter-chip.chip-amber.active)    { color: var(--amber-bright); border-color: rgba(200,146,10,0.4);  background: var(--amber-dim); }
-  :global(.filter-chip.chip-red.active)      { color: var(--text-error);   border-color: rgba(192,57,43,0.4);   background: var(--red-dim); }
+  :global(.filter-chip.chip-amber.active)    { color: var(--amber-bright); border-color: color-mix(in srgb, var(--amber) 40%, transparent);  background: var(--amber-dim); }
+  :global(.filter-chip.chip-red.active)      { color: var(--text-error);   border-color: color-mix(in srgb, var(--red) 40%, transparent);   background: var(--red-dim); }
 
   .btn.active {
     border-color: var(--accent-dim);
@@ -597,14 +597,14 @@
   }
 
   .btn-countdown {
-    border-color: rgba(200, 146, 10, 0.4);
+    border-color: color-mix(in srgb, var(--amber) 40%, transparent);
     color: var(--amber-bright);
-    background: rgba(200, 146, 10, 0.1);
+    background: color-mix(in srgb, var(--amber) 10%, transparent);
     min-width: 100px;
   }
   .btn-countdown:hover {
-    border-color: rgba(200, 146, 10, 0.7);
-    background: rgba(200, 146, 10, 0.18);
+    border-color: color-mix(in srgb, var(--amber) 70%, transparent);
+    background: color-mix(in srgb, var(--amber) 18%, transparent);
   }
 
   /* -- Console area (log + blade overlay container) -- */
@@ -643,7 +643,7 @@
 
   .log-lvl {
     font-family: var(--font-head);
-    font-size: 9px;
+    font-size: var(--fs-min);
     font-weight: 600;
     letter-spacing: 0.06em;
     padding: 1px 5px;
@@ -656,9 +656,9 @@
   .log-lvl.trace { color: #8a8aa0; background: rgba(120, 120, 140, 0.1); border: 1px solid rgba(120, 120, 140, 0.2); }
   .log-lvl.debug { color: var(--purple); background: var(--purple-dim); border: 1px solid rgba(130, 100, 180, 0.2); }
   .log-lvl.info { color: var(--blue); background: var(--blue-dim); border: 1px solid rgba(46, 134, 193, 0.25); }
-  .log-lvl.ok   { color: var(--green-bright); background: var(--green-dim); border: 1px solid rgba(39, 174, 96, 0.25); }
+  .log-lvl.ok   { color: var(--green-bright); background: var(--green-dim); border: 1px solid color-mix(in srgb, var(--green) 25%, transparent); }
   .log-lvl.warn { color: var(--amber); background: rgba(212, 160, 23, 0.1); border: 1px solid rgba(212, 160, 23, 0.25); }
-  .log-lvl.err  { color: var(--text-error); background: var(--red-dim); border: 1px solid rgba(192, 57, 43, 0.25); }
+  .log-lvl.err  { color: var(--text-error); background: var(--red-dim); border: 1px solid color-mix(in srgb, var(--red) 25%, transparent); }
   .log-lvl.fatal { color: #ff4444; background: rgba(180, 30, 30, 0.15); border: 1px solid rgba(180, 30, 30, 0.35); font-weight: 700; }
 
   .log-msg        { color: var(--console-text); word-break: break-word; min-width: 0; }
@@ -667,7 +667,7 @@
   .log-msg.log-raw { color: var(--console-text-dim); white-space: pre; }
   .log-msg.info   { color: var(--text-1); }
   .log-msg.ok     { color: var(--green-bright); }
-  .log-msg.warn   { color: var(--accent-dim); }
+  .log-msg.warn   { color: var(--accent); }
   .log-msg.err    { color: var(--text-error); }
   .log-msg.fatal  { color: #ff4444; font-weight: 600; }
 
@@ -697,7 +697,7 @@
     padding: 0 0 0 14px;
     font-family: var(--font-mono);
     font-size: 12px;
-    color: var(--accent-dim);
+    color: var(--accent);
     user-select: none;
   }
 
@@ -730,7 +730,7 @@
 
   .cmd-chip {
     font-family: var(--font-mono);
-    font-size: 10px;
+    font-size: var(--fs-min);
     padding: 3px 8px;
     background: var(--bg-3);
     border: 1px solid var(--border-mid);
@@ -742,7 +742,7 @@
   }
   .cmd-chip:hover:not(:disabled) {
     border-color: var(--accent-dim);
-    color: var(--accent-dim);
+    color: var(--accent);
     background: var(--accent-glow);
   }
   .cmd-chip:disabled { opacity: 0.4; cursor: not-allowed; }
@@ -777,7 +777,7 @@
 
   .ac-hint {
     font-family: var(--font-head);
-    font-size: 9px;
+    font-size: var(--fs-min);
     letter-spacing: 0.1em;
     text-transform: uppercase;
     color: var(--text-3);
