@@ -247,6 +247,7 @@
         {/if}
         <button
           class="btn btn-launch"
+          use:tip={!$appConfig.game_exe ? 'Set the game executable in Settings' : ''}
           disabled={!$appConfig.game_exe || !activeServer || launching || $gameRunning}
           on:click={launch}
         >
