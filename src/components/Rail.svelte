@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { activeTab, activeDataTab, serverRunning, apacheRunning, gameRunning, showUpdateBadge, goTab, goDataTab, type Tab, type DataTab } from '../lib/store'
+  import { activeTab, activeDataTab, serverRunning, apacheRunning, gameRunning, serverStartError, apacheStartError, showUpdateBadge, goTab, goDataTab, type Tab, type DataTab } from '../lib/store'
   import { tip } from '../lib/tooltip'
 
   const go = (tab: Tab) => goTab(tab)
@@ -82,12 +82,12 @@
   <div class="rail-spacer"></div>
 
   <div class="rail-status">
-    <div class="status-dot-wrap">
-      <div class="status-dot" class:on={$serverRunning}></div>
+    <div class="status-dot-wrap" use:tip={$serverStartError}>
+      <div class="status-dot" class:on={$serverRunning} class:failed={$serverStartError}></div>
       <span class="status-dot-label">Server</span>
     </div>
-    <div class="status-dot-wrap">
-      <div class="status-dot" class:on={$apacheRunning}></div>
+    <div class="status-dot-wrap" use:tip={$apacheStartError}>
+      <div class="status-dot" class:on={$apacheRunning} class:failed={$apacheStartError}></div>
       <span class="status-dot-label">Apache</span>
     </div>
     <div class="status-dot-wrap">
@@ -234,6 +234,11 @@
   .status-dot.on {
     background: var(--accent-bright);
     box-shadow: 0 0 8px var(--accent-glow);
+  }
+
+  .status-dot.failed {
+    background: var(--red);
+    box-shadow: 0 0 8px var(--red-dim);
   }
 
   .status-dot-label {

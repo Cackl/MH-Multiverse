@@ -259,6 +259,42 @@ export function clearServerError() {
   serverError.set('')
 }
 
+export const startingServer = writable<boolean>(false)
+export const startingApache = writable<boolean>(false)
+// Last start failure per process, shown by the Rail dots; '' when there is none.
+export const serverStartError = writable<string>('')
+export const apacheStartError = writable<string>('')
+serverRunning.subscribe(running => { if (running) { startingServer.set(false); serverStartError.set('') } })
+apacheRunning.subscribe(running => { if (running) apacheStartError.set('') })
+
+export async function startServer() {
+  startingServer.set(true)
+  serverStartError.set('')
+  clearServerError()
+  try {
+    await invoke('start_server', { serverExe: get(appConfig).server_exe })
+  } catch (e) {
+    setServerError(String(e))
+    serverStartError.set(String(e))
+    startingServer.set(false)
+  }
+}
+
+export async function startApache() {
+  startingApache.set(true)
+  apacheStartError.set('')
+  clearServerError()
+  try {
+    await invoke('start_apache', { serverExe: get(appConfig).server_exe })
+    apacheRunning.set(await invoke<boolean>('apache_is_running'))
+  } catch (e) {
+    setServerError(String(e))
+    apacheStartError.set(String(e))
+  } finally {
+    startingApache.set(false)
+  }
+}
+
 export const LOG_LEVEL_SEVERITY: Record<LogLevel, number> = {
   all:   -1,
   trace:  0,

@@ -21,6 +21,10 @@
     shutdownCountdownActive,
     startShutdownCountdown,
     cancelShutdownCountdown,
+    startingServer,
+    startingApache,
+    startServer,
+    startApache,
   } from '../lib/store'
   import { FALLBACK_COMMANDS } from '../lib/serverCommands'
   import PlayersBlade from './PlayersBlade.svelte'
@@ -31,16 +35,13 @@
   let playerCount = 0
 
   let command = ''
-  let starting = false
   let stopping = false
-  let startingApache = false
   let stoppingApache = false
   let scrollLocked = false
   let logEl: HTMLDivElement
   let dashboardPort = DASHBOARD_PORT_DEFAULT
   let dashboardPath = '/Dashboard/'
 
-  $: if ($serverRunning) starting = false
   $: if (!$serverRunning) stopping = false
 
   $: countdownLabel = (() => {
@@ -106,31 +107,6 @@
       } catch {}
     }
   })
-
-  async function startServer() {
-    starting = true
-    clearServerError()
-    try {
-      await invoke('start_server', { serverExe: $appConfig.server_exe })
-    } catch (e) {
-      setServerError(String(e))
-      starting = false
-    }
-  }
-
-  async function startApache() {
-    startingApache = true
-    clearServerError()
-    try {
-      await invoke('start_apache', { serverExe: $appConfig.server_exe })
-      const apache = await invoke<boolean>('apache_is_running')
-      apacheRunning.set(apache)
-    } catch (e) {
-      setServerError(String(e))
-    } finally {
-      startingApache = false
-    }
-  }
 
   async function stopApache() {
     stoppingApache = true
@@ -324,9 +300,9 @@
             </button>
           {/if}
         {:else}
-          <button class="btn btn-sm btn-green" on:click={startServer} disabled={starting || !$appConfig.server_exe} use:tip={!$appConfig.server_exe ? 'Set server exe in Settings' : ''}>
+          <button class="btn btn-sm btn-green" on:click={startServer} disabled={$startingServer || !$appConfig.server_exe} use:tip={!$appConfig.server_exe ? 'Set server exe in Settings' : ''}>
             <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" style="width:10px;height:10px;"><polygon points="4,2 12,7 4,12"/></svg>
-            {starting ? 'Starting...' : 'Server'}
+            {$startingServer ?'Starting...' : 'Server'}
           </button>
         {/if}
 
@@ -336,7 +312,7 @@
               Apache
             </button>
           {:else}
-            <button class="btn btn-sm btn-outline" on:click={startApache} disabled={startingApache || !$appConfig.server_exe} use:tip={!$appConfig.server_exe ? 'Set server exe in Settings' : ''}>
+            <button class="btn btn-sm btn-outline" on:click={startApache} disabled={$startingApache || !$appConfig.server_exe} use:tip={!$appConfig.server_exe ? 'Set server exe in Settings' : ''}>
               <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" style="width:10px;height:10px;"><polygon points="4,2 12,7 4,12"/></svg>
               Apache
             </button>
