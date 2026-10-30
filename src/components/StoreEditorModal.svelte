@@ -707,7 +707,7 @@
   on:click={e => { if (e.target === e.currentTarget) tryClose() }}
   on:keydown={onKeydown}
 >
-  <div class="editor-modal" role="dialog" aria-modal="true" tabindex="-1">
+  <div class="modal" role="dialog" aria-modal="true" tabindex="-1">
 
     <!-- ── Header ── -->
     <div class="modal-header">
@@ -1296,45 +1296,12 @@
 </div>
 
 <style>
-  /* ── Backdrop & shell ── */
-  .modal-backdrop {
-    position: fixed;
-    inset: 0;
-    background: rgba(0, 0, 0, 0.72);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: var(--z-modal);
-    backdrop-filter: blur(3px);
-  }
-
-  .editor-modal {
-    background: var(--bg-1);
-    border: 1px solid var(--border-lit);
-    border-radius: var(--radius-md);
+  .modal {
     width: min(1440px, 96vw);
     height: min(820px, 92vh);
-    margin-top: 38px;
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-    box-shadow:
-      0 32px 100px rgba(0, 0, 0, 0.6),
-      0 0 0 1px rgba(255, 255, 255, 0.03) inset;
   }
 
   /* ── Header ── */
-  .modal-header {
-    padding: 12px 16px;
-    border-bottom: 1px solid var(--border);
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    flex-shrink: 0;
-    gap: 12px;
-    min-height: 52px;
-  }
-
   .modal-title {
     display: flex;
     align-items: center;
@@ -1370,19 +1337,6 @@
   .meta-badge.dim { color: var(--text-3); }
 
   .modal-header-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
-
-  .close-btn {
-    width: 28px; height: 28px;
-    display: flex; align-items: center; justify-content: center;
-    background: transparent;
-    border: 1px solid transparent;
-    color: var(--text-2);
-    cursor: pointer;
-    border-radius: var(--radius-sm);
-    transition: all 0.12s;
-  }
-  .close-btn:hover { color: var(--text-0); background: var(--bg-3); border-color: var(--border-mid); }
-  .close-btn svg { width: 14px; height: 14px; }
 
   /* ── Two-column body ── */
   .modal-body {
@@ -1933,17 +1887,7 @@
   }
 
   /* ── Footer ── */
-  .modal-footer {
-    padding: 10px 16px;
-    border-top: 1px solid var(--border);
-    background: var(--chrome-footer-bg);
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 10px;
-    flex-shrink: 0;
-    min-height: 50px;
-  }
+  .modal-footer { justify-content: space-between; }
 
   .footer-left    { display: flex; align-items: center; gap: 10px; min-width: 0; }
   .footer-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; margin-left: auto; }
