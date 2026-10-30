@@ -223,6 +223,8 @@
           aria-label="Enabled"
           class="toggle-switch"
           class:on={draft.Enabled}
+          role="switch"
+          aria-checked={draft.Enabled}
           on:click={() => draft.Enabled = !draft.Enabled}
         ></button>
       </div>

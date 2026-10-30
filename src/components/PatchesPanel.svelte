@@ -382,6 +382,8 @@
                 <button
                   class="toggle-switch file-toggle"
                   class:on={f.enabled}
+                  role="switch"
+                  aria-checked={f.enabled}
                   title="Move to Off/ (disable)"
                   disabled={togglingFile === f.file_name}
                   on:click|stopPropagation={() => toggleFileEnabled(f)}
@@ -406,6 +408,8 @@
                 <button
                   class="toggle-switch file-toggle"
                   class:on={f.enabled}
+                  role="switch"
+                  aria-checked={f.enabled}
                   title="Move to Patches/ (enable)"
                   disabled={togglingFile === f.file_name}
                   on:click|stopPropagation={() => toggleFileEnabled(f)}
@@ -530,6 +534,8 @@
                       <button
                         class="toggle-switch row-toggle"
                         class:on={entry.Enabled}
+                        role="switch"
+                        aria-checked={entry.Enabled}
                         title={entry.Enabled ? 'Disable entry' : 'Enable entry'}
                         on:click|stopPropagation={() => {
                           dirtyEntries[dirtyIndex].Enabled = !dirtyEntries[dirtyIndex].Enabled
