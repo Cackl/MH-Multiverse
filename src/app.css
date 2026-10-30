@@ -916,6 +916,26 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
   min-height: 52px;
 }
 
+.modal-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.modal-title svg { width: 16px; height: 16px; color: var(--accent); flex-shrink: 0; }
+
+.modal-display-name {
+  font-family: var(--font-head);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-0);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .close-btn {
   width: 28px;
   height: 28px;

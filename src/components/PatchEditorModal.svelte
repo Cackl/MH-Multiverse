@@ -383,22 +383,6 @@
   }
 
   /* ── Header ── */
-  .modal-title {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-  }
-  .modal-title svg { width: 16px; height: 16px; color: var(--accent); flex-shrink: 0; }
-
-  .modal-display-name {
-    font-family: var(--font-head);
-    font-size: 13px;
-    font-weight: 600;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    color: var(--text-0);
-  }
-
   /* ── Body ── */
   .modal-body {
     padding: 20px;

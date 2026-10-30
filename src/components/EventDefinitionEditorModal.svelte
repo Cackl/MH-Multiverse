@@ -175,7 +175,15 @@
   >
     <!-- Header -->
     <div class="modal-header">
-      <span class="modal-title">{isNew ? 'New Event Definition' : 'Edit Event Definition'}</span>
+      <div class="modal-title">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <rect x="3" y="3" width="18" height="18" rx="2"/>
+          <line x1="16" y1="1" x2="16" y2="5"/>
+          <line x1="8" y1="1" x2="8" y2="5"/>
+          <line x1="3" y1="9" x2="21" y2="9"/>
+        </svg>
+        <span class="modal-display-name">{isNew ? 'New Event Definition' : 'Edit Event Definition'}</span>
+      </div>
       <button class="close-btn" aria-label="Close" on:click={tryClose}>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <line x1="18" y1="6" x2="6" y2="18"/>
@@ -373,18 +381,6 @@
   .modal {
     width: min(560px, 90vw);
     max-height: 85vh;
-  }
-
-  /* ── Header ── */
-
-  .modal-title {
-    font-family: var(--font-head);
-    font-size: 12px;
-    font-weight: 700;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    color: var(--text-1);
-    flex: 1;
   }
 
   /* ── Body ── */

@@ -406,7 +406,7 @@
           <circle cx="7" cy="6" r="1" fill="currentColor" stroke="none"/>
           <circle cx="11" cy="6" r="1" fill="currentColor" stroke="none"/>
         </svg>
-        <span>{isEdit ? 'Edit Server' : 'Add Server'}</span>
+        <span class="modal-display-name">{isEdit ? 'Edit Server' : 'Add Server'}</span>
       </div>
       <button class="close-btn" aria-label="Close" on:click={onClose}>
         <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5">
@@ -747,23 +747,6 @@
   .modal {
     width: 500px;
     max-height: 85vh;
-  }
-
-  .modal-title {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    font-family: var(--font-head);
-    font-size: 14px;
-    font-weight: 600;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    color: var(--text-0);
-  }
-  .modal-title svg {
-    width: 18px;
-    height: 18px;
-    color: var(--accent);
   }
 
   /* ── Tabs ── */
