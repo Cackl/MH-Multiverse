@@ -1155,7 +1155,6 @@
     padding: 7px 8px;
     outline: none;
   }
-  .preset-add-input::placeholder { color: var(--text-3); }
 
   .preset-add-row .btn {
     margin: 4px;

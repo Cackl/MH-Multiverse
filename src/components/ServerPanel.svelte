@@ -712,7 +712,6 @@
     outline: none;
     border-radius: 0;
   }
-  .cmd-input::placeholder { color: var(--text-3); }
   .cmd-input:disabled { opacity: 0.5; }
 
   .cmd-input-row .btn {

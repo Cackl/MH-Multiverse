@@ -199,7 +199,6 @@
     font-size: 12px;
     outline: none;
   }
-  .blade-search::placeholder { color: var(--text-3); }
 
   /* -- Player list -- */
   .blade-list {

@@ -1498,7 +1498,6 @@
     min-width: 0;
   }
   .picker-search:focus { border-color: var(--accent-dim); }
-  .picker-search::placeholder { color: var(--text-3); font-family: var(--font-body); }
   .picker-search:disabled { opacity: 0.4; cursor: not-allowed; }
 
   .picker-check {
@@ -1725,7 +1724,6 @@
   }
   .field-input:focus { border-color: var(--accent-dim); }
   .field-input.readonly { color: var(--text-3); cursor: default; }
-  .field-input::placeholder { color: var(--text-3); font-family: var(--font-body); font-size: 12px; }
 
   .field-select {
     background: var(--bg-0);

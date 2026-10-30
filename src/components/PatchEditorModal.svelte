@@ -430,7 +430,6 @@
     transition: border-color 0.14s;
   }
   .field-input:focus { border-color: var(--accent-dim); }
-  .field-input::placeholder { color: var(--text-3); font-family: var(--font-body); }
   .field-input.input-error { border-color: var(--red); }
 
   .field-select {

@@ -710,7 +710,6 @@
     min-width: 160px;
     width: 200px;
   }
-  .filename-input::placeholder { color: var(--text-3); font-family: var(--font-body); }
 
   .filename-error { font-size: 11px; color: var(--text-error); }
 
@@ -877,7 +876,6 @@
     outline: none; transition: border-color 0.12s; width: 100%;
   }
   .add-input:focus { border-color: var(--accent-dim); }
-  .add-input::placeholder { color: var(--text-3); font-family: var(--font-body); font-size: 12px; }
 
   .value-field { flex: 1; }
 
