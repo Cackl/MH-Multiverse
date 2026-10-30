@@ -6,6 +6,7 @@
   import type { PatchFileInfo, PatchEntry } from '../lib/patchesMeta'
   import PanelSidebar from './PanelSidebar.svelte'
   import PatchEditorModal from './PatchEditorModal.svelte'
+  import { tip } from '../lib/tooltip'
 
   // ── State ──────────────────────────────────────────────────────────────────
 
@@ -292,7 +293,8 @@
         <button
           class="btn-icon"
           style="margin-left:auto;"
-          title="New patch file"
+          aria-label="New patch file"
+          use:tip={'New patch file'}
           disabled={!$appConfig.server_exe}
           on:click={() => { creatingFile = !creatingFile; createError = '' }}
         >
@@ -301,13 +303,13 @@
             <line x1="5" y1="12" x2="19" y2="12"/>
           </svg>
         </button>
-        <button class="btn-icon" title="Rescan Patches directory" disabled={scanning} on:click={scan}>
+        <button class="btn-icon" aria-label="Rescan Patches directory" use:tip={'Rescan Patches directory'} disabled={scanning} on:click={scan}>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <polyline points="23 4 23 10 17 10"/>
             <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
           </svg>
         </button>
-        <button class="btn-icon" title="Open Patches folder" disabled={!$appConfig.server_exe} on:click={openPatchesDir}>
+        <button class="btn-icon" aria-label="Open Patches folder" use:tip={'Open Patches folder'} disabled={!$appConfig.server_exe} on:click={openPatchesDir}>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
           </svg>
@@ -382,7 +384,10 @@
                 <button
                   class="toggle-switch file-toggle"
                   class:on={f.enabled}
-                  title="Move to Off/ (disable)"
+                  role="switch"
+                  aria-checked={f.enabled}
+                  aria-label="Move to Off/ (disable)"
+                  use:tip={'Move to Off/ (disable)'}
                   disabled={togglingFile === f.file_name}
                   on:click|stopPropagation={() => toggleFileEnabled(f)}
                 ></button>
@@ -406,7 +411,10 @@
                 <button
                   class="toggle-switch file-toggle"
                   class:on={f.enabled}
-                  title="Move to Patches/ (enable)"
+                  role="switch"
+                  aria-checked={f.enabled}
+                  aria-label="Move to Patches/ (enable)"
+                  use:tip={'Move to Patches/ (enable)'}
                   disabled={togglingFile === f.file_name}
                   on:click|stopPropagation={() => toggleFileEnabled(f)}
                 ></button>
@@ -464,7 +472,7 @@
           <div class="empty-state"><span class="empty-state-label">Loading...</span></div>
         {:else if loadError}
           <div class="empty-state">
-            <span class="empty-state-label" style="color:var(--text-error);">Load error</span>
+            <span class="empty-state-label error">Load error</span>
             <span class="empty-state-sub">{loadError}</span>
           </div>
         {:else if dirtyEntries.length === 0}
@@ -530,7 +538,10 @@
                       <button
                         class="toggle-switch row-toggle"
                         class:on={entry.Enabled}
-                        title={entry.Enabled ? 'Disable entry' : 'Enable entry'}
+                        role="switch"
+                        aria-checked={entry.Enabled}
+                        aria-label={entry.Enabled ? 'Disable entry' : 'Enable entry'}
+                        use:tip={entry.Enabled ? 'Disable entry' : 'Enable entry'}
                         on:click|stopPropagation={() => {
                           dirtyEntries[dirtyIndex].Enabled = !dirtyEntries[dirtyIndex].Enabled
                           dirtyEntries = dirtyEntries
@@ -545,13 +556,13 @@
                     <td class="col-actions-cell">
                       <button
                         class="move-btn"
-                        title="Move up"
+                        use:tip={'Move up'}
                         disabled={sortCol !== null || !!searchLower || dirtyIndex === 0}
                         on:click|stopPropagation={() => moveEntry(dirtyIndex, -1)}
                       >↑</button>
                       <button
                         class="move-btn"
-                        title="Move down"
+                        use:tip={'Move down'}
                         disabled={sortCol !== null || !!searchLower || dirtyIndex === dirtyEntries.length - 1}
                         on:click|stopPropagation={() => moveEntry(dirtyIndex, 1)}
                       >↓</button>
@@ -828,34 +839,7 @@
     flex-shrink: 0;
   }
 
-  .search-wrap {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    background: var(--bg-0);
-    border: 1px solid var(--border-mid);
-    border-radius: var(--radius-sm);
-    padding: 0 8px;
-    flex: 1;
-    min-width: 0;
-    max-width: 300px;
-  }
-  .search-wrap svg { width: 12px; height: 12px; color: var(--text-3); flex-shrink: 0; }
-  .search-wrap:focus-within { border-color: var(--accent-dim); }
-
-  .search-input {
-    flex: 1;
-    background: none;
-    border: none;
-    outline: none;
-    color: var(--text-0);
-    font-family: var(--font-mono);
-    font-size: 12px;
-    padding: 5px 0;
-    width: auto;
-    border-radius: 0;
-  }
-  .search-input::placeholder { color: var(--text-3); font-family: var(--font-body); }
+  .search-wrap { min-width: 0; max-width: 300px; }
 
   /* ── List view ── */
   .list-wrap { flex: 1; overflow: auto; }

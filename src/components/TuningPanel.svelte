@@ -6,6 +6,7 @@
   import { KNOWN_CORE, KNOWN_EVENTS, type TuningFileInfo, type EventDefinition, type EventsData } from '../lib/tuningMeta'
   import PanelSidebar from './PanelSidebar.svelte'
   import TuningEditorModal from './TuningEditorModal.svelte'
+  import { tip } from '../lib/tooltip'
 
   // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -239,7 +240,8 @@
       <button
         class="btn-icon"
         on:click={() => { creatingNew = true; editingFile = null }}
-        title="Create new tuning file"
+        aria-label="Create new tuning file"
+        use:tip={'Create new tuning file'}
         disabled={!$appConfig.server_exe}
         style="margin-left:auto;"
       >
@@ -251,7 +253,8 @@
       <button
         class="btn-icon"
         on:click={scan}
-        title="Rescan LiveTuning directory"
+        aria-label="Rescan LiveTuning directory"
+        use:tip={'Rescan LiveTuning directory'}
         disabled={scanning}
       >
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -262,7 +265,8 @@
       <button
         class="btn-icon"
         on:click={openLiveTuningDir}
-        title="Open LiveTuning folder"
+        aria-label="Open LiveTuning folder"
+        use:tip={'Open LiveTuning folder'}
         disabled={!$appConfig.server_exe}
       >
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -316,7 +320,7 @@
                 class="star-btn"
                 class:starred={file.starred}
                 aria-label={file.starred ? 'Remove from favourites' : 'Add to favourites'}
-                title={file.starred ? 'Remove from favourites' : 'Add to favourites'}
+                use:tip={file.starred ? 'Remove from favourites' : 'Add to favourites'}
                 on:click|stopPropagation={() => toggleFavourite(file)}
               >
                 {#if file.starred}
@@ -482,7 +486,7 @@
         class="btn btn-sm btn-outline"
         on:click={reloadLiveTuning}
         disabled={!$serverRunning}
-        title={$serverRunning ? 'Send !server reloadlivetuning' : 'Server not running'}
+        use:tip={$serverRunning ? 'Send !server reloadlivetuning' : 'Server not running'}
       >
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:11px;height:11px;">
           <polyline points="23 4 23 10 17 10"/>
@@ -517,7 +521,7 @@
         </div>
       {:else if scanError}
         <div class="empty-state">
-          <span class="empty-state-label" style="color:var(--text-error);">Scan error</span>
+          <span class="empty-state-label error">Scan error</span>
           <span class="empty-state-sub">{scanError}</span>
         </div>
       {:else if files.length === 0}
@@ -549,7 +553,7 @@
                     <button
                       class="star-btn starred"
                       aria-label="Remove from favourites"
-                      title="Remove from favourites"
+                      use:tip={'Remove from favourites'}
                       on:click|stopPropagation={() => toggleFavourite(file)}
                     >
                       <svg viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="1.5">
@@ -572,7 +576,7 @@
                   {:else if tag}
                     <button
                       class="file-tag tag-{tag} card-tag-btn"
-                      title="Change tag"
+                      use:tip={'Change tag'}
                       on:click|stopPropagation={() => editingTag = file.canonical_name}
                     >{TAG_LABELS[tag]}</button>
                   {:else}
@@ -597,7 +601,7 @@
                       role="switch"
                       aria-checked={file.enabled}
                       tabindex="0"
-                      title={!file.toggleable ? 'Unknown prefix, cannot toggle' : undefined}
+                      use:tip={!file.toggleable ? 'Unknown prefix, cannot toggle' : ''}
                       on:click={() => toggleFile(file)}
                       on:keydown={e => e.key === 'Enter' && toggleFile(file)}
                     ></div>
@@ -627,7 +631,7 @@
                     <button
                       class="star-btn"
                       aria-label="Add to favourites"
-                      title="Add to favourites"
+                      use:tip={'Add to favourites'}
                       on:click|stopPropagation={() => toggleFavourite(file)}
                     >
                       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
@@ -650,7 +654,7 @@
                   {:else if tag}
                     <button
                       class="file-tag tag-{tag} card-tag-btn"
-                      title="Change tag"
+                      use:tip={'Change tag'}
                       on:click|stopPropagation={() => editingTag = file.canonical_name}
                     >{TAG_LABELS[tag]}</button>
                   {:else}
@@ -675,7 +679,7 @@
                       role="switch"
                       aria-checked={file.enabled}
                       tabindex="0"
-                      title={!file.toggleable ? 'Unknown prefix, cannot toggle' : undefined}
+                      use:tip={!file.toggleable ? 'Unknown prefix, cannot toggle' : ''}
                       on:click={() => toggleFile(file)}
                       on:keydown={e => e.key === 'Enter' && toggleFile(file)}
                     ></div>
@@ -912,31 +916,7 @@
     min-height: 53px;
   }
 
-  .search-wrap {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    background: var(--bg-0);
-    border: 1px solid var(--border-mid);
-    border-radius: var(--radius-sm);
-    padding: 0 8px;
-    flex: 1;
-    max-width: 280px;
-  }
-  .search-wrap svg { width: 12px; height: 12px; color: var(--text-3); flex-shrink: 0; }
-  .search-wrap:focus-within { border-color: var(--accent-dim); }
-
-  .search-input {
-    flex: 1;
-    background: none;
-    border: none;
-    outline: none;
-    color: var(--text-0);
-    font-family: var(--font-mono);
-    font-size: 12px;
-    padding: 5px 0;
-  }
-  .search-input::placeholder { color: var(--text-3); font-family: var(--font-body); }
+  .search-wrap { max-width: 280px; }
 
   .file-count {
     font-family: var(--font-head);

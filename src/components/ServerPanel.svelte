@@ -309,7 +309,7 @@
         {/if}
         <div class="header-spacer"></div>
         {#if $serverError}
-          <div class="header-error" title={$serverError}>{$serverError}</div>
+          <div class="header-error" use:tip={$serverError}>{$serverError}</div>
         {/if}
         {#if $serverRunning}
           {#if $shutdownCountdownActive}
@@ -712,7 +712,6 @@
     outline: none;
     border-radius: 0;
   }
-  .cmd-input::placeholder { color: var(--text-3); }
   .cmd-input:disabled { opacity: 0.5; }
 
   .cmd-input-row .btn {

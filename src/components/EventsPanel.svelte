@@ -10,6 +10,7 @@
   import PanelSidebar from './PanelSidebar.svelte'
   import EventRuleEditorModal from './EventRuleEditorModal.svelte'
   import EventDefinitionEditorModal from './EventDefinitionEditorModal.svelte'
+  import { tip } from '../lib/tooltip'
 
   // ── Types ───────────────────────────────────────────────────────────────────
 
@@ -349,7 +350,8 @@
         <button
           class="btn-icon"
           style="margin-left:auto;"
-          title="New schedule rule"
+          aria-label="New schedule rule"
+          use:tip={'New schedule rule'}
           disabled={!$appConfig.server_exe || loading}
           on:click={startNewRule}
         >
@@ -360,7 +362,8 @@
         </button>
         <button
           class="btn-icon"
-          title="Reload events and schedule"
+          aria-label="Reload events and schedule"
+          use:tip={'Reload events and schedule'}
           disabled={loading}
           on:click={loadData}
         >
@@ -372,7 +375,8 @@
         <button
           class="btn-icon"
           on:click={openLiveTuningDir}
-          title="Open LiveTuning folder"
+          aria-label="Open LiveTuning folder"
+          use:tip={'Open LiveTuning folder'}
           disabled={!$appConfig.server_exe}
         >
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -453,13 +457,13 @@
                 <button
                 class="btn btn-sm btn-outline override-btn"
                 disabled={saving || !!pendingAction}
-                title="Overwrite EventsOverride.json with default Events.json"
+                use:tip={'Overwrite EventsOverride.json with default Events.json'}
                 on:click={() => pendingAction = 'resetEvents'}
                 >Reset</button>
                 <button
                 class="btn btn-sm btn-outline override-btn"
                 disabled={saving || !!pendingAction}
-                title="Add any missing default events to the override"
+                use:tip={'Add any missing default events to the override'}
                 on:click={() => pendingAction = 'mergeEvents'}
                 >Merge</button>
             {/if}
@@ -490,13 +494,13 @@
                 <button
                 class="btn btn-sm btn-outline override-btn"
                 disabled={saving || !!pendingAction}
-                title="Overwrite EventScheduleOverride.json with default"
+                use:tip={'Overwrite EventScheduleOverride.json with default'}
                 on:click={() => pendingAction = 'resetSchedule'}
                 >Reset</button>
                 <button
                 class="btn btn-sm btn-outline override-btn"
                 disabled={saving || !!pendingAction}
-                title="Add any missing default rules to the override"
+                use:tip={'Add any missing default rules to the override'}
                 on:click={() => pendingAction = 'mergeSchedule'}
                 >Merge</button>
             {/if}
@@ -533,7 +537,7 @@
 
       {:else if loadError}
         <div class="empty-state">
-          <span class="empty-state-label" style="color:var(--text-error);">Load error</span>
+          <span class="empty-state-label error">Load error</span>
           <span class="empty-state-sub">{loadError}</span>
         </div>
 
@@ -541,7 +545,7 @@
 
         <!-- Rule editor view -->
         <div class="editor-header">
-          <button class="back-btn" title="Back to dashboard" on:click={discardEditor}>
+          <button class="back-btn" aria-label="Back to dashboard" use:tip={'Back to dashboard'} on:click={discardEditor}>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <polyline points="15 18 9 12 15 6"/>
             </svg>
@@ -595,7 +599,7 @@
                     <div class="active-card rotation-card event-card"
                         role="button"
                         tabindex="0"
-                        title="Edit schedule rule"
+                        use:tip={'Edit schedule rule'}
                         on:click={() => selectRule(item.rule)}
                         on:keydown={e => e.key === 'Enter' && selectRule(item.rule)}>
                       <div class="active-card-top">
@@ -614,7 +618,7 @@
                       class="active-card event-card"
                       role="button"
                       tabindex="0"
-                      title="Edit definition"
+                      use:tip={'Edit definition'}
                       on:click={() => { editingDefinition = item.definition; creatingDefinition = false }}
                       on:keydown={e => e.key === 'Enter' && (editingDefinition = item.definition)}
                     >
@@ -692,7 +696,7 @@
                       {#if def.file_path}
                         <button
                           class="btn btn-sm btn-outline def-edit-btn"
-                          title="Open in Live Tuning editor"
+                          use:tip={'Open in Live Tuning editor'}
                           on:click={() => openInTuning(def.file_path)}
                         >Tuning</button>
                       {/if}

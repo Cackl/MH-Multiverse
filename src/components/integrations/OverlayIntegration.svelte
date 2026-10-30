@@ -233,9 +233,9 @@
           <div class="cols">
             <span class="dim-text">{l.fields[0]}</span>
             <span>{l.fields[1]}</span>
-            <span title={l.fields[2]}>{l.fields[2]}</span>
+            <span use:tip={l.fields[2]}>{l.fields[2]}</span>
             <span class="dim-text">{l.fields[3]}</span>
-            <span class="r r-{l.fields[4].toLowerCase()}" title={l.fields[5]}>{l.fields[4]}</span>
+            <span class="r r-{l.fields[4].toLowerCase()}" use:tip={l.fields[5]}>{l.fields[4]}</span>
           </div>
           {#if l.fields[5]}<div class="sub-line">{l.fields[5]}</div>{/if}
         {:else if l.event === 'region_entered' && l.fields.length === 3}
@@ -251,7 +251,7 @@
                   {#each l.hits as h}
                     <tr>
                       <td class="dim-text">{h.time}</td><td>{h.health}</td>
-                      <td title={h.note}>{h.damage}</td><td>{h.kind}</td><td>{h.attacker}</td><td class="dim-text">{h.power}</td>
+                      <td use:tip={h.note}>{h.damage}</td><td>{h.kind}</td><td>{h.attacker}</td><td class="dim-text">{h.power}</td>
                     </tr>
                   {/each}
                 </tbody>

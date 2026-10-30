@@ -38,17 +38,6 @@
 {/if}
 
 <style>
-  .modal-backdrop {
-    position: fixed;
-    inset: 0;
-    background: rgba(0, 0, 0, 0.72);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: var(--z-modal);
-    backdrop-filter: blur(3px);
-  }
-
   .confirm-modal {
     width: min(420px, calc(100vw - 32px));
     background: var(--bg-1);

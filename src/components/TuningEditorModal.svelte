@@ -2,6 +2,7 @@
   import { onMount } from 'svelte'
   import { invoke } from '@tauri-apps/api/core'
   import { categoryForSetting, KNOWN_CORE, KNOWN_EVENTS, KNOWN_SETTINGS, blueprintHintForSetting, parseTuningValue, type KnownSetting } from '../lib/tuningMeta'
+  import { tip } from '../lib/tooltip'
 
   // ── Props ──────────────────────────────────────────────────────────────────
 
@@ -331,7 +332,7 @@
   on:keydown={onKeydown}
 >
   <div
-    class="editor-modal"
+    class="modal"
     role="dialog"
     aria-modal="true"
     tabindex="-1"
@@ -359,7 +360,7 @@
             class="btn btn-sm btn-outline"
             on:click={reloadLiveTuning}
             disabled={!serverRunning}
-            title={serverRunning ? 'Send !server reloadlivetuning' : 'Server not running'}
+            use:tip={serverRunning ? 'Send !server reloadlivetuning' : 'Server not running'}
           >
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:11px;height:11px;">
               <polyline points="23 4 23 10 17 10"/>
@@ -639,62 +640,12 @@
 </div>
 
 <style>
-  .modal-backdrop {
-    position: fixed;
-    inset: 0;
-    background: rgba(0, 0, 0, 0.72);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: var(--z-modal);
-    backdrop-filter: blur(3px);
-  }
-
-  .editor-modal {
-    background: var(--bg-1);
-    border: 1px solid var(--border-lit);
-    border-radius: var(--radius-md);
+  .modal {
     width: min(1060px, 92vw);
     height: min(700px, 86vh);
-    margin-top: 38px;
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-    box-shadow:
-      0 32px 100px rgba(0, 0, 0, 0.6),
-      0 0 0 1px rgba(255, 255, 255, 0.03) inset;
   }
 
   /* ── Header ── */
-  .modal-header {
-    padding: 12px 16px;
-    border-bottom: 1px solid var(--border);
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    flex-shrink: 0;
-    gap: 12px;
-    min-height: 52px;
-  }
-
-  .modal-title {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    min-width: 0;
-  }
-  .modal-title svg { width: 16px; height: 16px; color: var(--accent); flex-shrink: 0; }
-
-  .modal-display-name {
-    font-family: var(--font-head);
-    font-size: 13px;
-    font-weight: 600;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    color: var(--text-0);
-    white-space: nowrap;
-  }
-
   .modal-filename {
     font-family: var(--font-mono);
     font-size: 11px;
@@ -706,19 +657,6 @@
   }
 
   .modal-header-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
-
-  .close-btn {
-    width: 28px; height: 28px;
-    display: flex; align-items: center; justify-content: center;
-    background: transparent;
-    border: 1px solid transparent;
-    color: var(--text-2);
-    cursor: pointer;
-    border-radius: var(--radius-sm);
-    transition: all 0.12s;
-  }
-  .close-btn:hover { color: var(--text-0); background: var(--bg-3); border-color: var(--border-mid); }
-  .close-btn svg { width: 14px; height: 14px; }
 
   /* ── New file bar ── */
   .new-file-bar {
@@ -773,7 +711,6 @@
     min-width: 160px;
     width: 200px;
   }
-  .filename-input::placeholder { color: var(--text-3); font-family: var(--font-body); }
 
   .filename-error { font-size: 11px; color: var(--text-error); }
 
@@ -826,22 +763,6 @@
   }
   .filter-select:focus { border-color: var(--accent-dim); }
 
-  .search-wrap {
-    display: flex; align-items: center; gap: 6px;
-    background: var(--bg-0);
-    border: 1px solid var(--border-mid);
-    border-radius: var(--radius-sm);
-    padding: 0 8px; flex: 1;
-  }
-  .search-wrap svg { width: 12px; height: 12px; color: var(--text-3); flex-shrink: 0; }
-  .search-wrap:focus-within { border-color: var(--accent-dim); }
-
-  .search-input {
-    flex: 1; background: none; border: none; outline: none;
-    color: var(--text-0); font-family: var(--font-mono); font-size: 12px; padding: 5px 0;
-  }
-  .search-input::placeholder { color: var(--text-3); font-family: var(--font-body); }
-
   .entry-count {
     font-family: var(--font-head); font-size: var(--fs-min);
     letter-spacing: 0.1em; text-transform: uppercase;
@@ -878,7 +799,7 @@
   .col-cat   { width: 120px; }
   .col-proto { width: 28%; }
   .col-value { width: 110px; }
-  .col-del   { width: 36px; }
+  .col-del   { width: 50px; }
 
   /* Clickable prototype cell */
   .col-proto.proto-expandable { cursor: pointer; }
@@ -956,7 +877,6 @@
     outline: none; transition: border-color 0.12s; width: 100%;
   }
   .add-input:focus { border-color: var(--accent-dim); }
-  .add-input::placeholder { color: var(--text-3); font-family: var(--font-body); font-size: 12px; }
 
   .value-field { flex: 1; }
 
@@ -1054,12 +974,7 @@
   .setting-opt-desc { font-size: 11px; color: var(--text-2); line-height: 1.4; }
 
   /* ── Footer ── */
-  .modal-footer {
-    padding: 10px 16px; border-top: 1px solid var(--border);
-    background: var(--chrome-footer-bg);
-    display: flex; align-items: center; justify-content: space-between;
-    gap: 10px; flex-shrink: 0; min-height: 50px;
-  }
+  .modal-footer { justify-content: space-between; }
 
   .footer-left { display: flex; align-items: center; gap: 10px; min-width: 0; }
 

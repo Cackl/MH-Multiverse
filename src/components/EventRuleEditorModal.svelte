@@ -2,6 +2,7 @@
   import { onDestroy } from 'svelte'
   import { setUnsaved } from '../lib/store'
   import type { EventDefinition, ScheduleRule } from '../lib/tuningMeta'
+  import { tip } from '../lib/tooltip'
 
   // ── Props ───────────────────────────────────────────────────────────────────
 
@@ -258,7 +259,7 @@
                     {#if def?.file_path}
                     <button
                         class="btn btn-sm btn-outline"
-                        title="Open in Live Tuning editor"
+                        use:tip={'Open in Live Tuning editor'}
                         disabled={saving}
                         on:click={() => onOpenTuning(def.file_path)}
                     >Tuning</button>
@@ -269,7 +270,7 @@
                     {#if def}
                     <button
                         class="btn btn-sm btn-outline"
-                        title="Edit event definition"
+                        use:tip={'Edit event definition'}
                         disabled={saving}
                         on:click={() => onEditDefinition(def)}
                     >Edit</button>
@@ -278,20 +279,21 @@
                 {#if isRotation}
                     <button
                     class="move-btn"
-                    title="Move up"
+                    use:tip={'Move up'}
                     disabled={saving || i === 0}
                     on:click={() => moveEvent(i, -1)}
                     >↑</button>
                     <button
                     class="move-btn"
-                    title="Move down"
+                    use:tip={'Move down'}
                     disabled={saving || i === events.length - 1}
                     on:click={() => moveEvent(i, 1)}
                     >↓</button>
                 {/if}
                 <button
                     class="remove-btn"
-                    title="Remove"
+                    aria-label="Remove"
+                    use:tip={'Remove'}
                     disabled={saving}
                     on:click={() => removeEvent(eventId)}
                 >

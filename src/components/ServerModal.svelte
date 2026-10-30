@@ -1,8 +1,8 @@
 <script lang="ts">
-  import { tick } from 'svelte'
   import { invoke } from '@tauri-apps/api/core'
   import { open } from '@tauri-apps/plugin-dialog'
   import { appConfig, serverRunning, upsertServer, type Server } from '../lib/store'
+  import { tip } from '../lib/tooltip'
 
   export let server: Server | null = null
   export let onClose: () => void
@@ -352,48 +352,9 @@
       runRestore()
     }
   }
-
-  // ── Tooltip ──────────────────────────────────────────────────────────────
-
-  let tooltip = ''
-  let tooltipX = 0
-  let tooltipY = 0
-  let tooltipVisible = false
-  let tooltipEl: HTMLDivElement | null = null
-
-  const TOOLTIP_OFFSET = 12
-  const VIEWPORT_PAD = 10
-
-  async function showTooltip(e: MouseEvent, text: string) {
-    tooltip = text
-    tooltipVisible = true
-    await tick()
-    if (!tooltipEl) return
-    const rect = tooltipEl.getBoundingClientRect()
-    const vw = window.innerWidth
-    const vh = window.innerHeight
-    let x = e.clientX + TOOLTIP_OFFSET
-    let y = e.clientY - 8
-    if (x + rect.width + VIEWPORT_PAD > vw) x = e.clientX - rect.width - TOOLTIP_OFFSET
-    x = Math.max(VIEWPORT_PAD, Math.min(x, vw - rect.width - VIEWPORT_PAD))
-    if (y < VIEWPORT_PAD) y = e.clientY + TOOLTIP_OFFSET
-    y = Math.max(VIEWPORT_PAD, Math.min(y, vh - rect.height - VIEWPORT_PAD))
-    tooltipX = x
-    tooltipY = y
-  }
-
-  function hideTooltip() {
-    tooltipVisible = false
-  }
 </script>
 
 <svelte:window on:keydown={onKeydown} />
-
-{#if tooltipVisible}
-  <div bind:this={tooltipEl} class="tooltip" style="left:{tooltipX}px; top:{tooltipY}px">
-    {tooltip}
-  </div>
-{/if}
 
 <div class="modal-backdrop" role="dialog" aria-modal="true">
   <div class="modal">
@@ -406,7 +367,7 @@
           <circle cx="7" cy="6" r="1" fill="currentColor" stroke="none"/>
           <circle cx="11" cy="6" r="1" fill="currentColor" stroke="none"/>
         </svg>
-        <span>{isEdit ? 'Edit Server' : 'Add Server'}</span>
+        <span class="modal-display-name">{isEdit ? 'Edit Server' : 'Add Server'}</span>
       </div>
       <button class="close-btn" aria-label="Close" on:click={onClose}>
         <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5">
@@ -470,8 +431,7 @@
           <button
             class="info-btn"
             type="button"
-            on:mouseenter={(e) => showTooltip(e, 'Server runs on this machine - port and dashboard path are read from MHServerEmu Config.')}
-            on:mouseleave={hideTooltip}
+            use:tip={'Server runs on this machine - port and dashboard path are read from MHServerEmu Config.'}
             tabindex="-1"
           >?</button>
         </label>
@@ -483,8 +443,7 @@
               <button
                 class="info-btn"
                 type="button"
-                on:mouseenter={(e) => showTooltip(e, 'Hostname or IP address only - no http:// prefix or path suffix required. Include a port as hostname:port if not on standard 80/443.')}
-                on:mouseleave={hideTooltip}
+                use:tip={'Hostname or IP address only - no http:// prefix or path suffix required. Include a port as hostname:port if not on standard 80/443.'}
                 tabindex="-1"
               >?</button>
             </div>
@@ -496,8 +455,7 @@
             <button
               class="info-btn"
               type="button"
-              on:mouseenter={(e) => showTooltip(e, 'Use HTTPS for the dashboard URL and SiteConfig requests. Requires SSL to be configured on the remote server.')}
-              on:mouseleave={hideTooltip}
+              use:tip={'Use HTTPS for the dashboard URL and SiteConfig requests. Requires SSL to be configured on the remote server.'}
               tabindex="-1"
             >?</button>
           </label>
@@ -569,7 +527,7 @@
           <div class="import-summary">
             <div class="summary-row">
               <span class="summary-label">File</span>
-              <span class="summary-value mono" title={importFilePath}>{fileName(importFilePath)}</span>
+              <span class="summary-value mono" use:tip={importFilePath}>{fileName(importFilePath)}</span>
             </div>
             <div class="summary-row">
               <span class="summary-label">Player</span>
@@ -684,7 +642,7 @@
             <div class="import-summary">
               <div class="summary-row">
                 <span class="summary-label">File</span>
-                <span class="summary-value mono" title={restoreFilePath}>{fileName(restoreFilePath)}</span>
+                <span class="summary-value mono" use:tip={restoreFilePath}>{fileName(restoreFilePath)}</span>
               </div>
               <div class="summary-row">
                 <span class="summary-label">Player</span>
@@ -744,72 +702,10 @@
 </div>
 
 <style>
-  .modal-backdrop {
-    position: fixed;
-    inset: 0;
-    background: rgba(0, 0, 0, 0.65);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: var(--z-modal);
-    backdrop-filter: blur(2px);
-  }
-
   .modal {
-    background: var(--bg-2);
-    border: 1px solid var(--border-lit);
-    border-radius: var(--radius-md);
     width: 500px;
     max-height: 85vh;
-    display: flex;
-    flex-direction: column;
-    box-shadow: 0 24px 80px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.03) inset;
   }
-
-  .modal-header {
-    padding: 14px 16px;
-    border-bottom: 1px solid var(--border);
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-  }
-
-  .modal-title {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    font-family: var(--font-head);
-    font-size: 14px;
-    font-weight: 600;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    color: var(--text-0);
-  }
-  .modal-title svg {
-    width: 18px;
-    height: 18px;
-    color: var(--accent);
-  }
-
-  .close-btn {
-    width: 28px;
-    height: 28px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: transparent;
-    border: 1px solid transparent;
-    color: var(--text-2);
-    cursor: pointer;
-    border-radius: var(--radius-sm);
-    transition: all 0.12s;
-  }
-  .close-btn:hover {
-    color: var(--text-0);
-    background: var(--bg-3);
-    border-color: var(--border-mid);
-  }
-  .close-btn svg { width: 14px; height: 14px; }
 
   /* ── Tabs ── */
   .tab-bar {
@@ -890,14 +786,6 @@
     color: var(--text-error);
   }
 
-  .modal-footer {
-    padding: 12px 16px;
-    border-top: 1px solid var(--border);
-    display: flex;
-    justify-content: flex-end;
-    gap: 8px;
-    flex-shrink: 0;
-  }
 
   /* ── Checkbox rows ── */
   .check-row {
@@ -1062,20 +950,4 @@
 
   .btn-sm { padding: 5px 10px; font-size: 11px; align-self: flex-start; }
 
-  /* ── Tooltip ── */
-  .tooltip {
-    position: fixed;
-    z-index: calc(var(--z-modal) + 1);
-    background: var(--bg-3);
-    border: 1px solid var(--border-lit);
-    border-radius: var(--radius-sm);
-    color: var(--text-1);
-    font-size: 12px;
-    font-family: var(--font-body);
-    padding: 6px 10px;
-    max-width: 280px;
-    line-height: 1.5;
-    pointer-events: none;
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
-  }
 </style>

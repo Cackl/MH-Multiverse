@@ -2,6 +2,7 @@
   import { invoke } from '@tauri-apps/api/core'
   import { askConfirm } from '../lib/store'
   import type { TuningFileInfo, EventDefinition } from '../lib/tuningMeta'
+  import { tip } from '../lib/tooltip'
 
   // ── Types ───────────────────────────────────────────────────────────────────
 
@@ -166,7 +167,7 @@
   on:click={tryClose}
 >
   <div
-    class="modal-card"
+    class="modal"
     role="dialog"
     aria-modal="true"
     tabindex="-1"
@@ -175,8 +176,16 @@
   >
     <!-- Header -->
     <div class="modal-header">
-      <span class="modal-title">{isNew ? 'New Event Definition' : 'Edit Event Definition'}</span>
-      <button class="btn-icon" on:click={tryClose} title="Close">
+      <div class="modal-title">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <rect x="3" y="3" width="18" height="18" rx="2"/>
+          <line x1="16" y1="1" x2="16" y2="5"/>
+          <line x1="8" y1="1" x2="8" y2="5"/>
+          <line x1="3" y1="9" x2="21" y2="9"/>
+        </svg>
+        <span class="modal-display-name">{isNew ? 'New Event Definition' : 'Edit Event Definition'}</span>
+      </div>
+      <button class="close-btn" aria-label="Close" on:click={tryClose}>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <line x1="18" y1="6" x2="6" y2="18"/>
           <line x1="6" y1="6" x2="18" y2="18"/>
@@ -303,7 +312,7 @@
               {#each missions as m}
                 <div class="mission-row">
                   <span class="mission-path">{m}</span>
-                  <button class="remove-btn" title="Remove" on:click={() => removeMission(m)}>
+                  <button class="remove-btn" aria-label="Remove" use:tip={'Remove'} on:click={() => removeMission(m)}>
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                       <line x1="18" y1="6" x2="6" y2="18"/>
                       <line x1="6" y1="6" x2="18" y2="18"/>
@@ -353,7 +362,7 @@
   </div>
 </div>
 
-<!-- Prototype search dropdown — rendered outside modal-card so it can overlay freely -->
+<!-- Prototype search dropdown — rendered outside the modal so it can overlay freely -->
 {#if protoSuggestOpen}
   <div class="proto-dropdown" style={protoDropdownStyle}>
     {#each protoSearchResults as result}
@@ -370,47 +379,9 @@
 {/if}
 
 <style>
-  .modal-backdrop {
-    position: fixed;
-    inset: 0;
-    background: rgba(0, 0, 0, 0.6);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: var(--z-modal);
-    backdrop-filter: blur(2px);
-  }
-
-  .modal-card {
-    background: var(--bg-2);
-    border: 1px solid var(--border-lit);
-    border-radius: var(--radius-md);
+  .modal {
     width: min(560px, 90vw);
     max-height: 85vh;
-    display: flex;
-    flex-direction: column;
-    box-shadow: 0 24px 80px rgba(0, 0, 0, 0.55);
-  }
-
-  /* ── Header ── */
-
-  .modal-header {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 14px 16px 12px;
-    border-bottom: 1px solid var(--border);
-    flex-shrink: 0;
-  }
-
-  .modal-title {
-    font-family: var(--font-head);
-    font-size: 12px;
-    font-weight: 700;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    color: var(--text-1);
-    flex: 1;
   }
 
   /* ── Body ── */
@@ -668,15 +639,4 @@
     color: var(--accent);
   }
 
-  /* ── Footer ── */
-
-  .modal-footer {
-    display: flex;
-    justify-content: flex-end;
-    gap: 8px;
-    padding: 10px 16px;
-    border-top: 1px solid var(--border);
-    flex-shrink: 0;
-    background: var(--chrome-sunken-bg);
-  }
 </style>

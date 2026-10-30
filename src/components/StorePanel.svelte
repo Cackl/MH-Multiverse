@@ -13,6 +13,7 @@
   } from '../lib/catalogMeta'
   import PanelSidebar from './PanelSidebar.svelte'
   import StoreEditorModal from './StoreEditorModal.svelte'
+  import { tip } from '../lib/tooltip'
 
   // ── State ──────────────────────────────────────────────────────────────────
 
@@ -370,7 +371,8 @@
         <button
           class="btn-icon"
           on:click={() => { creatingNew = true; editingEntry = null }}
-          title="Add new catalog entry"
+          aria-label="Add new catalog entry"
+          use:tip={'Add new catalog entry'}
           disabled={!$appConfig.server_exe || catalogFiles.length === 0}
           style="margin-left: auto;"
         >
@@ -382,7 +384,8 @@
         <button
           class="btn-icon"
           on:click={load}
-          title="Reload catalog files"
+          aria-label="Reload catalog files"
+          use:tip={'Reload catalog files'}
           disabled={loading}
         >
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -393,7 +396,8 @@
         <button
           class="btn-icon"
           on:click={openMtxStoreDir}
-          title="Open MTXStore folder"
+          aria-label="Open MTXStore folder"
+          use:tip={'Open MTXStore folder'}
           disabled={!$appConfig.server_exe}
         >
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -554,7 +558,7 @@
 
           {:else if batchMode === 'price'}
             <span class="batch-label">{totalSelectedCount} selected</span>
-            <button class="batch-clear" on:click={clearSelection} title="Clear selection">×</button>
+            <button class="batch-clear" on:click={clearSelection} use:tip={'Clear selection'}>×</button>
             <div class="batch-sep"></div>
             <span class="batch-action-label">New price (G):</span>
             <input
@@ -580,7 +584,7 @@
 
           {:else if batchMode === 'add-mod' || batchMode === 'remove-mod'}
             <span class="batch-label">{totalSelectedCount} selected</span>
-            <button class="batch-clear" on:click={clearSelection} title="Clear selection">×</button>
+            <button class="batch-clear" on:click={clearSelection} use:tip={'Clear selection'}>×</button>
             <div class="batch-sep"></div>
             <span class="batch-action-label">
               {batchMode === 'add-mod' ? 'Add modifier:' : 'Remove modifier:'}
@@ -609,15 +613,14 @@
 
           {:else}
             <span class="batch-label">{totalSelectedCount} selected</span>
-            <button class="batch-clear" on:click={clearSelection} title="Clear selection">×</button>
+            <button class="batch-clear" on:click={clearSelection} use:tip={'Clear selection'}>×</button>
             <div class="batch-sep"></div>
             <div class="batch-actions">
               <button class="btn btn-sm btn-outline" on:click={() => setBatchMode('price')}>Set Price</button>
               <button class="btn btn-sm btn-outline" on:click={() => setBatchMode('add-mod')}>Add Modifier</button>
               <button class="btn btn-sm btn-outline" on:click={() => setBatchMode('remove-mod')}>Remove Modifier</button>
               <button
-                class="btn btn-sm btn-outline"
-                style="color: var(--text-error);"
+                class="btn btn-sm btn-red"
                 on:click={() => { batchDeleteConfirming = true; batchError = ''; batchSuccess = '' }}
               >Delete</button>
             </div>
@@ -649,7 +652,7 @@
 
         {:else if loadError}
           <div class="empty-state">
-            <span class="empty-state-label" style="color: var(--text-error);">Load error</span>
+            <span class="empty-state-label error">Load error</span>
             <span class="empty-state-sub">{loadError}</span>
           </div>
 
@@ -732,7 +735,7 @@
                     >
                   </td>
                   <td class="col-sku">{entry.SkuId}</td>
-                  <td class="col-name" title={title}>{title}</td>
+                  <td class="col-name" use:tip={title}>{title}</td>
                   <td class="col-type">
                     <span class="type-badge type-badge-{typeLow}">{entry.Type.Name}</span>
                   </td>
@@ -924,35 +927,7 @@
     flex-wrap: nowrap;
   }
 
-  .search-wrap {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    background: var(--bg-0);
-    border: 1px solid var(--border-mid);
-    border-radius: var(--radius-sm);
-    padding: 0 8px;
-    flex: 1;
-    max-width: 240px;
-    min-width: 100px;
-  }
-  .search-wrap svg { width: 12px; height: 12px; color: var(--text-3); flex-shrink: 0; }
-  .search-wrap:focus-within { border-color: var(--accent-dim); }
-
-  .search-input {
-    flex: 1;
-    background: none;
-    border: none;
-    outline: none;
-    color: var(--text-0);
-    font-family: var(--font-mono);
-    font-size: 12px;
-    padding: 5px 0;
-    /* Override global input sizing */
-    width: auto;
-    border-radius: 0;
-  }
-  .search-input::placeholder { color: var(--text-3); font-family: var(--font-body); }
+  .search-wrap { min-width: 100px; max-width: 240px; }
 
   .toolbar-sep {
     width: 1px;
