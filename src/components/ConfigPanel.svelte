@@ -635,7 +635,6 @@
                         <button
                           class="info-btn"
                           use:tip={field.description}
-                          tabindex="-1"
                         >?</button>
                       </span>
                     </div>
@@ -657,7 +656,6 @@
                         <button
                           class="info-btn"
                           use:tip={field.description}
-                          tabindex="-1"
                         >?</button>
                       </span>
                     </div>

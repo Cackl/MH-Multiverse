@@ -8,7 +8,14 @@ export function tip(node: HTMLElement, text: string) {
   let current = text
   let el: HTMLDivElement | null = null
 
-  function place(e: MouseEvent) {
+  // Keyboard focus has no pointer: anchor to the element's top-right corner instead
+  function pos(e: MouseEvent | FocusEvent) {
+    if (e instanceof MouseEvent) return e
+    const r = node.getBoundingClientRect()
+    return { clientX: r.right, clientY: r.top }
+  }
+
+  function place(e: { clientX: number; clientY: number }) {
     if (!el) return
     const r = el.getBoundingClientRect()
     let x = e.clientX + OFFSET
@@ -21,13 +28,13 @@ export function tip(node: HTMLElement, text: string) {
     el.style.top = `${y}px`
   }
 
-  function show(e: MouseEvent) {
+  function show(e: MouseEvent | FocusEvent) {
     if (!current || el) return
     el = document.createElement('div')
     el.className = 'mhm-tooltip'
     el.textContent = current
     document.body.appendChild(el)
-    place(e)
+    place(pos(e))
   }
 
   function hide() {
@@ -38,6 +45,8 @@ export function tip(node: HTMLElement, text: string) {
   node.addEventListener('mouseenter', show)
   node.addEventListener('mousemove', place)
   node.addEventListener('mouseleave', hide)
+  node.addEventListener('focus', show)
+  node.addEventListener('blur', hide)
 
   return {
     update(next: string) {
@@ -49,6 +58,8 @@ export function tip(node: HTMLElement, text: string) {
       node.removeEventListener('mouseenter', show)
       node.removeEventListener('mousemove', place)
       node.removeEventListener('mouseleave', hide)
+      node.removeEventListener('focus', show)
+      node.removeEventListener('blur', hide)
     },
   }
 }
