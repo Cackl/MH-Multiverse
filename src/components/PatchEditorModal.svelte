@@ -192,7 +192,7 @@
   role="presentation"
   on:click={e => { if (e.target === e.currentTarget) tryClose() }}
 >
-  <div class="editor-modal" role="dialog" aria-modal="true" tabindex="-1">
+  <div class="modal" role="dialog" aria-modal="true" tabindex="-1">
 
     <!-- ── Header ── -->
     <div class="modal-header">
@@ -378,44 +378,11 @@
 </div>
 
 <style>
-  /* ── Backdrop / shell ── */
-  .modal-backdrop {
-    position: fixed;
-    inset: 0;
-    background: rgba(0, 0, 0, 0.72);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: var(--z-modal);
-    backdrop-filter: blur(3px);
-  }
-
-  .editor-modal {
-    background: var(--bg-1);
-    border: 1px solid var(--border-lit);
-    border-radius: var(--radius-md);
+  .modal {
     width: min(800px, 92vw);
-    margin-top: 38px;
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-    box-shadow:
-      0 32px 100px rgba(0, 0, 0, 0.6),
-      0 0 0 1px rgba(255, 255, 255, 0.03) inset;
   }
 
   /* ── Header ── */
-  .modal-header {
-    padding: 12px 16px;
-    border-bottom: 1px solid var(--border);
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    flex-shrink: 0;
-    gap: 12px;
-    min-height: 52px;
-  }
-
   .modal-title {
     display: flex;
     align-items: center;
@@ -431,19 +398,6 @@
     text-transform: uppercase;
     color: var(--text-0);
   }
-
-  .close-btn {
-    width: 28px; height: 28px;
-    display: flex; align-items: center; justify-content: center;
-    background: transparent;
-    border: 1px solid transparent;
-    color: var(--text-2); cursor: pointer;
-    border-radius: var(--radius-sm);
-    transition: all 0.12s;
-    flex-shrink: 0;
-  }
-  .close-btn:hover { color: var(--text-0); background: var(--bg-3); border-color: var(--border-mid); }
-  .close-btn svg { width: 14px; height: 14px; }
 
   /* ── Body ── */
   .modal-body {
@@ -630,17 +584,6 @@
   }
 
   /* ── Footer ── */
-  .modal-footer {
-    padding: 12px 16px;
-    border-top: 1px solid var(--border);
-    background: var(--chrome-footer-bg);
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    flex-shrink: 0;
-    min-height: 52px;
-  }
-
   .footer-left {
     display: flex;
     align-items: center;
