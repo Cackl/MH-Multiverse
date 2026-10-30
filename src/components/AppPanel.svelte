@@ -147,7 +147,7 @@
             on:keydown={(e) => e.key === 'Enter' && (activeSection = item.id)}
           >
             {item.label}
-            {#if item.id === 'about' && $showUpdateBadge}<span class="nav-badge" title="Update available"></span>{/if}
+            {#if item.id === 'about' && $showUpdateBadge}<span class="nav-badge" use:tip={'Update available'}></span>{/if}
           </div>
         {/each}
       </nav>
@@ -332,7 +332,7 @@
                   <button
                     class="btn btn-accent btn-sm"
                     disabled={installing || $serverRunning}
-                    title={$serverRunning ? 'Stop the server before updating' : ''}
+                    use:tip={$serverRunning ? 'Stop the server before updating' : ''}
                     on:click={installUpdate}
                   >{installing ? 'Updating…' : 'Update now'}</button>
                   {#if $showUpdateBadge}

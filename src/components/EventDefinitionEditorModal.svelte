@@ -2,6 +2,7 @@
   import { invoke } from '@tauri-apps/api/core'
   import { askConfirm } from '../lib/store'
   import type { TuningFileInfo, EventDefinition } from '../lib/tuningMeta'
+  import { tip } from '../lib/tooltip'
 
   // ── Types ───────────────────────────────────────────────────────────────────
 
@@ -311,7 +312,7 @@
               {#each missions as m}
                 <div class="mission-row">
                   <span class="mission-path">{m}</span>
-                  <button class="remove-btn" title="Remove" on:click={() => removeMission(m)}>
+                  <button class="remove-btn" aria-label="Remove" use:tip={'Remove'} on:click={() => removeMission(m)}>
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                       <line x1="18" y1="6" x2="6" y2="18"/>
                       <line x1="6" y1="6" x2="18" y2="18"/>

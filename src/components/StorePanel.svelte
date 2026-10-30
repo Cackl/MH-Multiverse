@@ -13,6 +13,7 @@
   } from '../lib/catalogMeta'
   import PanelSidebar from './PanelSidebar.svelte'
   import StoreEditorModal from './StoreEditorModal.svelte'
+  import { tip } from '../lib/tooltip'
 
   // ── State ──────────────────────────────────────────────────────────────────
 
@@ -370,7 +371,8 @@
         <button
           class="btn-icon"
           on:click={() => { creatingNew = true; editingEntry = null }}
-          title="Add new catalog entry"
+          aria-label="Add new catalog entry"
+          use:tip={'Add new catalog entry'}
           disabled={!$appConfig.server_exe || catalogFiles.length === 0}
           style="margin-left: auto;"
         >
@@ -382,7 +384,8 @@
         <button
           class="btn-icon"
           on:click={load}
-          title="Reload catalog files"
+          aria-label="Reload catalog files"
+          use:tip={'Reload catalog files'}
           disabled={loading}
         >
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -393,7 +396,8 @@
         <button
           class="btn-icon"
           on:click={openMtxStoreDir}
-          title="Open MTXStore folder"
+          aria-label="Open MTXStore folder"
+          use:tip={'Open MTXStore folder'}
           disabled={!$appConfig.server_exe}
         >
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -554,7 +558,7 @@
 
           {:else if batchMode === 'price'}
             <span class="batch-label">{totalSelectedCount} selected</span>
-            <button class="batch-clear" on:click={clearSelection} title="Clear selection">×</button>
+            <button class="batch-clear" on:click={clearSelection} use:tip={'Clear selection'}>×</button>
             <div class="batch-sep"></div>
             <span class="batch-action-label">New price (G):</span>
             <input
@@ -580,7 +584,7 @@
 
           {:else if batchMode === 'add-mod' || batchMode === 'remove-mod'}
             <span class="batch-label">{totalSelectedCount} selected</span>
-            <button class="batch-clear" on:click={clearSelection} title="Clear selection">×</button>
+            <button class="batch-clear" on:click={clearSelection} use:tip={'Clear selection'}>×</button>
             <div class="batch-sep"></div>
             <span class="batch-action-label">
               {batchMode === 'add-mod' ? 'Add modifier:' : 'Remove modifier:'}
@@ -609,7 +613,7 @@
 
           {:else}
             <span class="batch-label">{totalSelectedCount} selected</span>
-            <button class="batch-clear" on:click={clearSelection} title="Clear selection">×</button>
+            <button class="batch-clear" on:click={clearSelection} use:tip={'Clear selection'}>×</button>
             <div class="batch-sep"></div>
             <div class="batch-actions">
               <button class="btn btn-sm btn-outline" on:click={() => setBatchMode('price')}>Set Price</button>
@@ -731,7 +735,7 @@
                     >
                   </td>
                   <td class="col-sku">{entry.SkuId}</td>
-                  <td class="col-name" title={title}>{title}</td>
+                  <td class="col-name" use:tip={title}>{title}</td>
                   <td class="col-type">
                     <span class="type-badge type-badge-{typeLow}">{entry.Type.Name}</span>
                   </td>

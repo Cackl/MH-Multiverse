@@ -527,7 +527,7 @@
           <div class="import-summary">
             <div class="summary-row">
               <span class="summary-label">File</span>
-              <span class="summary-value mono" title={importFilePath}>{fileName(importFilePath)}</span>
+              <span class="summary-value mono" use:tip={importFilePath}>{fileName(importFilePath)}</span>
             </div>
             <div class="summary-row">
               <span class="summary-label">Player</span>
@@ -642,7 +642,7 @@
             <div class="import-summary">
               <div class="summary-row">
                 <span class="summary-label">File</span>
-                <span class="summary-value mono" title={restoreFilePath}>{fileName(restoreFilePath)}</span>
+                <span class="summary-value mono" use:tip={restoreFilePath}>{fileName(restoreFilePath)}</span>
               </div>
               <div class="summary-row">
                 <span class="summary-label">Player</span>

@@ -354,7 +354,7 @@
   <PanelSidebar width="var(--sidebar-narrow)">
     <svelte:fragment slot="header">
       {#if onBack}
-        <button class="btn-icon" on:click={onBack} title="Back" style="margin-right:4px;">
+        <button class="btn-icon" on:click={onBack} aria-label="Back" use:tip={'Back'} style="margin-right:4px;">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <polyline points="15 18 9 12 15 6"/>
           </svg>
@@ -367,7 +367,8 @@
       <button
         class="btn-icon"
         on:click={openConfigDir}
-        title="Open MHServerEmu folder"
+        aria-label="Open MHServerEmu folder"
+        use:tip={'Open MHServerEmu folder'}
         disabled={!$appConfig.server_exe}
         style="margin-left:auto;"
       >
@@ -629,7 +630,7 @@
                     <div class="config-field-head">
                       <span class="config-field-label">{field.label}</span>
                       {#if isOverridden(field)}
-                        <span class="override-dot" title="Overridden from default"></span>
+                        <span class="override-dot" use:tip={'Overridden from default'}></span>
                       {/if}
                       <span class="config-field-default">
                         <button
@@ -650,7 +651,7 @@
                     <div class="config-field-head">
                       <span class="config-field-label">{field.label}</span>
                       {#if isOverridden(field)}
-                        <span class="override-dot" title="Overridden from default"></span>
+                        <span class="override-dot" use:tip={'Overridden from default'}></span>
                       {/if}
                       <span class="config-field-default">
                         <button

@@ -5,6 +5,7 @@
   import { fly } from 'svelte/transition'
   import PlayerCard from './PlayerCard.svelte'
   import { type PlayerSession, userLevelLabel, isBanned, isWhitelisted } from '../lib/playerMeta'
+  import { tip } from '../lib/tooltip'
 
   export let open = false
   export let playerCount = 0
@@ -63,7 +64,7 @@
         <span class="blade-title">Players</span>
         <span class="blade-count">{playerCount}</span>
         <div class="blade-spacer"></div>
-        <button class="close-btn" on:click={() => (open = false)} title="Close">
+        <button class="close-btn" on:click={() => (open = false)} aria-label="Close" use:tip={'Close'}>
           <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5">
             <line x1="2" y1="2" x2="12" y2="12"/>
             <line x1="12" y1="2" x2="2" y2="12"/>

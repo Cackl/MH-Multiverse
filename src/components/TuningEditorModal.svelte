@@ -2,6 +2,7 @@
   import { onMount } from 'svelte'
   import { invoke } from '@tauri-apps/api/core'
   import { categoryForSetting, KNOWN_CORE, KNOWN_EVENTS, KNOWN_SETTINGS, blueprintHintForSetting, parseTuningValue, type KnownSetting } from '../lib/tuningMeta'
+  import { tip } from '../lib/tooltip'
 
   // ── Props ──────────────────────────────────────────────────────────────────
 
@@ -359,7 +360,7 @@
             class="btn btn-sm btn-outline"
             on:click={reloadLiveTuning}
             disabled={!serverRunning}
-            title={serverRunning ? 'Send !server reloadlivetuning' : 'Server not running'}
+            use:tip={serverRunning ? 'Send !server reloadlivetuning' : 'Server not running'}
           >
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:11px;height:11px;">
               <polyline points="23 4 23 10 17 10"/>

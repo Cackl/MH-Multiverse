@@ -309,7 +309,7 @@
         {/if}
         <div class="header-spacer"></div>
         {#if $serverError}
-          <div class="header-error" title={$serverError}>{$serverError}</div>
+          <div class="header-error" use:tip={$serverError}>{$serverError}</div>
         {/if}
         {#if $serverRunning}
           {#if $shutdownCountdownActive}

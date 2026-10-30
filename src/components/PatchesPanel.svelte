@@ -6,6 +6,7 @@
   import type { PatchFileInfo, PatchEntry } from '../lib/patchesMeta'
   import PanelSidebar from './PanelSidebar.svelte'
   import PatchEditorModal from './PatchEditorModal.svelte'
+  import { tip } from '../lib/tooltip'
 
   // ── State ──────────────────────────────────────────────────────────────────
 
@@ -292,7 +293,8 @@
         <button
           class="btn-icon"
           style="margin-left:auto;"
-          title="New patch file"
+          aria-label="New patch file"
+          use:tip={'New patch file'}
           disabled={!$appConfig.server_exe}
           on:click={() => { creatingFile = !creatingFile; createError = '' }}
         >
@@ -301,13 +303,13 @@
             <line x1="5" y1="12" x2="19" y2="12"/>
           </svg>
         </button>
-        <button class="btn-icon" title="Rescan Patches directory" disabled={scanning} on:click={scan}>
+        <button class="btn-icon" aria-label="Rescan Patches directory" use:tip={'Rescan Patches directory'} disabled={scanning} on:click={scan}>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <polyline points="23 4 23 10 17 10"/>
             <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
           </svg>
         </button>
-        <button class="btn-icon" title="Open Patches folder" disabled={!$appConfig.server_exe} on:click={openPatchesDir}>
+        <button class="btn-icon" aria-label="Open Patches folder" use:tip={'Open Patches folder'} disabled={!$appConfig.server_exe} on:click={openPatchesDir}>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
           </svg>
@@ -384,7 +386,8 @@
                   class:on={f.enabled}
                   role="switch"
                   aria-checked={f.enabled}
-                  title="Move to Off/ (disable)"
+                  aria-label="Move to Off/ (disable)"
+                  use:tip={'Move to Off/ (disable)'}
                   disabled={togglingFile === f.file_name}
                   on:click|stopPropagation={() => toggleFileEnabled(f)}
                 ></button>
@@ -410,7 +413,8 @@
                   class:on={f.enabled}
                   role="switch"
                   aria-checked={f.enabled}
-                  title="Move to Patches/ (enable)"
+                  aria-label="Move to Patches/ (enable)"
+                  use:tip={'Move to Patches/ (enable)'}
                   disabled={togglingFile === f.file_name}
                   on:click|stopPropagation={() => toggleFileEnabled(f)}
                 ></button>
@@ -536,7 +540,8 @@
                         class:on={entry.Enabled}
                         role="switch"
                         aria-checked={entry.Enabled}
-                        title={entry.Enabled ? 'Disable entry' : 'Enable entry'}
+                        aria-label={entry.Enabled ? 'Disable entry' : 'Enable entry'}
+                        use:tip={entry.Enabled ? 'Disable entry' : 'Enable entry'}
                         on:click|stopPropagation={() => {
                           dirtyEntries[dirtyIndex].Enabled = !dirtyEntries[dirtyIndex].Enabled
                           dirtyEntries = dirtyEntries
@@ -551,13 +556,13 @@
                     <td class="col-actions-cell">
                       <button
                         class="move-btn"
-                        title="Move up"
+                        use:tip={'Move up'}
                         disabled={sortCol !== null || !!searchLower || dirtyIndex === 0}
                         on:click|stopPropagation={() => moveEntry(dirtyIndex, -1)}
                       >↑</button>
                       <button
                         class="move-btn"
-                        title="Move down"
+                        use:tip={'Move down'}
                         disabled={sortCol !== null || !!searchLower || dirtyIndex === dirtyEntries.length - 1}
                         on:click|stopPropagation={() => moveEntry(dirtyIndex, 1)}
                       >↓</button>

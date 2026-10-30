@@ -5,6 +5,7 @@
   import { listen, type UnlistenFn } from '@tauri-apps/api/event'
   import { appConfig, serverRunning, setBackupTargets } from '../lib/store'
   import PanelSidebar from './PanelSidebar.svelte'
+  import { tip } from '../lib/tooltip'
 
   // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -365,7 +366,7 @@
           {#if updateInfo}
             <div class="info-row url-row">
               <span class="info-label">URL</span>
-              <span class="info-value mono url-value" title={updateInfo.download_url}>{updateInfo.download_url}</span>
+              <span class="info-value mono url-value">{updateInfo.download_url}</span>
             </div>
           {/if}
           {#if checkError}
@@ -508,7 +509,8 @@
             <button
               class="btn-icon"
               on:click={openBackupsDir}
-              title="Open Backups folder"
+              aria-label="Open Backups folder"
+              use:tip={'Open Backups folder'}
               disabled={!hasServerExe}
             >
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">

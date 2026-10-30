@@ -1,5 +1,6 @@
 <script lang="ts">
   import { invoke } from '@tauri-apps/api/core'
+  import { tip } from '../lib/tooltip'
   import {
     type PlayerSession,
     USER_LEVEL_OPTIONS,
@@ -173,17 +174,17 @@
             <div class="btn-group">
               {#if !isWhitelisted(player.flags)}
                 <button class="btn btn-ghost" disabled={commandRunning} on:click={executeWhitelist}
-                  title="!account whitelist [email]">Whitelist</button>
+                  use:tip={'!account whitelist [email]'}>Whitelist</button>
               {:else}
                 <button class="btn btn-ghost" disabled={commandRunning} on:click={executeUnwhitelist}
-                  title="!account unwhitelist [email]">Unwhitelist</button>
+                  use:tip={'!account unwhitelist [email]'}>Unwhitelist</button>
               {/if}
             </div>
             <button
             class="btn btn-ghost"
             disabled={commandRunning}
             on:click={executeClientInfo}
-            title="Client Info (output goes to server console)"
+            use:tip={'Client Info (output goes to server console)'}
             >Client Info</button>
           </div>
         </div>

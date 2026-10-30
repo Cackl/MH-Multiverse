@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte'
   import { invoke } from '@tauri-apps/api/core'
+  import { tip } from '../lib/tooltip'
   import {
     typeNames,
     modifiersForType,
@@ -802,7 +803,7 @@
               <div class="field">
                 <label class="field-label" for="f-order">
                   Order
-                  <span class="label-hint" title="1 = Top Priority, 2 = Alphabetical, 3->999 = After Alphabetical">?</span>
+                  <span class="label-hint" use:tip={'1 = Top Priority, 2 = Alphabetical, 3->999 = After Alphabetical'}>?</span>
                 </label>
                 <input
                   id="f-order" class="field-input" type="number"
@@ -947,10 +948,10 @@
                     class="btn btn-sm btn-outline"
                     on:click={generateHtml}
                     disabled={generating}
-                    title="Generate HTML store page"
+                    use:tip={'Generate HTML store page'}
                   >{generating ? 'Generating…' : 'Generate HTML'}</button>
                   {#if generatePath}
-                    <span class="feedback-ok url-feedback" title={generatePath}>HTML written</span>
+                    <span class="feedback-ok url-feedback" use:tip={generatePath}>HTML written</span>
                   {:else if generateError}
                     <span class="feedback-error url-feedback">{generateError}</span>
                   {/if}
@@ -1027,7 +1028,7 @@
                 <tbody>
                   {#each formGuidItems as item, i}
                     <tr>
-                      <td class="col-name" title={item.ItemPrototypeRuntimeIdForClient}>
+                      <td class="col-name" use:tip={item.ItemPrototypeRuntimeIdForClient}>
                         <span class="item-name">{guidNames[i] ?? item.ItemPrototypeRuntimeIdForClient}</span>
                       </td>
                       <td class="col-qty">
@@ -1078,7 +1079,7 @@
                   <tbody>
                     {#each formAdditionalGuidItems as item, i}
                       <tr>
-                        <td class="col-name" title={item.ItemPrototypeRuntimeIdForClient}>
+                        <td class="col-name" use:tip={item.ItemPrototypeRuntimeIdForClient}>
                           <span class="item-name">{additionalGuidNames[i] ?? item.ItemPrototypeRuntimeIdForClient}</span>
                         </td>
                         <td class="col-qty">
@@ -1193,7 +1194,7 @@
                   <span
                     class="picker-status"
                     class:warn={pickerSelectedIsExisting}
-                    title={pickerSelectedIsExisting
+                    use:tip={pickerSelectedIsExisting
                       ? 'This prototype is already present in another catalog entry.'
                       : pickerSelectedId}
                   >

@@ -145,7 +145,7 @@
     <PanelSidebar width="var(--sidebar-wide)">
       <svelte:fragment slot="header">
         <div class="section-title">Servers</div>
-        <button class="btn-icon" title="Add server" on:click={openAdd} style="margin-left:auto;">
+        <button class="btn-icon" aria-label="Add server" use:tip={'Add server'} on:click={openAdd} style="margin-left:auto;">
           <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5">
             <line x1="7" y1="3" x2="7" y2="11"/>
             <line x1="3" y1="7" x2="11" y2="7"/>
