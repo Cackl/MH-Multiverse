@@ -744,34 +744,9 @@
 </div>
 
 <style>
-  .modal-backdrop {
-    position: fixed;
-    inset: 0;
-    background: rgba(0, 0, 0, 0.65);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: var(--z-modal);
-    backdrop-filter: blur(2px);
-  }
-
   .modal {
-    background: var(--bg-2);
-    border: 1px solid var(--border-lit);
-    border-radius: var(--radius-md);
     width: 500px;
     max-height: 85vh;
-    display: flex;
-    flex-direction: column;
-    box-shadow: 0 24px 80px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.03) inset;
-  }
-
-  .modal-header {
-    padding: 14px 16px;
-    border-bottom: 1px solid var(--border);
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
   }
 
   .modal-title {
@@ -790,26 +765,6 @@
     height: 18px;
     color: var(--accent);
   }
-
-  .close-btn {
-    width: 28px;
-    height: 28px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: transparent;
-    border: 1px solid transparent;
-    color: var(--text-2);
-    cursor: pointer;
-    border-radius: var(--radius-sm);
-    transition: all 0.12s;
-  }
-  .close-btn:hover {
-    color: var(--text-0);
-    background: var(--bg-3);
-    border-color: var(--border-mid);
-  }
-  .close-btn svg { width: 14px; height: 14px; }
 
   /* ── Tabs ── */
   .tab-bar {
@@ -890,14 +845,6 @@
     color: var(--text-error);
   }
 
-  .modal-footer {
-    padding: 12px 16px;
-    border-top: 1px solid var(--border);
-    display: flex;
-    justify-content: flex-end;
-    gap: 8px;
-    flex-shrink: 0;
-  }
 
   /* ── Checkbox rows ── */
   .check-row {
