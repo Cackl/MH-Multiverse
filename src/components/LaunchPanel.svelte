@@ -12,8 +12,13 @@
   import ServerModal from './ServerModal.svelte'
   import { openCard } from './integrations/IntegrationCard.svelte'
   import PanelSidebar from './PanelSidebar.svelte'
+  import GetStarted from './GetStarted.svelte'
 
   $: activeServer = $appConfig.servers.find(s => s.id === $activeServerId) ?? null
+
+  // The guide shows on its own with no servers; the sidebar button brings it back afterwards.
+  let guideRequested = false
+  $: showGuide = $appConfig.servers.length === 0 || guideRequested
 
   let showModal = false
   let editingServer: Server | null = null
@@ -145,7 +150,14 @@
     <PanelSidebar width="var(--sidebar-wide)">
       <svelte:fragment slot="header">
         <div class="section-title">Servers</div>
-        <button class="btn-icon" aria-label="Add server" use:tip={'Add server'} on:click={openAdd} style="margin-left:auto;">
+        <button class="btn-icon" aria-label="Get started guide" use:tip={'Get started guide'} on:click={() => guideRequested = !guideRequested} style="margin-left:auto;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"/>
+            <path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3"/>
+            <line x1="12" y1="17" x2="12.01" y2="17"/>
+          </svg>
+        </button>
+        <button class="btn-icon" aria-label="Add server" use:tip={'Add server'} on:click={openAdd}>
           <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5">
             <line x1="7" y1="3" x2="7" y2="11"/>
             <line x1="3" y1="7" x2="11" y2="7"/>
@@ -158,10 +170,10 @@
           <div
             class="server-card"
             class:selected={server.id === $activeServerId}
-            on:click={() => selectServer(server.id)}
+            on:click={() => { guideRequested = false; selectServer(server.id) }}
             role="button"
             tabindex="0"
-            on:keydown={(e) => e.key === 'Enter' && selectServer(server.id)}
+            on:keydown={(e) => e.key === 'Enter' && (guideRequested = false, selectServer(server.id))}
           >
             <div class="server-card-name">{server.name}</div>
             <div class="server-card-url">
@@ -177,7 +189,9 @@
     </PanelSidebar>
 
     <!-- Detail area -->
-    {#if activeServer}
+    {#if showGuide}
+      <GetStarted onAddServer={openAdd} />
+    {:else if activeServer}
       <div class="launch-detail">
         <!-- Hero -->
         <div class="detail-hero">
@@ -263,13 +277,7 @@
             <line x1="2" y1="9" x2="22" y2="9"/>
           </svg>
         </div>
-        <div class="empty-state-text">
-          {#if $appConfig.servers.length === 0}
-           <button class="empty-state-button" type="button" aria-label="Add Server" on:click={openAdd}>Add a server</button> to get started
-          {:else} 
-          Select a server
-          {/if}
-        </div>
+        <div class="empty-state-text">Select a server</div>
       </div>
     {/if}
   </div>
@@ -541,17 +549,5 @@
     letter-spacing: 0.1em;
     text-transform: uppercase;
     color: var(--text-3);
-  }
-
-  .empty-state-button {
-    font-family: var(--font-head);
-    font-size: 13px;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-    color: var(--accent) !important;
-    text-decoration: underline !important;
-    background: none;
-    all:unset;
-    cursor:pointer;
   }
 </style>
