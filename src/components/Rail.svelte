@@ -70,27 +70,27 @@
     <span class="rail-group-label">App</span>
   </div>
 
-  <button class="rail-tab" class:active={$activeTab === 'settings'} on:click={() => go('settings')}>
+  <button class="rail-tab" class:active={$activeTab === 'settings'} use:tip={$showUpdateBadge ? 'Update available' : ''} on:click={() => go('settings')}>
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
       <path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"/>
       <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
     </svg>
     <span class="rail-label">Settings</span>
-    {#if $showUpdateBadge}<span class="update-badge" use:tip={'Update available'}></span>{/if}
+    {#if $showUpdateBadge}<span class="update-badge"></span>{/if}
   </button>
 
   <div class="rail-spacer"></div>
 
   <div class="rail-status">
-    <div class="status-dot-wrap" use:tip={'MHServerEmu'}>
+    <div class="status-dot-wrap">
       <div class="status-dot" class:on={$serverRunning}></div>
       <span class="status-dot-label">Server</span>
     </div>
-    <div class="status-dot-wrap" use:tip={'Apache'}>
+    <div class="status-dot-wrap">
       <div class="status-dot" class:on={$apacheRunning}></div>
       <span class="status-dot-label">Apache</span>
     </div>
-    <div class="status-dot-wrap" use:tip={'Game'}>
+    <div class="status-dot-wrap">
       <div class="status-dot" class:on={$gameRunning}></div>
       <span class="status-dot-label">Game</span>
     </div>
