@@ -517,7 +517,7 @@
         </div>
       {:else if scanError}
         <div class="empty-state">
-          <span class="empty-state-label" style="color:var(--text-error);">Scan error</span>
+          <span class="empty-state-label error">Scan error</span>
           <span class="empty-state-sub">{scanError}</span>
         </div>
       {:else if files.length === 0}

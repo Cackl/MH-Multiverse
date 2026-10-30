@@ -1059,6 +1059,9 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
   color: var(--text-2);
 }
 
+/* Three classes so it also beats panels that restyle .empty-state-label locally */
+.empty-state .empty-state-label.error { color: var(--text-error); }
+
 .empty-state-sub {
   font-size: 11px;
   color: var(--text-3);

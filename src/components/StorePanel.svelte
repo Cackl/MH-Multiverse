@@ -648,7 +648,7 @@
 
         {:else if loadError}
           <div class="empty-state">
-            <span class="empty-state-label" style="color: var(--text-error);">Load error</span>
+            <span class="empty-state-label error">Load error</span>
             <span class="empty-state-sub">{loadError}</span>
           </div>
 
