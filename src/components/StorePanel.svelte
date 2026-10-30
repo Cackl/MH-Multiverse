@@ -616,8 +616,7 @@
               <button class="btn btn-sm btn-outline" on:click={() => setBatchMode('add-mod')}>Add Modifier</button>
               <button class="btn btn-sm btn-outline" on:click={() => setBatchMode('remove-mod')}>Remove Modifier</button>
               <button
-                class="btn btn-sm btn-outline"
-                style="color: var(--text-error);"
+                class="btn btn-sm btn-red"
                 on:click={() => { batchDeleteConfirming = true; batchError = ''; batchSuccess = '' }}
               >Delete</button>
             </div>

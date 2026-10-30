@@ -1271,8 +1271,7 @@
               >{deleting ? 'Deleting…' : 'Confirm Delete'}</button>
             {:else}
               <button
-                class="btn btn-sm btn-outline"
-                style="color: var(--text-error);"
+                class="btn btn-sm btn-red"
                 on:click={() => deleteConfirming = true}
               >Delete</button>
             {/if}
