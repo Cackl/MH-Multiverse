@@ -159,8 +159,8 @@
   /* Z-index scale */
   --z-panel:    1;
   --z-dropdown: 10;
-  --z-tooltip:  100;
   --z-modal:    200;
+  --z-tooltip:  250;
   --z-titlebar: 300;
 
   /* Panel background gradient */
