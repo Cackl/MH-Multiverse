@@ -80,7 +80,7 @@
     }
     return $serverLog.filter(l => l.level === $serverLogFilter)
   })()
-  $: filtered, scrollToEnd()
+  $: $serverLogFilter, $logFilterThreshold, scrollToEnd()
   $: if (!scrollLocked) filtered.length, scrollToEnd()
 
   $: uptimeFormatted = [
