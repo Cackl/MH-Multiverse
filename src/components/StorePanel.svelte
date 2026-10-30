@@ -923,35 +923,7 @@
     flex-wrap: nowrap;
   }
 
-  .search-wrap {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    background: var(--bg-0);
-    border: 1px solid var(--border-mid);
-    border-radius: var(--radius-sm);
-    padding: 0 8px;
-    flex: 1;
-    max-width: 240px;
-    min-width: 100px;
-  }
-  .search-wrap svg { width: 12px; height: 12px; color: var(--text-3); flex-shrink: 0; }
-  .search-wrap:focus-within { border-color: var(--accent-dim); }
-
-  .search-input {
-    flex: 1;
-    background: none;
-    border: none;
-    outline: none;
-    color: var(--text-0);
-    font-family: var(--font-mono);
-    font-size: 12px;
-    padding: 5px 0;
-    /* Override global input sizing */
-    width: auto;
-    border-radius: 0;
-  }
-  .search-input::placeholder { color: var(--text-3); font-family: var(--font-body); }
+  .search-wrap { min-width: 100px; max-width: 240px; }
 
   .toolbar-sep {
     width: 1px;

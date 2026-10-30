@@ -356,6 +356,29 @@ input[type="number"]::-webkit-outer-spin-button {
 }
 input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 
+/* ── Search box (icon + bare input inside a bordered wrapper) ── */
+.search-wrap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--bg-0);
+  border: 1px solid var(--border-mid);
+  border-radius: var(--radius-sm);
+  padding: 0 8px;
+  flex: 1;
+}
+.search-wrap svg { width: 12px; height: 12px; color: var(--text-3); flex-shrink: 0; }
+.search-wrap:focus-within { border-color: var(--accent-dim); }
+/* Two classes so it beats the global input[type="text"] rule */
+.search-wrap .search-input {
+  flex: 1;
+  width: auto;
+  background: none;
+  border: none;
+  border-radius: 0;
+  padding: 5px 0;
+}
+
 /* ── Field display (read-only value boxes) ── */
 .field-value {
   background: var(--bg-0);
