@@ -1,16 +1,16 @@
 <script lang="ts">
-  import { open } from '@tauri-apps/plugin-dialog'
   import { onDestroy } from 'svelte'
   import { invoke } from '@tauri-apps/api/core'
   import { listen, type UnlistenFn } from '@tauri-apps/api/event'
   import { openUrl } from '@tauri-apps/plugin-opener'
   import {
-    appConfig, type SettingsSection, setGameExe, setServerExe, activeTheme, setTheme, setLaunchOptions, type LaunchOptions,
+    appConfig, type SettingsSection, activeTheme, setTheme, setLaunchOptions, type LaunchOptions,
     appUpdate, appUpdateError, appUpdateCheckedAt, checkAppUpdate, showUpdateBadge,
     updateRemindLater, dismissedUpdate, serverRunning, settingsSection,
   } from '../lib/store'
   import { parseReleaseNotes } from '../lib/releaseNotes'
   import { tip } from '../lib/tooltip'
+  import { browseGameExe, browseServerExe } from '../lib/browseExe'
   import PanelSidebar from './PanelSidebar.svelte'
   import OverlayIntegration from './integrations/OverlayIntegration.svelte'
   import ProfileImport from './integrations/ProfileImport.svelte'
@@ -75,26 +75,6 @@
   // The Game indicator matches the process by this exact name (launcher.rs), so a renamed exe launches but is never seen running.
   const GAME_EXE_NAME = 'MarvelHeroesOmega.exe'
   $: gameExeRenamed = !!$appConfig.game_exe && $appConfig.game_exe.split(/[\\/]/).pop()!.toLowerCase() !== GAME_EXE_NAME.toLowerCase()
-
-  async function browseGameExe() {
-    const selected = await open({
-      filters: [{ name: 'Executable', extensions: ['exe'] }],
-      multiple: false,
-    })
-    if (selected && typeof selected === 'string') {
-      await setGameExe(selected)
-    }
-  }
-
-  async function browseServerExe() {
-    const selected = await open({
-      filters: [{ name: 'Executable', extensions: ['exe'] }],
-      multiple: false,
-    })
-    if (selected && typeof selected === 'string') {
-      await setServerExe(selected)
-    }
-  }
 
   async function updateOpt<K extends keyof LaunchOptions>(key: K, value: LaunchOptions[K]) {
     const updated = { ...$appConfig.launch_options, [key]: value }
