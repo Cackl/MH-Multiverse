@@ -5,6 +5,7 @@
   import { appConfig, setUnsaved, setConsolePresets, serverRunning, setShutdownConfig, logFilterThreshold, type ShutdownConfig } from '../lib/store'
   import { FALLBACK_COMMANDS } from '../lib/serverCommands'
   import { CONFIG_SCHEMA, type Field } from '../lib/configMeta'
+  import { tip } from '../lib/tooltip'
   import PanelSidebar from './PanelSidebar.svelte'
 
   export let embedded = false
@@ -37,10 +38,6 @@
   let loadError = ''
   let saveError = ''
   let saveSuccess = false
-  let tooltip = ''
-  let tooltipX = 0
-  let tooltipY = 0
-  let tooltipVisible = false
   let presets: string[] = []
 
   $: canLoad = !!$appConfig.server_exe
@@ -125,45 +122,6 @@
 
   function isModified(field: Field): boolean {
     return (values[field.section]?.[field.key] ?? '') !== (savedValues[field.section]?.[field.key] ?? '')
-  }
-
-  // -- Tooltip --
-
-  let tooltipEl: HTMLDivElement | null = null
-
-  const TOOLTIP_OFFSET = 12
-  const VIEWPORT_PAD = 10
-
-  async function showTooltip(e: MouseEvent, text: string) {
-    tooltip = text
-    tooltipVisible = true
-
-    await tick()
-    if (!tooltipEl) return
-
-    const rect = tooltipEl.getBoundingClientRect()
-    const vw = window.innerWidth
-    const vh = window.innerHeight
-
-    let x = e.clientX + TOOLTIP_OFFSET
-    let y = e.clientY - 8
-
-    if (x + rect.width + VIEWPORT_PAD > vw) {
-      x = e.clientX - rect.width - TOOLTIP_OFFSET
-    }
-    x = Math.max(VIEWPORT_PAD, Math.min(x, vw - rect.width - VIEWPORT_PAD))
-
-    if (y < VIEWPORT_PAD) {
-      y = e.clientY + TOOLTIP_OFFSET
-    }
-    y = Math.max(VIEWPORT_PAD, Math.min(y, vh - rect.height - VIEWPORT_PAD))
-
-    tooltipX = x
-    tooltipY = y
-  }
-
-  function hideTooltip() {
-    tooltipVisible = false
   }
 
   // -- Console presets --
@@ -386,16 +344,6 @@
     if (canLoad) load()
   })
 </script>
-
-{#if tooltipVisible}
-  <div
-    bind:this={tooltipEl}
-    class="tooltip"
-    style="left:{tooltipX}px; top:{tooltipY}px"
-  >
-    {tooltip}
-  </div>
-{/if}
 
 <div class="config-panel">
   <div class="panel-bg"></div>
@@ -686,8 +634,7 @@
                       <span class="config-field-default">
                         <button
                           class="info-btn"
-                          on:mouseenter={(e) => showTooltip(e, field.description)}
-                          on:mouseleave={hideTooltip}
+                          use:tip={field.description}
                           tabindex="-1"
                         >?</button>
                       </span>
@@ -709,8 +656,7 @@
                       <span class="config-field-default">
                         <button
                           class="info-btn"
-                          on:mouseenter={(e) => showTooltip(e, field.description)}
-                          on:mouseleave={hideTooltip}
+                          use:tip={field.description}
                           tabindex="-1"
                         >?</button>
                       </span>
@@ -1004,23 +950,6 @@
     color: var(--text-3);
     font-family: var(--font-body);
     margin-top: 2px;
-  }
-
-  /* -- Tooltip -- */
-  .tooltip {
-    position: fixed;
-    z-index: var(--z-tooltip);
-    background: var(--bg-3);
-    border: 1px solid var(--border-lit);
-    border-radius: var(--radius-sm);
-    color: var(--text-1);
-    font-size: 12px;
-    font-family: var(--font-body);
-    padding: 6px 10px;
-    max-width: 300px;
-    line-height: 1.5;
-    pointer-events: none;
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
   }
 
   /* -- Subsection description -- */

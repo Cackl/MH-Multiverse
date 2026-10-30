@@ -1,8 +1,8 @@
 <script lang="ts">
-  import { tick } from 'svelte'
   import { invoke } from '@tauri-apps/api/core'
   import { open } from '@tauri-apps/plugin-dialog'
   import { appConfig, serverRunning, upsertServer, type Server } from '../lib/store'
+  import { tip } from '../lib/tooltip'
 
   export let server: Server | null = null
   export let onClose: () => void
@@ -352,48 +352,9 @@
       runRestore()
     }
   }
-
-  // ── Tooltip ──────────────────────────────────────────────────────────────
-
-  let tooltip = ''
-  let tooltipX = 0
-  let tooltipY = 0
-  let tooltipVisible = false
-  let tooltipEl: HTMLDivElement | null = null
-
-  const TOOLTIP_OFFSET = 12
-  const VIEWPORT_PAD = 10
-
-  async function showTooltip(e: MouseEvent, text: string) {
-    tooltip = text
-    tooltipVisible = true
-    await tick()
-    if (!tooltipEl) return
-    const rect = tooltipEl.getBoundingClientRect()
-    const vw = window.innerWidth
-    const vh = window.innerHeight
-    let x = e.clientX + TOOLTIP_OFFSET
-    let y = e.clientY - 8
-    if (x + rect.width + VIEWPORT_PAD > vw) x = e.clientX - rect.width - TOOLTIP_OFFSET
-    x = Math.max(VIEWPORT_PAD, Math.min(x, vw - rect.width - VIEWPORT_PAD))
-    if (y < VIEWPORT_PAD) y = e.clientY + TOOLTIP_OFFSET
-    y = Math.max(VIEWPORT_PAD, Math.min(y, vh - rect.height - VIEWPORT_PAD))
-    tooltipX = x
-    tooltipY = y
-  }
-
-  function hideTooltip() {
-    tooltipVisible = false
-  }
 </script>
 
 <svelte:window on:keydown={onKeydown} />
-
-{#if tooltipVisible}
-  <div bind:this={tooltipEl} class="tooltip" style="left:{tooltipX}px; top:{tooltipY}px">
-    {tooltip}
-  </div>
-{/if}
 
 <div class="modal-backdrop" role="dialog" aria-modal="true">
   <div class="modal">
@@ -470,8 +431,7 @@
           <button
             class="info-btn"
             type="button"
-            on:mouseenter={(e) => showTooltip(e, 'Server runs on this machine - port and dashboard path are read from MHServerEmu Config.')}
-            on:mouseleave={hideTooltip}
+            use:tip={'Server runs on this machine - port and dashboard path are read from MHServerEmu Config.'}
             tabindex="-1"
           >?</button>
         </label>
@@ -483,8 +443,7 @@
               <button
                 class="info-btn"
                 type="button"
-                on:mouseenter={(e) => showTooltip(e, 'Hostname or IP address only - no http:// prefix or path suffix required. Include a port as hostname:port if not on standard 80/443.')}
-                on:mouseleave={hideTooltip}
+                use:tip={'Hostname or IP address only - no http:// prefix or path suffix required. Include a port as hostname:port if not on standard 80/443.'}
                 tabindex="-1"
               >?</button>
             </div>
@@ -496,8 +455,7 @@
             <button
               class="info-btn"
               type="button"
-              on:mouseenter={(e) => showTooltip(e, 'Use HTTPS for the dashboard URL and SiteConfig requests. Requires SSL to be configured on the remote server.')}
-              on:mouseleave={hideTooltip}
+              use:tip={'Use HTTPS for the dashboard URL and SiteConfig requests. Requires SSL to be configured on the remote server.'}
               tabindex="-1"
             >?</button>
           </label>
@@ -992,20 +950,4 @@
 
   .btn-sm { padding: 5px 10px; font-size: 11px; align-self: flex-start; }
 
-  /* ── Tooltip ── */
-  .tooltip {
-    position: fixed;
-    z-index: calc(var(--z-modal) + 1);
-    background: var(--bg-3);
-    border: 1px solid var(--border-lit);
-    border-radius: var(--radius-sm);
-    color: var(--text-1);
-    font-size: 12px;
-    font-family: var(--font-body);
-    padding: 6px 10px;
-    max-width: 280px;
-    line-height: 1.5;
-    pointer-events: none;
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
-  }
 </style>
