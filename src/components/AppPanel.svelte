@@ -1,16 +1,16 @@
 <script lang="ts">
-  import { open } from '@tauri-apps/plugin-dialog'
   import { onDestroy } from 'svelte'
   import { invoke } from '@tauri-apps/api/core'
   import { listen, type UnlistenFn } from '@tauri-apps/api/event'
   import { openUrl } from '@tauri-apps/plugin-opener'
   import {
-    appConfig, type SettingsSection, setGameExe, setServerExe, activeTheme, setTheme, setLaunchOptions, type LaunchOptions,
+    appConfig, type SettingsSection, activeTheme, setTheme, setLaunchOptions, type LaunchOptions,
     appUpdate, appUpdateError, appUpdateCheckedAt, checkAppUpdate, showUpdateBadge,
     updateRemindLater, dismissedUpdate, serverRunning, settingsSection,
   } from '../lib/store'
   import { parseReleaseNotes } from '../lib/releaseNotes'
   import { tip } from '../lib/tooltip'
+  import { browseGameExe, browseServerExe } from '../lib/browseExe'
   import PanelSidebar from './PanelSidebar.svelte'
   import OverlayIntegration from './integrations/OverlayIntegration.svelte'
   import ProfileImport from './integrations/ProfileImport.svelte'
@@ -72,25 +72,9 @@
 
   const version = __APP_VERSION__
 
-  async function browseGameExe() {
-    const selected = await open({
-      filters: [{ name: 'Executable', extensions: ['exe'] }],
-      multiple: false,
-    })
-    if (selected && typeof selected === 'string') {
-      await setGameExe(selected)
-    }
-  }
-
-  async function browseServerExe() {
-    const selected = await open({
-      filters: [{ name: 'Executable', extensions: ['exe'] }],
-      multiple: false,
-    })
-    if (selected && typeof selected === 'string') {
-      await setServerExe(selected)
-    }
-  }
+  // The Game indicator matches the process by this exact name (launcher.rs), so a renamed exe launches but is never seen running.
+  const GAME_EXE_NAME = 'MarvelHeroesOmega.exe'
+  $: gameExeRenamed = !!$appConfig.game_exe && $appConfig.game_exe.split(/[\\/]/).pop()!.toLowerCase() !== GAME_EXE_NAME.toLowerCase()
 
   async function updateOpt<K extends keyof LaunchOptions>(key: K, value: LaunchOptions[K]) {
     const updated = { ...$appConfig.launch_options, [key]: value }
@@ -173,7 +157,18 @@
               </div>
             </div>
             <div class="path-group">
-              <span class="field-label">Game Executable</span>
+              <span class="field-label label-with-icon">
+                Game Executable
+                {#if gameExeRenamed}
+                  <button type="button" class="label-warn" aria-label="Warning"
+                    use:tip={`Not named ${GAME_EXE_NAME}, so Multiverse won't detect it running`}>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+                      <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+                    </svg>
+                  </button>
+                {/if}
+              </span>
               <div class="path-row">
                 <div class="field-value path-value" use:tip={$appConfig.game_exe}>
                   {$appConfig.game_exe || 'Not set'}
@@ -643,6 +638,10 @@
     border-radius: var(--radius-sm);
   }
   .breaking-box strong { color: var(--amber); }
+
+  .label-with-icon { display: inline-flex; align-items: center; gap: 6px; }
+  .label-warn { display: inline-flex; padding: 0; background: none; border: 0; color: var(--amber); cursor: help; }
+  .label-warn svg { width: 13px; height: 13px; }
 
   .progress-wrap { display: flex; flex-direction: column; gap: 6px; }
   .progress-bar { height: 4px; background: var(--bg-3); border-radius: 2px; overflow: hidden; }
