@@ -22,6 +22,7 @@
 
   let showModal = false
   let editingServer: Server | null = null
+  let addTab: 'remote' | 'local' | null = null
   let launchError = ''
   let launching = false
 
@@ -75,8 +76,9 @@
     cancelDelete()
   })
 
-  function openAdd() {
+  function openAdd(tab: 'remote' | 'local' | null = null) {
     editingServer = null
+    addTab = tab
     showModal = true
   }
 
@@ -138,7 +140,7 @@
 </script>
 
 {#if showModal}
-  <ServerModal server={editingServer} onClose={closeModal} />
+  <ServerModal server={editingServer} initialTab={addTab} onClose={closeModal} />
 {/if}
 
 <div class="launch-panel">
@@ -157,7 +159,7 @@
             <line x1="12" y1="17" x2="12.01" y2="17"/>
           </svg>
         </button>
-        <button class="btn-icon" aria-label="Add server" use:tip={'Add server'} on:click={openAdd}>
+        <button class="btn-icon" aria-label="Add server" use:tip={'Add server'} on:click={() => openAdd()}>
           <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5">
             <line x1="7" y1="3" x2="7" y2="11"/>
             <line x1="3" y1="7" x2="11" y2="7"/>
