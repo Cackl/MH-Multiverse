@@ -1,10 +1,11 @@
 <script lang="ts">
   import { invoke } from '@tauri-apps/api/core'
   import { open } from '@tauri-apps/plugin-dialog'
-  import { appConfig, serverRunning, upsertServer, type Server } from '../lib/store'
+  import { appConfig, serverRunning, upsertServer, jsonPersistence, refreshPersistence, type Server } from '../lib/store'
   import { tip } from '../lib/tooltip'
 
   export let server: Server | null = null
+  export let initialTab: 'remote' | 'local' | null = null
   export let onClose: () => void
 
   const isEdit = server !== null
@@ -17,7 +18,8 @@
   let password = ''
   let saving = false
   let error = ''
-  let isLocal  = server?.is_local  ?? true
+  // A new profile starts on Local once there is a server to run it on, otherwise on Remote.
+  let isLocal  = server?.is_local  ?? (initialTab ? initialTab === 'local' : !!$appConfig.server_exe)
   let useHttps = server?.use_https ?? false
 
   async function save() {
@@ -27,7 +29,7 @@
     password = password.trim()
 
     if (!name) { error = 'Name is required.'; return }
-    if (!isLocal && !host) { error = 'Host is required for non-local servers.'; return }
+    if (!isLocal && !host) { error = 'Host is required for remote servers.'; return }
     if (!isEdit && !password) { error = 'Password is required for a new server.'; return }
 
     saving = true
@@ -52,12 +54,40 @@
   }
 
   // ── Tabs ─────────────────────────────────────────────────────────────────
-  // Import is only offered when adding a new server — it needs direct
-  // Account.db access and always creates a local profile, neither of which
-  // makes sense while editing an existing profile's connection details.
+  // Remote and Local are the same 'manual' form with isLocal switched, so the entered
+  // fields carry across. From Backup imports into a new local profile when adding, and
+  // restores into the existing account when editing a profile that was saved as local.
 
   type TabId = 'manual' | 'import' | 'restore'
   let activeTab: TabId = 'manual'
+
+  // JSON storage has one built-in account and accepts any login, so a new local profile can
+  // start filled in. Tracked so switching to Remote does not leave those values behind.
+  const JSON_ACCOUNT_EMAIL = 'default@mhserveremu'
+  const JSON_PLACEHOLDER_PASSWORD = 'local'
+  let jsonPrefilled = false
+  $: refreshPersistence($appConfig.server_exe)
+  $: if (!isEdit && isLocal && $jsonPersistence && !jsonPrefilled) {
+    jsonPrefilled = true
+    if (!email) email = JSON_ACCOUNT_EMAIL
+    if (!password) password = JSON_PLACEHOLDER_PASSWORD
+  }
+
+  function selectKind(local: boolean) {
+    if (!local && jsonPrefilled) {
+      if (email === JSON_ACCOUNT_EMAIL) email = ''
+      if (password === JSON_PLACEHOLDER_PASSWORD) password = ''
+      jsonPrefilled = false
+    }
+    isLocal = local
+    activeTab = 'manual'
+  }
+
+  // Name clashes are allowed (profiles are keyed by id) but confusing in the list.
+  const nameTaken = (n: string) =>
+    !!n.trim() && $appConfig.servers.some(s => s.id !== server?.id && s.name.trim().toLowerCase() === n.trim().toLowerCase())
+  $: nameClash = nameTaken(name)
+  $: importNameClash = nameTaken(importServerName)
 
   // ── Import tab types ─────────────────────────────────────────────────────
 
@@ -139,6 +169,7 @@
 
   $: canImport =
     !!importSummary &&
+    !$jsonPersistence &&
     !$serverRunning &&
     hasServerExe &&
     !!importPassword.trim() &&
@@ -161,6 +192,7 @@
     !!restoreSummary &&
     !!restoreTargetAccount &&
     !restoreMismatchMsg &&
+    !$jsonPersistence &&
     !$serverRunning &&
     hasServerExe
 
@@ -339,8 +371,10 @@
     return new Date(iso).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })
   }
 
+  $: busy = saving || importSaving || restoreSaving
+
   function onKeydown(e: KeyboardEvent) {
-    if (e.key === 'Escape') onClose()
+    if (e.key === 'Escape' && !busy) onClose()
   }
 
   function submit() {
@@ -369,7 +403,7 @@
         </svg>
         <span class="modal-display-name">{isEdit ? 'Edit Server' : 'Add Server'}</span>
       </div>
-      <button class="close-btn" aria-label="Close" on:click={onClose}>
+      <button class="close-btn" aria-label="Close" on:click={onClose} disabled={busy}>
         <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5">
           <line x1="3.5" y1="3.5" x2="10.5" y2="10.5"/>
           <line x1="10.5" y1="3.5" x2="3.5" y2="10.5"/>
@@ -377,64 +411,52 @@
       </button>
     </div>
 
-    {#if !isEdit}
-      <div class="tab-bar">
-        <button
-          type="button"
-          class="tab-btn"
-          class:active={activeTab === 'manual'}
-          on:click={() => selectTab('manual')}
-        >
-          Manual
-        </button>
+    <div class="tab-bar">
+      <button
+        type="button"
+        class="tab-btn"
+        class:active={activeTab === 'manual' && !isLocal}
+        on:click={() => selectKind(false)}
+      >
+        Remote
+      </button>
+      <button
+        type="button"
+        class="tab-btn"
+        class:active={activeTab === 'manual' && isLocal}
+        on:click={() => selectKind(true)}
+      >
+        Local
+      </button>
+      {#if !isEdit}
         <button
           type="button"
           class="tab-btn"
           class:active={activeTab === 'import'}
           on:click={() => selectTab('import')}
         >
-          Import Account
+          From Backup
         </button>
-      </div>
-    {:else if isLocal}
-      <div class="tab-bar">
-        <button
-          type="button"
-          class="tab-btn"
-          class:active={activeTab === 'manual'}
-          on:click={() => selectTab('manual')}
-        >
-          Manual
-        </button>
+      {:else if server?.is_local}
         <button
           type="button"
           class="tab-btn"
           class:active={activeTab === 'restore'}
-          on:click={() => selectTab('restore')}
+          on:click={() => { isLocal = true; selectTab('restore') }}
         >
-          Restore Backup
+          From Backup
         </button>
-      </div>
-    {/if}
+      {/if}
+    </div>
 
     <div class="modal-body">
 
       {#if activeTab === 'manual'}
         <div class="form-group">
           <label class="field-label" for="modal-name">Name</label>
-          <input id="modal-name" type="text" bind:value={name} placeholder="Local Server">
+          <input id="modal-name" type="text" bind:value={name} placeholder={isLocal ? 'Local Server' : 'Server name'}>
+          {#if nameClash}<div class="hint-block">A profile with this name already exists.</div>{/if}
         </div>
-
-        <label class="check-row">
-          <input type="checkbox" bind:checked={isLocal}>
-          <span class="check-label">Local</span>
-          <button
-            class="info-btn"
-            type="button"
-            use:tip={'Server runs on this machine - port and dashboard path are read from MHServerEmu Config.'}
-            tabindex="-1"
-          >?</button>
-        </label>
 
         {#if !isLocal}
           <div class="form-group">
@@ -461,6 +483,13 @@
           </label>
         {/if}
 
+        {#if !isEdit && isLocal && $jsonPersistence}
+          <div class="import-note">
+            <i class="note-icon">i</i>
+            This server stores data in a JSON file with one built-in account, and any email and password logs in. Set the player name in the Config tab.
+          </div>
+        {/if}
+
         <div class="form-group">
           <label class="field-label" for="modal-email">Email</label>
           <input id="modal-email" type="text" bind:value={email} placeholder="player1@local.host">
@@ -485,6 +514,10 @@
           <i class="note-icon">i</i>
           Creates a local server profile from an account export file.
         </div>
+
+        {#if $jsonPersistence}
+          <div class="warning-notice">Restoring a backup isn't available yet for servers that store data in JSON.</div>
+        {/if}
 
         <div class="form-group">
           <div class="label-row">
@@ -548,6 +581,7 @@
           <div class="form-group">
             <label class="field-label" for="modal-import-server-name">Server Name</label>
             <input id="modal-import-server-name" type="text" bind:value={importServerName} placeholder={importSummary.player_name}>
+            {#if importNameClash}<div class="hint-block">A profile with this name already exists.</div>{/if}
           </div>
 
           <div class="form-group">
@@ -599,6 +633,10 @@
           <i class="note-icon">!</i>
           Restoring overwrites this account's current avatars, items, and progress. This cannot be undone.
         </div>
+
+        {#if $jsonPersistence}
+          <div class="warning-notice">Restoring a backup isn't available yet for servers that store data in JSON.</div>
+        {/if}
 
         {#if !restoreTargetAccount}
           <div class="hint-block">No account in Account.db matches {server?.email ?? 'this profile\'s email'}.</div>

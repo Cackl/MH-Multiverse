@@ -2,15 +2,18 @@
   import {
     appConfig, serverRunning, apacheRunning, startingServer, startingApache,
     startServer, startApache, activeTab, settingsSection, launchOptionsReviewed,
+    jsonPersistence, refreshPersistence,
   } from '../lib/store'
   import { browseGameExe, browseServerExe } from '../lib/browseExe'
   import { tip } from '../lib/tooltip'
 
-  export let onAddServer: () => void
+  export let onAddServer: (tab: 'remote' | 'local') => void
 
   const NEEDS_SERVER_EXE = 'Set the MHServerEmu executable first'
 
   $: hasServerExe = !!$appConfig.server_exe
+  $: refreshPersistence($appConfig.server_exe)
+  $: hasLocalProfile = $appConfig.servers.some(s => s.is_local)
   $: launchOptionsDone = $launchOptionsReviewed || !$appConfig.launch_options.auto_login
 
   function openLaunchOptions() {
@@ -50,7 +53,7 @@
     <div class="gs-text">
       <div class="gs-title">Join a remote server</div>
     </div>
-    <button class="btn btn-sm btn-outline" on:click={onAddServer}>Add server</button>
+    <button class="btn btn-sm btn-outline" on:click={() => onAddServer('remote')}>Add server</button>
   </div>
 
   <div class="section-divider"><span>Play Locally</span></div>
@@ -86,12 +89,16 @@
   </div>
 
   <div class="gs-row">
-    <span class="mark"></span>
+    <span class="mark" class:done={hasLocalProfile}></span>
     <div class="gs-text">
       <div class="gs-title">Local account</div>
-      <div class="gs-detail">Create an account on your server and a profile to log in with.</div>
+      <div class="gs-detail">
+        {$jsonPersistence ? 'Built in. Any login works, so just add a local profile.' : 'Create an account on your server and a profile to log in with.'}
+      </div>
     </div>
-    <button class="btn btn-sm btn-outline" on:click={onAddServer}>Create local server</button>
+    <button class="btn btn-sm btn-outline" on:click={() => onAddServer('local')}>
+      {$jsonPersistence ? 'Add local profile' : 'Create local server'}
+    </button>
   </div>
 </div>
 

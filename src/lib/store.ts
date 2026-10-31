@@ -83,6 +83,14 @@ export const apacheRunning = writable<boolean>(false)
 export const uptimeSec = writable<number>(0)
 // Session only: the Get Started checklist ticks "Launch options" once the user has opened them.
 export const launchOptionsReviewed = writable<boolean>(false)
+
+// True when the linked server keeps one built-in account in a JSON file instead of Account.db.
+export const jsonPersistence = writable<boolean>(false)
+export async function refreshPersistence(serverExe: string) {
+  jsonPersistence.set(
+    serverExe ? await invoke<boolean>('uses_json_persistence', { serverExe }).catch(() => false) : false
+  )
+}
 export const serverError = writable<string>('')
 
 export type OverlayStatus = {
