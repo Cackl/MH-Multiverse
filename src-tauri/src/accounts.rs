@@ -156,9 +156,38 @@ fn read_and_parse(json_path: &str) -> Result<ImportJson, String> {
 fn hash_password(password: &str) -> (Vec<u8>, Vec<u8>) {
     let mut salt = vec![0u8; 64];
     rand::thread_rng().fill_bytes(&mut salt);
+    (derive_hash(password, &salt), salt)
+}
+
+fn derive_hash(password: &str, salt: &[u8]) -> Vec<u8> {
     let mut hash = vec![0u8; 64];
-    pbkdf2_hmac::<Sha512>(password.as_bytes(), &salt, 210_000, &mut hash);
-    (hash, salt)
+    pbkdf2_hmac::<Sha512>(password.as_bytes(), salt, 210_000, &mut hash);
+    hash
+}
+
+/// Read-only: the server may be running and the launcher only needs to look.
+fn open_db_read_only(server_exe: &str) -> Result<Connection, String> {
+    let path = db_path(server_exe)?;
+    Connection::open_with_flags(&path, OpenFlags::SQLITE_OPEN_READ_ONLY)
+        .map_err(|e| format!("Failed to open database: {e}"))
+}
+
+fn email_exists(conn: &Connection, email: &str) -> Result<bool, String> {
+    Ok(count(conn, "SELECT COUNT(*) FROM Account WHERE Email = ?1 COLLATE NOCASE", email)? > 0)
+}
+
+/// True when `password` hashes to the stored hash for `email`. False for an unknown email.
+fn password_matches(conn: &Connection, email: &str, password: &str) -> Result<bool, String> {
+    let row = conn.query_row(
+        "SELECT PasswordHash, Salt FROM Account WHERE Email = ?1 COLLATE NOCASE",
+        params![email],
+        |r| Ok((r.get::<_, Vec<u8>>(0)?, r.get::<_, Vec<u8>>(1)?)),
+    );
+    match row {
+        Ok((hash, salt)) => Ok(derive_hash(password, &salt) == hash),
+        Err(rusqlite::Error::QueryReturnedNoRows) => Ok(false),
+        Err(e) => Err(e.to_string()),
+    }
 }
 
 /// Returns the highest ID currently stored across all entity tables so that
@@ -286,6 +315,37 @@ pub fn list_accounts_for_import(server_exe: String) -> Result<Vec<AccountEntry>,
         .map_err(|e| e.to_string())?;
 
     Ok(rows)
+}
+
+/// Whether an account with this email exists. Errors while the database is missing or
+/// locked, so callers polling after a console command should treat an error as "not yet".
+#[tauri::command]
+pub fn account_exists(server_exe: String, email: String) -> Result<bool, String> {
+    email_exists(&open_db_read_only(&server_exe)?, email.trim())
+}
+
+/// Whether `password` is the account's current password, checked against the stored
+/// hash and salt. Used to confirm a console `!account create` or `!account password` landed.
+#[tauri::command]
+pub fn account_password_matches(server_exe: String, email: String, password: String) -> Result<bool, String> {
+    password_matches(&open_db_read_only(&server_exe)?, email.trim(), &password)
+}
+
+/// Lowercased names from `Data/PlayerNameBlacklist.txt`, which the server refuses for new
+/// accounts. Empty when the file is absent.
+#[tauri::command]
+pub fn blocked_player_names(server_exe: String) -> Result<Vec<String>, String> {
+    let path = crate::paths::server_dir(&server_exe)?.join("Data").join("PlayerNameBlacklist.txt");
+    if !path.exists() {
+        return Ok(Vec::new());
+    }
+    let raw = fs::read_to_string(&path).map_err(|e| format!("Failed to read PlayerNameBlacklist.txt: {e}"))?;
+    Ok(raw
+        .trim_start_matches('\u{FEFF}')
+        .lines()
+        .map(|l| l.trim().to_lowercase())
+        .filter(|l| !l.is_empty())
+        .collect())
 }
 
 /// Perform the account import.

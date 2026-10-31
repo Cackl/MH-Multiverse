@@ -80,6 +80,65 @@ fn list_accounts_for_import_returns_seeded_rows() {
 }
 
 #[test]
+fn blocked_player_names_reads_the_blacklist() {
+    let (_tmp, server_exe) = empty_server();
+    assert!(blocked_player_names(server_exe.clone()).unwrap().is_empty(), "no file");
+
+    let data = db_path(&server_exe).unwrap().parent().unwrap().to_path_buf();
+    fs::create_dir_all(&data).unwrap();
+    fs::write(data.join("PlayerNameBlacklist.txt"), "\u{FEFF}Admin\r\n\r\n  Moderator  \nGM\n").unwrap();
+    assert_eq!(blocked_player_names(server_exe).unwrap(), ["admin", "moderator", "gm"]);
+}
+
+#[test]
+fn account_exists_table() {
+    let (_tmp, server_exe, _conn) = seeded_db();
+    let cases = [
+        ("admin@test.local", true),
+        ("  admin@test.local  ", true),
+        ("ADMIN@TEST.LOCAL", true),
+        ("nobody@test.local", false),
+        ("", false),
+    ];
+    for (email, expected) in cases {
+        assert_eq!(account_exists(server_exe.clone(), email.into()).unwrap(), expected, "{email:?}");
+    }
+}
+
+#[test]
+fn account_exists_errors_until_the_database_exists() {
+    let (_tmp, server_exe) = empty_server();
+    fs::create_dir_all(db_path(&server_exe).unwrap().parent().unwrap()).unwrap();
+    assert!(account_exists(server_exe, "a@b.c".into()).is_err());
+}
+
+#[test]
+fn account_password_matches_table() {
+    let (_tmp, server_exe, conn) = seeded_db();
+    let overrides = ImportOverrides {
+        email: Some("pw@test.local".into()),
+        player_name: Some("PwPlayer".into()),
+        new_password: Some("s3cret".into()),
+    };
+    do_add_with_overrides(&conn, &overrides, &sample_data()).unwrap();
+
+    let cases = [
+        ("pw@test.local", "s3cret", true),
+        ("PW@test.local", "s3cret", true),
+        (" pw@test.local ", "s3cret", true),
+        ("pw@test.local", "S3cret", false),
+        ("pw@test.local", "", false),
+        ("nobody@test.local", "s3cret", false),
+        // Seeded rows hold a one-byte placeholder hash; they must not match, and must not error.
+        ("admin@test.local", "s3cret", false),
+    ];
+    for (email, password, expected) in cases {
+        let got = account_password_matches(server_exe.clone(), email.into(), password.into()).unwrap();
+        assert_eq!(got, expected, "{email:?} / {password:?}");
+    }
+}
+
+#[test]
 fn import_add_creates_account() {
     let (_tmp, _server_exe, conn) = seeded_db();
     let data = sample_data();

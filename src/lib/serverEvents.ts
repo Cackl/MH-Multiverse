@@ -7,6 +7,7 @@ import {
   clearServerError,
   setServerError,
   serverRunning,
+  serverReady,
   startUptime,
   stopUptime,
   setSchedulerNow,
@@ -16,6 +17,7 @@ import {
   type LogLine,
   type OverlayLine,
 } from './store'
+import { maskSecrets } from './serverCommands'
 
 type ServerStoppedPayload = {
   running: boolean
@@ -84,9 +86,12 @@ export function normalizeLogBatch(lines: RawLogEventPayload): Omit<LogLine, 'id'
   return lines.map((line) => ({
     time: line.time ?? '',
     level: toLogLevel(line.level),
-    msg: line.msg ?? '',
+    msg: maskSecrets(line.msg ?? ''),
   }))
 }
+
+// Logged by ServerApp.Run right before it starts reading console input.
+const READY_TEXT = "Type '!commands' for a list of available commands"
 
 const NOW_REGEX = /Checking Live Tuning events \(now=\[(.*?)\]\)/
 
@@ -107,6 +112,8 @@ export function extractSchedulerNow(msg: string): Date | null {
 async function syncInitialState() {
   const running = await invoke<boolean>('server_is_running')
   serverRunning.set(running)
+  // Already running when the app opened, so long past its startup.
+  serverReady.set(running)
 
   if (running) {
     startUptime()
@@ -136,6 +143,7 @@ export async function initServerEventBridge(): Promise<void> {
       if (dt) {
         setSchedulerNow(dt)
       }
+      if (line.msg.includes(READY_TEXT)) serverReady.set(true)
     }
 
     appendLogBatch(batch)
@@ -143,6 +151,7 @@ export async function initServerEventBridge(): Promise<void> {
 
   bridge.unlistenStarted = await listen('server-started', async () => {
     serverRunning.set(true)
+    serverReady.set(false)
     clearServerError()
     startUptime()
     appendLog({ time: logTimestamp(), level: 'ok', msg: '[MH Multiverse] Server started' })

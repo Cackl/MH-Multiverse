@@ -1,7 +1,8 @@
 <script lang="ts">
   import { invoke } from '@tauri-apps/api/core'
   import { open } from '@tauri-apps/plugin-dialog'
-  import { appConfig, serverRunning, upsertServer, jsonPersistence, refreshPersistence, type Server } from '../lib/store'
+  import { appConfig, activeTab as appTab, serverRunning, upsertServer, jsonPersistence, refreshPersistence, type Server } from '../lib/store'
+  import { syncAccount } from '../lib/accountCommands'
   import { tip } from '../lib/tooltip'
 
   export let server: Server | null = null
@@ -22,20 +23,47 @@
   let isLocal  = server?.is_local  ?? (initialTab ? initialTab === 'local' : !!$appConfig.server_exe)
   let useHttps = server?.use_https ?? false
 
-  async function save() {
+  // `account`: 'sync' makes the server account match first (Local, Account.db servers only),
+  // 'overwrite' also sets the password on an existing account, 'skip' saves the profile as is.
+  async function save(account: 'sync' | 'overwrite' | 'skip' = 'sync') {
     name = name.trim()
     host = host.trim()
     email = email.trim()
     password = password.trim()
+    checkEmail()
 
     if (!name) { error = 'Name is required.'; return }
     if (!isLocal && !host) { error = 'Host is required for remote servers.'; return }
     if (!isEdit && !password) { error = 'Password is required for a new server.'; return }
+    const dup = sameAccountAs(email, isLocal, host, $appConfig.servers)
+    if (dup) { error = sameAccountText(dup); return }
 
     saving = true
     error = ''
+    acctError = ''
+    acctMismatch = false
+    acctTimedOut = false
+    acctWarning = ''
 
     try {
+      // A blank password in edit mode keeps the saved one, so there is nothing to sync.
+      if (canManageAccount && password && account !== 'skip') {
+        acctMsg = 'Checking the account...'
+        const r = await syncAccount(
+          { email, playerName: playerName.trim(), password, makeAdmin, overwritePassword: ownAccount || account === 'overwrite' },
+          { onStatus: m => { acctMsg = m } },
+        )
+        acctMsg = ''
+        if (!r.ok) {
+          acctError = r.error
+          acctMismatch = !!r.mismatch
+          acctTimedOut = !!r.timedOut
+          return
+        }
+        // Shown only if the profile save below fails; otherwise the modal closes.
+        if (r.created) acctMsg = 'The account was created on the server.'
+        if (r.warning) acctWarning = r.warning
+      }
       const entry: Server = {
         id: server?.id ?? crypto.randomUUID(),
         name,
@@ -45,6 +73,7 @@
         use_https: useHttps,
       }
       await upsertServer(entry, password)
+      if (acctWarning) { acctMsg = ''; return }
       onClose()
     } catch (e) {
       error = String(e)
@@ -70,6 +99,7 @@
   $: if (!isEdit && isLocal && $jsonPersistence && !jsonPrefilled) {
     jsonPrefilled = true
     if (!email) email = JSON_ACCOUNT_EMAIL
+    checkEmail()
     if (!password) password = JSON_PLACEHOLDER_PASSWORD
   }
 
@@ -78,16 +108,19 @@
       if (email === JSON_ACCOUNT_EMAIL) email = ''
       if (password === JSON_PLACEHOLDER_PASSWORD) password = ''
       jsonPrefilled = false
+      checkEmail()
     }
     isLocal = local
     activeTab = 'manual'
   }
 
-  // Name clashes are allowed (profiles are keyed by id) but confusing in the list.
-  const nameTaken = (n: string) =>
-    !!n.trim() && $appConfig.servers.some(s => s.id !== server?.id && s.name.trim().toLowerCase() === n.trim().toLowerCase())
-  $: nameClash = nameTaken(name)
-  $: importNameClash = nameTaken(importServerName)
+  // Another Multiverse profile that logs into the same account: the same email on the local
+  // server (every local profile uses the one linked MHServerEmu), or on the same remote host.
+  const lower = (s: string) => s.trim().toLowerCase()
+  const sameAccountAs = (e: string, local: boolean, h: string, servers: Server[]) => !e.trim() ? null :
+    servers.find(s => s.id !== server?.id && s.is_local === local && (local || lower(s.host) === lower(h)) && lower(s.email) === lower(e)) ?? null
+  const sameAccountText = (s: Server) =>
+    `Your profile "${s.name}" already signs in with this email ${s.is_local ? 'on the local server' : 'on this host'}.`
 
   // ── Import tab types ─────────────────────────────────────────────────────
 
@@ -373,13 +406,56 @@
 
   $: busy = saving || importSaving || restoreSaving
 
+  // ── Server account (Local, Account.db servers only) ───────────────────
+  // Saving keeps the server account in step with the profile, see save().
+  let playerName = ''
+  let makeAdmin = true
+  let acctMsg = ''
+  let acctError = ''
+  let acctMismatch = false
+  let acctTimedOut = false
+  let acctWarning = ''
+  $: canManageAccount = isLocal && hasServerExe && !$jsonPersistence
+  $: if (canManageAccount) loadExistingAccounts()
+  // Empty until the server's first start creates Account.db, so a fresh install asks for a player name.
+  // The email is checked after a pause in typing, on leaving the field and on save, not per
+  // keystroke: every partial email is "not on the server", which would flash the extra fields.
+  let checkedEmail = email.trim()
+  let emailTimer: ReturnType<typeof setTimeout> | undefined
+  function checkEmail() {
+    clearTimeout(emailTimer)
+    checkedEmail = email.trim()
+  }
+  function checkEmailSoon() {
+    clearTimeout(emailTimer)
+    emailTimer = setTimeout(checkEmail, 600)
+  }
+  $: sameAccountProfile = sameAccountAs(checkedEmail, isLocal, host, $appConfig.servers)
+  $: knownAccount = existingAccounts.find(a => a.email.toLowerCase() === checkedEmail.toLowerCase()) ?? null
+  $: newAccount = canManageAccount && !!checkedEmail && !knownAccount && (!isEdit || !!password.trim())
+  // Editing a profile's own password changes it on the server; pointing a profile at some
+  // other existing account never resets that account's password without asking.
+  $: ownAccount = isEdit && lower(email) === lower(server?.email ?? '')
+  // Says up front whether saving writes to MHServerEmu, since the modal just closes afterwards.
+  $: serverEffect = !canManageAccount || !knownAccount ? '' : `Existing account: ${knownAccount.player_name}. ` + (
+    ownAccount && password.trim() ? "If this password differs from the server's, saving changes it there too."
+    : isEdit ? 'Saving changes this profile only. Nothing on the server changes.'
+    : 'Saving adds a Multiverse profile only. Nothing on the server changes.')
+  $: saveLabel = saving ? 'Saving...' : newAccount ? 'Create Account & Save' : isEdit ? 'Save Changes' : 'Add Server'
+
+  function openConsole() {
+    onClose()
+    appTab.set('server')
+  }
+
   function onKeydown(e: KeyboardEvent) {
     if (e.key === 'Escape' && !busy) onClose()
   }
 
   function submit() {
     if (activeTab === 'manual') {
-      save()
+      if (acctWarning) onClose()
+      else save()
     } else if (activeTab === 'import') {
       runImport()
     } else if (activeTab === 'restore') {
@@ -455,7 +531,6 @@
         <div class="form-group">
           <label class="field-label" for="modal-name">Name</label>
           <input id="modal-name" type="text" bind:value={name} placeholder={isLocal ? 'Local Server' : 'Server name'}>
-          {#if nameClash}<div class="hint-block">A profile with this name already exists.</div>{/if}
         </div>
 
         {#if !isLocal}
@@ -492,8 +567,20 @@
 
         <div class="form-group">
           <label class="field-label" for="modal-email">Email</label>
-          <input id="modal-email" type="text" bind:value={email} placeholder="player1@local.host">
+          <input id="modal-email" type="text" bind:value={email} on:input={checkEmailSoon} on:blur={checkEmail} placeholder="player1@local.host">
+          {#if sameAccountProfile}
+            <div class="hint-block">{sameAccountText(sameAccountProfile)}</div>
+          {:else if serverEffect}
+            <div class="hint-block">{serverEffect}</div>
+          {/if}
         </div>
+
+        {#if newAccount}
+          <div class="form-group">
+            <label class="field-label" for="modal-player-name">Player name</label>
+            <input id="modal-player-name" type="text" bind:value={playerName} placeholder="Your in-game name">
+          </div>
+        {/if}
 
         <div class="form-group">
           <label class="field-label" for="modal-password">
@@ -502,6 +589,35 @@
           </label>
           <input id="modal-password" type="password" bind:value={password} placeholder={isEdit ? '............' : 'Required'}>
         </div>
+
+        {#if newAccount}
+          <label class="check-row">
+            <input type="checkbox" bind:checked={makeAdmin}>
+            <span class="check-label">Make it an admin account</span>
+            <button
+              class="info-btn"
+              type="button"
+              use:tip={'Admins can use server commands in game. Fine for a server only you play on.'}
+              tabindex="-1"
+            >?</button>
+          </label>
+          <div class="hint-block">Saving creates this account on your server, starting the server if it isn't running.</div>
+        {/if}
+
+        {#if acctMsg}
+          <div class="account-status" role="status">
+            {#if saving}<span class="spinner" aria-hidden="true"></span>{/if}{acctMsg}
+          </div>
+        {/if}
+        {#if acctWarning}<div class="warning-notice">{acctWarning} The profile was saved.</div>{/if}
+        {#if acctError}
+          <div class="error">
+            {acctError}
+            {#if acctMismatch}<button type="button" class="link-btn" on:click={() => save('overwrite')}>Set this password on the server</button>{/if}
+            {#if acctTimedOut}<button type="button" class="link-btn" on:click={openConsole}>Open Server console</button>{/if}
+            <button type="button" class="link-btn" on:click={() => save('skip')}>Save profile anyway</button>
+          </div>
+        {/if}
 
         {#if error}
           <div class="error">{error}</div>
@@ -581,7 +697,6 @@
           <div class="form-group">
             <label class="field-label" for="modal-import-server-name">Server Name</label>
             <input id="modal-import-server-name" type="text" bind:value={importServerName} placeholder={importSummary.player_name}>
-            {#if importNameClash}<div class="hint-block">A profile with this name already exists.</div>{/if}
           </div>
 
           <div class="form-group">
@@ -719,11 +834,11 @@
         type="button"
         class="btn btn-outline"
         on:click={onClose}
-        disabled={saving || importSaving || restoreSaving}
+        disabled={busy}
       >Cancel</button>
       {#if activeTab === 'manual'}
         <button type="button" class="btn btn-accent" on:click={submit} disabled={saving}>
-          {saving ? 'Saving...' : isEdit ? 'Save Changes' : 'Add Server'}
+          {acctWarning ? 'Done' : saveLabel}
         </button>
       {:else if activeTab === 'import'}
         <button type="button" class="btn btn-accent" on:click={submit} disabled={!canImport || importSaving}>
@@ -813,6 +928,37 @@
     border: 1px solid color-mix(in srgb, var(--red) 40%, transparent);
     background: var(--red-dim);
     border-radius: var(--radius-sm);
+  }
+
+  .account-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    color: var(--text-2);
+  }
+  .spinner {
+    width: 12px;
+    height: 12px;
+    flex-shrink: 0;
+    border: 2px solid var(--border-lit);
+    border-top-color: var(--text-1);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @media (prefers-reduced-motion: reduce) {
+    .spinner { animation-duration: 3s; }
+  }
+  .link-btn {
+    margin-left: 6px;
+    padding: 0;
+    background: none;
+    border: none;
+    color: inherit;
+    font: inherit;
+    text-decoration: underline;
+    cursor: pointer;
   }
 
   .field-error {
