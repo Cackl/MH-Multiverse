@@ -116,3 +116,12 @@ export const FALLBACK_COMMANDS: Cmd[] = [
     {f:'!tp',a:'x:+offset | x y z',d:'Teleports to position.'},
     {f:'!gc collect',a:'',d:'Forces garbage collection.'},
 ]
+
+const PASSWORD_ARG = /(!account\s+(?:create\s+\S+\s+\S+|(?:password|verify)\s+\S+)\s+)\S+/gi
+// The server's own echo: `command=[account], parameters=[create <email> <name> <password>]`.
+const PASSWORD_PARAM = /(command=\[account\],\s*parameters=\[(?:create\s+\S+\s+\S+|(?:password|verify)\s+\S+)\s+).+?(?=\]\s*$)/gi
+
+/** Hides the password in `account create|password|verify` wherever it appears in a log line. */
+export function maskSecrets(msg: string): string {
+  return msg.replace(PASSWORD_ARG, '$1****').replace(PASSWORD_PARAM, '$1****')
+}

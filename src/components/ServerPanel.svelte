@@ -26,7 +26,7 @@
     startServer,
     startApache,
   } from '../lib/store'
-  import { FALLBACK_COMMANDS } from '../lib/serverCommands'
+  import { FALLBACK_COMMANDS, maskSecrets } from '../lib/serverCommands'
   import PlayersBlade from './PlayersBlade.svelte'
 
   const DASHBOARD_PORT_DEFAULT = 8080
@@ -126,7 +126,7 @@
     if (!cmd) return
     try {
       await invoke('send_command', { cmd })
-      appendLog({ time: '', level: 'info', msg: `> ${cmd}` })
+      appendLog({ time: '', level: 'info', msg: `> ${maskSecrets(cmd)}` })
       command = ''
       acVisible = false; acResolved = null; acSuggs = []; acSel = -1
     } catch (e) {

@@ -16,6 +16,7 @@ import {
   type LogLine,
   type OverlayLine,
 } from './store'
+import { maskSecrets } from './serverCommands'
 
 type ServerStoppedPayload = {
   running: boolean
@@ -84,7 +85,7 @@ export function normalizeLogBatch(lines: RawLogEventPayload): Omit<LogLine, 'id'
   return lines.map((line) => ({
     time: line.time ?? '',
     level: toLogLevel(line.level),
-    msg: line.msg ?? '',
+    msg: maskSecrets(line.msg ?? ''),
   }))
 }
 

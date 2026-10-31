@@ -25,6 +25,38 @@ describe('normalizeLogBatch', () => {
   })
 })
 
+describe('log passwords', () => {
+  const cases: [string, string][] = [
+    ['!account create a@b.c Player hunter2', '!account create a@b.c Player ****'],
+    ['!account password a@b.c hunter2', '!account password a@b.c ****'],
+    ['!account verify a@b.c hunter2', '!account verify a@b.c ****'],
+    ['[Info] Console: !ACCOUNT  CREATE a@b.c Player hunter2 extra', '[Info] Console: !ACCOUNT  CREATE a@b.c Player **** extra'],
+    [
+      '[CommandManager] Command invoked: invoker=[ServerConsole], command=[account], parameters=[create me me3 pass]',
+      '[CommandManager] Command invoked: invoker=[ServerConsole], command=[account], parameters=[create me me3 ****]',
+    ],
+    [
+      'invoker=[ServerConsole], command=[account], parameters=[password a@b.co pw]x]',
+      'invoker=[ServerConsole], command=[account], parameters=[password a@b.co ****]',
+    ],
+    [
+      'invoker=[ServerConsole], command=[account], parameters=[verify a@b.co secret]',
+      'invoker=[ServerConsole], command=[account], parameters=[verify a@b.co ****]',
+    ],
+    [
+      'invoker=[ServerConsole], command=[account], parameters=[userlevel a@b.co 2]',
+      'invoker=[ServerConsole], command=[account], parameters=[userlevel a@b.co 2]',
+    ],
+    ['> !account password a@b.c', '> !account password a@b.c'],
+    ['!account info', '!account info'],
+    ['!account userlevel a@b.c 2', '!account userlevel a@b.c 2'],
+    ['Account created: a@b.c', 'Account created: a@b.c'],
+  ]
+  it.each(cases)('masks %s', (raw, shown) => {
+    expect(normalizeLogBatch([{ time: 't', level: 'info', msg: raw }])[0].msg).toBe(shown)
+  })
+})
+
 describe('parseServerNowAsUtc', () => {
   it('parses the MHServerEmu date/time format as UTC', () => {
     const date = parseServerNowAsUtc('04/10/2026 03:28:24')
