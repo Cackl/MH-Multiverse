@@ -83,6 +83,7 @@ pub fn run() {
             config::set_active_server,
             config::set_game_exe,
             config::set_server_exe,
+            ini::uses_json_persistence,
             config::set_theme,
             config::set_launch_options,
             config::set_shutdown_config,

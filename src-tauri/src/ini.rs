@@ -108,6 +108,14 @@ pub fn read_merged_value(server_exe: &str, section: &str, key: &str, default: &s
         .unwrap_or_else(|| default.to_string())
 }
 
+/// True when the server stores player data in a single JSON file instead of Account.db.
+#[tauri::command]
+pub fn uses_json_persistence(server_exe: String) -> bool {
+    read_merged_value(&server_exe, "PlayerManager", "UseJsonDBManager", "false")
+        .trim()
+        .eq_ignore_ascii_case("true")
+}
+
 #[tauri::command]
 pub fn read_config(server_exe: String) -> Result<ConfigState, String> {
     let config_path = config_ini_path(&server_exe)

@@ -145,3 +145,30 @@ fn read_merged_value_override_wins() {
     assert_eq!(read_merged_value(&server_exe, "WebFrontend", "Port", "0"), "9090");
     assert_eq!(read_merged_value(&server_exe, "Frontend", "Port", "0"), "8888");
 }
+
+#[test]
+fn uses_json_persistence_table() {
+    let json = "[PlayerManager]\nUseJsonDBManager = true\n";
+    let sqlite = "[PlayerManager]\nUseJsonDBManager = false\n";
+    // (Config.ini, ConfigOverride.ini, expected)
+    let cases: [(Option<&str>, Option<&str>, bool); 8] = [
+        (None, None, false),
+        (Some(""), None, false),
+        (Some(json), None, true),
+        (Some("[PlayerManager]\nUseJsonDBManager = True\n"), None, true),
+        (Some(json), Some(sqlite), false),
+        (Some(sqlite), Some(json), true),
+        (Some("[Other]\nUseJsonDBManager = true\n"), None, false),
+        (Some(json), Some("[PlayerManager]\nEnablePersistence = true\n"), true),
+    ];
+    for (i, (config, over, want)) in cases.iter().enumerate() {
+        let (tmp, server_exe) = empty_server();
+        if let Some(c) = config {
+            fs::write(tmp.path().join("Config.ini"), c).unwrap();
+        }
+        if let Some(o) = over {
+            fs::write(tmp.path().join("ConfigOverride.ini"), o).unwrap();
+        }
+        assert_eq!(uses_json_persistence(server_exe), *want, "case {i}");
+    }
+}
