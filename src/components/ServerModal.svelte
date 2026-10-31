@@ -113,12 +113,6 @@
     activeTab = 'manual'
   }
 
-  // Name clashes are allowed (profiles are keyed by id) but confusing in the list.
-  const nameTaken = (n: string) =>
-    !!n.trim() && $appConfig.servers.some(s => s.id !== server?.id && s.name.trim().toLowerCase() === n.trim().toLowerCase())
-  $: nameClash = nameTaken(name)
-  $: importNameClash = nameTaken(importServerName)
-
   // ── Import tab types ─────────────────────────────────────────────────────
 
   interface ImportSummary {
@@ -510,7 +504,6 @@
         <div class="form-group">
           <label class="field-label" for="modal-name">Name</label>
           <input id="modal-name" type="text" bind:value={name} placeholder={isLocal ? 'Local Server' : 'Server name'}>
-          {#if nameClash}<div class="hint-block">A profile with this name already exists.</div>{/if}
         </div>
 
         {#if !isLocal}
@@ -674,7 +667,6 @@
           <div class="form-group">
             <label class="field-label" for="modal-import-server-name">Server Name</label>
             <input id="modal-import-server-name" type="text" bind:value={importServerName} placeholder={importSummary.player_name}>
-            {#if importNameClash}<div class="hint-block">A profile with this name already exists.</div>{/if}
           </div>
 
           <div class="form-group">
