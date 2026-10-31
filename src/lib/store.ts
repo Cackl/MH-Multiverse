@@ -78,6 +78,9 @@ export async function goDataTab(sub: DataTab) {
   activeDataTab.set(sub)
 }
 export const serverRunning = writable<boolean>(false)
+// True once the server has finished starting and reads console commands (see serverEvents.ts).
+export const serverReady = writable<boolean>(false)
+serverRunning.subscribe(running => { if (!running) serverReady.set(false) })
 export const gameRunning = writable<boolean>(false)
 export const apacheRunning = writable<boolean>(false)
 export const uptimeSec = writable<number>(0)
