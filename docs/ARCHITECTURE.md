@@ -31,9 +31,14 @@ mh-multiverse/
 │   ├── lib/
 │   │   ├── store.ts              Global stores, types, Tauri invoke wrappers
 │   │   ├── releaseNotes.ts       Minimal Markdown → blocks parser for release notes (no {@html})
-│   │   ├── tooltip.ts            `tip` Svelte action: hover tooltip in the Config panel's style
+│   │   ├── tooltip.ts            `tip` Svelte action: the app's only tooltip (400 ms on hover,
+│   │   │                         instant on keyboard focus); native `title=` is not used
 │   │   ├── serverEvents.ts       Tauri event listeners (log, start, stop, player-event)
-│   │   ├── serverCommands.ts     Fallback command list for autocomplete
+│   │   ├── serverCommands.ts     Fallback command list for autocomplete; maskSecrets for
+│   │   │                         passwords in account commands
+│   │   ├── accountCommands.ts    syncAccount: create or check a local Account.db account through
+│   │   │                         console commands, waiting on the server's reply lines
+│   │   ├── browseExe.ts          Shared exe file picker (Settings, Get Started)
 │   │   ├── playerMeta.ts         PlayerSession type, user level labels, ban/whitelist flag helpers
 │   │   ├── tuningMeta.ts         Tuning enum prefixes, category maps, known file sets,
 │   │   │                         Tuning/Events payload type interfaces
@@ -45,6 +50,8 @@ mh-multiverse/
 │       ├── Rail.svelte            Left nav rail (MHO / Local / App groups)
 │       ├── PanelSidebar.svelte    Reusable sidebar layout wrapper
 │       ├── LaunchPanel.svelte     Server profiles, credentials, game launch (shows an "Overlay" indicator when inject-on-launch is on; clicking it opens the Overlay card in Settings)
+│       ├── GetStarted.svelte      Launch-page checklist shown with no servers (game/server exe, Server + Apache start, local account, launch options); reopened by the Servers header's ? button
+│       ├── ConfirmDialog.svelte   Themed confirm dialog driven by askConfirm() in store.ts
 │       ├── ServerPanel.svelte     Server start/stop, log viewer, command input, online players
 │       ├── PlayersBlade.svelte    Searchable list of players connected to the server
 │       ├── PlayerCard.svelte      Per-player moderation/admin card (kick, ban, user level, info)
@@ -62,8 +69,11 @@ mh-multiverse/
 │       ├── OpsPanel.svelte        Server update, backup create/restore/delete
 │       ├── integrations/          Integrations page building blocks
 │       │   ├── IntegrationCard.svelte     Collapsible card shell (title, subtitle); one per integration; openCard(id) pre-opens one for deep links
-│       │   └── OverlayIntegration.svelte  MarvelHeroesOmega Overlay card: folder/trust, inject toggle and Inject now, flags, loot log
-│       ├── ServerModal.svelte     Add/edit server dialog; tabbed Manual / Import Account / Restore Backup
+│       │   ├── OverlayIntegration.svelte  MarvelHeroesOmega Overlay card: folder/trust, inject toggle and Inject now, flags, loot log
+│       │   └── ProfileImport.svelte       Import Server Profiles card (Bifrost, overlay launcher): detect/browse, preview, import
+│       ├── ServerModal.svelte     Add/edit server dialog; tabs Remote / Local / From Backup. Local
+│       │                          profiles on an Account.db server sync the account on Save
+│       │                          (accountCommands.ts); From Backup imports or restores by storage mode
 │       └── AppPanel.svelte        Settings: exe paths, launch options, themes, integrations
 │                                  (overlay link/trust/flags/loot log), about
 │
@@ -96,7 +106,10 @@ mh-multiverse/
 │   │   ├── app_update.rs         MH Multiverse self-update: GitHub Releases check, verified
 │   │   │                         download, portable exe swap or MSI install
 │   │   ├── accounts.rs           Account export (!account download JSON) import and restore;
-│   │   │                         Download/ folder scanning, ID remapping, Add/Replace modes
+│   │   │                         Download/ folder scanning, ID remapping, Add/Replace modes;
+│   │   │                         JSON-storage restore; read-only account/password checks
+│   │   ├── test_helpers.rs       Test-only fixtures (temp server dir, seeded Account.db); the
+│   │   │                         tests live in tests/rust/test_*.rs, one #[path] mod per module
 │   │   ├── overlay/              Third-party overlay integration (see Rust Modules)
 │   │   │   ├── mod.rs            OverlayConfig/TrustRecord, hashing, trust + flag commands,
 │   │   │   │                     post-launch injection and Inject now orchestration
@@ -195,7 +208,7 @@ Panels follow a consistent layout: `PanelSidebar` on the left (file/item list wi
 
 **`EventsPanel.svelte`** deviates from the standard sidebar/editor split. The sidebar lists schedule rules grouped by type (`AlwaysOn`, `DayOfWeek`, `WeeklyRotation`, `SpecialDate`), and the main area is a dashboard showing currently active events and a collapsible full event definition list. Selecting a rule or definition opens an inline editor area (not a separate modal) in place of the dashboard. Override status controls (Reset / Merge) for both Events and Schedule are rendered at the bottom of the sidebar.
 
-**`PlayerCard.svelte`** is a self-contained card rendered per online player in `PlayersPanel.svelte` (accessed via a button in `ServerPanel`). It issues moderation commands (`!client kick`, `!account ban/unban`, `!account whitelist/unwhitelist`, `!client info`) and admin commands (`!account userlevel`) directly via `invoke('send_command', { cmd })`. Actions requiring an email address check `player.email` before proceeding and display inline feedback. Destructive actions (kick, ban) require a two-step confirmation UI within the card.
+**`PlayerCard.svelte`** is a self-contained card rendered per online player in `PlayersBlade.svelte` (accessed via a button in `ServerPanel`). It issues moderation commands (`!client kick`, `!account ban/unban`, `!account whitelist/unwhitelist`, `!client info`) and admin commands (`!account userlevel`) directly via `invoke('send_command', { cmd })`. Actions requiring an email address check `player.email` before proceeding and display inline feedback. Destructive actions (kick, ban) require a two-step confirmation UI within the card.
 
 **`ServerModal.svelte`** is tabbed rather than a single form. Add mode shows Manual (the original host/email/password form) and Import Account (create a new local account from a `!account download` export, then create its server profile in the same step). Edit mode shows Manual and, for local servers only, Restore Backup (overwrite the existing profile's account data from a newer export — no identity fields, no picker, resolved automatically from the profile's `email`). The two non-Manual tabs are otherwise independent of each other and of Manual's fields, except that Restore's visibility reactively tracks the Local checkbox.
 
@@ -325,6 +338,7 @@ The stdout reader additionally calls `parse_player_log_event` on every line (reg
 | `write_config` | `server_exe: String, updates: IniData` | `()` | Diff-write overrides only |
 | `reset_config_section` | `server_exe: String, section: String` | `()` | Remove section from ConfigOverride.ini |
 | `get_config_dir` | `server_exe: String` | `String` | Return server directory path |
+| `uses_json_persistence` | `server_exe: String` | `bool` | Whether `[PlayerManager] UseJsonDBManager` is true (merged), i.e. the server stores its one account in a JSON file |
 
 ### Tuning (`tuning.rs`)
 
@@ -373,7 +387,7 @@ The stdout reader additionally calls `parse_player_log_event` on every line (reg
 
 | Command | Parameters | Returns | Description |
 |---|---|---|---|
-| `check_update_available` | - | `UpdateInfo` | Probe nightly build URL availability |
+| `check_update_available` | `server_exe: Option<String>` | `UpdateInfo` | Probe nightly build URL availability and compare it with the installed build |
 | `run_update` | `server_exe: String, backup_targets: Vec<String>` | `()` | Full update flow: backup → download → extract → install → restore |
 | `create_backup` | `server_exe: String, targets: Vec<String>, label: String` | `BackupManifest` | Create a named backup |
 | `list_backups` | `server_exe: String` | `Vec<BackupManifest>` | List backups (newest first) |
@@ -421,6 +435,10 @@ Imports server profiles from uploaded JSON files, detected by shape: Bifrost `Bi
 | `scan_download_backups` | `game_exe: String` | `Vec<BackupFileEntry>` | List candidate files in `<game_exe_dir>/Download/` by filename pattern only |
 | `list_accounts_for_import` | `server_exe: String` | `Vec<AccountEntry>` | All accounts (id, player name, email) — used for Add conflict pre-checks and Restore target resolution |
 | `import_account` | `server_exe: String, json_path: String, mode: String, target_id: Option<String>, overrides: Option<ImportOverrides>` | `()` | `mode: "add"` creates a new account (`overrides` applies); `mode: "replace"` overwrites `target_id`'s game data only (`overrides` ignored). `target_id` is a decimal string (see u64 Precision) |
+| `restore_json_account` | `server_exe: String, json_path: String` | `Option<String>` | JSON storage only: write the export as the server's save (see Account Import and Restore below); returns the file name of the copy made of the previous save |
+| `account_exists` | `server_exe: String, email: String` | `bool` | Read-only check that an account with this email is in Account.db; errors while the file is missing or locked |
+| `account_password_matches` | `server_exe: String, email: String, password: String` | `bool` | Read-only: recompute the PBKDF2 hash with the stored salt to confirm a console `!account create` / `password` landed |
+| `blocked_player_names` | `server_exe: String` | `Vec<String>` | Lowercased names from `Data/PlayerNameBlacklist.txt`, which the server refuses for new accounts |
 
 ---
 
@@ -434,6 +452,13 @@ Imports server profiles from uploaded JSON files, detected by shape: Bifrost `Bi
 | `settingsSection` | `writable<SettingsSection>` | Settings section to open next (`client` / `theme` / `integrations` / `about`); read once by `AppPanel` on mount, then reset to `client`. Set by the Launch page overlay indicator |
 | `activeDataTab` | `writable<DataTab>` | Current data sub-tab (`events` / `tuning` / `store` / `patches`) |
 | `serverRunning` | `writable<boolean>` | MHServerEmu process state |
+| `serverReady` | `writable<boolean>` | True once the server logs its ready line and reads console commands; reset when it stops |
+| `startingServer` / `startingApache` | `writable<boolean>` | A start is in progress |
+| `serverStartError` / `apacheStartError` | `writable<string>` | Last start failure, shown on the Rail dots; '' when none |
+| `jsonPersistence` | `writable<boolean>` | The linked server stores its one account in a JSON file; set by `refreshPersistence` |
+| `launchOptionsReviewed` | `writable<boolean>` | Session only: Get Started ticks "Launch options" once they have been opened |
+| `unsavedSources` | `writable<Record<string, string>>` | Editors holding unsaved edits, keyed by source; checked by `confirmLeave` |
+| `confirmRequest` | `writable<ConfirmRequest \| null>` | The open `askConfirm` question, rendered by `ConfirmDialog` |
 | `gameRunning` | `writable<boolean>` | MarvelHeroesOmega.exe process state |
 | `apacheRunning` | `writable<boolean>` | Apache process state |
 | `uptimeSec` | `writable<number>` | Server uptime counter (seconds) |
@@ -455,6 +480,12 @@ Imports server profiles from uploaded JSON files, detected by shape: Bifrost `Bi
 
 | Export | Signature | Description |
 |---|---|---|
+| `askConfirm` | `(opts) => Promise<boolean>` | Ask through the themed `ConfirmDialog`; a newer question cancels an unanswered one |
+| `setUnsaved` | `(key, label \| null) => void` | Register or clear an editor's unsaved edits |
+| `confirmLeave` | `() => Promise<boolean>` | True when nothing is unsaved or the user agrees to discard it |
+| `goTab` / `goDataTab` | `(tab) => Promise<void>` | Navigate after `confirmLeave` |
+| `startServer` / `startApache` | `() => Promise<void>` | Start the process, tracking `starting*` and `*StartError` |
+| `refreshPersistence` | `(serverExe) => Promise<void>` | Set `jsonPersistence` from `uses_json_persistence` |
 | `startUptime` | `() => void` | Start uptime timer (no-op if running) |
 | `stopUptime` | `() => void` | Stop and reset uptime timer |
 | `appendLog` | `(line: Omit<LogLine, 'id'>) => void` | Append single log line with auto-ID |
@@ -511,7 +542,7 @@ Frontend store ──invoke──→ Rust command ──→ load multiverse.json
 
 Every config mutation loads from disk, modifies, and writes back. There is no in-memory cache on the Rust side. This is simple and correct but means rapid successive mutations each do a full read-write cycle. The frontend's optimistic store update keeps the UI responsive regardless.
 
-Passwords follow a separate path: the frontend sends plaintext to `upsert_server`, which encrypts via AES-256-GCM before storing. The `Server` type sent to the frontend omits `password_enc` and `password_nonce` (they are `#[serde(default)]` fields not populated in the response). Passwords are only decrypted at game launch time in `launcher.rs`. The is_local and use_https fields are included in the serialised Server record. For local servers, host is stored as an empty string; the actual siteconfigurl and dashboard URL are computed at use time from Config.ini.
+Passwords follow a separate path: the frontend sends plaintext to `upsert_server`, which encrypts via AES-256-GCM before storing. The `Server` type sent to the frontend includes `password_enc` and `password_nonce` (encrypted, `#[serde(default)]`), but the frontend never decrypts or sends them back: `upsert_server` keeps the stored values when no new password is given. Passwords are only decrypted at game launch time in `launcher.rs`. The is_local and use_https fields are included in the serialised Server record. For local servers, host is stored as an empty string; the actual siteconfigurl and dashboard URL are computed at use time from Config.ini.
 
 ### Server Lifecycle
 
@@ -651,7 +682,7 @@ ensure_catalogue_loaded
   → extract Blueprint.directory (LZ4 decompress)
   → extract Prototype.directory (LZ4 decompress)
   → parse directories into PrototypeCatalogue
-  → build indices: by_id, by_path, by_guid
+  → build indices: by_id, by_path
   → cache result keyed by sip path
 ```
 
@@ -670,14 +701,16 @@ Values of `"N/A"` or empty string are treated as absent at each level.
 ### Update Flow
 
 ```
-check_update_available
-  → compute target build date (today, or yesterday if before 07:15 UTC)
-  → construct nightly.link URL
-  → HTTP range probe (bytes=0-0) to check existence
-  → return UpdateInfo { build_date, download_url, available }
+check_update_available(server_exe)
+  → candidate build dates: today and yesterday (UTC)
+  → HTTP range probe (bytes=0-0) of each nightly.link URL, newest first
+  → read the installed build date from MHServerEmu.exe's ProductVersion
+    ("1.0.3+build20261027131155"), if it has one
+  → return UpdateInfo { build_date, download_url, available, installed_build_date, up_to_date }
 
 run_update
   → guard: server must not be running
+  → refuse when the installed build is the same or newer
   → backup selected targets to {server_dir}/Backups/{timestamp}/
   → download zip with streaming progress events
   → extract to {server_dir}/_update_staging/
@@ -758,10 +791,18 @@ import_account(mode: "add", overrides)
 
 import_account(mode: "replace", target_id)
   → verify target_id exists — no other checks against the target
-  → DELETE Player row (ON DELETE CASCADE removes its Avatar/TeamUp/Item/
-    ControlledEntity children)
+  → DELETE Item, ControlledEntity, Avatar, TeamUp, then Player rows in that
+    order (foreign keys are off, so ON DELETE CASCADE never fires)
   → insert_player_data against target_id, same remap logic as Add
   → Account row's Email/PlayerName/Password/UserLevel/Flags untouched
+
+restore_json_account(server_exe, json_path)   [JSON storage only]
+  → refuse while the server runs; validate with read_and_parse
+  → [JsonDBManager] FileName must be a plain name in Data/
+  → copy the current save to <FileName>.multiverse-<timestamp>.bak, keeping
+    the newest max(MaxBackupNumber, 1) of those copies
+  → write the file as is with UserLevel = 2 (no remap: the loader doesn't check the Id)
+  → write its PlayerName to [JsonDBManager] PlayerName in ConfigOverride.ini
 ```
 
 The remap step means an imported file's original account identity is irrelevant to whether it can be written — Replace will happily attach any file's data to any target. `ServerModal`'s Restore tab is the only safeguard: it resolves the target account from the profile's own `email` and hard-blocks the Restore button if the selected file's email/player name don't match that account, since nothing on the backend would otherwise catch a mismatched file.
