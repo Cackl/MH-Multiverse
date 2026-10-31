@@ -304,6 +304,107 @@ fn import_replace_target_not_found() {
     assert_eq!(err, "Target account not found.");
 }
 
+// restore_json_account's running-server guard needs tauri::State, so these call
+// restore_json_save, which it delegates to.
+
+/// An empty server with Data/ and the sample export saved as a backup whose Id
+/// is the built-in JSON account's (above JS's safe integer range).
+fn json_server() -> (tempfile::TempDir, String, String, serde_json::Value) {
+    let (tmp, server_exe) = empty_server();
+    fs::create_dir_all(tmp.path().join("Data")).unwrap();
+    let mut backup: serde_json::Value =
+        serde_json::from_str(&fs::read_to_string(fixture_path("import/sample_account_export.json")).unwrap()).unwrap();
+    backup["Id"] = 0x2000000000000001u64.into();
+    let backup_path = tmp.path().join("backup.json").to_string_lossy().to_string();
+    fs::write(&backup_path, backup.to_string()).unwrap();
+    (tmp, server_exe, backup_path, backup)
+}
+
+fn multiverse_copies(tmp: &tempfile::TempDir) -> Vec<String> {
+    let mut names: Vec<String> = fs::read_dir(tmp.path().join("Data"))
+        .unwrap()
+        .flatten()
+        .map(|e| e.file_name().to_string_lossy().to_string())
+        .filter(|n| n.contains(".multiverse-"))
+        .collect();
+    names.sort();
+    names
+}
+
+#[test]
+fn restore_json_writes_the_backup_as_admin_and_sets_the_player_name() {
+    let (tmp, server_exe, backup_path, mut backup) = json_server();
+    assert_eq!(restore_json_save(&server_exe, &backup_path).unwrap(), None, "no previous save to copy");
+
+    let raw = fs::read_to_string(tmp.path().join("Data/DefaultAccount.json")).unwrap();
+    assert!(raw.contains("2305843009213693953"), "Id must stay exact: {raw}");
+    backup["UserLevel"] = 2.into();
+    assert_eq!(serde_json::from_str::<serde_json::Value>(&raw).unwrap(), backup);
+    assert_eq!(crate::ini::read_merged_value(&server_exe, "JsonDBManager", "PlayerName", ""), "ImportedPlayer");
+}
+
+#[test]
+fn restore_json_honours_the_filename_override() {
+    let (tmp, server_exe, backup_path, _) = json_server();
+    fs::write(tmp.path().join("ConfigOverride.ini"), "[JsonDBManager]\nFileName=Mine.json\n").unwrap();
+    restore_json_save(&server_exe, &backup_path).unwrap();
+    assert!(tmp.path().join("Data/Mine.json").exists());
+    assert!(!tmp.path().join("Data/DefaultAccount.json").exists());
+}
+
+#[test]
+fn restore_json_copies_the_previous_save_and_keeps_max_backup_number_copies() {
+    // (older copies already there, MaxBackupNumber, copies left afterwards)
+    let cases = [(0, None, 1), (6, None, 5), (3, Some("2"), 2), (2, Some("0"), 1), (2, Some("x"), 3)];
+    for (older, max, left) in cases {
+        let (tmp, server_exe, backup_path, _) = json_server();
+        let data = tmp.path().join("Data");
+        fs::write(data.join("DefaultAccount.json"), "old save").unwrap();
+        for i in 0..older {
+            fs::write(data.join(format!("DefaultAccount.json.multiverse-20200101-00000{i}.bak")), "").unwrap();
+        }
+        fs::write(data.join("DefaultAccount.json.bak0"), "server's own").unwrap();
+        if let Some(m) = max {
+            fs::write(tmp.path().join("ConfigOverride.ini"), format!("[JsonDBManager]\nMaxBackupNumber={m}\n")).unwrap();
+        }
+
+        let copy = restore_json_save(&server_exe, &backup_path).unwrap().unwrap();
+        let copies = multiverse_copies(&tmp);
+        assert_eq!(copies.len(), left, "{older} older, max {max:?}: {copies:?}");
+        assert_eq!(copies.last(), Some(&copy), "the new copy must be kept");
+        assert_eq!(fs::read_to_string(data.join(&copy)).unwrap(), "old save");
+        assert!(data.join("DefaultAccount.json.bak0").exists(), "server backups are not ours to prune");
+    }
+}
+
+#[test]
+fn restore_json_rejects_filenames_outside_data() {
+    for bad in ["", "..", "sub/Save.json", "../Save.json", "C:/Save.json", "/Save.json", r"\\host\share\Save.json"] {
+        let (tmp, server_exe, backup_path, _) = json_server();
+        fs::write(tmp.path().join("ConfigOverride.ini"), format!("[JsonDBManager]\nFileName={bad}\n")).unwrap();
+        let err = restore_json_save(&server_exe, &backup_path).unwrap_err();
+        assert!(err.contains("FileName"), "{bad:?} -> {err}");
+    }
+}
+
+#[test]
+fn restore_json_rejects_bad_backups_without_touching_the_save() {
+    let mut control_name: serde_json::Value =
+        serde_json::from_str(&fs::read_to_string(fixture_path("import/sample_account_export.json")).unwrap()).unwrap();
+    control_name["PlayerName"] = "Name\n[PlayerManager]".into();
+    for bad in ["not json".to_string(), "{}".to_string(), r#"{"PlayerName":"x"}"#.to_string(), control_name.to_string()] {
+        let (tmp, server_exe, backup_path, _) = json_server();
+        fs::write(&backup_path, &bad).unwrap();
+        let save = tmp.path().join("Data/DefaultAccount.json");
+        fs::write(&save, "old save").unwrap();
+
+        assert!(restore_json_save(&server_exe, &backup_path).is_err(), "{bad}");
+        assert_eq!(fs::read_to_string(&save).unwrap(), "old save");
+        assert!(multiverse_copies(&tmp).is_empty(), "{bad}");
+        assert!(!tmp.path().join("ConfigOverride.ini").exists(), "{bad}");
+    }
+}
+
 #[test]
 fn hash_password_is_salted() {
     // Same password twice: a fresh random salt each time, so neither the salt

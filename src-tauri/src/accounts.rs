@@ -407,6 +407,95 @@ pub fn import_account(
     result
 }
 
+/// Restore a `!account download` file as the save of a JSON-storage server
+/// ([PlayerManager] UseJsonDBManager=true). That file has the same shape as the
+/// server's save and the loader doesn't check the Id, so it is written as is,
+/// with UserLevel forced to Admin. The backup's player name goes to
+/// [JsonDBManager] PlayerName, which the server applies on every start.
+/// Returns the file name of the copy made of the previous save, if there was one.
+#[tauri::command]
+pub fn restore_json_account(
+    server_exe: String,
+    json_path: String,
+    server_state: State<'_, ServerState>,
+) -> Result<Option<String>, String> {
+    // A running server rewrites the save from memory on every player save.
+    if crate::server::server_process_is_running(&server_state) {
+        return Err("Stop the server before restoring a backup.".into());
+    }
+    restore_json_save(&server_exe, &json_path)
+}
+
+fn json_save_path(server_exe: &str) -> Result<PathBuf, String> {
+    let name = crate::ini::read_merged_value(server_exe, "JsonDBManager", "FileName", "DefaultAccount.json");
+    // A single plain name: the copies made below are looked up next to it in Data/.
+    let mut parts = Path::new(&name).components();
+    if !matches!((parts.next(), parts.next()), (Some(Component::Normal(_)), None)) {
+        return Err(format!("Invalid [JsonDBManager] FileName '{name}': must be a file name in Data/."));
+    }
+    Ok(crate::paths::server_dir(server_exe)?.join("Data").join(name))
+}
+
+fn restore_json_save(server_exe: &str, json_path: &str) -> Result<Option<String>, String> {
+    let data = read_and_parse(json_path)?;
+    if data.player_name.chars().any(char::is_control) {
+        return Err("The backup's player name contains control characters.".into());
+    }
+    let save = json_save_path(server_exe)?;
+
+    let raw = fs::read_to_string(json_path).map_err(|e| format!("Failed to read file: {e}"))?;
+    let mut account: serde_json::Value = serde_json::from_str(raw.strip_prefix('\u{FEFF}').unwrap_or(&raw))
+        .map_err(|e| format!("Failed to parse JSON: {e}"))?;
+    account["UserLevel"] = 2.into();
+    let content = serde_json::to_string(&account).map_err(|e| e.to_string())?;
+
+    let copy = if save.exists() { Some(copy_json_save(server_exe, &save)?) } else { None };
+    fs::write(&save, content).map_err(|e| format!("Failed to write the save: {e}"))?;
+
+    let updates = HashMap::from([(
+        "JsonDBManager".to_string(),
+        HashMap::from([("PlayerName".to_string(), data.player_name)]),
+    )]);
+    crate::ini::write_config(server_exe.to_string(), updates)?;
+    Ok(copy)
+}
+
+/// Copy the current save to `<FileName>.multiverse-<timestamp>.bak`, then keep
+/// only the newest [JsonDBManager] MaxBackupNumber of those copies (at least one).
+/// Separate from the server's own rotating backups, which would push this copy
+/// out after a few saves.
+fn copy_json_save(server_exe: &str, save: &Path) -> Result<String, String> {
+    let dir = save.parent().ok_or("Invalid save path")?;
+    let prefix = format!("{}.multiverse-", save.file_name().unwrap_or_default().to_string_lossy());
+    let name = format!("{prefix}{}.bak", chrono::Local::now().format("%Y%m%d-%H%M%S"));
+    let target = dir.join(&name);
+    if target.exists() {
+        return Err(format!("{name} already exists. Try again in a moment."));
+    }
+    fs::copy(save, &target).map_err(|e| format!("Failed to copy the current save: {e}"))?;
+
+    let keep = crate::ini::read_merged_value(server_exe, "JsonDBManager", "MaxBackupNumber", "5")
+        .trim()
+        .parse::<usize>()
+        .unwrap_or(5)
+        .max(1);
+    // The timestamp sorts by name, newest last.
+    let mut copies: Vec<PathBuf> = fs::read_dir(dir)
+        .map_err(|e| format!("Failed to read Data folder: {e}"))?
+        .flatten()
+        .map(|e| e.path())
+        .filter(|p| {
+            let n = p.file_name().unwrap_or_default().to_string_lossy();
+            n.starts_with(&prefix) && n.ends_with(".bak")
+        })
+        .collect();
+    copies.sort();
+    for old in &copies[..copies.len().saturating_sub(keep)] {
+        let _ = fs::remove_file(old);
+    }
+    Ok(name)
+}
+
 // ── Import modes ───────────────────────────────────────────────────────────
 
 /// Resolve overrides on top of the parsed JSON, then delegate to `do_add`.

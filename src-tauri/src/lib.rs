@@ -155,6 +155,7 @@ pub fn run() {
             accounts::account_exists,
             accounts::account_password_matches,
             accounts::import_account,
+            accounts::restore_json_account,
             overlay::overlay_status,
             overlay::overlay_set_dir,
             overlay::overlay_trust,
