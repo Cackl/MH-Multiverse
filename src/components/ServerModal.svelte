@@ -30,11 +30,13 @@
     host = host.trim()
     email = email.trim()
     password = password.trim()
-    checkedEmail = email
+    checkEmail()
 
     if (!name) { error = 'Name is required.'; return }
     if (!isLocal && !host) { error = 'Host is required for remote servers.'; return }
     if (!isEdit && !password) { error = 'Password is required for a new server.'; return }
+    const dup = sameAccountAs(email, isLocal, host, $appConfig.servers)
+    if (dup) { error = sameAccountText(dup); return }
 
     saving = true
     error = ''
@@ -47,9 +49,6 @@
       // A blank password in edit mode keeps the saved one, so there is nothing to sync.
       if (canManageAccount && password && account !== 'skip') {
         acctMsg = 'Checking the account...'
-        // Editing a profile's own password changes it on the server; pointing a profile at some
-        // other existing account never resets that account's password without asking.
-        const ownAccount = isEdit && email.toLowerCase() === (server?.email ?? '').toLowerCase()
         const r = await syncAccount(
           { email, playerName: playerName.trim(), password, makeAdmin, overwritePassword: ownAccount || account === 'overwrite' },
           { onStatus: m => { acctMsg = m } },
@@ -100,6 +99,7 @@
   $: if (!isEdit && isLocal && $jsonPersistence && !jsonPrefilled) {
     jsonPrefilled = true
     if (!email) email = JSON_ACCOUNT_EMAIL
+    checkEmail()
     if (!password) password = JSON_PLACEHOLDER_PASSWORD
   }
 
@@ -108,10 +108,19 @@
       if (email === JSON_ACCOUNT_EMAIL) email = ''
       if (password === JSON_PLACEHOLDER_PASSWORD) password = ''
       jsonPrefilled = false
+      checkEmail()
     }
     isLocal = local
     activeTab = 'manual'
   }
+
+  // Another Multiverse profile that logs into the same account: the same email on the local
+  // server (every local profile uses the one linked MHServerEmu), or on the same remote host.
+  const lower = (s: string) => s.trim().toLowerCase()
+  const sameAccountAs = (e: string, local: boolean, h: string, servers: Server[]) => !e.trim() ? null :
+    servers.find(s => s.id !== server?.id && s.is_local === local && (local || lower(s.host) === lower(h)) && lower(s.email) === lower(e)) ?? null
+  const sameAccountText = (s: Server) =>
+    `Your profile "${s.name}" already signs in with this email ${s.is_local ? 'on the local server' : 'on this host'}.`
 
   // ── Import tab types ─────────────────────────────────────────────────────
 
@@ -409,11 +418,29 @@
   $: canManageAccount = isLocal && hasServerExe && !$jsonPersistence
   $: if (canManageAccount) loadExistingAccounts()
   // Empty until the server's first start creates Account.db, so a fresh install asks for a player name.
-  // Checked when the email field loses focus (and on save), not per keystroke: every partial
-  // email is "not on the server", which would flash the new-account fields while typing.
+  // The email is checked after a pause in typing, on leaving the field and on save, not per
+  // keystroke: every partial email is "not on the server", which would flash the extra fields.
   let checkedEmail = email.trim()
+  let emailTimer: ReturnType<typeof setTimeout> | undefined
+  function checkEmail() {
+    clearTimeout(emailTimer)
+    checkedEmail = email.trim()
+  }
+  function checkEmailSoon() {
+    clearTimeout(emailTimer)
+    emailTimer = setTimeout(checkEmail, 600)
+  }
+  $: sameAccountProfile = sameAccountAs(checkedEmail, isLocal, host, $appConfig.servers)
   $: knownAccount = existingAccounts.find(a => a.email.toLowerCase() === checkedEmail.toLowerCase()) ?? null
   $: newAccount = canManageAccount && !!checkedEmail && !knownAccount && (!isEdit || !!password.trim())
+  // Editing a profile's own password changes it on the server; pointing a profile at some
+  // other existing account never resets that account's password without asking.
+  $: ownAccount = isEdit && lower(email) === lower(server?.email ?? '')
+  // Says up front whether saving writes to MHServerEmu, since the modal just closes afterwards.
+  $: serverEffect = !canManageAccount || !knownAccount ? '' : `Existing account: ${knownAccount.player_name}. ` + (
+    ownAccount && password.trim() ? "If this password differs from the server's, saving changes it there too."
+    : isEdit ? 'Saving changes this profile only. Nothing on the server changes.'
+    : 'Saving adds a Multiverse profile only. Nothing on the server changes.')
   $: saveLabel = saving ? 'Saving...' : newAccount ? 'Create Account & Save' : isEdit ? 'Save Changes' : 'Add Server'
 
   function openConsole() {
@@ -540,7 +567,12 @@
 
         <div class="form-group">
           <label class="field-label" for="modal-email">Email</label>
-          <input id="modal-email" type="text" bind:value={email} on:blur={() => (checkedEmail = email.trim())} placeholder="player1@local.host">
+          <input id="modal-email" type="text" bind:value={email} on:input={checkEmailSoon} on:blur={checkEmail} placeholder="player1@local.host">
+          {#if sameAccountProfile}
+            <div class="hint-block">{sameAccountText(sameAccountProfile)}</div>
+          {:else if serverEffect}
+            <div class="hint-block">{serverEffect}</div>
+          {/if}
         </div>
 
         {#if newAccount}
@@ -548,8 +580,6 @@
             <label class="field-label" for="modal-player-name">Player name</label>
             <input id="modal-player-name" type="text" bind:value={playerName} placeholder="Your in-game name">
           </div>
-        {:else if canManageAccount && knownAccount}
-          <div class="hint-block">Existing account on this server: {knownAccount.player_name}</div>
         {/if}
 
         <div class="form-group">
