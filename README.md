@@ -15,14 +15,17 @@ The app is currently Windows-only and communicates with the server via stdin/std
 ## Features
 
 ### Game Launching
-- Multi-server profile management with encrypted, OS-keychain-backed credentials and auto-login. Local profiles support both patched and unpatched clients
-- Configurable launch flags (startup movies, motion comics, sound, resolution, robocopy, no-Steam, and more)
-- Simplified flow for taking an `!account download` JSON backup and adding to a local MHServerEmu Account database
+- Multi-server profile management with encrypted, OS-keychain-backed credentials and optional auto-login (note: the game client writes the password in plain text to its own Launch.log). Local profiles support both patched and unpatched clients
+- Steam Mode for Steam copies (`-steam -nosolidstate`), otherwise standalone (`-robocopy -nosteam`)
+- Launch options: skip startup movies/motion comics, no sound, custom resolution, client log, 32-bit client, patched client, plus an Additional Arguments field
+- A Get Started checklist on the Launch page that walks through linking the game and MHServerEmu and adding a server
+- Add Server with Remote, Local and From Backup tabs. On a local server that uses SQLite persistence, saving a profile creates the account on the server in the same step
+- Account import and restore from `!account download` JSON backups, for servers that store data in either SQLite or the single JSON file
 
 ### Local Server Management
 - Start/stop MHServerEmu with live log streaming and an interactive, autocomplete-backed command console
 - View logged-in players with moderation shortcuts (user level, kick, ban, whitelist)
-- Independent Apache start/stop for offline play
+- Apache start/stop independent of MHServerEmu to allow for the use of alternate web servers
 
 ### Server Configuration (INI Editor)
 - Visual editor for `Config.ini` / `ConfigOverride.ini` with grouped sections, tooltips, and type-appropriate controls
@@ -49,11 +52,10 @@ The app is currently Windows-only and communicates with the server via stdin/std
 ### Application Settings
 - Game/server executable path configuration with file browser, and multiple app themes
 
-### Calligraphy.sip Integration
-- Reads the game's data file (`Calligraphy.sip`) to know the game's definitions for items, powers, regions, and other objects
-- Search for any of these by name, with filters to narrow results down by type
-- Powers the search boxes in the Live Tuning, Data Patching, and Store Catalog editors, so you can find things by name instead of a numeric ID
-- Remembers what it's read so searches are fast, and updates automatically if you switch to a different server install
+### Integrations
+- MarvelHeroes Overlay: link and trust your copy, optionally inject on launch, toggle its flags, and view the loot-filter log
+- Import Server Profiles from Bifrost and the overlay launcher, with a preview before saving
+- `Calligraphy.sip`: Reads the game's data file (`Calligraphy.sip`) to know the definitions for items, powers, regions, and other objects - powering searches in Live Tuning, Data Patching and Store Catalog editors to find things by name instead of numeric IDs
 
 ![Theme Showcase](./docs/images/theme-showcase.png)
 ![Server Showcase](./docs/images/server-showcase.png)
@@ -116,7 +118,7 @@ Neither method removes your settings (like server lists). To fully clean up, als
 
 ## Planned Updates
 
-The last update introduced Account Importing, which I'm already finding useful for testing builds locally. Next up, I'm looking to make the calligraphy.sip parsing smoother (and in particular less reliant on `display_names.json` for prototype ID -> display name replacement). If there's enough interest, I'll also look into Linux support, though it's not something I have any experience with.
+Next up for 1.7.0: continuing the streamlining and abstraction principles from the Get Started checklist taken to the Data tab. I'm aiming to make configuring Events, Live Tuning, Store Catalogs, and Data Patching accessible to more users.
 
 ---
 
