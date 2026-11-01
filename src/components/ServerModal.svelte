@@ -116,9 +116,14 @@
 
   // Another Multiverse profile that logs into the same account: the same email on the local
   // server (every local profile uses the one linked MHServerEmu), or on the same remote host.
+  // A profile edited without changing its account is let through, so duplicates saved before
+  // this check existed can still be renamed or edited.
   const lower = (s: string) => s.trim().toLowerCase()
-  const sameAccountAs = (e: string, local: boolean, h: string, servers: Server[]) => !e.trim() ? null :
-    servers.find(s => s.id !== server?.id && s.is_local === local && (local || lower(s.host) === lower(h)) && lower(s.email) === lower(e)) ?? null
+  const sameAccount = (s: Server, e: string, local: boolean, h: string) =>
+    s.is_local === local && (local || lower(s.host) === lower(h)) && lower(s.email) === lower(e)
+  const sameAccountAs = (e: string, local: boolean, h: string, servers: Server[]) =>
+    !e.trim() || (server && sameAccount(server, e, local, h)) ? null :
+    servers.find(s => s.id !== server?.id && sameAccount(s, e, local, h)) ?? null
   const sameAccountText = (s: Server) =>
     `Your profile "${s.name}" already signs in with this email ${s.is_local ? 'on the local server' : 'on this host'}.`
 
