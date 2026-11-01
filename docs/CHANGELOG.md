@@ -2,6 +2,45 @@
 ---
 <br>
 
+# Version 1.6.0 Release
+
+## What's Changed
+
+### Get Started
+- With no servers set up, the Launch page shows a Get Started checklist: link the game and MHServerEmu, start the Server and Apache, add a local profile, and review the launch options. The `?` button in the Servers header brings it back.
+- Clearer launch problems: a warning if the game executable isn't `MarvelHeroesOmega.exe`, a tooltip on the Launch button while none is set, and red Rail dots (with the error as tooltip) when the Server or Apache fails to start.
+
+### Add Server and local accounts
+- Add and Edit Server now have Remote, Local and From Backup tabs. Local profiles always use localhost.
+- With SQLite persistence (Account.db), saving a Local profile keeps the server account in step: it creates a missing account (admin by default, starting the server if needed), offers to set the password if it differs, and leaves the server alone if it already matches. A line under Email says which will happen, and "Save profile anyway" is always offered on an error.
+- With JSON persistence, the Local tab explains the single built-in account and fills in its login.
+- A second profile for the same account is refused, and a new server is selected straight away.
+- Passwords in account commands are masked in the Server console, and the console suggests your local profiles' emails.
+
+### Restoring backups
+- From Backup now works with JSON persistence: the backup replaces the server's save as an admin account and sets the player name in Config. A copy of the previous save is kept in the Data folder (up to the JSON DB's Max Backups), and a local profile is only added if you don't have one.
+- Account.db import and restore now honour a custom `[SQLiteDBManager] FileName` and no longer create an empty Account.db before the server's first start.
+
+### Server updates
+- The Updates card shows the installed MHServerEmu build and won't reinstall it, falls back to yesterday's nightly if today's isn't out yet, and can't run twice at once.
+
+### Data editors
+- Leaving a tab or closing an editor with unsaved changes now asks first, and Save & Close now closes the Tuning and Store editors.
+- Tuning and Patch files are written atomically, with a `.bak` copy of the previous file.
+- Fixed Tuning value parsing, duplicate adds and prototype search hints, and blank Store Source names.
+
+### Themes and tooltips
+- Every theme now meets WCAG contrast targets (text 4.5:1, borders 3:1), the smallest text is 10px, and tints and glows follow each theme's own colours.
+- All tooltips use the app's style, appear after a short hover delay or on keyboard focus, and show above modals.
+- Modals, search boxes and buttons share one style across the Data tab.
+
+### Bug fixes
+- The Server console Lock button now stops auto-scrolling.
+- Small Launch page fixes: matching Username and Password box heights, the dashboard port read after the config loads, and no stray quotes in the "Select a server" prompt.
+
+<br>
+
+---
 # Version 1.5.2 Release
 
 ## What's Changed
