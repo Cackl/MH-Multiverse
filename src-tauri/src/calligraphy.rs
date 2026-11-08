@@ -33,6 +33,9 @@ struct PrototypeRecord {
     is_abstract: bool,
     /// English name from the game client's strings (own or inherited `DisplayName`-style field).
     game_name: Option<String>,
+    /// Display name after the fallback order in `resolve_name`, and where it came from.
+    name: String,
+    name_source: &'static str,
 }
 
 pub(crate) struct PrototypeCatalogue {
@@ -41,8 +44,8 @@ pub(crate) struct PrototypeCatalogue {
     /// blueprint id → its RuntimeBinding class followed by its ancestors' (e.g. AvatarPrototype, AgentPrototype, …)
     classes: HashMap<u64, Vec<String>>,
     prototypes: Vec<PrototypeRecord>,
-    /// prototype runtime id → prototype file path; built once in build_catalogue.
-    by_id: HashMap<u64, String>,
+    /// prototype runtime id → index into `prototypes`; built once in build_catalogue.
+    by_id: HashMap<u64, usize>,
     /// prototype file path → prototype runtime id; inverse of by_id.
     by_path: HashMap<String, u64>,
 }
@@ -249,7 +252,7 @@ fn parse_prototype_directory(data: &[u8]) -> Result<Vec<PrototypeRecord>, String
         // PrototypeRecordFlags::Abstract = bit 0
         let is_abstract = flags & 0x01 != 0;
 
-        prototypes.push(PrototypeRecord { prototype_id, prototype_guid, blueprint_id, path, is_abstract, game_name: None });
+        prototypes.push(PrototypeRecord { prototype_id, prototype_guid, blueprint_id, path, is_abstract, game_name: None, name: String::new(), name_source: "" });
     }
 
     Ok(prototypes)
@@ -504,9 +507,10 @@ fn build_catalogue(sip_path: &str, loco_dir: Option<&std::path::Path>) -> Result
 
     // Build runtime-ID ↔ path indices; by_id for display name resolution,
     // by_path for the inverse lookup needed when adding GuidItems from a path search.
-    let by_id: HashMap<u64, String> = prototypes
+    let by_id: HashMap<u64, usize> = prototypes
         .iter()
-        .map(|p| (p.prototype_id, p.path.clone()))
+        .enumerate()
+        .map(|(i, p)| (p.prototype_id, i))
         .collect();
 
     let by_path: HashMap<String, u64> = prototypes
@@ -574,14 +578,70 @@ fn sip_path_for_server_exe(server_exe: &str) -> Result<String, String> {
     Ok(sip_path_str)
 }
 
+/// The game client's English string folder: searched up from the game exe (as
+/// `overlay::sip_candidates` does for its Calligraphy.sip), then in the server's own Data folder.
+fn loco_dir(game_exe: &str, server_exe: &str) -> Option<std::path::PathBuf> {
+    const LOCO: &str = "Data/Game/Loco/eng.all";
+    std::path::Path::new(game_exe)
+        .ancestors()
+        .skip(1)
+        .take(5)
+        .map(|d| d.join(LOCO))
+        .chain(crate::paths::server_dir(server_exe).ok().map(|d| d.join(LOCO)))
+        .find(|p| p.is_dir())
+}
+
+/// Splits a prototype file name into words: `.../CowKingSpearLunge.prototype` → "Cow King Spear Lunge".
+fn leaf_words(path: &str) -> String {
+    let leaf = path.rsplit('/').next().unwrap_or(path);
+    let leaf = leaf.split('.').next().unwrap_or(leaf);
+    let chars: Vec<char> = leaf.chars().collect();
+    let mut out = String::new();
+    for (i, &c) in chars.iter().enumerate() {
+        if c == '_' {
+            out.push(' ');
+            continue;
+        }
+        if i > 0 && c.is_uppercase() {
+            let prev = chars[i - 1];
+            let next_lower = chars.get(i + 1).is_some_and(|n| n.is_lowercase());
+            if prev.is_lowercase() || prev.is_ascii_digit() || (prev.is_uppercase() && next_lower) {
+                out.push(' ');
+            }
+        }
+        out.push(c);
+    }
+    out.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
+/// A prototype's display name and its source, first match wins: the server's
+/// `display_names_custom.json`, the game client's strings, the bundled `display_names.json`,
+/// then the file name split into words.
+fn resolve_name(custom: Option<&str>, game: Option<&str>, bundled: Option<&str>, path: &str) -> (String, &'static str) {
+    if let Some(n) = custom.filter(|n| crate::store::usable_name(n)) {
+        return (n.to_string(), "custom");
+    }
+    if let Some(n) = game {
+        return (n.to_string(), "game");
+    }
+    if let Some(n) = bundled {
+        return (n.to_string(), "bundled");
+    }
+    (leaf_words(path), "path")
+}
+
 /// Ensure the cached prototype catalogue is loaded for the given server executable.
 ///
-/// Rebuilds the cache automatically when the resolved `Calligraphy.sip` path changes.
+/// Rebuilds the cache when the resolved `Calligraphy.sip` path or client string folder changes.
 pub(crate) fn ensure_catalogue_loaded(
     state: &CatalogueState,
+    dn: &DisplayNameState,
     server_exe: &str,
+    game_exe: &str,
 ) -> Result<(), String> {
     let sip_path_str = sip_path_for_server_exe(server_exe)?;
+    let loco = loco_dir(game_exe, server_exe);
+    let cache_key = format!("{sip_path_str}|{}", loco.as_deref().map(|p| p.display().to_string()).unwrap_or_default());
 
     let mut guard = state
         .0
@@ -590,11 +650,21 @@ pub(crate) fn ensure_catalogue_loaded(
 
     let needs_build = guard
         .as_ref()
-        .map(|(cached_path, _)| cached_path != &sip_path_str)
+        .map(|(cached_key, _)| cached_key != &cache_key)
         .unwrap_or(true);
 
     if needs_build {
-        *guard = Some((sip_path_str.clone(), build_catalogue(&sip_path_str, None)?));
+        let mut catalogue = build_catalogue(&sip_path_str, loco.as_deref())?;
+        let custom = crate::store::read_custom_names(&crate::paths::server_dir(server_exe)?);
+        for p in &mut catalogue.prototypes {
+            (p.name, p.name_source) = resolve_name(
+                custom.get(&p.path).map(String::as_str),
+                p.game_name.as_deref(),
+                dn.bundled(&p.path),
+                &p.path,
+            );
+        }
+        *guard = Some((cache_key, catalogue));
     }
 
     Ok(())
@@ -602,15 +672,9 @@ pub(crate) fn ensure_catalogue_loaded(
 
 // ── Public helpers ────────────────────────────────────────────────────────────
 
-/// Look up the prototype file path for a given runtime prototype ID.
-///
-/// Returns `None` if the ID is not present in the catalogue (catalogue not yet
-/// loaded, or the ID is from a file not present in `Calligraphy.sip`).
-///
-/// Used by `store.rs` for display name resolution without duplicating catalogue
-/// access logic.
-pub(crate) fn path_for_id(catalogue: &PrototypeCatalogue, id: u64) -> Option<&str> {
-    catalogue.by_id.get(&id).map(|s| s.as_str())
+/// Display name for a runtime prototype ID (see `resolve_name`), if the catalogue has it.
+pub(crate) fn name_for_id(catalogue: &PrototypeCatalogue, id: u64) -> Option<&str> {
+    catalogue.by_id.get(&id).map(|&i| catalogue.prototypes[i].name.as_str())
 }
 
 /// Look up the prototype runtime ID for a given prototype file path.
@@ -639,12 +703,13 @@ pub(crate) fn id_for_path(catalogue: &PrototypeCatalogue, path: &str) -> Option<
 ///
 /// Search text is matched case-insensitively against both:
 /// - prototype path
-/// - resolved display name
+/// - display name (see `resolve_name`)
 ///
 /// Returns up to 500 matches for category browsing when `query` is empty, or up
 /// to 100 matches when searching.
 #[tauri::command]
 pub fn search_prototypes(
+    app: tauri::AppHandle,
     state: tauri::State<CatalogueState>,
     dn_state: tauri::State<DisplayNameState>,
     server_exe: String,
@@ -661,11 +726,8 @@ pub fn search_prototypes(
         return Ok(vec![]);
     }
 
-    let server_dir = crate::paths::server_dir(&server_exe)?
-        .to_string_lossy()
-        .to_string();
-
-    ensure_catalogue_loaded(&state, &server_exe)?;
+    let game_exe = crate::config::load_config(&app).game_exe;
+    ensure_catalogue_loaded(&state, &dn_state, &server_exe, &game_exe)?;
 
     let guard = state
         .0
@@ -698,7 +760,7 @@ pub fn search_prototypes(
             continue;
         }
 
-        let display_name = dn_state.lookup(&server_dir, &p.path);
+        let display_name = p.name.clone();
         let display_name_lower = display_name.to_lowercase();
 
         if !query_lower.is_empty()
@@ -731,7 +793,7 @@ pub fn search_prototypes(
 
 /// Resolve a prototype file path to its runtime ID (as a decimal string).
 ///
-/// This is the inverse of `path_for_id` — given a path returned by
+/// Given a path returned by
 /// `search_prototypes`, it returns the `ItemPrototypeRuntimeIdForClient`
 /// value needed to construct a `GuidItem` in a catalog entry.
 ///
@@ -739,11 +801,14 @@ pub fn search_prototypes(
 /// JS boundary without precision loss.
 #[tauri::command]
 pub fn lookup_prototype_id(
+    app: tauri::AppHandle,
     state: tauri::State<CatalogueState>,
+    dn_state: tauri::State<DisplayNameState>,
     server_exe: String,
     prototype_path: String,
 ) -> Result<String, String> {
-    ensure_catalogue_loaded(&state, &server_exe)?;
+    let game_exe = crate::config::load_config(&app).game_exe;
+    ensure_catalogue_loaded(&state, &dn_state, &server_exe, &game_exe)?;
 
     let guard = state
         .0

@@ -132,7 +132,7 @@ fn setup_with_sip() -> (tempfile::TempDir, String) {
 
 fn load(server_exe: &str) -> CatalogueState {
     let state = CatalogueState(Mutex::new(None));
-    ensure_catalogue_loaded(&state, server_exe).unwrap();
+    ensure_catalogue_loaded(&state, &DisplayNameState::new(), server_exe, "").unwrap();
     state
 }
 
@@ -157,7 +157,7 @@ fn id_for_path_round_trip() {
     let path = "Entity/Avatar/Prototypes/BlackWidow.prototype";
     let id = id_for_path(cat, path).unwrap();
     assert_eq!(id, 1001);
-    assert_eq!(path_for_id(cat, id), Some(path));
+    assert_eq!(cat.prototypes[cat.by_id[&id]].path, path);
 }
 
 #[test]
@@ -181,7 +181,7 @@ fn load_pak_invalid_signature() {
     write_sip(&server_exe, &bytes);
 
     let state = CatalogueState(Mutex::new(None));
-    let err = ensure_catalogue_loaded(&state, &server_exe).unwrap_err();
+    let err = ensure_catalogue_loaded(&state, &DisplayNameState::new(), &server_exe, "").unwrap_err();
     assert!(err.contains("signature"), "unexpected error: {err}");
 }
 
@@ -195,14 +195,14 @@ fn load_pak_truncated() {
     write_sip(&server_exe, &bytes);
 
     let state = CatalogueState(Mutex::new(None));
-    assert!(ensure_catalogue_loaded(&state, &server_exe).is_err());
+    assert!(ensure_catalogue_loaded(&state, &DisplayNameState::new(), &server_exe, "").is_err());
 }
 
 #[test]
 fn sip_not_found_errors() {
     let (_tmp, server_exe) = empty_server(); // Data/Game/Calligraphy.sip never created
     let state = CatalogueState(Mutex::new(None));
-    let err = ensure_catalogue_loaded(&state, &server_exe).unwrap_err();
+    let err = ensure_catalogue_loaded(&state, &DisplayNameState::new(), &server_exe, "").unwrap_err();
     assert!(err.contains("not found"));
 }
 
@@ -210,13 +210,13 @@ fn sip_not_found_errors() {
 fn ensure_catalogue_loaded_rebuilds_on_path_change() {
     let (_tmp1, server_exe1) = setup_with_sip();
     let state = CatalogueState(Mutex::new(None));
-    ensure_catalogue_loaded(&state, &server_exe1).unwrap();
+    ensure_catalogue_loaded(&state, &DisplayNameState::new(), &server_exe1, "").unwrap();
 
     let (_tmp2, server_exe2) = setup_with_sip();
-    ensure_catalogue_loaded(&state, &server_exe2).unwrap();
+    ensure_catalogue_loaded(&state, &DisplayNameState::new(), &server_exe2, "").unwrap();
 
-    let cached_path = state.0.lock().unwrap().as_ref().unwrap().0.clone();
-    assert_eq!(cached_path, sip_path_for_server_exe(&server_exe2).unwrap());
+    let cached_key = state.0.lock().unwrap().as_ref().unwrap().0.clone();
+    assert!(cached_key.starts_with(&sip_path_for_server_exe(&server_exe2).unwrap()), "{cached_key}");
 }
 
 // ── Game names: skip-scanner fixtures ────────────────────────────────────────
@@ -469,4 +469,103 @@ fn build_catalogue_names_prototypes_from_client_strings() {
     // Without client strings nothing is named, and the build still succeeds.
     let cat = build_catalogue(sip.to_str().unwrap(), None).unwrap();
     assert!(cat.prototypes.iter().all(|p| p.game_name.is_none()));
+}
+
+// ── Display name order and client lookup ─────────────────────────────────────
+
+#[test]
+fn leaf_words_cases() {
+    let cases = [
+        ("Entity/Mobs/CowKingSpearLunge.prototype", "Cow King Spear Lunge"),
+        ("Powers/Pet045GiantAntPower.prototype", "Pet045 Giant Ant Power"),
+        ("Powers/MrFantasticConeRapidPunchHSEffec.prototype", "Mr Fantastic Cone Rapid Punch HS Effec"),
+        ("Regions/DR_Victory_Room.prototype", "DR Victory Room"),
+        ("NoFolder", "No Folder"),
+    ];
+    for (path, want) in cases {
+        assert_eq!(leaf_words(path), want, "{path}");
+    }
+}
+
+#[test]
+fn resolve_name_order() {
+    let path = "Entity/Items/HealthPotion.prototype";
+    let cases = [
+        ((Some("Mine"), Some("Game"), Some("Bundled")), ("Mine", "custom")),
+        ((Some("#N/A"), Some("Game"), Some("Bundled")), ("Game", "game")),
+        ((Some(" "), None, Some("Bundled")), ("Bundled", "bundled")),
+        ((None, None, None), ("Health Potion", "path")),
+    ];
+    for ((custom, game, bundled), (name, source)) in cases {
+        assert_eq!(resolve_name(custom, game, bundled, path), (name.to_string(), source), "{custom:?} {game:?} {bundled:?}");
+    }
+}
+
+#[test]
+fn loco_dir_prefers_the_client_then_the_server() {
+    let tmp = tempfile::tempdir().unwrap();
+    let game_exe = tmp.path().join("Marvel Heroes/UnrealEngine3/Binaries/Win64/MarvelHeroesOmega.exe");
+    let client_loco = tmp.path().join("Marvel Heroes/Data/Game/Loco/eng.all");
+    let server_exe = tmp.path().join("Server/MHServerEmu/MHServerEmu.exe");
+    let server_loco = crate::paths::server_dir(server_exe.to_str().unwrap()).unwrap().join("Data/Game/Loco/eng.all");
+    let (game, server) = (game_exe.to_str().unwrap(), server_exe.to_str().unwrap());
+
+    assert_eq!(loco_dir(game, server), None);
+    std::fs::create_dir_all(&server_loco).unwrap();
+    assert_eq!(loco_dir(game, server), Some(server_loco.clone()));
+    assert_eq!(loco_dir("", server), Some(server_loco));
+    std::fs::create_dir_all(&client_loco).unwrap();
+    assert_eq!(loco_dir(game, server), Some(client_loco));
+}
+
+#[test]
+fn loaded_catalogue_uses_custom_names_and_rebuilds_when_the_client_appears() {
+    let (_tmp, server_exe) = setup_with_sip();
+    let server_dir = crate::paths::server_dir(&server_exe).unwrap();
+    std::fs::write(
+        server_dir.join("display_names_custom.json"),
+        r#"{"Entity/Avatar/Prototypes/BlackWidow.prototype": "My Widow"}"#,
+    )
+    .unwrap();
+    let dn = DisplayNameState::new();
+    let state = CatalogueState(Mutex::new(None));
+    let name = |state: &CatalogueState, id: u64| {
+        let guard = state.0.lock().unwrap();
+        name_for_id(&guard.as_ref().unwrap().1, id).map(str::to_string)
+    };
+
+    ensure_catalogue_loaded(&state, &dn, &server_exe, "").unwrap();
+    assert_eq!(name(&state, 1001).as_deref(), Some("My Widow"));
+    assert_eq!(name(&state, 1003).as_deref(), Some("Health Potion"));
+    assert_eq!(name(&state, 4242), None);
+
+    // A client string folder showing up later changes the cache key, so the catalogue is rebuilt.
+    let before = state.0.lock().unwrap().as_ref().unwrap().0.clone();
+    std::fs::create_dir_all(server_dir.join("Data/Game/Loco/eng.all")).unwrap();
+    ensure_catalogue_loaded(&state, &dn, &server_exe, "").unwrap();
+    assert_ne!(state.0.lock().unwrap().as_ref().unwrap().0, before);
+}
+
+/// Opt-in check against real game data (not run by default):
+///   MHM_SERVER_EXE=<MHServerEmu.exe> MHM_GAME_EXE=<MarvelHeroesOmega.exe> \
+///   cargo test --lib real_game_data -- --ignored --nocapture
+#[test]
+#[ignore = "needs MHM_SERVER_EXE and MHM_GAME_EXE pointing at a real install"]
+fn real_game_data_names() {
+    let (Ok(server_exe), Ok(game_exe)) = (std::env::var("MHM_SERVER_EXE"), std::env::var("MHM_GAME_EXE")) else {
+        panic!("set MHM_SERVER_EXE and MHM_GAME_EXE");
+    };
+    let state = CatalogueState(Mutex::new(None));
+    let start = std::time::Instant::now();
+    ensure_catalogue_loaded(&state, &DisplayNameState::new(), &server_exe, &game_exe).unwrap();
+    println!("catalogue + names built in {:?}", start.elapsed());
+
+    let guard = state.0.lock().unwrap();
+    let cat = &guard.as_ref().unwrap().1;
+    let mut by_source: HashMap<&str, usize> = HashMap::new();
+    for p in cat.prototypes.iter().filter(|p| !p.is_abstract) {
+        *by_source.entry(p.name_source).or_default() += 1;
+    }
+    println!("non-abstract prototypes by name source: {by_source:?}");
+    assert!(by_source.get("game").copied().unwrap_or(0) > 10_000, "client strings not found or not used");
 }
