@@ -114,6 +114,25 @@ fn schedule_round_trip() {
 }
 
 #[test]
+fn null_event_slot_loads_as_empty_and_is_saved_as_empty_string() {
+    let (_tmp, server_exe) = setup();
+    let dir = dir_for(&server_exe);
+    fs::write(
+        dir.join("EventScheduleOverride.json"),
+        r#"[{"Name":"Rot","IsEnabled":true,"Type":"WeeklyRotation","StartDayOfWeek":"Monday","Events":["ArmorIncursion",null,"CosmicChaos"]}]"#,
+    )
+    .unwrap();
+
+    let rules = load_event_schedule(server_exe.clone()).unwrap().rules;
+    assert_eq!(rules[0].events, ["ArmorIncursion", "", "CosmicChaos"]);
+
+    save_schedule_override(server_exe, rules).unwrap();
+    let written = fs::read_to_string(dir.join("EventScheduleOverride.json")).unwrap();
+    assert!(!written.contains("null"), "{written}");
+    assert!(written.contains("\"\""), "{written}");
+}
+
+#[test]
 fn schedule_merge_by_name() {
     let (_tmp, server_exe) = setup();
     let dir = dir_for(&server_exe);

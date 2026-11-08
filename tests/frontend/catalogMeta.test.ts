@@ -30,7 +30,7 @@ describe('inferOfferType', () => {
     expect(inferOfferType(entryWithType('Bundle'))).toBe('bundle')
   })
   it('Bundle with additional items is bogo', () => {
-    expect(inferOfferType(entryWithType('Bundle', [{ PrototypeGuid: 1, ItemPrototypeRuntimeIdForClient: '1', Quantity: 1 }]))).toBe('bogo')
+    expect(inferOfferType(entryWithType('Bundle', [{ PrototypeGuid: '1', ItemPrototypeRuntimeIdForClient: '1', Quantity: 1 }]))).toBe('bogo')
   })
 })
 

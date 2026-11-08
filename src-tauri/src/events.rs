@@ -96,8 +96,15 @@ struct RawScheduleRule {
     start_day: Option<u32>,
     #[serde(rename = "DurationDays", skip_serializing_if = "Option::is_none")]
     duration_days: Option<u32>,
-    #[serde(rename = "Events")]
+    #[serde(rename = "Events", deserialize_with = "null_as_empty_slot")]
     events: Vec<String>,
+}
+
+/// The server allows `null` slots in a schedule's Events list (an empty week).
+/// Read them as "" and always write "" so older readers never see a null.
+fn null_as_empty_slot<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Vec<String>, D::Error> {
+    let slots = Vec::<Option<String>>::deserialize(d)?;
+    Ok(slots.into_iter().map(Option::unwrap_or_default).collect())
 }
 
 // ── Path helpers ──────────────────────────────────────────────────────────────
@@ -183,7 +190,7 @@ fn write_events_to_path(path: &Path, definitions: &[EventDefinition]) -> Result<
     let contents = serde_json::to_string_pretty(&map)
         .map_err(|e| format!("JSON serialisation error: {e}"))?;
 
-    std::fs::write(path, contents)
+    crate::store::write_with_backup(path, &contents)
         .map_err(|e| format!("Cannot write {}: {e}", path.display()))?;
 
     Ok(())
@@ -207,7 +214,7 @@ fn write_schedule_to_path(path: &Path, rules: &[ScheduleRule]) -> Result<(), Str
     let contents = serde_json::to_string_pretty(&raw)
         .map_err(|e| format!("JSON serialisation error: {e}"))?;
 
-    std::fs::write(path, contents)
+    crate::store::write_with_backup(path, &contents)
         .map_err(|e| format!("Cannot write {}: {e}", path.display()))?;
 
     Ok(())

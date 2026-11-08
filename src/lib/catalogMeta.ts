@@ -6,7 +6,7 @@
 // outside the PascalCase struct.
 
 export interface GuidItem {
-  PrototypeGuid: number
+  PrototypeGuid: string
   /** Decimal string — preserves full u64 precision across the JS boundary. */
   ItemPrototypeRuntimeIdForClient: string
   Quantity: number

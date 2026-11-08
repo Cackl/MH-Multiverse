@@ -93,10 +93,6 @@
     addEventId = ''
   }
 
-  function removeEvent(id: string) {
-    events = events.filter(e => e !== id)
-  }
-
   function moveEvent(i: number, dir: -1 | 1) {
     const j = i + dir
     if (j < 0 || j >= events.length) return
@@ -246,11 +242,11 @@
         <div class="events-empty">No events added yet.</div>
       {:else}
         <div class="events-list">
-          {#each events as eventId, i (eventId)}
+          {#each events as eventId, i (i)}
             <div class="event-row">
               <span class="status-dot" class:dot-active={eventIsActive(eventId)} class:dot-disabled={!eventIsActive(eventId)}></span>
               <div class="event-info">
-                <span class="event-name">{eventLabel(eventId)}</span>
+                <span class="event-name">{eventLabel(eventId) || '(empty slot)'}</span>
                 <span class="event-id">{eventId}</span>
               </div>
               <div class="event-actions">
@@ -295,7 +291,7 @@
                     aria-label="Remove"
                     use:tip={'Remove'}
                     disabled={saving}
-                    on:click={() => removeEvent(eventId)}
+                    on:click={() => events = events.filter((_, idx) => idx !== i)}
                 >
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <line x1="18" y1="6" x2="6" y2="18"/>

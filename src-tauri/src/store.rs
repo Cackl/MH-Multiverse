@@ -81,7 +81,7 @@ impl DisplayNameState {
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(rename_all = "PascalCase")]
 struct GuidItemDisk {
-    prototype_guid: i32,
+    prototype_guid: u64,
     item_prototype_runtime_id_for_client: u64,
     quantity: i32,
 }
@@ -110,7 +110,8 @@ struct CatalogEntryDisk {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "PascalCase")]
 pub struct GuidItem {
-    pub prototype_guid: i32,
+    /// Decimal string (a ulong on the server), for the same reason as the runtime ID below.
+    pub prototype_guid: String,
     /// Stored as a decimal string to preserve full u64 precision across the JS boundary.
     pub item_prototype_runtime_id_for_client: String,
     pub quantity: i32,
@@ -127,7 +128,7 @@ pub struct LocalizedEntry {
     pub title: String,
     #[serde(default)]
     pub release_date: String,
-    pub item_price: i32,
+    pub item_price: i64,
 }
 
 fn default_lang() -> String {
@@ -200,7 +201,7 @@ fn disk_to_view(d: CatalogEntryDisk) -> CatalogEntry {
 
 fn guid_disk_to_view(g: GuidItemDisk) -> GuidItem {
     GuidItem {
-        prototype_guid: g.prototype_guid,
+        prototype_guid: g.prototype_guid.to_string(),
         item_prototype_runtime_id_for_client: g.item_prototype_runtime_id_for_client.to_string(),
         quantity: g.quantity,
     }
@@ -243,8 +244,12 @@ fn guid_view_to_disk(g: GuidItem) -> Result<GuidItemDisk, String> {
                 g.item_prototype_runtime_id_for_client
             )
         })?;
+    let guid = g
+        .prototype_guid
+        .parse::<u64>()
+        .map_err(|e| format!("Invalid prototype GUID '{}': {e}", g.prototype_guid))?;
     Ok(GuidItemDisk {
-        prototype_guid: g.prototype_guid,
+        prototype_guid: guid,
         item_prototype_runtime_id_for_client: id,
         quantity: g.quantity,
     })
@@ -288,14 +293,19 @@ fn modified_path_for(base: &Path) -> PathBuf {
     base.with_file_name(format!("{stem}MODIFIED.json"))
 }
 
-/// Read and deserialise disk catalog entries from `path`, returning an empty
-/// vec on any error (missing file, invalid JSON, wrong schema) rather than
-/// propagating — callers decide whether absence is an error.
-fn load_disk_entries(path: &Path) -> Vec<CatalogEntryDisk> {
-    fs::read_to_string(path)
-        .ok()
-        .and_then(|s| serde_json::from_str(&s).ok())
-        .unwrap_or_default()
+/// Read and deserialise disk catalog entries from `path`. A missing file is
+/// normal and yields an empty vec; an unreadable or unparseable file is an
+/// error so callers never overwrite it with a near-empty list.
+fn load_disk_entries(path: &Path) -> Result<Vec<CatalogEntryDisk>, String> {
+    let name = path.file_name().unwrap_or_default().to_string_lossy();
+    let raw = match fs::read_to_string(path) {
+        Ok(s) => s,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
+        Err(e) => return Err(format!("Cannot read {name}: {e}")),
+    };
+    serde_json::from_str(raw.trim_start_matches('\u{FEFF}')).map_err(|e| {
+        format!("{name} is not valid catalog JSON ({e}). Fix or remove the file; nothing was changed.")
+    })
 }
 
 /// Writes `contents` to `path` atomically: writes to a sibling `.tmp` file
@@ -415,15 +425,13 @@ pub fn load_catalog_entries(server_exe: String) -> Result<Vec<CatalogEntryWithMe
             .to_string_lossy()
             .to_string();
 
-        for entry in load_disk_entries(base_path) {
+        for entry in load_disk_entries(base_path)? {
             upsert(entry, &base_name, false);
         }
 
         let modified = modified_path_for(base_path);
-        if modified.exists() {
-            for entry in load_disk_entries(&modified) {
-                upsert(entry, &base_name, true);
-            }
+        for entry in load_disk_entries(&modified)? {
+            upsert(entry, &base_name, true);
         }
     }
 
@@ -445,13 +453,8 @@ pub fn save_catalog_entry(
     let base_path = dir.join(&target_file);
     let modified_path = modified_path_for(&base_path);
 
-    // Backup before touching
-    if modified_path.exists() {
-        let bak = modified_path.with_extension("json.bak");
-        fs::copy(&modified_path, &bak).map_err(|e| format!("Backup failed: {e}"))?;
-    }
-
-    let mut disk_entries = load_disk_entries(&modified_path);
+    // Refuses (before any write or backup) if the existing file can't be parsed.
+    let mut disk_entries = load_disk_entries(&modified_path)?;
     let disk_entry = view_to_disk(entry)?;
     let sku = disk_entry.sku_id;
 
@@ -463,7 +466,7 @@ pub fn save_catalog_entry(
 
     let json = serde_json::to_string_pretty(&disk_entries)
         .map_err(|e| format!("Serialisation failed: {e}"))?;
-    write_atomic(&modified_path, &json)?;
+    write_with_backup(&modified_path, &json)?;
 
     Ok(())
 }
@@ -500,13 +503,7 @@ pub fn delete_catalog_entry(
         ));
     }
 
-    let bak = target_path.with_extension("json.bak");
-    fs::copy(&target_path, &bak).map_err(|e| format!("Backup failed: {e}"))?;
-
-    let json =
-        fs::read_to_string(&target_path).map_err(|e| format!("Read failed: {e}"))?;
-    let mut disk_entries: Vec<CatalogEntryDisk> =
-        serde_json::from_str(&json).map_err(|e| format!("Parse failed: {e}"))?;
+    let mut disk_entries = load_disk_entries(&target_path)?;
 
     let before = disk_entries.len();
     disk_entries.retain(|e| e.sku_id != sku);
@@ -517,7 +514,7 @@ pub fn delete_catalog_entry(
 
     let json = serde_json::to_string_pretty(&disk_entries)
         .map_err(|e| format!("Serialisation failed: {e}"))?;
-    write_atomic(&target_path, &json)?;
+    write_with_backup(&target_path, &json)?;
 
     Ok(())
 }
@@ -538,10 +535,10 @@ pub fn get_next_sku_id(server_exe: String) -> Result<String, String> {
     {
         let entry = entry.map_err(|e| e.to_string())?;
         let name = entry.file_name().to_string_lossy().to_string();
-        if !name.ends_with(".json") {
+        if !name.starts_with("Catalog") || !name.ends_with(".json") {
             continue;
         }
-        for e in load_disk_entries(&entry.path()) {
+        for e in load_disk_entries(&entry.path())? {
             if e.sku_id > max_sku {
                 max_sku = e.sku_id;
             }

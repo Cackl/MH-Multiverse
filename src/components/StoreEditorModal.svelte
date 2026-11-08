@@ -390,7 +390,7 @@
     if (!pickerSelectedId || !pickerSelectedPath) return
 
     const newItem: GuidItem = {
-      PrototypeGuid: 0,
+      PrototypeGuid: '0',
       ItemPrototypeRuntimeIdForClient: pickerSelectedId,
       Quantity: Math.max(1, pickerQty),
     }
