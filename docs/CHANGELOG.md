@@ -2,6 +2,18 @@
 ---
 <br>
 
+# Version 1.6.1 Release
+
+## What's Changed
+
+### Data tab editors & Bug fixes
+- A Store save no longer wipes a `*MODIFIED.json` file that can't be read (for example after a hand edit). The app now refuses to save, leaves the file and its `.bak` alone, and names the file in the error. Files starting with a UTF-8 BOM, and prices or prototype GUIDs above the old number limits, now load.
+- A schedule with an empty week (`null` in its Events list) now loads. Empty slots show as "(empty slot)" and are saved as `""`.
+- Events and schedule files are now written atomically, with a `.bak` copy of the previous file.
+
+<br>
+
+---
 # Version 1.6.0 Release
 
 ## What's Changed
