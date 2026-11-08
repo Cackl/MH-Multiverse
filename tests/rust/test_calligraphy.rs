@@ -568,4 +568,88 @@ fn real_game_data_names() {
     }
     println!("non-abstract prototypes by name source: {by_source:?}");
     assert!(by_source.get("game").copied().unwrap_or(0) > 10_000, "client strings not found or not used");
+
+    for (query, class) in [("doom", None), ("wolverine", Some("CostumePrototype")), ("xp", Some("ItemPrototype"))] {
+        let start = std::time::Instant::now();
+        let hits = search_catalogue(cat, query, &[], class);
+        let top: Vec<String> = hits.iter().take(5).map(|m| format!("{} [{}]", m.display_name, m.class)).collect();
+        println!("search {query:?} {class:?}: {} hits in {:?}; top: {top:?}", hits.len(), start.elapsed());
+    }
+}
+
+// ── Search ranking and class filter ──────────────────────────────────────────
+
+#[test]
+fn match_rank_cases() {
+    let cases = [
+        ("doom bot", "entity/x.prototype", "doom", Some(0)),
+        ("doctor doom", "entity/x.prototype", "doom", Some(1)),
+        ("s.h.i.e.l.d. agent", "entity/x.prototype", "agent", Some(1)),
+        ("kadoomer", "entity/x.prototype", "doom", Some(2)),
+        ("x", "entity/doom/x.prototype", "doom", Some(3)),
+        ("x", "entity/x.prototype", "doom", None),
+        ("anything", "entity/x.prototype", "", Some(0)),
+    ];
+    for (name, path, query, want) in cases {
+        assert_eq!(match_rank(name, path, query), want, "{name:?} / {query:?}");
+    }
+}
+
+fn record(id: u64, blueprint_id: u64, path: &str, name: &str, is_abstract: bool) -> PrototypeRecord {
+    let name_source = if name.starts_with("Doom Fight") { "path" } else { "game" };
+    PrototypeRecord {
+        prototype_id: id,
+        prototype_guid: id + 1000,
+        blueprint_id,
+        path: path.to_string(),
+        is_abstract,
+        game_name: None,
+        name: name.to_string(),
+        name_source,
+        search_name: name.to_lowercase(),
+        search_path: path.to_lowercase(),
+    }
+}
+
+fn search_fixture() -> PrototypeCatalogue {
+    PrototypeCatalogue {
+        blueprints: HashMap::new(),
+        classes: HashMap::from([
+            (1, vec!["CostumePrototype".to_string(), "ItemPrototype".to_string()]),
+            (2, vec!["AgentPrototype".to_string()]),
+        ]),
+        // Deliberately listed worst match first, so ranking has to reorder them.
+        prototypes: vec![
+            record(1, 2, "Entity/Doom/Henchman.prototype", "Henchman", false),
+            record(6, 2, "Missions/DoomFightPhase2.prototype", "Doom Fight Phase2", false), // name from the file name
+            record(2, 2, "Entity/Mobs/Kadoomer.prototype", "Kadoomer", false),
+            record(3, 1, "Entity/Items/Costumes/DoctorDoom.prototype", "Doctor Doom", false),
+            record(4, 2, "Entity/Mobs/DoomBot.prototype", "Doom Bot", false),
+            record(5, 2, "Entity/Mobs/DoomBase.prototype", "Doom Base", true),
+        ],
+        by_id: HashMap::new(),
+        by_path: HashMap::new(),
+    }
+}
+
+#[test]
+fn search_ranks_name_matches_above_path_matches_and_skips_abstract() {
+    let cat = search_fixture();
+    let names: Vec<String> = search_catalogue(&cat, " DOOM ", &[], None).into_iter().map(|m| m.display_name).collect();
+    assert_eq!(names, ["Doom Bot", "Doom Fight Phase2", "Doctor Doom", "Kadoomer", "Henchman"]);
+}
+
+#[test]
+fn search_filters_by_class_ancestry_and_category_prefix() {
+    let cat = search_fixture();
+
+    let items = search_catalogue(&cat, "doom", &[], Some("ItemPrototype"));
+    assert_eq!(items.len(), 1);
+    assert_eq!((items[0].display_name.as_str(), items[0].class.as_str()), ("Doctor Doom", "CostumePrototype"));
+    assert_eq!(items[0].name_source, "game");
+
+    let mobs: Vec<String> = search_catalogue(&cat, "", &["entity/mobs/".to_string()], None).into_iter().map(|m| m.display_name).collect();
+    assert_eq!(mobs, ["Kadoomer", "Doom Bot"]);
+
+    assert!(search_catalogue(&cat, "doom", &[], Some("AvatarPrototype")).is_empty());
 }

@@ -17,6 +17,10 @@ pub struct PrototypeMatch {
     pub blueprint: String,
     pub display_name: String,
     pub leaf: String,
+    /// The prototype's class (its blueprint's RuntimeBinding, e.g. "AvatarPrototype").
+    pub class: String,
+    /// Where `display_name` came from: "custom", "game", "bundled" or "path" (see `resolve_name`).
+    pub name_source: String,
     /// Runtime prototype ID (PrototypeId / PrototypeDataRef in patch files).
     /// Serialised as a decimal string to preserve full u64 precision across the JS boundary.
     pub prototype_id: String,
@@ -36,6 +40,9 @@ struct PrototypeRecord {
     /// Display name after the fallback order in `resolve_name`, and where it came from.
     name: String,
     name_source: &'static str,
+    /// Lowercase name and path, precomputed for search.
+    search_name: String,
+    search_path: String,
 }
 
 pub(crate) struct PrototypeCatalogue {
@@ -252,7 +259,7 @@ fn parse_prototype_directory(data: &[u8]) -> Result<Vec<PrototypeRecord>, String
         // PrototypeRecordFlags::Abstract = bit 0
         let is_abstract = flags & 0x01 != 0;
 
-        prototypes.push(PrototypeRecord { prototype_id, prototype_guid, blueprint_id, path, is_abstract, game_name: None, name: String::new(), name_source: "" });
+        prototypes.push(PrototypeRecord { prototype_id, prototype_guid, blueprint_id, path, is_abstract, game_name: None, name: String::new(), name_source: "", search_name: String::new(), search_path: String::new() });
     }
 
     Ok(prototypes)
@@ -663,6 +670,8 @@ pub(crate) fn ensure_catalogue_loaded(
                 dn.bundled(&p.path),
                 &p.path,
             );
+            p.search_name = p.name.to_lowercase();
+            p.search_path = p.path.to_lowercase();
         }
         *guard = Some((cache_key, catalogue));
     }
@@ -705,8 +714,11 @@ pub(crate) fn id_for_path(catalogue: &PrototypeCatalogue, path: &str) -> Option<
 /// - prototype path
 /// - display name (see `resolve_name`)
 ///
-/// Returns up to 500 matches for category browsing when `query` is empty, or up
-/// to 100 matches when searching.
+/// `class_filter` keeps prototypes whose class is, or derives from, that RuntimeBinding
+/// (e.g. "ItemPrototype" also matches costumes and artifacts).
+///
+/// Results are ranked (see `match_rank`). Returns up to 500 matches for category browsing
+/// when `query` is empty, or up to 100 matches when searching.
 #[tauri::command]
 pub fn search_prototypes(
     app: tauri::AppHandle,
@@ -717,6 +729,7 @@ pub fn search_prototypes(
     blueprint_hint: Option<String>,
     category_path: Option<String>,
     is_inventory_type: Option<bool>,
+    class_filter: Option<String>,
 ) -> Result<Vec<PrototypeMatch>, String> {
     let effective_category = category_path
         .or(blueprint_hint)
@@ -735,7 +748,6 @@ pub fn search_prototypes(
         .map_err(|_| "Catalogue state lock is poisoned".to_string())?;
     let (_, catalogue) = guard.as_ref().unwrap();
 
-    let query_lower = query.trim().to_lowercase();
     let category_prefixes: Vec<String> = effective_category
         .split('|')
         .map(str::trim)
@@ -743,52 +755,66 @@ pub fn search_prototypes(
         .map(|s| s.replace('\\', "/").to_lowercase())
         .collect();
 
-    let max_results: usize = if query_lower.is_empty() { 500 } else { 100 };
-
     // Accepted for parity with the source app's category config (see doc
     // comment above) but not read: path-prefix filtering already covers
     // every case this would otherwise filter.
     let _ = is_inventory_type;
 
-    let mut results: Vec<PrototypeMatch> = Vec::new();
-    for p in catalogue.prototypes.iter().filter(|p| !p.is_abstract) {
-        let path_lower = p.path.to_lowercase();
+    Ok(search_catalogue(catalogue, &query, &category_prefixes, class_filter.as_deref()))
+}
 
-        if !category_prefixes.is_empty()
-            && !category_prefixes.iter().any(|prefix| path_lower.starts_with(prefix))
-        {
-            continue;
-        }
+/// How well a prototype matches a lowercase query, best first: the name starts with it, a word
+/// in the name starts with it, the name contains it, the path contains it. `None` = no match.
+fn match_rank(name: &str, path: &str, query: &str) -> Option<u8> {
+    if query.is_empty() || name.starts_with(query) {
+        Some(0)
+    } else if name.split(|c: char| !c.is_alphanumeric()).any(|w| w.starts_with(query)) {
+        Some(1)
+    } else if name.contains(query) {
+        Some(2)
+    } else if path.contains(query) {
+        Some(3)
+    } else {
+        None
+    }
+}
 
-        let display_name = p.name.clone();
-        let display_name_lower = display_name.to_lowercase();
+/// The search behind `search_prototypes`: non-abstract prototypes under one of `category_prefixes`
+/// (lowercase; empty = any) and of `class_filter`, ranked by `match_rank`; within a rank, real
+/// names come before names made from the file name, then catalogue order.
+fn search_catalogue(
+    catalogue: &PrototypeCatalogue,
+    query: &str,
+    category_prefixes: &[String],
+    class_filter: Option<&str>,
+) -> Vec<PrototypeMatch> {
+    let query = query.trim().to_lowercase();
+    let class_filter = class_filter.map(str::trim).filter(|c| !c.is_empty());
+    let classes_of = |p: &PrototypeRecord| catalogue.classes.get(&p.blueprint_id).map(Vec::as_slice).unwrap_or(&[]);
 
-        if !query_lower.is_empty()
-            && !path_lower.contains(&query_lower)
-            && !display_name_lower.contains(&query_lower)
-        {
-            continue;
-        }
+    let mut hits: Vec<(u8, &PrototypeRecord)> = catalogue
+        .prototypes
+        .iter()
+        .filter(|p| !p.is_abstract)
+        .filter(|p| category_prefixes.is_empty() || category_prefixes.iter().any(|c| p.search_path.starts_with(c.as_str())))
+        .filter(|p| class_filter.map_or(true, |c| classes_of(p).iter().any(|b| b == c)))
+        .filter_map(|p| match_rank(&p.search_name, &p.search_path, &query).map(|rank| (rank, p)))
+        .collect();
+    hits.sort_by_key(|&(rank, p)| (rank, p.name_source == "path"));
+    hits.truncate(if query.is_empty() { 500 } else { 100 });
 
-        results.push(PrototypeMatch {
+    hits.into_iter()
+        .map(|(_, p)| PrototypeMatch {
             path: p.path.clone(),
-            blueprint: catalogue
-                .blueprints
-                .get(&p.blueprint_id)
-                .cloned()
-                .unwrap_or_default(),
-            display_name,
+            blueprint: catalogue.blueprints.get(&p.blueprint_id).cloned().unwrap_or_default(),
+            display_name: p.name.clone(),
             leaf: p.path.rsplit('/').next().unwrap_or(&p.path).to_string(),
+            class: classes_of(p).first().cloned().unwrap_or_default(),
+            name_source: p.name_source.to_string(),
             prototype_id: p.prototype_id.to_string(),
             prototype_guid: p.prototype_guid.to_string(),
-        });
-
-        if results.len() >= max_results {
-            break;
-        }
-    }
-
-    Ok(results)
+        })
+        .collect()
 }
 
 /// Resolve a prototype file path to its runtime ID (as a decimal string).
