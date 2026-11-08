@@ -96,8 +96,15 @@ struct RawScheduleRule {
     start_day: Option<u32>,
     #[serde(rename = "DurationDays", skip_serializing_if = "Option::is_none")]
     duration_days: Option<u32>,
-    #[serde(rename = "Events")]
+    #[serde(rename = "Events", deserialize_with = "null_as_empty_slot")]
     events: Vec<String>,
+}
+
+/// The server allows `null` slots in a schedule's Events list (an empty week).
+/// Read them as "" and always write "" so older readers never see a null.
+fn null_as_empty_slot<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Vec<String>, D::Error> {
+    let slots = Vec::<Option<String>>::deserialize(d)?;
+    Ok(slots.into_iter().map(Option::unwrap_or_default).collect())
 }
 
 // ── Path helpers ──────────────────────────────────────────────────────────────
