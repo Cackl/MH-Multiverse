@@ -166,3 +166,50 @@ fn write_with_backup_snapshots_previous_contents() {
     assert_eq!(fs::read_to_string(tmp.path().join("X.json.bak")).unwrap(), "one");
     assert!(!tmp.path().join("X.json.tmp").exists(), "temp file must not be left behind");
 }
+
+#[test]
+fn unparseable_modified_file_blocks_save_and_delete_and_is_left_untouched() {
+    for bad in ["", "{not json", "[{\"SkuId\": 1}]", "{\"SkuId\": 1}"] {
+        let (_tmp, server_exe) = empty_mtxstore();
+        let dir = mtxstore_dir(&server_exe).unwrap();
+        let modified = dir.join("CatalogBundleMODIFIED.json");
+        let bak = dir.join("CatalogBundleMODIFIED.json.bak");
+        fs::write(&modified, bad).unwrap();
+        fs::write(&bak, "previous good").unwrap();
+
+        let err = save_catalog_entry(server_exe.clone(), sample_entry("2001"), "CatalogBundle.json".to_string())
+            .unwrap_err();
+        assert!(err.contains("CatalogBundleMODIFIED.json"), "error should name the file: {err}");
+        delete_catalog_entry(server_exe, "2001".into(), "CatalogBundle.json".into(), true).unwrap_err();
+
+        assert_eq!(fs::read_to_string(&modified).unwrap(), bad, "input {bad:?}");
+        assert_eq!(fs::read_to_string(&bak).unwrap(), "previous good", "input {bad:?}");
+    }
+}
+
+#[test]
+fn corrupt_modified_file_is_reported_when_listing() {
+    let (_tmp, server_exe) = setup();
+    let dir = mtxstore_dir(&server_exe).unwrap();
+    fs::write(dir.join("CatalogBundleMODIFIED.json"), "{oops").unwrap();
+    let err = load_catalog_entries(server_exe).unwrap_err();
+    assert!(err.contains("CatalogBundleMODIFIED.json"), "{err}");
+}
+
+#[test]
+fn bom_file_parses_and_values_beyond_i32_round_trip() {
+    let (_tmp, server_exe) = empty_mtxstore();
+    let dir = mtxstore_dir(&server_exe).unwrap();
+    let modified = dir.join("CatalogBundleMODIFIED.json");
+    let json = r#"[{"SkuId":7,"GuidItems":[{"PrototypeGuid":18446744073709551615,"ItemPrototypeRuntimeIdForClient":1,"Quantity":1}],
+        "AdditionalGuidItems":[],"LocalizedEntries":[{"LanguageId":"en_us","Description":"","Title":"T","ReleaseDate":"","ItemPrice":5000000000}],
+        "InfoUrls":[],"ContentData":[],"Type":{"Name":"Boost","Order":5},"TypeModifiers":[]}]"#;
+    fs::write(&modified, format!("\u{FEFF}{json}")).unwrap();
+
+    save_catalog_entry(server_exe, sample_entry("8"), "CatalogBundle.json".to_string()).unwrap();
+
+    let written = fs::read_to_string(&modified).unwrap();
+    assert!(written.contains("\"PrototypeGuid\": 18446744073709551615"), "{written}");
+    assert!(written.contains("\"ItemPrice\": 5000000000"), "{written}");
+    assert!(written.contains("\"SkuId\": 8"), "{written}");
+}
