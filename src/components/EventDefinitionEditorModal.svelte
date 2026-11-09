@@ -1,9 +1,8 @@
 <script lang="ts">
-  import { invoke } from '@tauri-apps/api/core'
   import { askConfirm } from '../lib/store'
   import type { TuningFileInfo, EventDefinition } from '../lib/tuningMeta'
   import { tip } from '../lib/tooltip'
-  import type { PrototypeMatch } from '../lib/prototypes'
+  import PrototypePicker from './PrototypePicker.svelte'
 
   // ── Props ───────────────────────────────────────────────────────────────────
 
@@ -31,17 +30,6 @@
   let idError    = ''
   let nameError  = ''
 
-  // Prototype search
-  let protoSuggestOpen  = false
-  let protoSearchResults: PrototypeMatch[] = []
-  let protoSearching    = false
-  let protoSearchError  = ''
-  let protoDebounceTimer: ReturnType<typeof setTimeout> | null = null
-  let activeProtoTarget: 'gift' | 'mission' | null = null
-  let protoDropdownStyle = ''
-  let giftInputEl:    HTMLInputElement
-  let missionInputEl: HTMLInputElement
-
   // ── Derived ─────────────────────────────────────────────────────────────────
 
   $: fileOptions = tuningFiles
@@ -50,59 +38,6 @@
     f => f.relative_path === file_path && f.was_auto_enabled
   )
 
-  // ── Prototype search ─────────────────────────────────────────────────────────
-
-  async function searchPrototypes(query: string) {
-    if (query.length < 2) {
-      protoSuggestOpen = false
-      protoSearchResults = []
-      return
-    }
-    protoSearching   = true
-    protoSearchError = ''
-    try {
-      protoSearchResults = await invoke<PrototypeMatch[]>('search_prototypes', {
-        serverExe,
-        query,
-      })
-      protoSuggestOpen = protoSearchResults.length > 0
-    } catch (e) {
-      protoSearchError = String(e)
-      protoSuggestOpen = false
-    } finally {
-      protoSearching = false
-    }
-  }
-
-  function onProtoInput(target: 'gift' | 'mission', value: string, inputEl: HTMLInputElement) {
-    activeProtoTarget = target
-    if (protoDebounceTimer) clearTimeout(protoDebounceTimer)
-    if (value.length < 2) {
-      protoSuggestOpen = false
-      return
-    }
-    const rect         = inputEl.getBoundingClientRect()
-    protoDropdownStyle = `top:${rect.bottom + 3}px;left:${rect.left}px;width:${rect.width}px;`
-    protoDebounceTimer = setTimeout(() => searchPrototypes(value), 200)
-  }
-
-  function selectPrototype(path: string) {
-    if (activeProtoTarget === 'gift') {
-      daily_gift = path
-    } else if (activeProtoTarget === 'mission') {
-      newMission = path
-      addMission()
-    }
-    protoSuggestOpen  = false
-    activeProtoTarget = null
-  }
-
-  function onWindowClick(e: MouseEvent) {
-    if (protoSuggestOpen && !(e.target as Element).closest('.proto-dropdown')) {
-      protoSuggestOpen = false
-    }
-  }
-
   // ── Helpers ─────────────────────────────────────────────────────────────────
 
   function addMission() {
@@ -110,7 +45,6 @@
     if (!m || missions.includes(m)) return
     missions   = [...missions, m]
     newMission = ''
-    protoSuggestOpen = false
   }
 
   function removeMission(m: string) {
@@ -147,13 +81,12 @@
 
   function handleKeydown(e: KeyboardEvent) {
     if (e.key === 'Escape') {
-      if (protoSuggestOpen) { protoSuggestOpen = false; return }
       tryClose()
     }
   }
 </script>
 
-<svelte:window on:keydown={handleKeydown} on:click={onWindowClick} />
+<svelte:window on:keydown={handleKeydown} />
 
 <div
   class="modal-backdrop"
@@ -261,23 +194,7 @@
       <div class="field-group">
         <label class="field-label" for="def-gift">Daily gift</label>
         <div class="field-control">
-          <input
-            id="def-gift"
-            class="field-input"
-            type="text"
-            bind:this={giftInputEl}
-            bind:value={daily_gift}
-            placeholder="Prototype path (type to search)"
-            autocomplete="off"
-            spellcheck="false"
-            on:input={() => onProtoInput('gift', daily_gift, giftInputEl)}
-            on:focus={() => { if (daily_gift.length >= 2) onProtoInput('gift', daily_gift, giftInputEl) }}
-          />
-          {#if protoSearching && activeProtoTarget === 'gift'}
-            <div class="proto-hint">Searching…</div>
-          {:else if protoSearchError && activeProtoTarget === 'gift'}
-            <div class="proto-hint error">{protoSearchError}</div>
-          {/if}
+          <PrototypePicker id="def-gift" bind:value={daily_gift} {serverExe} />
         </div>
       </div>
 
@@ -317,17 +234,11 @@
             </div>
           {/if}
           <div class="add-mission-row">
-            <input
-              class="field-input"
-              type="text"
-              bind:this={missionInputEl}
+            <PrototypePicker
               bind:value={newMission}
-              placeholder="Prototype path (type to search)"
-              autocomplete="off"
-              spellcheck="false"
-              on:input={() => onProtoInput('mission', newMission, missionInputEl)}
-              on:focus={() => { if (newMission.length >= 2) onProtoInput('mission', newMission, missionInputEl) }}
-              on:keydown={e => e.key === 'Enter' && addMission()}
+              {serverExe}
+              onSelect={m => { newMission = m.path; addMission() }}
+              onEnter={addMission}
             />
             <button
               class="btn btn-sm btn-outline"
@@ -335,11 +246,6 @@
               on:click={addMission}
             >Add</button>
           </div>
-          {#if protoSearching && activeProtoTarget === 'mission'}
-            <div class="proto-hint">Searching…</div>
-          {:else if protoSearchError && activeProtoTarget === 'mission'}
-            <div class="proto-hint error">{protoSearchError}</div>
-          {/if}
         </div>
       </div>
 
@@ -355,22 +261,6 @@
 
   </div>
 </div>
-
-<!-- Prototype search dropdown — rendered outside the modal so it can overlay freely -->
-{#if protoSuggestOpen}
-  <div class="proto-dropdown" style={protoDropdownStyle}>
-    {#each protoSearchResults as result}
-      <button
-        class="proto-option"
-        type="button"
-        on:mousedown|preventDefault={() => selectPrototype(result.path)}
-      >
-        <span class="proto-opt-path">{result.path}</span>
-        <span class="proto-opt-bp">{result.blueprint}</span>
-      </button>
-    {/each}
-  </div>
-{/if}
 
 <style>
   .modal {
@@ -558,7 +448,6 @@
     gap: 8px;
     align-items: center;
   }
-  .add-mission-row .field-input { flex: 1; }
 
   .remove-btn {
     width: 20px;
@@ -577,60 +466,5 @@
   }
   .remove-btn:hover { color: var(--text-error); border-color: rgba(220,60,60,0.3); }
   .remove-btn svg   { width: 12px; height: 12px; }
-
-  /* ── Prototype search hint ── */
-
-  .proto-hint {
-    font-family: var(--font-body);
-    font-size: var(--fs-min);
-    color: var(--text-3);
-  }
-  .proto-hint.error { color: var(--text-error); }
-
-  /* ── Prototype search dropdown ── */
-
-  .proto-dropdown {
-    position: fixed;
-    background: var(--bg-2);
-    border: 1px solid var(--border-lit);
-    border-radius: var(--radius-sm);
-    z-index: calc(var(--z-modal) + 10);
-    max-height: 280px;
-    overflow-y: auto;
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
-  }
-
-  .proto-option {
-    display: flex;
-    flex-direction: column;
-    gap: 1px;
-    width: 100%;
-    text-align: left;
-    background: none;
-    border: none;
-    border-bottom: 1px solid var(--border);
-    padding: 6px 10px;
-    cursor: pointer;
-    transition: background 0.08s;
-  }
-  .proto-option:last-child { border-bottom: none; }
-  .proto-option:hover      { background: var(--bg-3); }
-
-  .proto-opt-path {
-    font-family: var(--font-mono);
-    font-size: 11px;
-    color: var(--text-0);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-
-  .proto-opt-bp {
-    font-family: var(--font-head);
-    font-size: var(--fs-min);
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    color: var(--accent);
-  }
 
 </style>
