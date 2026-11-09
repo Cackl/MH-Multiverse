@@ -3,6 +3,7 @@
   import { invoke } from '@tauri-apps/api/core'
   import { categoryForSetting, KNOWN_CORE, KNOWN_EVENTS, KNOWN_SETTINGS, blueprintHintForSetting, parseTuningValue, type KnownSetting } from '../lib/tuningMeta'
   import { tip } from '../lib/tooltip'
+  import type { PrototypeMatch } from '../lib/prototypes'
 
   // ── Props ──────────────────────────────────────────────────────────────────
 
@@ -59,7 +60,7 @@
 
   // Prototype search
   let protoSuggestOpen = false
-  let protoSearchResults: { path: string; blueprint: string }[] = []
+  let protoSearchResults: PrototypeMatch[] = []
   let protoSearching = false
   let protoSearchError = ''
   let protoDebounceTimer: ReturnType<typeof setTimeout> | null = null
@@ -220,7 +221,7 @@
     protoSearchError = ''
     try {
       const hint = blueprintHintForSetting(newSetting) ?? undefined
-      protoSearchResults = await invoke<{ path: string; blueprint: string }[]>(
+      protoSearchResults = await invoke<PrototypeMatch[]>(
         'search_prototypes',
         { serverExe: serverExe, query, blueprintHint: hint }
       )

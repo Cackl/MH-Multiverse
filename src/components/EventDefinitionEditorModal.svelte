@@ -3,13 +3,7 @@
   import { askConfirm } from '../lib/store'
   import type { TuningFileInfo, EventDefinition } from '../lib/tuningMeta'
   import { tip } from '../lib/tooltip'
-
-  // ── Types ───────────────────────────────────────────────────────────────────
-
-  interface PrototypeMatch {
-    path: string
-    blueprint: string
-  }
+  import type { PrototypeMatch } from '../lib/prototypes'
 
   // ── Props ───────────────────────────────────────────────────────────────────
 

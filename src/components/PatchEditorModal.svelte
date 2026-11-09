@@ -2,6 +2,7 @@
   import { invoke } from '@tauri-apps/api/core'
   import { askConfirm } from '../lib/store'
   import type { PatchEntry } from '../lib/patchesMeta'
+  import type { PrototypeMatch } from '../lib/prototypes'
 
   // ── Props ──────────────────────────────────────────────────────────────────
 
@@ -11,17 +12,6 @@
   export let onClose:  () => void
   export let onSave:   (entry: PatchEntry) => void
   export let onDelete: () => void
-
-  // ── Types ──────────────────────────────────────────────────────────────────
-
-  interface PrototypeMatch {
-    path:           string
-    blueprint:      string
-    display_name:   string
-    leaf:           string
-    prototype_id:   string
-    prototype_guid: string
-  }
 
   // ── Constants ──────────────────────────────────────────────────────────────
 

@@ -2,6 +2,7 @@
   import { onMount } from 'svelte'
   import { invoke } from '@tauri-apps/api/core'
   import { tip } from '../lib/tooltip'
+  import type { PrototypeMatch } from '../lib/prototypes'
   import {
     typeNames,
     modifiersForType,
@@ -261,14 +262,8 @@
 
   let selectedCategory: ItemCategory | null = null
   let pickerSearch = ''
-  type PrototypePickerResult = {
-    path: string
-    blueprint: string
-    display_name: string
-    leaf: string
-  }
 
-  let pickerResults: PrototypePickerResult[] = []
+  let pickerResults: PrototypeMatch[] = []
   let pickerLoading = false
   let pickerError   = ''
 
@@ -303,17 +298,17 @@
     ? pickerResults.filter(r => !allAddedPaths.has(r.path))
     : pickerResults
 
-  function hasFriendlyDisplayName(result: PrototypePickerResult): boolean {
+  function hasFriendlyDisplayName(result: PrototypeMatch): boolean {
     return !!result.display_name && result.display_name !== result.path
   }
 
-  function formatPickerResultLabel(result: PrototypePickerResult): string {
+  function formatPickerResultLabel(result: PrototypeMatch): string {
     return hasFriendlyDisplayName(result)
       ? `${result.display_name} (${result.path})`
       : result.path
   }
 
-  function formatPickerResultCompactLabel(result: PrototypePickerResult): string {
+  function formatPickerResultCompactLabel(result: PrototypeMatch): string {
     return hasFriendlyDisplayName(result)
       ? result.display_name
       : (result.leaf || result.path.split('/').pop() || result.path)
@@ -341,7 +336,7 @@
     pickerError   = ''
     pickerResults = []
     try {
-      pickerResults = await invoke<PrototypePickerResult[]>(
+      pickerResults = await invoke<PrototypeMatch[]>(
         'search_prototypes',
         {
           serverExe,
