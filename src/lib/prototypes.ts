@@ -17,14 +17,13 @@ export interface PrototypeMatch {
 
 export type PrototypeSearchState = {
   results: PrototypeMatch[]
-  searching: boolean
   error: string
   open: boolean
 }
 
 const MIN_QUERY_LENGTH = 2
 const DEBOUNCE_MS = 200
-const CLOSED: PrototypeSearchState = { results: [], searching: false, error: '', open: false }
+const CLOSED: PrototypeSearchState = { results: [], error: '', open: false }
 
 export function createPrototypeSearch(search: (query: string) => Promise<PrototypeMatch[]>) {
   const state = writable(CLOSED)
@@ -43,7 +42,6 @@ export function createPrototypeSearch(search: (query: string) => Promise<Prototy
 
   async function run(query: string) {
     const id = ++latest
-    state.update(s => ({ ...s, searching: true, error: '' }))
     try {
       const results = await search(query)
       if (id === latest) state.set({ ...CLOSED, results, open: results.length > 0 })

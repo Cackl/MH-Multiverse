@@ -108,10 +108,8 @@
     />
   {/if}
 
-  {#if $searchState.searching}
-    <div class="picker-hint">Searching...</div>
-  {:else if $searchState.error}
-    <div class="picker-hint error">{$searchState.error}</div>
+  {#if $searchState.error}
+    <div class="picker-hint">{$searchState.error}</div>
   {/if}
 
   {#if $searchState.open}
@@ -155,9 +153,8 @@
 
   .picker-hint {
     font-size: var(--fs-min);
-    color: var(--text-3);
+    color: var(--text-error);
   }
-  .picker-hint.error { color: var(--text-error); }
 
   .picker-dropdown {
     position: fixed;

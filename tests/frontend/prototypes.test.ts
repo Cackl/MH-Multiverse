@@ -34,7 +34,6 @@ describe('createPrototypeSearch', () => {
     expect(queries()).toEqual([])
     vi.advanceTimersByTime(1)
     expect(queries()).toEqual(['doo'])
-    expect(state().searching).toBe(true)
   })
 
   it('opens with results', async () => {
@@ -42,7 +41,7 @@ describe('createPrototypeSearch', () => {
     vi.advanceTimersByTime(200)
     pending[0].resolve([match('a')])
     await vi.advanceTimersByTimeAsync(0)
-    expect(state()).toEqual({ results: [match('a')], searching: false, error: '', open: true })
+    expect(state()).toEqual({ results: [match('a')], error: '', open: true })
   })
 
   it('stays closed with no results', async () => {
@@ -51,15 +50,14 @@ describe('createPrototypeSearch', () => {
     pending[0].resolve([])
     await vi.advanceTimersByTimeAsync(0)
     expect(state().open).toBe(false)
-    expect(state().searching).toBe(false)
   })
 
-  it('shows an error and stops searching', async () => {
+  it('shows an error', async () => {
     search.input('doom')
     vi.advanceTimersByTime(200)
     pending[0].reject('no sip')
     await vi.advanceTimersByTimeAsync(0)
-    expect(state()).toEqual({ results: [], searching: false, error: 'no sip', open: false })
+    expect(state()).toEqual({ results: [], error: 'no sip', open: false })
   })
 
   it('ignores a slow response once a newer search has started', async () => {
@@ -81,7 +79,7 @@ describe('createPrototypeSearch', () => {
     pending[1].resolve([match('new')])
     pending[0].reject('old failure')
     await vi.advanceTimersByTimeAsync(0)
-    expect(state()).toEqual({ results: [match('new')], searching: false, error: '', open: true })
+    expect(state()).toEqual({ results: [match('new')], error: '', open: true })
   })
 
   it('keeps showing results while the next search waits', async () => {
@@ -106,7 +104,7 @@ describe('createPrototypeSearch', () => {
     search.close()
     pending[0].resolve([match('a')])
     await vi.advanceTimersByTimeAsync(0)
-    expect(state()).toEqual({ results: [], searching: false, error: '', open: false })
+    expect(state()).toEqual({ results: [], error: '', open: false })
   })
 
   it('a too-short input closes the dropdown', async () => {
