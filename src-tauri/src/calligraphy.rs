@@ -53,8 +53,6 @@ pub(crate) struct PrototypeCatalogue {
     prototypes: Vec<PrototypeRecord>,
     /// prototype runtime id → index into `prototypes`; built once in build_catalogue.
     by_id: HashMap<u64, usize>,
-    /// prototype file path → prototype runtime id; inverse of by_id.
-    by_path: HashMap<String, u64>,
 }
 
 /// Cached catalogue keyed by the sip path it was built from.
@@ -512,20 +510,14 @@ fn build_catalogue(sip_path: &str, loco_dir: Option<&std::path::Path>) -> Result
         }
     }
 
-    // Build runtime-ID ↔ path indices; by_id for display name resolution,
-    // by_path for the inverse lookup needed when adding GuidItems from a path search.
+    // by_id for display name resolution.
     let by_id: HashMap<u64, usize> = prototypes
         .iter()
         .enumerate()
         .map(|(i, p)| (p.prototype_id, i))
         .collect();
 
-    let by_path: HashMap<String, u64> = prototypes
-        .iter()
-        .map(|p| (p.path.clone(), p.prototype_id))
-        .collect();
-
-    Ok(PrototypeCatalogue { blueprints, classes, prototypes, by_id, by_path })
+    Ok(PrototypeCatalogue { blueprints, classes, prototypes, by_id })
 }
 
 /// Blueprint types (RuntimeBinding) of every class deriving from EntityPrototype. The game's
@@ -686,15 +678,6 @@ pub(crate) fn name_for_id(catalogue: &PrototypeCatalogue, id: u64) -> Option<&st
     catalogue.by_id.get(&id).map(|&i| catalogue.prototypes[i].name.as_str())
 }
 
-/// Look up the prototype runtime ID for a given prototype file path.
-///
-/// Returns `None` if the path is not in the catalogue.
-/// Used by `lookup_prototype_id` in `store.rs` to resolve a selected prototype
-/// path back to the `ItemPrototypeRuntimeIdForClient` needed by catalog entries.
-pub(crate) fn id_for_path(catalogue: &PrototypeCatalogue, path: &str) -> Option<u64> {
-    catalogue.by_path.get(path).copied()
-}
-
 // ── Tauri command ─────────────────────────────────────────────────────────────
 
 /// Search prototype paths in Calligraphy.sip.
@@ -815,36 +798,6 @@ fn search_catalogue(
             prototype_guid: p.prototype_guid.to_string(),
         })
         .collect()
-}
-
-/// Resolve a prototype file path to its runtime ID (as a decimal string).
-///
-/// Given a path returned by
-/// `search_prototypes`, it returns the `ItemPrototypeRuntimeIdForClient`
-/// value needed to construct a `GuidItem` in a catalog entry.
-///
-/// Returns as a String to safely transport the full u64 range across the
-/// JS boundary without precision loss.
-#[tauri::command]
-pub fn lookup_prototype_id(
-    app: tauri::AppHandle,
-    state: tauri::State<CatalogueState>,
-    dn_state: tauri::State<DisplayNameState>,
-    server_exe: String,
-    prototype_path: String,
-) -> Result<String, String> {
-    let game_exe = crate::config::load_config(&app).game_exe;
-    ensure_catalogue_loaded(&state, &dn_state, &server_exe, &game_exe)?;
-
-    let guard = state
-        .0
-        .lock()
-        .map_err(|_| "Catalogue state lock is poisoned".to_string())?;
-    let (_, catalogue) = guard.as_ref().unwrap();
-
-    id_for_path(catalogue, &prototype_path)
-        .map(|id| id.to_string())
-        .ok_or_else(|| format!("Prototype '{}' not found in catalogue", prototype_path))
 }
 
 #[cfg(test)]

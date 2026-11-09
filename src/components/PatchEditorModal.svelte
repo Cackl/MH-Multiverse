@@ -1,7 +1,8 @@
 <script lang="ts">
-  import { invoke } from '@tauri-apps/api/core'
   import { askConfirm } from '../lib/store'
   import type { PatchEntry } from '../lib/patchesMeta'
+  import type { PrototypeMatch } from '../lib/prototypes'
+  import PrototypePicker from './PrototypePicker.svelte'
 
   // ── Props ──────────────────────────────────────────────────────────────────
 
@@ -11,17 +12,6 @@
   export let onClose:  () => void
   export let onSave:   (entry: PatchEntry) => void
   export let onDelete: () => void
-
-  // ── Types ──────────────────────────────────────────────────────────────────
-
-  interface PrototypeMatch {
-    path:           string
-    blueprint:      string
-    display_name:   string
-    leaf:           string
-    prototype_id:   string
-    prototype_guid: string
-  }
 
   // ── Constants ──────────────────────────────────────────────────────────────
 
@@ -52,11 +42,6 @@
 
   // Prototype search
   let protoQuery    = draft.Prototype
-  let protoResults: PrototypeMatch[] = []
-  let protoSearching = false
-  let protoDropOpen  = false
-  let protoDebounce: ReturnType<typeof setTimeout> | null = null
-  let protoInputEl:  HTMLTextAreaElement
 
   // Value is edited as a string regardless of underlying type.
   let valueStr = serializeValue(draft.Value, draft.ValueType)
@@ -110,38 +95,17 @@
 
   // ── Prototype search ───────────────────────────────────────────────────────
 
-  function onProtoInput() {
-    protoQuery      = protoQuery.replace(/[\r\n]/g, '')
-    draft.Prototype = protoQuery
+  function onProtoInput(value: string) {
+    draft.Prototype = value
     lastMatch       = null
-    if (protoDebounce) clearTimeout(protoDebounce)
-    if (protoQuery.trim().length < 2) { protoDropOpen = false; protoResults = []; return }
-    protoDebounce = setTimeout(runSearch, 220)
-  }
-
-  async function runSearch() {
-    protoSearching = true
-    try {
-      protoResults  = await invoke<PrototypeMatch[]>('search_prototypes', { serverExe, query: protoQuery })
-      protoDropOpen = protoResults.length > 0
-    } catch {
-      protoResults  = []
-      protoDropOpen = false
-    } finally {
-      protoSearching = false
-    }
   }
 
   function selectProto(match: PrototypeMatch) {
-    protoQuery      = match.path
     draft.Prototype = match.path
     lastMatch       = match
-    protoDropOpen   = false
 
     if (ID_TYPES.has(draft.ValueType))        valueStr = match.prototype_id
     else if (GUID_TYPES.has(draft.ValueType)) valueStr = match.prototype_guid
-
-    protoInputEl?.focus()
   }
 
   // ── Save / delete ──────────────────────────────────────────────────────────
@@ -172,20 +136,14 @@
 
   function onKeydown(e: KeyboardEvent) {
     if (e.key === 'Escape') {
-      if (protoDropOpen)    { protoDropOpen = false; return }
       if (deleteConfirming) { deleteConfirming = false; return }
       tryClose()
     }
   }
 
-  function onWindowClick(e: MouseEvent) {
-    if (protoDropOpen && !(e.target as Element).closest('.proto-wrap')) {
-      protoDropOpen = false
-    }
-  }
 </script>
 
-<svelte:window on:keydown={onKeydown} on:click={onWindowClick} />
+<svelte:window on:keydown={onKeydown} />
 
 <div
   class="modal-backdrop"
@@ -246,38 +204,15 @@
       <!-- Prototype + search -->
       <div class="field-row field-row-top">
         <label class="field-label" for="pe-proto">Prototype</label>
-        <div class="proto-wrap">
-          <div class="proto-input-row">
-            <textarea
-              id="pe-proto"
-              class="field-textarea field-textarea-sm"
-              rows="2"
-              placeholder="Search or paste prototype path..."
-              bind:value={protoQuery}
-              bind:this={protoInputEl}
-              on:input={onProtoInput}
-              autocomplete="off"
-              spellcheck="false"
-            ></textarea>
-            {#if protoSearching}
-              <span class="proto-hint">Searching...</span>
-            {/if}
-          </div>
-
-          {#if protoDropOpen}
-            <div class="proto-dropdown">
-              {#each protoResults as match (match.path)}
-                <button class="proto-option" on:click={() => selectProto(match)}>
-                  <span class="proto-opt-name">
-                    {match.display_name !== match.path ? match.display_name : match.leaf}
-                  </span>
-                  <span class="proto-opt-path">{match.path}</span>
-                  <span class="proto-opt-bp">{match.blueprint}</span>
-                </button>
-              {/each}
-            </div>
-          {/if}
-        </div>
+        <PrototypePicker
+          id="pe-proto"
+          bind:value={protoQuery}
+          {serverExe}
+          multiline
+          placeholder="Search or paste prototype path..."
+          onInput={onProtoInput}
+          onSelect={selectProto}
+        />
       </div>
 
       <!-- Path -->
@@ -484,89 +419,6 @@
   .value-error    { color: var(--text-error); }
   .value-hint     { color: var(--text-3); }
   .value-hint em  { color: var(--accent); font-style: normal; }
-
-  /* ── Prototype search ── */
-  .proto-wrap {
-    position: relative;
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-  }
-
-  .proto-input-row {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-  }
-  /* .proto-input-row .field-input    { flex: 1; } */
-  .proto-input-row .field-textarea { flex: 1; }
-
-  .proto-hint {
-    font-family: var(--font-head);
-    font-size: var(--fs-min);
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    color: var(--text-3);
-    white-space: nowrap;
-    flex-shrink: 0;
-  }
-
-  .proto-dropdown {
-    position: absolute;
-    top: calc(100% + 4px);
-    left: 0;
-    right: 0;
-    background: var(--bg-2);
-    border: 1px solid var(--border-lit);
-    border-radius: var(--radius-sm);
-    z-index: var(--z-dropdown);
-    max-height: 240px;
-    overflow-y: auto;
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
-  }
-
-  .proto-option {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    width: 100%;
-    text-align: left;
-    background: none;
-    border: none;
-    border-bottom: 1px solid var(--border);
-    padding: 7px 10px;
-    cursor: pointer;
-    transition: background 0.08s;
-  }
-  .proto-option:last-child { border-bottom: none; }
-  .proto-option:hover { background: var(--bg-3); }
-
-  .proto-opt-name {
-    font-family: var(--font-head);
-    font-size: 11px;
-    font-weight: 600;
-    color: var(--text-0);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-
-  .proto-opt-path {
-    font-family: var(--font-mono);
-    font-size: var(--fs-min);
-    color: var(--text-2);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-
-  .proto-opt-bp {
-    font-family: var(--font-head);
-    font-size: var(--fs-min);
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    color: var(--accent);
-  }
 
   /* ── Footer ── */
   .footer-left {
