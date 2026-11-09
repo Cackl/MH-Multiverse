@@ -2,7 +2,6 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::sync::Mutex;
 
 use crate::calligraphy::{ensure_catalogue_loaded, CatalogueState};
 
@@ -13,63 +12,36 @@ static DISPLAY_NAMES_JSON: &str =
 
 // ── Display name state ────────────────────────────────────────────────────────
 
-/// Holds the embedded prototype path → display name map plus an optional
-/// per-server-directory override map loaded from `display_names_custom.json`.
-///
-/// The embedded map is immutable after construction. The custom map is loaded
-/// lazily on first use and refreshed if the server directory changes.
+/// The embedded prototype path → display name map (`assets/display_names.json`): the name
+/// fallback for servers whose game client strings can't be found. Name resolution itself
+/// happens once per catalogue build (`calligraphy::resolve_name`).
 pub struct DisplayNameState {
     embedded: HashMap<String, String>,
-    custom: Mutex<Option<(String, HashMap<String, String>)>>,
 }
 
 impl DisplayNameState {
     pub fn new() -> Self {
         let embedded: HashMap<String, String> =
             serde_json::from_str(DISPLAY_NAMES_JSON).unwrap_or_default();
-        Self {
-            embedded,
-            custom: Mutex::new(None),
-        }
+        Self { embedded }
     }
 
-    /// Resolve a prototype path to a display name.
-    ///
-    /// Resolution order:
-    /// 1. `display_names_custom.json` in `server_dir` (if present and non-empty)
-    /// 2. Embedded `display_names.json`
-    /// 3. The prototype path itself (verbatim fallback)
-    pub(crate) fn lookup(&self, server_dir: &str, path: &str) -> String {
-        if let Ok(mut guard) = self.custom.lock() {
-            let needs_load = guard
-                .as_ref()
-                .map(|(cached_dir, _)| cached_dir != server_dir)
-                .unwrap_or(true);
-
-            if needs_load {
-                let custom_path = Path::new(server_dir).join("display_names_custom.json");
-                let map: HashMap<String, String> = fs::read_to_string(&custom_path)
-                    .ok()
-                    .and_then(|s| serde_json::from_str(&s).ok())
-                    .unwrap_or_default();
-                *guard = Some((server_dir.to_string(), map));
-            }
-
-            if let Some((_, ref custom_map)) = *guard {
-                if let Some(name) = custom_map.get(path) {
-                    if name != "N/A" && !name.is_empty() {
-                        return name.clone();
-                    }
-                }
-            }
-        }
-
-        self.embedded
-            .get(path)
-            .filter(|n| n.as_str() != "N/A" && !n.is_empty())
-            .cloned()
-            .unwrap_or_else(|| path.to_string())
+    pub(crate) fn bundled(&self, path: &str) -> Option<&str> {
+        self.embedded.get(path).map(String::as_str).filter(|n| usable_name(n))
     }
+}
+
+/// `display_names_custom.json` in `server_dir` (path → name), or empty if absent or invalid.
+pub(crate) fn read_custom_names(server_dir: &Path) -> HashMap<String, String> {
+    fs::read_to_string(server_dir.join("display_names_custom.json"))
+        .ok()
+        .and_then(|s| serde_json::from_str(&s).ok())
+        .unwrap_or_default()
+}
+
+/// Placeholder names in the name files mean "no name".
+pub(crate) fn usable_name(name: &str) -> bool {
+    !matches!(name.trim(), "" | "N/A" | "#N/A")
 }
 
 // ── Disk-only catalog types ───────────────────────────────────────────────────
@@ -331,35 +303,17 @@ pub(crate) fn write_with_backup(path: &Path, contents: &str) -> Result<(), Strin
 
 // ── Display name resolution (internal) ───────────────────────────────────────
 
-/// Resolve a prototype runtime ID (as a decimal string) to a display name,
-/// using the catalogue and display name state. Falls back gracefully at each step.
-fn name_for_id(
-    dn: &DisplayNameState,
-    cat: &CatalogueState,
-    server_dir: &str,
-    id_str: &str,
-) -> String {
-    let id: u64 = match id_str.parse() {
-        Ok(v) => v,
-        Err(_) => return id_str.to_string(),
+/// Resolve a prototype runtime ID (as a decimal string) to its display name from the loaded
+/// catalogue; the raw ID when the catalogue isn't loaded or doesn't know it.
+fn name_for_id(cat: &CatalogueState, id_str: &str) -> String {
+    let Ok(id) = id_str.parse::<u64>() else {
+        return id_str.to_string();
     };
-
-    // The MutexGuard `g` must stay live until after path_for_id returns its &str,
-    // so we clone to an owned String inside the closure before `g` is dropped.
-    let maybe_path: Option<String> = cat
-        .0
+    cat.0
         .lock()
         .ok()
-        .and_then(|g| {
-            g.as_ref()
-                .and_then(|(_, c)| crate::calligraphy::path_for_id(c, id))
-                .map(|s| s.to_string())
-        });
-
-    match maybe_path {
-        Some(path) => dn.lookup(server_dir, &path),
-        None => id_str.to_string(),
-    }
+        .and_then(|g| g.as_ref().and_then(|(_, c)| crate::calligraphy::name_for_id(c, id)).map(str::to_string))
+        .unwrap_or_else(|| id_str.to_string())
 }
 
 // ── Tauri commands ────────────────────────────────────────────────────────────
@@ -551,21 +505,19 @@ pub fn get_next_sku_id(server_exe: String) -> Result<String, String> {
 /// Resolve a prototype runtime ID (decimal string) to a human-readable display name.
 ///
 /// The ID is a string parameter to safely transport the full u64 range from TypeScript.
-/// Falls back through: custom override → embedded map → prototype path → raw ID.
+/// Name order: see `calligraphy::resolve_name`; the raw ID if the prototype is unknown.
 #[tauri::command]
 pub fn resolve_display_name(
+    app: tauri::AppHandle,
     dn_state: tauri::State<DisplayNameState>,
     cat_state: tauri::State<CatalogueState>,
     server_exe: String,
     prototype_runtime_id: String,
 ) -> String {
-    let server_dir = server_dir_of(&server_exe)
-        .map(|p| p.to_string_lossy().to_string())
-        .unwrap_or_default();
+    let game_exe = crate::config::load_config(&app).game_exe;
+    let _ = ensure_catalogue_loaded(&cat_state, &dn_state, &server_exe, &game_exe);
 
-    let _ = ensure_catalogue_loaded(&cat_state, &server_exe);
-
-    name_for_id(&dn_state, &cat_state, &server_dir, &prototype_runtime_id)
+    name_for_id(&cat_state, &prototype_runtime_id)
 }
 
 /// Generate the HTML page for a bundle catalog entry and write it to disk.
@@ -588,17 +540,12 @@ pub fn resolve_display_name(
 /// Returns the absolute path of the backup HTML file.
 #[tauri::command]
 pub fn generate_bundle_html(
-    dn_state: tauri::State<DisplayNameState>,
     cat_state: tauri::State<CatalogueState>,
     server_exe: String,
     entry: CatalogEntry,
     slug: String,
     save_to_apache: bool,
 ) -> Result<String, String> {
-    let server_dir = server_dir_of(&server_exe)
-        .map(|p| p.to_string_lossy().to_string())
-        .unwrap_or_default();
-
     let sku: u64 = entry
         .sku_id
         .parse()
@@ -617,12 +564,7 @@ pub fn generate_bundle_html(
 
     let mut items_html = String::new();
     for item in &entry.guid_items {
-        let name = name_for_id(
-            &dn_state,
-            &cat_state,
-            &server_dir,
-            &item.item_prototype_runtime_id_for_client,
-        );
+        let name = name_for_id(&cat_state, &item.item_prototype_runtime_id_for_client);
         if item.quantity == 1 {
             items_html.push_str(&format!("            <li>{name}</li>\n"));
         } else {
