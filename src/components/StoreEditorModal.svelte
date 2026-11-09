@@ -269,8 +269,6 @@
 
   let pickerSelectedPath = ''
   let pickerSelectedId   = ''
-  let pickerIdLoading    = false
-  let pickerIdError      = ''
   let pickerQty          = 1
 
   let hideAddedItems = false
@@ -326,7 +324,6 @@
     selectedCategory = cat
     pickerSelectedPath = ''
     pickerSelectedId   = ''
-    pickerIdError      = ''
     await runPickerSearch(pickerSearch)
   }
 
@@ -359,26 +356,10 @@
     pickerDebounce = setTimeout(() => runPickerSearch(pickerSearch), 250)
   }
 
-  async function selectPickerItem(path: string) {
-    if (pickerSelectedPath === path) {
-      pickerSelectedPath = ''
-      pickerSelectedId   = ''
-      return
-    }
-    pickerSelectedPath = path
-    pickerSelectedId   = ''
-    pickerIdError      = ''
-    pickerIdLoading    = true
-    try {
-      pickerSelectedId = await invoke<string>('lookup_prototype_id', {
-        serverExe,
-        prototypePath: path,
-      })
-    } catch (e) {
-      pickerIdError = String(e)
-    } finally {
-      pickerIdLoading = false
-    }
+  function selectPickerItem(result: PrototypeMatch) {
+    const deselect = pickerSelectedPath === result.path
+    pickerSelectedPath = deselect ? '' : result.path
+    pickerSelectedId   = deselect ? '' : result.prototype_id
   }
 
   function addPickerItem() {
@@ -1163,7 +1144,7 @@
                   <button
                     class="picker-result"
                     class:selected={pickerSelectedPath === result.path}
-                    on:click={() => selectPickerItem(result.path)}
+                    on:click={() => selectPickerItem(result)}
                   >
                     {#if hideProtoPaths}
                       <span class="result-name">{formatPickerResultCompactLabel(result)}</span>
@@ -1181,11 +1162,7 @@
 
             <div class="picker-add-row">
               <div class="picker-selected-info">
-                {#if pickerIdLoading}
-                  <span class="picker-status dim">Resolving ID…</span>
-                {:else if pickerIdError}
-                  <span class="picker-status error">{pickerIdError}</span>
-                {:else if pickerSelectedPath}
+                {#if pickerSelectedPath}
                   <span
                     class="picker-status"
                     class:warn={pickerSelectedIsExisting}
@@ -1211,7 +1188,7 @@
               <button
                 class="btn btn-sm btn-accent"
                 on:click={addPickerItem}
-                disabled={!pickerSelectedId || pickerIdLoading}
+                disabled={!pickerSelectedId}
               >
                 {#if offerType === 'bogo'}
                   {bogoTarget === 'main' ? 'Add Purchase Item' : 'Add Bonus Item'}
@@ -1595,7 +1572,6 @@
     gap: 6px;
   }
   .picker-status.dim  { color: var(--text-3); font-family: var(--font-body); }
-  .picker-status.error { color: var(--text-error); }
   .picker-status.warn { color: var(--amber-bright); }
 
   .picker-status-flag {

@@ -124,7 +124,6 @@ pub fn run() {
             app_update::check_overlay_update,
             app_update::install_app_update,
             calligraphy::search_prototypes,
-            calligraphy::lookup_prototype_id,
             store::get_mtxstore_dir,
             store::list_catalog_files,
             store::load_catalog_entries,

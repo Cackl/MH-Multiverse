@@ -143,21 +143,7 @@ fn build_catalogue_populates_indices() {
     let guard = state.0.lock().unwrap();
     let (_, cat) = guard.as_ref().unwrap();
     assert_eq!(cat.by_id.len(), 3);
-    assert_eq!(cat.by_path.len(), 3);
     assert_eq!(cat.blueprints.len(), 2);
-}
-
-#[test]
-fn id_for_path_round_trip() {
-    let (_tmp, server_exe) = setup_with_sip();
-    let state = load(&server_exe);
-    let guard = state.0.lock().unwrap();
-    let (_, cat) = guard.as_ref().unwrap();
-
-    let path = "Entity/Avatar/Prototypes/BlackWidow.prototype";
-    let id = id_for_path(cat, path).unwrap();
-    assert_eq!(id, 1001);
-    assert_eq!(cat.prototypes[cat.by_id[&id]].path, path);
 }
 
 #[test]
@@ -628,8 +614,15 @@ fn search_fixture() -> PrototypeCatalogue {
             record(5, 2, "Entity/Mobs/DoomBase.prototype", "Doom Base", true),
         ],
         by_id: HashMap::new(),
-        by_path: HashMap::new(),
     }
+}
+
+// The Store editor writes this id straight into ItemPrototypeRuntimeIdForClient.
+#[test]
+fn search_results_carry_the_runtime_id() {
+    let cat = search_fixture();
+    let hits = search_catalogue(&cat, "Doom Bot", &[], None);
+    assert_eq!(hits[0].prototype_id, "4");
 }
 
 #[test]
