@@ -1054,23 +1054,7 @@
   }
 
   /* ── Info button ── */
-  .info-btn {
-    width: 12px;
-    height: 12px;
-    border-radius: 50%;
-    border: 1px solid var(--border-lit);
-    background: var(--bg-3);
-    color: var(--text-3);
-    font-size: var(--fs-min);
-    cursor: help;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    flex-shrink: 0;
-    transition: all 0.12s;
-    padding: 0;
-  }
-  .info-btn:hover { border-color: var(--accent-dim); color: var(--accent-bright); }
+  .info-btn { width: 12px; height: 12px; }
 
   /* ── Import tab ── */
   .import-note {

@@ -327,7 +327,8 @@ export interface RateRow {
   min: number
   max: number
   step: number
-  note?: string
+  /** Shown as a ? tooltip beside the label. */
+  tip?: string
   /** A value that means "use the game data", shown as Game default. */
   gameDefault?: number
   /** Only one of Infinity XP and Omega XP is live, set by [GameOptions] InfinitySystemEnabled. */
@@ -336,7 +337,7 @@ export interface RateRow {
 
 // Ranges from SimpleView-LiveTuning.md §5.3. Stock Global sets all of these keys.
 export const RATE_ROWS: RateRow[] = [
-  { setting: 'eGTV_XPGain',                  label: 'XP from kills and orbs', group: 'XP',      format: 'times',  min: 0.25, max: 10,   step: 0.25, note: 'Mission reward XP is not affected.' },
+  { setting: 'eGTV_XPGain',                  label: 'XP from kills and orbs', group: 'XP',      format: 'times',  min: 0.25, max: 10,   step: 0.25, tip: 'Mission reward XP is not affected.' },
   { setting: 'eGTV_InfinityXPPct',           label: 'Infinity XP',            group: 'XP',      format: 'times',  min: 0,    max: 10,   step: 0.5, infinity: true },
   { setting: 'eGTV_OmegaXPPct',              label: 'Omega XP',               group: 'XP',      format: 'times',  min: 0,    max: 10,   step: 0.5, infinity: false },
   { setting: 'eGTV_PartyXPBonusPct',         label: 'Party XP bonus',         group: 'XP',      format: 'bonus',  min: 1,    max: 5,    step: 0.5 },
@@ -344,13 +345,13 @@ export const RATE_ROWS: RateRow[] = [
   { setting: 'eGTV_LootDropRate',            label: 'Drop rate',              group: 'Loot',    format: 'times',  min: 0.25, max: 10,   step: 0.25 },
   { setting: 'eGTV_LootRarity',              label: 'Rare item find',         group: 'Loot',    format: 'times',  min: 0.5,  max: 10,   step: 0.5 },
   { setting: 'eGTV_LootSpecialDropRate',     label: 'Special item find',      group: 'Loot',    format: 'times',  min: 0.5,  max: 10,   step: 0.5 },
-  { setting: 'eGTV_LootVaporizationEnabled', label: 'Auto-convert drops',     group: 'Loot',    format: 'toggle', min: 0,    max: 1,    step: 1 },
+  { setting: 'eGTV_LootVaporizationEnabled', label: 'Enable Loot Vaporising', group: 'Loot',    format: 'toggle', min: 0,    max: 1,    step: 1 },
   { setting: 'eGTV_VendorBuyPrice',          label: 'Buy prices',             group: 'Vendors', format: 'times',  min: 0,    max: 3,    step: 0.25 },
   { setting: 'eGTV_VendorSellPrice',         label: 'Sell prices',            group: 'Vendors', format: 'times',  min: 0,    max: 3,    step: 0.25 },
   { setting: 'eGTV_VendorXPGain',            label: 'Vendor XP',              group: 'Vendors', format: 'times',  min: 0,    max: 10,   step: 0.5 },
   { setting: 'eGTV_PVPEnabled',              label: 'PvP',                    group: 'Rules',   format: 'toggle', min: 0,    max: 1,    step: 1 },
   { setting: 'eGTV_PlayerTradeEnabled',      label: 'Player trading',         group: 'Rules',   format: 'toggle', min: 0,    max: 1,    step: 1 },
-  { setting: 'eGTV_BoostTimersRunning',      label: 'Boost timers run',       group: 'Rules',   format: 'toggle', min: 0,    max: 1,    step: 1 },
+  { setting: 'eGTV_BoostTimersRunning',      label: 'Boost timers run',       group: 'Rules',   format: 'toggle', min: 0,    max: 1,    step: 1, tip: 'Off pauses all boost timers everywhere.' },
 ]
 
 /** The rows to show: all but the dead one of Infinity XP and Omega XP. */
@@ -412,7 +413,7 @@ export function resolveRate(tuning: GlobalTuning, row: RateRow): RateState {
     else if (i < ownedAt) { below = v; belowFile = f.file }
     else after = { file: f.file, value: v }
     if (globalSets && i < globalAt) {
-      noEffect.push(`${f.file} sets ${formatRate(row, v)}: no effect, because ${GLOBAL_FILE} loads after it.`)
+      noEffect.push(`${f.file} (${formatRate(row, v)}) is ignored. Global loads after it.`)
     }
   })
 
@@ -451,8 +452,8 @@ export function planServerRatesWrite(
 
 export interface ReloadResult {
   count: number
-  /** What the server rejected while loading, from its `Verify failed:` lines. */
-  rejected: string[]
+  /** How many entries or files the server rejected while loading (its `Verify failed:` lines). */
+  rejected: number
 }
 
 /**
@@ -463,12 +464,11 @@ export interface ReloadResult {
  * lines alone cover both.
  */
 export function reloadResult(lines: string[]): ReloadResult | null {
-  const rejected: string[] = []
+  let rejected = 0
   for (const line of lines) {
     const loaded = /Loaded (\d+) Live Tuning settings/.exec(line)
     if (loaded) return { count: Number(loaded[1]), rejected }
-    const failed = /Verify failed: (.*)/.exec(line)
-    if (failed) rejected.push(failed[1].trim())
+    if (line.includes('Verify failed:')) rejected++
   }
   return null
 }

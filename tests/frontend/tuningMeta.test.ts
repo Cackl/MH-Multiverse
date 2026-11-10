@@ -174,7 +174,7 @@ describe('resolveRate', () => {
     ['a file between Global and it sets it', [[G, [['eGTV_XPGain', 1]]], [HOLIDAY, [['eGTV_XPGain', 4]]], [OWN, []]],
       4, 4, { kind: 'setIn', file: HOLIDAY }, []],
     ['an _ file Global resets has no effect', [[OLD, [['eGTV_XPGain', 3]]], [G, [['eGTV_XPGain', 1]]], [OWN, []]],
-      1, 1, { kind: 'stock' }, [`${OLD} sets 3×: no effect, because ${G} loads after it.`]],
+      1, 1, { kind: 'stock' }, [`${OLD} (3×) is ignored. Global loads after it.`]],
     ['an _ file Global does not reset applies', [[OLD, [['eGTV_XPGain', 3]]], [G, [['eGTV_LootRarity', 1]]], [OWN, []]],
       3, 3, { kind: 'setIn', file: OLD }, []],
     ['other settings are ignored', [[G, [['eGTV_LootRarity', 5]]], [OWN, [['eGTV_LootDropRate', 2]]]], 1, 1, { kind: 'stock' }, []],
@@ -220,14 +220,14 @@ describe('reloadResult', () => {
     ['nothing yet', [], null],
     ['unrelated lines only', ['[CommandManager] Command invoked: invoker=[ServerConsole], command=[server], parameters=[reloadlivetuning]'], null],
     ['rejections before the load ends are not a result yet', ['[General] Verify failed: Invalid setting eGTV_Foo for prototype '], null],
-    ['the load line', [loaded], { count: 42, rejected: [] }],
+    ['the load line', [loaded], { count: 42, rejected: 0 }],
     ['rejections before the load line', [
       '[General] Verify failed: Invalid setting eGTV_Foo for prototype ',
       '[FileHelper] Failed to deserialize C:\\x\\LiveTuningDataBad.json as LiveTuningUpdateValue[]',
       '[General] Verify failed: Failed to parse LiveTuningDataBad.json',
       loaded,
-    ], { count: 42, rejected: ['Invalid setting eGTV_Foo for prototype', 'Failed to parse LiveTuningDataBad.json'] }],
-    ['lines after the load line are ignored', [loaded, '[General] Verify failed: later'], { count: 42, rejected: [] }],
+    ], { count: 42, rejected: 2 }],
+    ['lines after the load line are ignored', [loaded, '[General] Verify failed: later'], { count: 42, rejected: 0 }],
   ])('%s', (_name, lines, expected) => {
     expect(reloadResult(lines)).toEqual(expected)
   })

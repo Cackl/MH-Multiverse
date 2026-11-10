@@ -36,7 +36,6 @@
   $: ownedError = tuning?.files.find(f => f.file === SERVER_RATES_FILE)?.error ?? null
   $: current = (setting: string): number => edits[setting] ?? states[setting]?.value ?? 1
   $: dirty = Object.keys(edits).filter(s => edits[s] !== states[s]?.value)
-  $: sellAboveBuy = rows.length > 0 && current('eGTV_VendorSellPrice') > current('eGTV_VendorBuyPrice')
 
   function setValue(row: RateRow, value: number) {
     edits = { ...edits, [row.setting]: value }
@@ -76,7 +75,7 @@
       edits = {}
       stopWatching()
       reloadMsg = ''
-      rejected = []
+      reloadError = ''
       saveMsg = 'Saved'
       await load(serverExe)
     } catch (e) {
@@ -91,7 +90,7 @@
   // the log lines that follow it.
 
   let reloadMsg = ''
-  let rejected: string[] = []
+  let reloadError = ''
   let unlisten: UnlistenFn | null = null
   let timer: ReturnType<typeof setTimeout> | null = null
 
@@ -104,15 +103,18 @@
 
   function finish(result: ReloadResult) {
     stopWatching()
-    rejected = result.rejected
-    reloadMsg = rejected.length === 0
-      ? `Reloaded: ${result.count} settings live`
-      : `Reloaded, but the server rejected ${rejected.length === 1 ? 'this' : `these ${rejected.length}`}:`
+    if (result.rejected === 0) reloadMsg = `Reloaded: ${result.count} settings live`
+    else showReloadError(`Reloaded with ${result.rejected} rejected ${result.rejected === 1 ? 'entry' : 'entries'}. See the Server log.`)
+  }
+
+  function showReloadError(message: string) {
+    reloadMsg = ''
+    reloadError = message
   }
 
   async function reload() {
     stopWatching()
-    rejected = []
+    reloadError = ''
     const lines: string[] = []
     unlisten = await listen<{ msg: string }[]>('server-log', e => {
       lines.push(...e.payload.map(l => l.msg))
@@ -121,14 +123,14 @@
     })
     timer = setTimeout(() => {
       stopWatching()
-      reloadMsg = 'No confirmation from the server. Check the Server log.'
+      showReloadError('No reply from the server. See the Server log.')
     }, 5000)
     reloadMsg = 'Reload sent'
     try {
       await invoke('send_command', { cmd: '!server reloadlivetuning' })
     } catch (e) {
       stopWatching()
-      reloadMsg = `Reload not sent: ${e}`
+      showReloadError(`Reload not sent: ${e}`)
     }
   }
 
@@ -139,7 +141,7 @@
   <div class="rates-head">
     <div>
       <div class="rates-title">Server Rates</div>
-      <div class="rates-sub">Saved to {SERVER_RATES_FILE}. Files that load after it win over it.</div>
+      <div class="rates-sub">Saves to {SERVER_RATES_FILE}</div>
     </div>
   </div>
 
@@ -150,9 +152,7 @@
       <p class="rates-msg error">{loadError}</p>
     {:else if tuning}
       {#if ownedError}
-        <p class="rates-msg error">
-          {SERVER_RATES_FILE} can't be read, so saving is off until it's fixed or removed in Advanced: {ownedError}
-        </p>
+        <p class="rates-msg error">Can't read {SERVER_RATES_FILE}: {ownedError}</p>
       {/if}
 
       {#each GROUPS as group}
@@ -163,7 +163,10 @@
           {@const locked = state.badge.kind === 'overriddenBy'}
           {@const changed = dirty.includes(row.setting)}
           <div class="rate-row" class:locked>
-            <span class="rate-label">{row.label}</span>
+            <span class="rate-label">
+              {row.label}
+              {#if row.tip}<button class="info-btn" aria-label="About {row.label}" use:tip={row.tip}>?</button>{/if}
+            </span>
 
             <div class="rate-control">
               {#if row.format === 'toggle'}
@@ -213,14 +216,10 @@
                 <span class="rate-badge {state.badge.kind}">{badgeText(state)}</span>
               {/if}
               {#if !locked && value !== state.below}
-                <button class="rate-revert" on:click={() => setValue(row, state.below)} use:tip={'Back to the value without Server Rates'}>Revert</button>
+                <button class="rate-revert" on:click={() => setValue(row, state.below)}>Revert</button>
               {/if}
             </span>
 
-            {#if row.note}<span class="rate-note">{row.note}</span>{/if}
-            {#if row.setting === 'eGTV_VendorSellPrice' && sellAboveBuy}
-              <span class="rate-note warn">Sell prices above buy prices let players make credits by buying and selling.</span>
-            {/if}
             {#each state.notes as note}<span class="rate-note">{note}</span>{/each}
           </div>
         {/each}
@@ -231,9 +230,8 @@
   <div class="rates-foot">
     <div class="rates-status">
       {#if saveError}<span class="error">{saveError}</span>
-      {:else if reloadMsg}
-        <span>{reloadMsg}</span>
-        {#each rejected as line}<span class="rejected">{line}</span>{/each}
+      {:else if reloadError}<span class="error">{reloadError}</span>
+      {:else if reloadMsg}<span>{reloadMsg}</span>
       {:else if saveMsg}<span>{saveMsg}</span>{/if}
     </div>
     <button
@@ -312,6 +310,9 @@
   .rate-row.locked .rate-value { opacity: var(--dimmed-opacity); }
 
   .rate-label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
     font-family: var(--font-head);
     font-size: var(--fs-min);
     font-weight: 600;
@@ -359,8 +360,8 @@
   }
   .rate-badge.yours,
   .rate-badge.changed { color: var(--accent-bright); }
-  .rate-badge.setIn { color: var(--text-2); }
-  .rate-badge.overriddenBy { color: var(--amber-bright); }
+  .rate-badge.setIn,
+  .rate-badge.overriddenBy { color: var(--text-2); }
 
   .rate-revert {
     background: none;
@@ -379,7 +380,6 @@
     line-height: 1.4;
     color: var(--text-3);
   }
-  .rate-note.warn { color: var(--amber-bright); }
 
   .rates-foot {
     display: flex;
@@ -391,17 +391,8 @@
   }
   .rates-status {
     flex: 1;
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
     min-width: 0;
     font-size: 12px;
     color: var(--text-1);
-  }
-  .rejected {
-    font-family: var(--font-mono);
-    font-size: 11px;
-    color: var(--text-error);
-    overflow-wrap: anywhere;
   }
 </style>
