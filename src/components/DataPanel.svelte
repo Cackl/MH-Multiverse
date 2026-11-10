@@ -1,6 +1,7 @@
 <script lang="ts">
-  import { activeDataTab, goDataTab, type DataTab } from '../lib/store'
+  import { activeDataTab, goDataTab, appConfig, setAdvancedData, type DataTab } from '../lib/store'
   import TuningPanel from './TuningPanel.svelte'
+  import ServerRates from './ServerRates.svelte'
   import StorePanel  from './StorePanel.svelte'
   import PatchesPanel from './PatchesPanel.svelte'
   import EventsPanel from './EventsPanel.svelte';
@@ -28,6 +29,20 @@
         {tab.label}
       </button>
     {/each}
+    <!-- Simple and Advanced differ only on Live Tuning so far; the other areas follow in their own sections. -->
+    <div class="mode-switch">
+      <span>Advanced</span>
+      <div
+        class="toggle-switch"
+        class:on={$appConfig.advanced_data}
+        role="switch"
+        aria-checked={$appConfig.advanced_data}
+        aria-label="Advanced"
+        tabindex="0"
+        on:click={() => setAdvancedData(!$appConfig.advanced_data)}
+        on:keydown={(e) => e.key === 'Enter' && setAdvancedData(!$appConfig.advanced_data)}
+      ></div>
+    </div>
   </div>
 
   <!-- ── Active panel ── -->
@@ -35,7 +50,11 @@
     {#if $activeDataTab === 'events'}
       <EventsPanel />
     {:else if $activeDataTab === 'tuning'}
-      <TuningPanel />
+      {#if $appConfig.advanced_data}
+        <TuningPanel />
+      {:else}
+        <ServerRates />
+      {/if}
     {:else if $activeDataTab === 'store'}
       <StorePanel />
     {:else if $activeDataTab === 'patches'}
@@ -92,6 +111,20 @@
   .data-tab.active {
     color: var(--accent-bright);
     border-bottom-color: var(--accent);
+  }
+
+  .mode-switch {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-left: auto;
+    padding: 0 6px;
+    font-family: var(--font-head);
+    font-size: var(--fs-min);
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--text-3);
   }
 
   /* ── Panel area ── */
