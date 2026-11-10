@@ -484,6 +484,10 @@ pub struct GlobalTuning {
     pub live_events: bool,
 }
 
+/// The file the Server Rates form owns. It loads after `LiveTuningDataGlobal.json`, and user
+/// files that sort after it (such as `LiveTuningDataUser...`) win over it.
+pub(crate) const SERVER_RATES_FILE: &str = "LiveTuningDataMultiverse.json";
+
 fn ini_flag(server_exe: &str, section: &str, key: &str) -> bool {
     crate::ini::read_merged_value(server_exe, section, key, "true")
         .trim()
@@ -533,7 +537,8 @@ pub fn read_global_tuning(server_exe: String) -> Result<GlobalTuning, String> {
     let infinity_system = ini_flag(&server_exe, "GameOptions", "InfinitySystemEnabled");
     let live_events = ini_flag(&server_exe, "GameData", "EnableLiveTuningEvents");
     if !dir.exists() {
-        return Ok(GlobalTuning { files: vec![], events: vec![], infinity_system, live_events });
+        let files = vec![GlobalTuningFile { file: SERVER_RATES_FILE.into(), values: vec![], error: None }];
+        return Ok(GlobalTuning { files, events: vec![], infinity_system, live_events });
     }
 
     // The server reads only top-level LiveTuningData*.json (FileHelper.GetFilesWithPrefix),
@@ -545,11 +550,17 @@ pub fn read_global_tuning(server_exe: String) -> Result<GlobalTuning, String> {
         .map(|e| e.file_name().to_string_lossy().to_string())
         .filter(|n| n.starts_with("LiveTuningData") && n.ends_with(".json"))
         .collect();
+    // Listed even before it exists, so callers can tell which files load after it; a missing
+    // file loads the same nothing as an empty one.
+    if !names.iter().any(|n| n == SERVER_RATES_FILE) {
+        names.push(SERVER_RATES_FILE.to_string());
+    }
     sort_like_server(&mut names);
 
     let files = names
         .into_iter()
         .map(|file| match globals_in(&dir.join(&file)) {
+            _ if !dir.join(&file).exists() => GlobalTuningFile { file, values: vec![], error: None },
             Ok(values) => GlobalTuningFile { file, values, error: None },
             Err(e) => GlobalTuningFile { file, values: vec![], error: Some(e) },
         })

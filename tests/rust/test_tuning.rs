@@ -343,10 +343,28 @@ fn global_tuning_lists_what_the_server_would_load() {
 }
 
 #[test]
-fn global_tuning_is_empty_without_a_live_tuning_folder() {
+fn global_tuning_without_a_live_tuning_folder_lists_only_the_server_rates_file() {
     let (_tmp, server_exe) = crate::test_helpers::empty_server();
     let state = read_global_tuning(server_exe).unwrap();
-    assert!(state.files.is_empty() && state.events.is_empty());
+    let names: Vec<&str> = state.files.iter().map(|f| f.file.as_str()).collect();
+    assert_eq!(names, [SERVER_RATES_FILE]);
+    assert!(state.files[0].values.is_empty() && state.events.is_empty());
+}
+
+#[test]
+fn global_tuning_lists_the_server_rates_file_where_it_would_load_before_it_exists() {
+    let (_tmp, server_exe) = crate::test_helpers::empty_server();
+    let dir = live_tuning_dir(&server_exe).unwrap();
+    fs::create_dir_all(&dir).unwrap();
+    for name in ["LiveTuningDataUserRates.json", "LiveTuningDataGlobal.json", "LiveTuningDataPvP.json"] {
+        fs::write(dir.join(name), "[]").unwrap();
+    }
+
+    let state = read_global_tuning(server_exe).unwrap();
+
+    let names: Vec<&str> = state.files.iter().map(|f| f.file.as_str()).collect();
+    assert_eq!(names, ["LiveTuningDataGlobal.json", SERVER_RATES_FILE, "LiveTuningDataPvP.json", "LiveTuningDataUserRates.json"]);
+    assert!(state.files[1].values.is_empty() && state.files[1].error.is_none(), "{:?}", state.files[1]);
 }
 
 #[test]
