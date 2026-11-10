@@ -95,6 +95,7 @@ pub fn run() {
             config::set_backup_targets,
             config::set_store_html_output_dir,
             config::set_console_presets,
+            config::set_advanced_data,
             launcher::launch_game,
             launcher::game_is_running,
             launcher::normalize_host,
