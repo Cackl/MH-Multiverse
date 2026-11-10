@@ -350,6 +350,26 @@ fn global_tuning_is_empty_without_a_live_tuning_folder() {
 }
 
 #[test]
+fn global_tuning_reads_the_infinity_and_event_switches() {
+    // (Config.ini, ConfigOverride.ini, infinity_system, live_events); server defaults are true.
+    let cases = [
+        (None, None, true, true),
+        (Some("[GameOptions]\nInfinitySystemEnabled=false\n[GameData]\nEnableLiveTuningEvents=False\n"), None, false, false),
+        (Some("[GameOptions]\nInfinitySystemEnabled=true\n[GameData]\nEnableLiveTuningEvents=true\n"),
+         Some("[GameOptions]\nInfinitySystemEnabled=false\n"), false, true),
+        (Some("[GameOptions]\nInfinitySystemEnabled=false\n"),
+         Some("[GameOptions]\nInfinitySystemEnabled=True\n[GameData]\nEnableLiveTuningEvents=false\n"), true, false),
+    ];
+    for (config, over, infinity, events) in cases {
+        let (tmp, server_exe) = crate::test_helpers::empty_server();
+        if let Some(c) = config { fs::write(tmp.path().join("Config.ini"), c).unwrap(); }
+        if let Some(o) = over { fs::write(tmp.path().join("ConfigOverride.ini"), o).unwrap(); }
+        let state = read_global_tuning(server_exe).unwrap();
+        assert_eq!((state.infinity_system, state.live_events), (infinity, events), "{config:?} / {over:?}");
+    }
+}
+
+#[test]
 fn scan_lists_root_files_in_load_order() {
     let (_tmp, server_exe) = crate::test_helpers::empty_server();
     let dir = live_tuning_dir(&server_exe).unwrap();

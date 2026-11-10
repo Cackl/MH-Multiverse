@@ -478,6 +478,16 @@ pub struct GlobalTuning {
     /// Every defined event that sets a global. While an event runs, its values replace the
     /// base value, whichever file that came from.
     pub events: Vec<GlobalTuningEvent>,
+    /// `[GameOptions] InfinitySystemEnabled`: true means Infinity XP is live, false Omega XP.
+    pub infinity_system: bool,
+    /// `[GameData] EnableLiveTuningEvents`: false means no event overrides anything.
+    pub live_events: bool,
+}
+
+fn ini_flag(server_exe: &str, section: &str, key: &str) -> bool {
+    crate::ini::read_merged_value(server_exe, section, key, "true")
+        .trim()
+        .eq_ignore_ascii_case("true")
 }
 
 /// Sort key matching the server's `Array.Sort` of file names, which is culture-sensitive
@@ -520,8 +530,10 @@ fn globals_in(path: &Path) -> Result<Vec<GlobalValue>, String> {
 #[tauri::command]
 pub fn read_global_tuning(server_exe: String) -> Result<GlobalTuning, String> {
     let dir = live_tuning_dir(&server_exe)?;
+    let infinity_system = ini_flag(&server_exe, "GameOptions", "InfinitySystemEnabled");
+    let live_events = ini_flag(&server_exe, "GameData", "EnableLiveTuningEvents");
     if !dir.exists() {
-        return Ok(GlobalTuning { files: vec![], events: vec![] });
+        return Ok(GlobalTuning { files: vec![], events: vec![], infinity_system, live_events });
     }
 
     // The server reads only top-level LiveTuningData*.json (FileHelper.GetFilesWithPrefix),
@@ -557,7 +569,7 @@ pub fn read_global_tuning(server_exe: String) -> Result<GlobalTuning, String> {
         .collect();
     events.sort_by(|a, b| a.id.cmp(&b.id));
 
-    Ok(GlobalTuning { files, events })
+    Ok(GlobalTuning { files, events, infinity_system, live_events })
 }
 
 #[cfg(test)]
