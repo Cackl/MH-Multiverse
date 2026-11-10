@@ -153,7 +153,9 @@ describe('toShown', () => {
 describe('fromShown', () => {
   it.each([
     ['eGTV_XPGain', 3.5, 3.5],
-    ['eGTV_XPGain', 250, 100],
+    ['eGTV_XPGain', 250, 250],
+    ['eGTV_XPGain', 2500, 1000],
+    ['eGTV_LootDropRate', 1000, 1000],
     ['eGTV_XPGain', 0.1, 0.25],
     ['eGTV_PartyXPBonusPct', 1000, 11],
     ['eGTV_PartyXPBonusPct', 1200, 11],
