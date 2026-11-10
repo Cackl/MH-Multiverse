@@ -117,6 +117,7 @@ pub fn run() {
             tuning::create_tuning_file,
             tuning::get_live_tuning_dir,
             tuning::toggle_tuning_file,
+            tuning::read_global_tuning,
             updater::check_update_available,
             updater::run_update,
             updater::create_backup,

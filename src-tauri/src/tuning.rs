@@ -450,6 +450,119 @@ pub fn toggle_tuning_file(
     Ok(())
 }
 
+// ── Global settings across files (effective values) ──────────────────────────
+
+/// One global (`eGTV_`, empty `Prototype`) setting as a file sets it.
+#[derive(Debug, Clone, Serialize, PartialEq)]
+pub struct GlobalValue {
+    pub setting: String,
+    pub value: f64,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct GlobalTuningFile {
+    pub file: String,
+    pub values: Vec<GlobalValue>,
+    /// Set when the server would skip the whole file (unreadable or invalid JSON).
+    pub error: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct GlobalTuningEvent {
+    pub id: String,
+    pub display_name: String,
+    pub values: Vec<GlobalValue>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct GlobalTuning {
+    /// Base files in the order the server loads them; for a setting, the last file wins.
+    pub files: Vec<GlobalTuningFile>,
+    /// Every defined event that sets a global. While an event runs, its values replace the
+    /// base value, whichever file that came from.
+    pub events: Vec<GlobalTuningEvent>,
+}
+
+/// Sort key matching the server's `Array.Sort` of file names, which is culture-sensitive
+/// (ICU) rather than ordinal: `_` < `-` < `.` < other punctuation < digits < letters, letters
+/// ignoring case first. This is why `LiveTuningData_X.json` loads before
+/// `LiveTuningDataGlobal.json`.
+// ponytail: covers the characters that appear in tuning file names, not full ICU collation.
+fn server_sort_key(name: &str) -> (Vec<(u8, u32)>, String) {
+    let primary = name
+        .chars()
+        .map(|c| match c {
+            '_' => (0, 0),
+            '-' => (1, 0),
+            '.' => (2, 0),
+            c if c.is_ascii_digit() => (4, c as u32),
+            c if c.is_alphabetic() => (5, c.to_lowercase().next().unwrap_or(c) as u32),
+            c => (3, c as u32),
+        })
+        .collect();
+    (primary, name.to_string())
+}
+
+pub(crate) fn sort_like_server(names: &mut [String]) {
+    names.sort_by_cached_key(|n| server_sort_key(n));
+}
+
+fn globals_in(path: &Path) -> Result<Vec<GlobalValue>, String> {
+    let contents = std::fs::read_to_string(path).map_err(|e| e.to_string())?;
+    let raw: Vec<RawEntryIn> = serde_json::from_str(contents.trim_start_matches('\u{FEFF}'))
+        .map_err(|e| e.to_string())?;
+    Ok(raw
+        .into_iter()
+        .filter(|e| e.prototype.is_empty() && e.setting.starts_with("eGTV_"))
+        .map(|e| GlobalValue { setting: e.setting, value: e.value })
+        .collect())
+}
+
+/// What the server would load for global settings: the base files in its own order, and each
+/// event's values.
+#[tauri::command]
+pub fn read_global_tuning(server_exe: String) -> Result<GlobalTuning, String> {
+    let dir = live_tuning_dir(&server_exe)?;
+    if !dir.exists() {
+        return Ok(GlobalTuning { files: vec![], events: vec![] });
+    }
+
+    // The server reads only top-level LiveTuningData*.json (FileHelper.GetFilesWithPrefix),
+    // so OFF_ files and subfolders are not part of the base chain.
+    let mut names: Vec<String> = std::fs::read_dir(&dir)
+        .map_err(|e| format!("Cannot read {}: {e}", dir.display()))?
+        .flatten()
+        .filter(|e| e.path().is_file())
+        .map(|e| e.file_name().to_string_lossy().to_string())
+        .filter(|n| n.starts_with("LiveTuningData") && n.ends_with(".json"))
+        .collect();
+    sort_like_server(&mut names);
+
+    let files = names
+        .into_iter()
+        .map(|file| match globals_in(&dir.join(&file)) {
+            Ok(values) => GlobalTuningFile { file, values, error: None },
+            Err(e) => GlobalTuningFile { file, values: vec![], error: Some(e) },
+        })
+        .collect();
+
+    // An unreadable Events.json means the server runs no events, so none can override.
+    let definitions = crate::events::load_events(server_exe)
+        .map(|d| d.definitions)
+        .unwrap_or_default();
+    let mut events: Vec<GlobalTuningEvent> = definitions
+        .into_iter()
+        .filter_map(|d| {
+            // The server skips an event whose file is missing; an OFF_ copy doesn't count.
+            let values = globals_in(&dir.join(&d.file_path)).ok()?;
+            (!values.is_empty()).then(|| GlobalTuningEvent { id: d.id, display_name: d.display_name, values })
+        })
+        .collect();
+    events.sort_by(|a, b| a.id.cmp(&b.id));
+
+    Ok(GlobalTuning { files, events })
+}
+
 #[cfg(test)]
 #[path = "../../tests/rust/test_tuning.rs"]
 mod tests;
