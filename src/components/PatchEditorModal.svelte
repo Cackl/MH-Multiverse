@@ -18,7 +18,7 @@
   const VALUE_TYPES = [
     'PrototypeId', 'PrototypeDataRef', 'PrototypeGuid',
     'Integer', 'Float', 'Boolean', 'Enum', 'LocaleStringId',
-    'Vector3', 'PrototypeId[]', 'PrototypeDataRef[]', 'Prototype[]', 'Properties',
+    'Vector3', 'PrototypeId[]', 'PrototypeDataRef[]', 'Prototype', 'Prototype[]', 'Properties',
   ]
 
   // ValueTypes where selecting a prototype auto-fills Value from prototype_id.
@@ -26,7 +26,10 @@
   // ValueTypes where selecting a prototype auto-fills Value from prototype_guid.
   const GUID_TYPES: ReadonlySet<string> = new Set(['PrototypeGuid'])
   // ValueTypes that require a JSON textarea instead of a plain text input.
-  const COMPLEX:    ReadonlySet<string> = new Set(['Vector3', 'PrototypeId[]', 'PrototypeDataRef[]', 'Prototype[]', 'Properties'])
+  const COMPLEX:    ReadonlySet<string> = new Set(['Vector3', 'PrototypeId[]', 'PrototypeDataRef[]', 'Prototype', 'Prototype[]', 'Properties'])
+  // ValueTypes kept as the file's own JSON text end to end (load_patch_file sends them as a
+  // string): parsing in JS would round 64-bit ids and drop repeated Properties keys.
+  const RAW_JSON:   ReadonlySet<string> = new Set(['Prototype', 'Prototype[]', 'Properties'])
 
   // ── State ──────────────────────────────────────────────────────────────────
 
@@ -62,6 +65,7 @@
 
   function serializeValue(v: unknown, vt: string): string {
     if (v === null || v === undefined) return ''
+    if (RAW_JSON.has(vt) && typeof v === 'string') return v
     if (COMPLEX.has(vt) || typeof v === 'object') return JSON.stringify(v, null, 2)
     return String(v)
   }
@@ -70,6 +74,7 @@
     if (vt === 'Boolean')  return s === 'true'
     if (vt === 'Integer')  return parseInt(s, 10)
     if (vt === 'Float')    return parseFloat(s)
+    if (RAW_JSON.has(vt))  return s
     if (COMPLEX.has(vt))   { try { return JSON.parse(s) } catch { return s } }
     // ID types stay strings: they are 64-bit and Number() would round anything above
     // 2^53. save_patch_file converts them back to bare integers on write.

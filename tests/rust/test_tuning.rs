@@ -108,7 +108,26 @@ fn scan_leaves_event_owned_off_file_when_apply_auto_enable_false() {
 }
 
 #[test]
-fn read_normalises_null_prototype() {
+fn read_reports_entries_that_would_crash_the_server() {
+    // The server throws on a null or missing Prototype, so these must not load as if fine.
+    let cases = [
+        (r#"[{"Prototype": null, "Setting": "eGTV_XPGain", "Value": 2.0}]"#, "null"),
+        (r#"[{"Setting": "eGTV_XPGain", "Value": 2.0}]"#, "missing field `Prototype`"),
+        (r#"[{"Prototype": "", "Value": 2.0}]"#, "missing field `Setting`"),
+    ];
+    for (body, expected) in cases {
+        let (_tmp, server_exe) = crate::test_helpers::empty_server();
+        let dir = live_tuning_dir(&server_exe).unwrap();
+        fs::create_dir_all(&dir).unwrap();
+        fs::write(dir.join("LiveTuningDataBad.json"), body).unwrap();
+
+        let err = read_tuning_file(server_exe, "LiveTuningDataBad.json".to_string()).unwrap_err();
+        assert!(err.contains("LiveTuningDataBad.json") && err.contains(expected), "{body}: {err}");
+    }
+}
+
+#[test]
+fn read_keeps_empty_prototype_for_globals() {
     let (_tmp, server_exe) = setup();
     let entries = read_tuning_file(server_exe, "LiveTuningDataBugFixes.json".to_string()).unwrap();
     let e = entries.iter().find(|e| e.setting == "eGTV_XPGain").unwrap();
@@ -121,7 +140,7 @@ fn read_strips_bom() {
     let dir = live_tuning_dir(&server_exe).unwrap();
     fs::create_dir_all(&dir).unwrap();
     let mut bytes = vec![0xEF, 0xBB, 0xBF]; // UTF-8 BOM
-    bytes.extend_from_slice(br#"[{"Prototype": null, "Setting": "eGTV_XPGain", "Value": 1.0}]"#);
+    bytes.extend_from_slice(br#"[{"Prototype": "", "Setting": "eGTV_XPGain", "Value": 1.0}]"#);
     fs::write(dir.join("LiveTuningDataBom.json"), bytes).unwrap();
 
     let entries = read_tuning_file(server_exe, "LiveTuningDataBom.json".to_string()).unwrap();

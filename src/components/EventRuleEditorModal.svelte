@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onDestroy } from 'svelte'
   import { setUnsaved } from '../lib/store'
-  import type { EventDefinition, ScheduleRule } from '../lib/tuningMeta'
+  import { ruleDateError, type EventDefinition, type ScheduleRule } from '../lib/tuningMeta'
   import { tip } from '../lib/tooltip'
 
   // ── Props ───────────────────────────────────────────────────────────────────
@@ -59,6 +59,7 @@
   $: needsDate      = rule_type === 'SpecialDate'    || rule_type === 'SpecialDateLunar'
   $: isRotation     = rule_type === 'WeeklyRotation'
   $: availableToAdd = allEvents.filter(e => !events.includes(e.id))
+  $: dateError      = ruleDateError(rule_type, start_month, start_day, duration_days)
 
   $: setUnsaved('event-rule', isDirty ? 'Event rule' : null)
   onDestroy(() => setUnsaved('event-rule', null))
@@ -107,6 +108,7 @@
       nameError = 'Name is required.'
       return
     }
+    if (dateError) return
     onSave({
       name:             name.trim(),
       is_enabled,
@@ -216,13 +218,18 @@
       </div>
       <div class="field-group">
         <label class="field-label" for="duration">Duration (days)</label>
-        <input
-          id="duration"
-          class="field-input field-input-narrow"
-          type="number" min="1"
-          bind:value={duration_days}
-          disabled={saving}
-        />
+        <div class="field-control">
+          <input
+            id="duration"
+            class="field-input field-input-narrow"
+            type="number" min="1"
+            bind:value={duration_days}
+            disabled={saving}
+          />
+          {#if dateError}
+            <span class="field-error">{dateError}</span>
+          {/if}
+        </div>
       </div>
     {/if}
 
@@ -339,7 +346,7 @@
       {isDirty ? 'Discard' : 'Close'}
     </button>
     {#if isDirty}
-      <button class="btn btn-sm btn-accent" class:btn-pulse={isDirty} disabled={saving} on:click={handleSave}>
+      <button class="btn btn-sm btn-accent" class:btn-pulse={isDirty} disabled={saving || !!dateError} on:click={handleSave}>
         {saving ? 'Saving…' : 'Save to override'}
       </button>
     {/if}

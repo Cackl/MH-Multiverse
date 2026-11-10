@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte'
   import { invoke } from '@tauri-apps/api/core'
-  import { categoryForSetting, KNOWN_CORE, KNOWN_EVENTS, KNOWN_SETTINGS, blueprintHintForSetting, parseTuningValue, type KnownSetting } from '../lib/tuningMeta'
+  import { categoryForSetting, KNOWN_CORE, KNOWN_EVENTS, KNOWN_SETTINGS, NEW_TUNING_FILE_PREFIX, blueprintHintForSetting, newTuningFileName, parseTuningValue, tuningDisplayName, type KnownSetting } from '../lib/tuningMeta'
   import { tip } from '../lib/tooltip'
   import PrototypePicker from './PrototypePicker.svelte'
 
@@ -62,7 +62,7 @@
   // ── Derived ────────────────────────────────────────────────────────────────
 
   $: displayName = file
-    ? file.canonical_name.replace(/^LiveTuningData_?/, '').replace(/\.json$/, '') || 'LiveTuningData'
+    ? tuningDisplayName(file.canonical_name)
     : (newFileSuffix.trim() || 'New File')
 
   $: categories = [...new Set(entries.map(e => categoryForSetting(e.setting)))].sort()
@@ -143,7 +143,7 @@
   // ── Save / create ──────────────────────────────────────────────────────────
 
   function assembledName(): string {
-    return `LiveTuningData_${newFileSuffix.trim()}.json`
+    return newTuningFileName(newFileSuffix)
   }
 
   function validateNewName(): string {
@@ -334,7 +334,7 @@
       <div class="new-file-bar">
         <div class="filename-row">
           <div class="filename-compose" class:has-error={!!newFileError}>
-            <span class="filename-fixed">LiveTuningData_</span>
+            <span class="filename-fixed">{NEW_TUNING_FILE_PREFIX}</span>
             <input
               type="text"
               class="filename-input"
@@ -362,7 +362,7 @@
               <option value="">— blank —</option>
               {#each copyFromOptions as name}
                 <option value={name}>
-                  {name.replace(/^LiveTuningData_?/, '').replace(/\.json$/, '') || 'LiveTuningData'}
+                  {tuningDisplayName(name)}
                 </option>
               {/each}
             </select>

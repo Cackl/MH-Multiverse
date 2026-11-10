@@ -29,11 +29,13 @@ pub struct TuningEntry {
     pub value: f64,
 }
 
-// Raw serde shapes matching MHServerEmu JSON format
+// Raw serde shapes matching MHServerEmu JSON format. All three keys are required, and
+// Prototype may not be null: the server looks a null Prototype up by name and the
+// unhandled exception takes it down, at start-up and on `!server reloadlivetuning`.
 #[derive(Debug, Deserialize)]
 struct RawEntryIn {
-    #[serde(rename = "Prototype", default)]
-    prototype: Option<String>,
+    #[serde(rename = "Prototype")]
+    prototype: String,
     #[serde(rename = "Setting")]
     setting: String,
     #[serde(rename = "Value")]
@@ -298,7 +300,7 @@ pub fn read_tuning_file(
     Ok(raw
         .into_iter()
         .map(|r| TuningEntry {
-            prototype: r.prototype.unwrap_or_default(),
+            prototype: r.prototype,
             setting: r.setting,
             value: r.value,
         })

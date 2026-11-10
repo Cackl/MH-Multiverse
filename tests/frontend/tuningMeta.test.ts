@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { categoryForSetting, blueprintHintForSetting, parseTuningValue, CATEGORY_PREFIXES } from '../../src/lib/tuningMeta'
+import { categoryForSetting, blueprintHintForSetting, parseTuningValue, ruleDateError, newTuningFileName, tuningDisplayName, CATEGORY_PREFIXES } from '../../src/lib/tuningMeta'
 
 describe('categoryForSetting', () => {
   it('all prefixes map to their declared category', () => {
@@ -50,5 +50,55 @@ describe('parseTuningValue', () => {
     for (const bad of ['', '  ', null, undefined, 'abc', '1abc', 'NaN', 'Infinity']) {
       expect(parseTuningValue(bad as never), String(bad)).toBeNull()
     }
+  })
+})
+
+describe('ruleDateError', () => {
+  const ok = ''
+  it.each([
+    // type,              month, day, duration, expected
+    ['SpecialDate',       1,    31,  7,    ok],
+    ['SpecialDate',       2,    28,  1,    ok],
+    ['SpecialDate',       2,    29,  7,    'Day must be 1 to 28 for this month.'],
+    ['SpecialDate',       2,    30,  7,    'Day must be 1 to 28 for this month.'],
+    ['SpecialDate',       4,    30,  7,    ok],
+    ['SpecialDate',       4,    31,  7,    'Day must be 1 to 30 for this month.'],
+    ['SpecialDate',       12,   31,  7,    ok],
+    ['SpecialDate',       3,    0,   7,    'Day must be 1 to 31 for this month.'],
+    ['SpecialDate',       3,    null, 7,   'Day must be 1 to 31 for this month.'],
+    ['SpecialDate',       3,    1.5, 7,    'Day must be 1 to 31 for this month.'],
+    ['SpecialDate',       0,    1,   7,    'Month must be 1 to 12.'],
+    ['SpecialDate',       13,   1,   7,    'Month must be 1 to 12.'],
+    ['SpecialDate',       null, 1,   7,    'Month must be 1 to 12.'],
+    ['SpecialDate',       1,    1,   0,    'Duration must be at least 1 day.'],
+    ['SpecialDate',       1,    1,   null, 'Duration must be at least 1 day.'],
+    // Lunar months have up to 30 days and the server converts them safely.
+    ['SpecialDateLunar',  2,    30,  7,    ok],
+    ['SpecialDateLunar',  2,    30,  null, 'Duration must be at least 1 day.'],
+    // Undated rules ignore the date fields.
+    ['AlwaysOn',          null, null, null, ok],
+    ['DayOfWeek',         2,    31,  0,    ok],
+  ] as const)('%s %s/%s for %s days', (type, month, day, duration, expected) => {
+    expect(ruleDateError(type, month, day, duration)).toBe(expected)
+  })
+})
+
+describe('tuning file names', () => {
+  it('new files sort after LiveTuningDataGlobal.json, as the server loads them', () => {
+    // The server's culture-sensitive sort ranks '_' before letters; localeCompare does the same.
+    const name = newTuningFileName('  Rates ')
+    expect(name).toBe('LiveTuningDataUserRates.json')
+    expect(name.localeCompare('LiveTuningDataGlobal.json', 'en')).toBeGreaterThan(0)
+    expect('LiveTuningData_Rates.json'.localeCompare('LiveTuningDataGlobal.json', 'en')).toBeLessThan(0)
+  })
+
+  it.each([
+    ['LiveTuningDataUserRates.json', 'Rates'],
+    ['LiveTuningData_TEST.json',     'TEST'],
+    ['LiveTuningDataGlobal.json',    'Global'],
+    ['LiveTuningData.json',          'LiveTuningData'],
+    ['LiveTuningDataUser.json',      'User'],
+  ])('%s shows as %s', (file, label) => {
+    expect(tuningDisplayName(file)).toBe(label)
   })
 })
