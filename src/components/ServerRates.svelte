@@ -47,7 +47,7 @@
       case 'yours':        return 'Yours'
       case 'setIn':        return `Set in ${state.badge.file}`
       case 'overriddenBy': return `Overridden by ${state.badge.file}`
-      default:             return 'Stock'
+      default:             return 'Default'
     }
   }
 
