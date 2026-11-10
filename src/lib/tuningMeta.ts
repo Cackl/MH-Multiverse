@@ -311,12 +311,9 @@ export interface TuningEntry {
 // Mirror read_global_tuning in tuning.rs.
 export interface GlobalValue { setting: string; value: number }
 export interface GlobalTuningFile { file: string; values: GlobalValue[]; error: string | null }
-export interface GlobalTuningEvent { id: string; display_name: string; values: GlobalValue[] }
 export interface GlobalTuning {
   files: GlobalTuningFile[]
-  events: GlobalTuningEvent[]
   infinity_system: boolean
-  live_events: boolean
 }
 
 export type RateGroup = 'XP' | 'Loot' | 'Vendors' | 'Rules'
@@ -396,10 +393,7 @@ export interface RateState {
 const lastValue = (values: GlobalValue[], setting: string) =>
   values.filter(v => v.setting === setting).at(-1)?.value
 
-/**
- * Where a global's value comes from. Base files apply in load order and the last one wins;
- * an event replaces the value while it runs, whatever the base files say.
- */
+/** Where a global's value comes from. Base files apply in load order and the last one wins. */
 export function resolveRate(tuning: GlobalTuning, row: RateRow): RateState {
   const { setting } = row
   const ownedAt = tuning.files.findIndex(f => f.file === SERVER_RATES_FILE)
@@ -429,12 +423,7 @@ export function resolveRate(tuning: GlobalTuning, row: RateRow): RateState {
     : belowFile !== null && belowFile !== GLOBAL_FILE ? { kind: 'setIn', file: belowFile }
     : { kind: 'stock' }
 
-  const events = !tuning.live_events ? [] : tuning.events.flatMap(e => {
-    const v = lastValue(e.values, setting)
-    return v === undefined ? [] : [`${e.display_name} sets this to ${formatRate(row, v)} while it runs.`]
-  })
-
-  return { value: last ? last.value : owned ?? below, below, badge, notes: [...events, ...noEffect] }
+  return { value: last ? last.value : owned ?? below, below, badge, notes: noEffect }
 }
 
 const sameValue = (a: number, b: number) => Math.abs(a - b) < 1e-9

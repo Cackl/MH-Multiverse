@@ -465,34 +465,16 @@ pub struct GlobalTuningFile {
 }
 
 #[derive(Debug, Clone, Serialize)]
-pub struct GlobalTuningEvent {
-    pub id: String,
-    pub display_name: String,
-    pub values: Vec<GlobalValue>,
-}
-
-#[derive(Debug, Clone, Serialize)]
 pub struct GlobalTuning {
     /// Base files in the order the server loads them; for a setting, the last file wins.
     pub files: Vec<GlobalTuningFile>,
-    /// Every defined event that sets a global. While an event runs, its values replace the
-    /// base value, whichever file that came from.
-    pub events: Vec<GlobalTuningEvent>,
     /// `[GameOptions] InfinitySystemEnabled`: true means Infinity XP is live, false Omega XP.
     pub infinity_system: bool,
-    /// `[GameData] EnableLiveTuningEvents`: false means no event overrides anything.
-    pub live_events: bool,
 }
 
 /// The file the Server Rates form owns. It loads after `LiveTuningDataGlobal.json`, and user
 /// files that sort after it (such as `LiveTuningDataUser...`) win over it.
 pub(crate) const SERVER_RATES_FILE: &str = "LiveTuningDataMultiverse.json";
-
-fn ini_flag(server_exe: &str, section: &str, key: &str) -> bool {
-    crate::ini::read_merged_value(server_exe, section, key, "true")
-        .trim()
-        .eq_ignore_ascii_case("true")
-}
 
 /// Sort key matching the server's `Array.Sort` of file names, which is culture-sensitive
 /// (ICU) rather than ordinal: `_` < `-` < `.` < other punctuation < digits < letters, letters
@@ -529,16 +511,16 @@ fn globals_in(path: &Path) -> Result<Vec<GlobalValue>, String> {
         .collect())
 }
 
-/// What the server would load for global settings: the base files in its own order, and each
-/// event's values.
+/// What the server would load for global settings: the base files in its own order.
 #[tauri::command]
 pub fn read_global_tuning(server_exe: String) -> Result<GlobalTuning, String> {
     let dir = live_tuning_dir(&server_exe)?;
-    let infinity_system = ini_flag(&server_exe, "GameOptions", "InfinitySystemEnabled");
-    let live_events = ini_flag(&server_exe, "GameData", "EnableLiveTuningEvents");
+    let infinity_system = crate::ini::read_merged_value(&server_exe, "GameOptions", "InfinitySystemEnabled", "true")
+        .trim()
+        .eq_ignore_ascii_case("true");
     if !dir.exists() {
         let files = vec![GlobalTuningFile { file: SERVER_RATES_FILE.into(), values: vec![], error: None }];
-        return Ok(GlobalTuning { files, events: vec![], infinity_system, live_events });
+        return Ok(GlobalTuning { files, infinity_system });
     }
 
     // The server reads only top-level LiveTuningData*.json (FileHelper.GetFilesWithPrefix),
@@ -566,21 +548,7 @@ pub fn read_global_tuning(server_exe: String) -> Result<GlobalTuning, String> {
         })
         .collect();
 
-    // An unreadable Events.json means the server runs no events, so none can override.
-    let definitions = crate::events::load_events(server_exe)
-        .map(|d| d.definitions)
-        .unwrap_or_default();
-    let mut events: Vec<GlobalTuningEvent> = definitions
-        .into_iter()
-        .filter_map(|d| {
-            // The server skips an event whose file is missing; an OFF_ copy doesn't count.
-            let values = globals_in(&dir.join(&d.file_path)).ok()?;
-            (!values.is_empty()).then(|| GlobalTuningEvent { id: d.id, display_name: d.display_name, values })
-        })
-        .collect();
-    events.sort_by(|a, b| a.id.cmp(&b.id));
-
-    Ok(GlobalTuning { files, events, infinity_system, live_events })
+    Ok(GlobalTuning { files, infinity_system })
 }
 
 #[cfg(test)]

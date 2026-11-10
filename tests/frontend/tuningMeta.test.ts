@@ -109,7 +109,6 @@ describe('tuning file names', () => {
 
 const row = (setting: string): RateRow => RATE_ROWS.find(r => r.setting === setting)!
 const XP = row('eGTV_XPGain')
-const PRESTIGE = row('eGTV_CosmicPrestigeXPPct')
 
 describe('rateRows', () => {
   it.each([
@@ -152,12 +151,9 @@ describe('isCustomRate', () => {
 })
 
 type Files = [string, [string, number][]][]
-const tuning = (files: Files, extra: Partial<GlobalTuning> = {}): GlobalTuning => ({
+const tuning = (files: Files): GlobalTuning => ({
   files: files.map(([file, values]) => ({ file, values: values.map(([setting, value]) => ({ setting, value })), error: null })),
-  events: [],
   infinity_system: true,
-  live_events: true,
-  ...extra,
 })
 const G = 'LiveTuningDataGlobal.json'
 const OWN = SERVER_RATES_FILE
@@ -184,22 +180,6 @@ describe('resolveRate', () => {
     ['other settings are ignored', [[G, [['eGTV_LootRarity', 5]]], [OWN, [['eGTV_LootDropRate', 2]]]], 1, 1, { kind: 'stock' }, []],
   ])('%s', (_name, files, value, below, badge, notes) => {
     expect(resolveRate(tuning(files), XP)).toEqual({ value, below, badge, notes })
-  })
-
-  const chaos = { id: 'Chaos', display_name: 'Cosmic Chaos', values: [{ setting: 'eGTV_CosmicPrestigeXPPct', value: 0.08 }] }
-  const files: Files = [[G, [['eGTV_CosmicPrestigeXPPct', 1]]], [OWN, []]]
-
-  it.each([
-    [true, ['Cosmic Chaos sets this to 8% while it runs.']],
-    [false, []],
-  ])('with EnableLiveTuningEvents=%s an event shows notes %j', (live_events, notes) => {
-    const state = resolveRate(tuning(files, { events: [chaos], live_events }), PRESTIGE)
-    expect(state.notes).toEqual(notes)
-    expect(state.value).toBe(1) // events are notes, never the base value
-  })
-
-  it('an event that sets another setting adds no note', () => {
-    expect(resolveRate(tuning(files, { events: [chaos] }), XP).notes).toEqual([])
   })
 })
 

@@ -311,14 +311,6 @@ fn global_tuning_lists_what_the_server_would_load() {
     write("LiveTuningDataBroken.json", "[{ \"Prototype\": \"\", ");
     write("OFF_LiveTuningDataUserOff.json", &format!("[{}]", g("eGTV_XPGain", 5.0)));
     write("Events/Weekly/LiveTuningDataNested.json", &format!("[{}]", g("eGTV_XPGain", 6.0)));
-    write("Events/Weekly/LiveTuningDataChaos.json", &format!("\u{FEFF}[{}]", g("eGTV_CosmicPrestigeXPPct", 0.08)));
-    write("Events/Weekly/LiveTuningDataLoot.json", r#"[{ "Prototype": "Loot/Tables/Holiday.prototype", "Setting": "eLTTV_Enabled", "Value": 2.0 }]"#);
-    write("Events/Weekly/OFF_LiveTuningDataGone.json", &format!("[{}]", g("eGTV_XPGain", 7.0)));
-    write("Events.json", r#"{
-        "Chaos": { "DisplayName": "Cosmic Chaos", "FilePath": "Events/Weekly/LiveTuningDataChaos.json" },
-        "Loot": { "DisplayName": "Loot Only", "FilePath": "Events/Weekly/LiveTuningDataLoot.json" },
-        "Gone": { "DisplayName": "Missing File", "FilePath": "Events/Weekly/LiveTuningDataGone.json" }
-    }"#);
 
     let state = read_global_tuning(server_exe).unwrap();
 
@@ -336,10 +328,6 @@ fn global_tuning_lists_what_the_server_would_load() {
     assert_eq!(values(2), [("eGTV_XPGain", 1.0), ("eGTV_LootDropRate", 1.0)]);
     assert_eq!(values(3), [("eGTV_XPGain", 2.0)]);
     assert!(values(4).is_empty(), "per-prototype entries, even eGTV_ ones, are not globals");
-
-    assert_eq!(state.events.len(), 1);
-    assert_eq!(state.events[0].display_name, "Cosmic Chaos");
-    assert_eq!(state.events[0].values, [GlobalValue { setting: "eGTV_CosmicPrestigeXPPct".into(), value: 0.08 }]);
 }
 
 #[test]
@@ -348,7 +336,7 @@ fn global_tuning_without_a_live_tuning_folder_lists_only_the_server_rates_file()
     let state = read_global_tuning(server_exe).unwrap();
     let names: Vec<&str> = state.files.iter().map(|f| f.file.as_str()).collect();
     assert_eq!(names, [SERVER_RATES_FILE]);
-    assert!(state.files[0].values.is_empty() && state.events.is_empty());
+    assert!(state.files[0].values.is_empty());
 }
 
 #[test]
@@ -368,22 +356,20 @@ fn global_tuning_lists_the_server_rates_file_where_it_would_load_before_it_exist
 }
 
 #[test]
-fn global_tuning_reads_the_infinity_and_event_switches() {
-    // (Config.ini, ConfigOverride.ini, infinity_system, live_events); server defaults are true.
+fn global_tuning_reads_the_infinity_switch() {
+    // (Config.ini, ConfigOverride.ini, infinity_system); the server default is true.
     let cases = [
-        (None, None, true, true),
-        (Some("[GameOptions]\nInfinitySystemEnabled=false\n[GameData]\nEnableLiveTuningEvents=False\n"), None, false, false),
-        (Some("[GameOptions]\nInfinitySystemEnabled=true\n[GameData]\nEnableLiveTuningEvents=true\n"),
-         Some("[GameOptions]\nInfinitySystemEnabled=false\n"), false, true),
-        (Some("[GameOptions]\nInfinitySystemEnabled=false\n"),
-         Some("[GameOptions]\nInfinitySystemEnabled=True\n[GameData]\nEnableLiveTuningEvents=false\n"), true, false),
+        (None, None, true),
+        (Some("[GameOptions]\nInfinitySystemEnabled=False\n"), None, false),
+        (Some("[GameOptions]\nInfinitySystemEnabled=true\n"), Some("[GameOptions]\nInfinitySystemEnabled=false\n"), false),
+        (Some("[GameOptions]\nInfinitySystemEnabled=false\n"), Some("[GameOptions]\nInfinitySystemEnabled=True\n"), true),
     ];
-    for (config, over, infinity, events) in cases {
+    for (config, over, infinity) in cases {
         let (tmp, server_exe) = crate::test_helpers::empty_server();
         if let Some(c) = config { fs::write(tmp.path().join("Config.ini"), c).unwrap(); }
         if let Some(o) = over { fs::write(tmp.path().join("ConfigOverride.ini"), o).unwrap(); }
         let state = read_global_tuning(server_exe).unwrap();
-        assert_eq!((state.infinity_system, state.live_events), (infinity, events), "{config:?} / {over:?}");
+        assert_eq!(state.infinity_system, infinity, "{config:?} / {over:?}");
     }
 }
 

@@ -276,7 +276,7 @@ fn load_disk_entries(path: &Path) -> Result<Vec<CatalogEntryDisk>, String> {
         Err(e) => return Err(format!("Cannot read {name}: {e}")),
     };
     serde_json::from_str(raw.trim_start_matches('\u{FEFF}')).map_err(|e| {
-        format!("{name} is not valid catalog JSON ({e}). Fix or remove the file; nothing was changed.")
+        format!("{name} is not valid catalog JSON ({e}). Nothing was changed. Fix or remove the file.")
     })
 }
 
