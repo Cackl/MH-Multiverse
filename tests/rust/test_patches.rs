@@ -98,3 +98,74 @@ fn save_keeps_backup_of_previous_contents() {
     assert_eq!(std::fs::read_to_string(file.with_extension("json.bak")).unwrap(), before);
     assert_eq!(std::fs::read_to_string(&file).unwrap().trim(), "[]");
 }
+
+// Ids above 2^53 that the webview would round, and the repeated key that a
+// parsed JSON object would collapse, all from PatchDataComplex.json.
+const COMPLEX_IDS: &[&str] = &[
+    "1076091916814587724", "13794733944514418082", "17910267881806762587",
+    "9316722085805298222", "16576396162899383486", "1071992662862269383",
+    "5460518059085536758", "9964627584974134775", "10449030269642610036",
+    "8783203720206489305",
+];
+
+fn load_complex(server_exe: &str) -> Vec<PatchEntry> {
+    load_patch_file(server_exe.to_string(), "PatchDataComplex.json".to_string(), true).unwrap()
+}
+
+#[test]
+fn complex_values_load_as_their_original_text() {
+    let (_tmp, server_exe) = setup();
+    let entries = load_complex(&server_exe);
+
+    for e in &entries {
+        assert!(e.value.is_string(), "{} should cross as text", e.value_type);
+    }
+    let cooldowns = entries[0].value.as_str().unwrap();
+    assert_eq!(cooldowns.matches("CooldownModifierPctForPower").count(), 2);
+    assert!(cooldowns.contains("13794733944514418082"));
+}
+
+#[test]
+fn complex_values_survive_a_save_unchanged() {
+    let (_tmp, server_exe) = setup();
+    let entries = load_complex(&server_exe);
+    save_patch_file(server_exe.clone(), "PatchDataComplex.json".to_string(), true, entries).unwrap();
+
+    let file = patches_dir(&server_exe).unwrap().join("PatchDataComplex.json");
+    let text = std::fs::read_to_string(file).unwrap();
+    for id in COMPLEX_IDS {
+        assert!(text.contains(id), "{id} lost or rounded");
+    }
+    assert_eq!(text.matches("CooldownModifierPctForPower").count(), 2);
+    // Still a file the server can parse.
+    assert_eq!(serde_json::from_str::<Vec<JsonValue>>(&text).unwrap().len(), 4);
+}
+
+#[test]
+fn complex_value_edited_as_text_is_written_as_json() {
+    let (_tmp, server_exe) = setup();
+    let mut entries = load_complex(&server_exe);
+    entries[3].value = JsonValue::String(r#" { "ParentDataRef": 10449030269642610036, "Ability": 1 } "#.into());
+    save_patch_file(server_exe.clone(), "PatchDataComplex.json".to_string(), true, entries).unwrap();
+
+    // On disk the value is a JSON object, not a quoted string.
+    let file = patches_dir(&server_exe).unwrap().join("PatchDataComplex.json");
+    let text = std::fs::read_to_string(file).unwrap();
+    let on_disk: Vec<JsonValue> = serde_json::from_str(&text).unwrap();
+    assert_eq!(on_disk[3]["Value"]["Ability"], 1);
+    assert!(text.contains("10449030269642610036"));
+}
+
+#[test]
+fn save_rejects_complex_value_that_is_not_json() {
+    let (_tmp, server_exe) = setup();
+    let file = patches_dir(&server_exe).unwrap().join("PatchDataComplex.json");
+    let before = std::fs::read_to_string(&file).unwrap();
+    let mut entries = load_complex(&server_exe);
+    entries[1].value = JsonValue::String("{ not json".into());
+
+    let err = save_patch_file(server_exe, "PatchDataComplex.json".to_string(), true, entries).unwrap_err();
+
+    assert!(err.contains("not valid JSON"), "{err}");
+    assert_eq!(std::fs::read_to_string(&file).unwrap(), before);
+}

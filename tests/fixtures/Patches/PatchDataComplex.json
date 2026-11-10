@@ -1,0 +1,43 @@
+[
+    {
+        "Enabled": true,
+        "Prototype": "Entity/Characters/Avatars/Shipping/Psylocke.prototype",
+        "Path": "Properties",
+        "Description": "Repeated keys, one per power",
+        "ValueType": "Properties",
+        "Value": {
+            "CooldownModifierPctGlobal": -0.25,
+            "CooldownModifierPctForPower": [1076091916814587724, -0.5],
+            "CooldownModifierPctForPower": [13794733944514418082, -0.5]
+        }
+    },
+    {
+        "Enabled": true,
+        "Prototype": "Entity/Characters/Mobs/MGH/Chapter/MGHChapter05/MGHBruteNamedCH04.prototype",
+        "Path": "Properties",
+        "Description": "From stock Off/PatchDataTestOverrideLoot.json",
+        "ValueType": "Properties",
+        "Value": {
+            "LootTablePrototype": [ 17910267881806762587, 0, 9316722085805298222, 16576396162899383486 ]
+        }
+    },
+    {
+        "Enabled": true,
+        "Prototype": "Loot/Tables/ItemType/SpecialsCostumesCardsTokens.prototype",
+        "Path": "Choices[0].Choices[]",
+        "Description": "From stock PatchDataSpecialDrops.json",
+        "ValueType": "Prototype[]",
+        "Value": [
+            { "ParentDataRef": 1071992662862269383, "Item": 5460518059085536758, "Weight": 50 },
+            { "ParentDataRef": 1071992662862269383, "Item": 9964627584974134775, "Weight": 50 }
+        ]
+    },
+    {
+        "Enabled": true,
+        "Prototype": "Entity/Characters/Avatars/Shipping/Deadpool.prototype",
+        "Path": "HiddenPassivePowers[]",
+        "Description": "Recipe 5",
+        "ValueType": "Prototype",
+        "Value": { "ParentDataRef": 10449030269642610036, "Ability": 8783203720206489305 }
+    }
+]

@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use serde_json::value::RawValue;
 use serde_json::{Number, Value as JsonValue};
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -79,6 +80,63 @@ fn convert_ids(entry: &mut PatchEntry, to_strings: bool) {
     convert(&mut entry.value, to_strings);
 }
 
+// Struct values (`Prototype`, `Prototype[]`) and `Properties` nest 64-bit ids
+// at any depth, and `Properties` repeats keys (one `CooldownModifierPctForPower`
+// per power). `JsonValue` keeps only the last of a repeated key and the webview
+// rounds the ids, so these values cross to the frontend as their original JSON
+// text and are written back verbatim.
+const RAW_TYPES: &[&str] = &["Prototype", "Prototype[]", "Properties"];
+
+/// On-disk shape: the value stays as unparsed JSON text.
+#[derive(Deserialize, Serialize)]
+#[serde(rename_all = "PascalCase")]
+struct DiskEntry {
+    enabled: bool,
+    prototype: String,
+    path: String,
+    #[serde(default)]
+    description: String,
+    value_type: String,
+    value: Box<RawValue>,
+}
+
+fn from_disk(d: DiskEntry) -> Result<PatchEntry, String> {
+    let value = if RAW_TYPES.contains(&d.value_type.as_str()) {
+        JsonValue::String(d.value.get().to_string())
+    } else {
+        serde_json::from_str(d.value.get()).map_err(|e| format!("{}: {e}", d.path))?
+    };
+    let mut entry = PatchEntry {
+        enabled: d.enabled,
+        prototype: d.prototype,
+        path: d.path,
+        description: d.description,
+        value_type: d.value_type,
+        value,
+    };
+    convert_ids(&mut entry, true);
+    Ok(entry)
+}
+
+fn to_disk(mut entry: PatchEntry) -> Result<DiskEntry, String> {
+    convert_ids(&mut entry, false);
+    let value = match &entry.value {
+        JsonValue::String(text) if RAW_TYPES.contains(&entry.value_type.as_str()) => {
+            RawValue::from_string(text.trim().to_string())
+                .map_err(|e| format!("{}: Value is not valid JSON: {e}", entry.path))?
+        }
+        v => serde_json::value::to_raw_value(v).map_err(|e| format!("{}: {e}", entry.path))?,
+    };
+    Ok(DiskEntry {
+        enabled: entry.enabled,
+        prototype: entry.prototype,
+        path: entry.path,
+        description: entry.description,
+        value_type: entry.value_type,
+        value,
+    })
+}
+
 // ── Tauri commands ────────────────────────────────────────────────────────────
 
 /// Scan the Patches directory and return all PatchData*.json files.
@@ -139,10 +197,12 @@ pub fn load_patch_file(
     let text = fs::read_to_string(&path)
         .map_err(|e| format!("Cannot read {file_name}: {e}"))?;
 
-    let mut entries: Vec<PatchEntry> = serde_json::from_str(&text)
+    let disk: Vec<DiskEntry> = serde_json::from_str(&text)
         .map_err(|e| format!("Cannot parse {file_name}: {e}"))?;
-    entries.iter_mut().for_each(|e| convert_ids(e, true));
-    Ok(entries)
+    disk.into_iter()
+        .map(from_disk)
+        .collect::<Result<_, _>>()
+        .map_err(|e| format!("Cannot parse {file_name}: {e}"))
 }
 
 /// Write entries back to a patch file, pretty-printed.
@@ -151,14 +211,18 @@ pub fn save_patch_file(
     server_exe: String,
     file_name: String,
     enabled: bool,
-    mut entries: Vec<PatchEntry>,
+    entries: Vec<PatchEntry>,
 ) -> Result<(), String> {
     let patches = patches_dir(&server_exe)?;
     let path = file_path(&patches, &file_name, enabled);
 
-    entries.iter_mut().for_each(|e| convert_ids(e, false));
+    let disk: Vec<DiskEntry> = entries
+        .into_iter()
+        .map(to_disk)
+        .collect::<Result<_, _>>()
+        .map_err(|e| format!("Cannot save {file_name}: {e}"))?;
 
-    let text = serde_json::to_string_pretty(&entries)
+    let text = serde_json::to_string_pretty(&disk)
         .map_err(|e| format!("Cannot serialise entries: {e}"))?;
 
     crate::store::write_with_backup(&path, &text)
