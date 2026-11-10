@@ -258,12 +258,9 @@ pub fn scan_tuning_files(
         });
     }
 
-    // Toggleable (root, non-event) files first, then alphabetical by relative_path.
-    files.sort_by(|a, b| {
-        b.toggleable
-            .cmp(&a.toggleable)
-            .then(a.relative_path.cmp(&b.relative_path))
-    });
+    // Toggleable (root, non-event) files first, then in the order the server loads them, so
+    // the list reads top to bottom as "later files win".
+    files.sort_by_cached_key(|f| (!f.toggleable, server_sort_key(&f.relative_path)));
 
     Ok(files)
 }

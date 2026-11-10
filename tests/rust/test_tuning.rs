@@ -348,3 +348,18 @@ fn global_tuning_is_empty_without_a_live_tuning_folder() {
     let state = read_global_tuning(server_exe).unwrap();
     assert!(state.files.is_empty() && state.events.is_empty());
 }
+
+#[test]
+fn scan_lists_root_files_in_load_order() {
+    let (_tmp, server_exe) = crate::test_helpers::empty_server();
+    let dir = live_tuning_dir(&server_exe).unwrap();
+    fs::create_dir_all(&dir).unwrap();
+    for name in ["LiveTuningDataUserRates.json", "LiveTuningDataGlobal.json", "LiveTuningData.json", "LiveTuningData_TEST.json"] {
+        fs::write(dir.join(name), "[]").unwrap();
+    }
+
+    let files = scan_tuning_files(server_exe, false).unwrap();
+
+    let names: Vec<&str> = files.iter().map(|f| f.relative_path.as_str()).collect();
+    assert_eq!(names, ["LiveTuningData_TEST.json", "LiveTuningData.json", "LiveTuningDataGlobal.json", "LiveTuningDataUserRates.json"]);
+}
