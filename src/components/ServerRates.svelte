@@ -214,7 +214,6 @@
                   }}
                 >
                 <span class="rate-unit">{row.format === 'times' ? '×' : '%'}</span>
-                {#if value === row.gameDefault}<span class="rate-unit">Game default</span>{/if}
               {/if}
             </span>
 
