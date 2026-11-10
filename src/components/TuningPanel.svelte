@@ -3,7 +3,7 @@
   import { invoke } from '@tauri-apps/api/core'
   import { openPath } from '@tauri-apps/plugin-opener'
   import { appConfig, serverRunning, setTuningTags, setTuningFavourites, tuningFocusFile } from '../lib/store'
-  import { KNOWN_CORE, KNOWN_EVENTS, type TuningFileInfo, type EventDefinition, type EventsData } from '../lib/tuningMeta'
+  import { KNOWN_CORE, KNOWN_EVENTS, tuningDisplayName, type TuningFileInfo, type EventDefinition, type EventsData } from '../lib/tuningMeta'
   import PanelSidebar from './PanelSidebar.svelte'
   import TuningEditorModal from './TuningEditorModal.svelte'
   import { tip } from '../lib/tooltip'
@@ -94,9 +94,7 @@
   // ── Helpers ────────────────────────────────────────────────────────────────
 
   function displayName(file: TuningFileInfo): string {
-    return file.canonical_name
-      .replace(/^LiveTuningData_?/, '')
-      .replace(/\.json$/, '') || 'LiveTuningData'
+    return tuningDisplayName(file.canonical_name)
   }
 
   function effectiveTag(canonical: string): Tag {

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { categoryForSetting, blueprintHintForSetting, parseTuningValue, ruleDateError, CATEGORY_PREFIXES } from '../../src/lib/tuningMeta'
+import { categoryForSetting, blueprintHintForSetting, parseTuningValue, ruleDateError, newTuningFileName, tuningDisplayName, CATEGORY_PREFIXES } from '../../src/lib/tuningMeta'
 
 describe('categoryForSetting', () => {
   it('all prefixes map to their declared category', () => {
@@ -80,5 +80,25 @@ describe('ruleDateError', () => {
     ['DayOfWeek',         2,    31,  0,    ok],
   ] as const)('%s %s/%s for %s days', (type, month, day, duration, expected) => {
     expect(ruleDateError(type, month, day, duration)).toBe(expected)
+  })
+})
+
+describe('tuning file names', () => {
+  it('new files sort after LiveTuningDataGlobal.json, as the server loads them', () => {
+    // The server's culture-sensitive sort ranks '_' before letters; localeCompare does the same.
+    const name = newTuningFileName('  Rates ')
+    expect(name).toBe('LiveTuningDataUserRates.json')
+    expect(name.localeCompare('LiveTuningDataGlobal.json', 'en')).toBeGreaterThan(0)
+    expect('LiveTuningData_Rates.json'.localeCompare('LiveTuningDataGlobal.json', 'en')).toBeLessThan(0)
+  })
+
+  it.each([
+    ['LiveTuningDataUserRates.json', 'Rates'],
+    ['LiveTuningData_TEST.json',     'TEST'],
+    ['LiveTuningDataGlobal.json',    'Global'],
+    ['LiveTuningData.json',          'LiveTuningData'],
+    ['LiveTuningDataUser.json',      'User'],
+  ])('%s shows as %s', (file, label) => {
+    expect(tuningDisplayName(file)).toBe(label)
   })
 })

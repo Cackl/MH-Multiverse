@@ -149,6 +149,22 @@ export interface ScheduleData {
   using_override: boolean
 }
 
+// ── File names ─────────────────────────────────────────────────────────────────
+
+// The server loads LiveTuningData*.json in culture-sensitive sorted order and the last value
+// wins. "_" sorts before every letter, so a "LiveTuningData_" file loads before
+// LiveTuningDataGlobal.json, which then resets every global it sets. "User" sorts after "Global".
+export const NEW_TUNING_FILE_PREFIX = 'LiveTuningDataUser'
+
+export function newTuningFileName(suffix: string): string {
+  return `${NEW_TUNING_FILE_PREFIX}${suffix.trim()}.json`
+}
+
+/** Short label for a file: the name without "LiveTuningData", "_" or "User", and ".json". */
+export function tuningDisplayName(fileName: string): string {
+  return fileName.replace(/^LiveTuningData(?:_|User(?=.+\.json$))?/, '').replace(/\.json$/, '') || 'LiveTuningData'
+}
+
 // ── Known file sets ────────────────────────────────────────────────────────────
 
 export const KNOWN_CORE = new Set([
