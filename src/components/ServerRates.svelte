@@ -5,7 +5,7 @@
   import { appConfig, serverRunning } from '../lib/store'
   import { tip } from '../lib/tooltip'
   import {
-    SERVER_RATES_FILE, rateRows, resolveRate, formatRate, isCustomRate, planServerRatesWrite, reloadResult,
+    SERVER_RATES_FILE, rateRows, resolveRate, toShown, fromShown, planServerRatesWrite, reloadResult,
     type GlobalTuning, type RateRow, type RateState, type RateGroup, type TuningEntry, type ReloadResult,
   } from '../lib/tuningMeta'
 
@@ -182,17 +182,6 @@
                   on:keydown={(e) => !locked && e.key === 'Enter' && setValue(row, value !== 0 ? 0 : 1)}
                 ></div>
               {:else}
-                {#if row.gameDefault !== undefined}
-                  <label class="check-row">
-                    <input
-                      type="checkbox"
-                      checked={value === row.gameDefault}
-                      disabled={locked}
-                      on:change={(e) => setValue(row, e.currentTarget.checked ? row.gameDefault ?? 1 : row.min)}
-                    >
-                    <span class="check-label">Game default</span>
-                  </label>
-                {/if}
                 <input
                   type="range"
                   class="rate-slider"
@@ -201,13 +190,33 @@
                   max={row.max}
                   step={row.step}
                   value={Math.min(row.max, Math.max(row.min, value))}
-                  disabled={locked || value === row.gameDefault}
+                  disabled={locked}
                   on:input={(e) => setValue(row, Number(e.currentTarget.value))}
                 >
               {/if}
             </div>
 
-            <span class="rate-value">{formatRate(row, value)}{isCustomRate(row, value) ? ' (custom)' : ''}</span>
+            <span class="rate-value">
+              {#if row.format !== 'toggle'}
+                <input
+                  type="number"
+                  class="rate-box"
+                  aria-label="{row.label} value"
+                  min={toShown(row, row.min)}
+                  max={toShown(row, row.limit)}
+                  step="any"
+                  value={toShown(row, value)}
+                  disabled={locked}
+                  on:change={(e) => {
+                    const box = e.currentTarget
+                    if (Number.isFinite(box.valueAsNumber)) setValue(row, fromShown(row, box.valueAsNumber))
+                    box.value = String(toShown(row, current(row.setting))) // show the clamped value
+                  }}
+                >
+                <span class="rate-unit">{row.format === 'times' ? '×' : '%'}</span>
+                {#if value === row.gameDefault}<span class="rate-unit">Game default</span>{/if}
+              {/if}
+            </span>
 
             <span class="rate-side">
               {#if changed}
@@ -299,7 +308,7 @@
 
   .rate-row {
     display: grid;
-    grid-template-columns: minmax(150px, 1fr) minmax(140px, 2fr) 90px minmax(120px, auto);
+    grid-template-columns: minmax(150px, 1fr) minmax(140px, 2fr) auto minmax(120px, auto);
     align-items: center;
     column-gap: 14px;
     row-gap: 2px;
@@ -334,10 +343,24 @@
   }
 
   .rate-value {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    white-space: nowrap;
+  }
+  .rate-box {
+    width: 64px;
+    background: var(--bg-0);
+    border: 1px solid var(--border-mid);
+    border-radius: var(--radius-sm);
+    padding: 3px 6px;
     font-family: var(--font-mono);
     font-size: 12px;
     color: var(--text-0);
-    white-space: nowrap;
+  }
+  .rate-unit {
+    font-size: 11px;
+    color: var(--text-2);
   }
 
   .rate-side {

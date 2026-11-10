@@ -324,9 +324,12 @@ export interface RateRow {
   group: RateGroup
   /** times: 2×; bonus: +50% (1 = +0%); pct: 8%; toggle: 0 is Off, anything else On. */
   format: 'times' | 'bonus' | 'pct' | 'toggle'
+  /** The slider's range and step. */
   min: number
   max: number
   step: number
+  /** The highest value the number box takes; it can go past the slider. */
+  limit: number
   /** Shown as a ? tooltip beside the label. */
   tip?: string
   /** A value that means "use the game data", shown as Game default. */
@@ -335,23 +338,25 @@ export interface RateRow {
   infinity?: boolean
 }
 
-// Ranges from SimpleView-LiveTuning.md §5.3. Stock Global sets all of these keys.
+// Slider ranges from SimpleView-LiveTuning.md §5.3, with higher limits for the number box. The
+// limits stop runaway values: 1e39 becomes Infinity, which the server turns into a huge negative
+// number, and drop rates in the hundreds load the server heavily. Stock Global sets all of these.
 export const RATE_ROWS: RateRow[] = [
-  { setting: 'eGTV_XPGain',                  label: 'XP from kills and orbs', group: 'XP',      format: 'times',  min: 0.25, max: 10,   step: 0.25, tip: 'Mission reward XP is not affected.' },
-  { setting: 'eGTV_InfinityXPPct',           label: 'Infinity XP',            group: 'XP',      format: 'times',  min: 0,    max: 10,   step: 0.5, infinity: true },
-  { setting: 'eGTV_OmegaXPPct',              label: 'Omega XP',               group: 'XP',      format: 'times',  min: 0,    max: 10,   step: 0.5, infinity: false },
-  { setting: 'eGTV_PartyXPBonusPct',         label: 'Party XP bonus',         group: 'XP',      format: 'bonus',  min: 1,    max: 5,    step: 0.5 },
-  { setting: 'eGTV_CosmicPrestigeXPPct',     label: 'XP at max prestige',     group: 'XP',      format: 'pct',    min: 0.04, max: 0.99, step: 0.01, gameDefault: 1 },
-  { setting: 'eGTV_LootDropRate',            label: 'Drop rate',              group: 'Loot',    format: 'times',  min: 0.25, max: 10,   step: 0.25 },
-  { setting: 'eGTV_LootRarity',              label: 'Rare item find',         group: 'Loot',    format: 'times',  min: 0.5,  max: 10,   step: 0.5 },
-  { setting: 'eGTV_LootSpecialDropRate',     label: 'Special item find',      group: 'Loot',    format: 'times',  min: 0.5,  max: 10,   step: 0.5 },
-  { setting: 'eGTV_LootVaporizationEnabled', label: 'Enable Loot Vaporising', group: 'Loot',    format: 'toggle', min: 0,    max: 1,    step: 1 },
-  { setting: 'eGTV_VendorBuyPrice',          label: 'Buy prices',             group: 'Vendors', format: 'times',  min: 0,    max: 3,    step: 0.25 },
-  { setting: 'eGTV_VendorSellPrice',         label: 'Sell prices',            group: 'Vendors', format: 'times',  min: 0,    max: 3,    step: 0.25 },
-  { setting: 'eGTV_VendorXPGain',            label: 'Vendor XP',              group: 'Vendors', format: 'times',  min: 0,    max: 10,   step: 0.5 },
-  { setting: 'eGTV_PVPEnabled',              label: 'PvP',                    group: 'Rules',   format: 'toggle', min: 0,    max: 1,    step: 1 },
-  { setting: 'eGTV_PlayerTradeEnabled',      label: 'Player trading',         group: 'Rules',   format: 'toggle', min: 0,    max: 1,    step: 1 },
-  { setting: 'eGTV_BoostTimersRunning',      label: 'Boost timers run',       group: 'Rules',   format: 'toggle', min: 0,    max: 1,    step: 1, tip: 'Off pauses all boost timers everywhere.' },
+  { setting: 'eGTV_XPGain',                  label: 'XP from kills and orbs', group: 'XP',      format: 'times',  min: 0.25, max: 10, step: 0.25, limit: 100, tip: 'Mission reward XP is not affected.' },
+  { setting: 'eGTV_InfinityXPPct',           label: 'Infinity XP',            group: 'XP',      format: 'times',  min: 0,    max: 10, step: 0.5,  limit: 100, infinity: true },
+  { setting: 'eGTV_OmegaXPPct',              label: 'Omega XP',               group: 'XP',      format: 'times',  min: 0,    max: 10, step: 0.5,  limit: 100, infinity: false },
+  { setting: 'eGTV_PartyXPBonusPct',         label: 'Party XP bonus',         group: 'XP',      format: 'bonus',  min: 1,    max: 5,  step: 0.5,  limit: 11 },
+  { setting: 'eGTV_CosmicPrestigeXPPct',     label: 'XP at max prestige',     group: 'XP',      format: 'pct',    min: 0.01, max: 2,  step: 0.01, limit: 10, gameDefault: 1 },
+  { setting: 'eGTV_LootDropRate',            label: 'Drop rate',              group: 'Loot',    format: 'times',  min: 0.25, max: 10, step: 0.25, limit: 100 },
+  { setting: 'eGTV_LootRarity',              label: 'Rare item find',         group: 'Loot',    format: 'times',  min: 0.5,  max: 10, step: 0.5,  limit: 100 },
+  { setting: 'eGTV_LootSpecialDropRate',     label: 'Special item find',      group: 'Loot',    format: 'times',  min: 0.5,  max: 10, step: 0.5,  limit: 100 },
+  { setting: 'eGTV_LootVaporizationEnabled', label: 'Enable Loot Vaporising', group: 'Loot',    format: 'toggle', min: 0,    max: 1,  step: 1,    limit: 1 },
+  { setting: 'eGTV_VendorBuyPrice',          label: 'Buy prices',             group: 'Vendors', format: 'times',  min: 0,    max: 3,  step: 0.25, limit: 100 },
+  { setting: 'eGTV_VendorSellPrice',         label: 'Sell prices',            group: 'Vendors', format: 'times',  min: 0,    max: 3,  step: 0.25, limit: 100 },
+  { setting: 'eGTV_VendorXPGain',            label: 'Vendor XP',              group: 'Vendors', format: 'times',  min: 0,    max: 10, step: 0.5,  limit: 100 },
+  { setting: 'eGTV_PVPEnabled',              label: 'PvP',                    group: 'Rules',   format: 'toggle', min: 0,    max: 1,  step: 1,    limit: 1 },
+  { setting: 'eGTV_PlayerTradeEnabled',      label: 'Player trading',         group: 'Rules',   format: 'toggle', min: 0,    max: 1,  step: 1,    limit: 1 },
+  { setting: 'eGTV_BoostTimersRunning',      label: 'Boost timers run',       group: 'Rules',   format: 'toggle', min: 0,    max: 1,  step: 1,    limit: 1, tip: 'Off pauses all boost timers everywhere.' },
 ]
 
 /** The rows to show: all but the dead one of Infinity XP and Omega XP. */
@@ -370,10 +375,19 @@ export function formatRate(row: RateRow, value: number): string {
   }
 }
 
-/** True when the value can't be shown on the row's slider, e.g. 15× from a hand-written file. */
-export function isCustomRate(row: RateRow, value: number): boolean {
-  if (row.format === 'toggle' || value === row.gameDefault) return false
-  return value < row.min || value > row.max
+const round = (n: number) => Math.round(n * 1e6) / 1e6
+
+/** The value as the number box shows it: 2 for 2×, 50 for a +50% bonus, 8 for 8%. */
+export function toShown(row: RateRow, value: number): number {
+  if (row.format === 'bonus') return round((value - 1) * 100)
+  if (row.format === 'pct') return round(value * 100)
+  return value
+}
+
+/** The value for a number typed in the box, kept between the row's min and limit. */
+export function fromShown(row: RateRow, shown: number): number {
+  const value = row.format === 'bonus' ? shown / 100 + 1 : row.format === 'pct' ? shown / 100 : shown
+  return round(Math.min(row.limit, Math.max(row.min, value)))
 }
 
 export type RateBadge =

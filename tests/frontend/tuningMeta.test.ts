@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { categoryForSetting, blueprintHintForSetting, parseTuningValue, ruleDateError, newTuningFileName, tuningDisplayName, CATEGORY_PREFIXES,
-  RATE_ROWS, SERVER_RATES_FILE, rateRows, formatRate, isCustomRate, resolveRate, planServerRatesWrite, reloadResult,
+  RATE_ROWS, SERVER_RATES_FILE, rateRows, formatRate, toShown, fromShown, resolveRate, planServerRatesWrite, reloadResult,
   type GlobalTuning, type RateRow, type TuningEntry } from '../../src/lib/tuningMeta'
 
 describe('categoryForSetting', () => {
@@ -138,15 +138,35 @@ describe('formatRate', () => {
   })
 })
 
-describe('isCustomRate', () => {
+describe('toShown', () => {
   it.each([
-    ['eGTV_XPGain', 15, true],
-    ['eGTV_XPGain', 0.1, true],
-    ['eGTV_XPGain', 10, false],
-    ['eGTV_CosmicPrestigeXPPct', 1, false],
-    ['eGTV_PVPEnabled', 2, false],
-  ])('%s = %s is custom: %s', (setting, value, custom) => {
-    expect(isCustomRate(row(setting), value)).toBe(custom)
+    ['eGTV_XPGain', 2, 2],
+    ['eGTV_PartyXPBonusPct', 1.5, 50],
+    ['eGTV_PartyXPBonusPct', 1.1, 10],
+    ['eGTV_CosmicPrestigeXPPct', 0.07, 7],
+    ['eGTV_CosmicPrestigeXPPct', 1, 100],
+  ])('%s = %s shows %s in the box', (setting, value, shown) => {
+    expect(toShown(row(setting), value)).toBe(shown)
+  })
+})
+
+describe('fromShown', () => {
+  it.each([
+    ['eGTV_XPGain', 3.5, 3.5],
+    ['eGTV_XPGain', 250, 100],
+    ['eGTV_XPGain', 0.1, 0.25],
+    ['eGTV_PartyXPBonusPct', 1000, 11],
+    ['eGTV_PartyXPBonusPct', 1200, 11],
+    ['eGTV_PartyXPBonusPct', -5, 1],
+    ['eGTV_PartyXPBonusPct', 10, 1.1],
+    ['eGTV_PartyXPBonusPct', 14, 1.14], // 14 / 100 + 1 is 1.1400000000000001 unrounded
+    ['eGTV_CosmicPrestigeXPPct', 7, 0.07],
+    ['eGTV_CosmicPrestigeXPPct', 100, 1],
+    ['eGTV_CosmicPrestigeXPPct', 5000, 10],
+    ['eGTV_CosmicPrestigeXPPct', 0, 0.01],
+    ['eGTV_VendorBuyPrice', 0, 0],
+  ])('%s typed as %s is %s', (setting, shown, value) => {
+    expect(fromShown(row(setting), shown)).toBe(value)
   })
 })
 
