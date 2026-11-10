@@ -169,3 +169,16 @@ fn save_rejects_complex_value_that_is_not_json() {
     assert!(err.contains("not valid JSON"), "{err}");
     assert_eq!(std::fs::read_to_string(&file).unwrap(), before);
 }
+
+#[test]
+fn load_accepts_a_byte_order_mark() {
+    let (_tmp, server_exe) = setup();
+    let file = patches_dir(&server_exe).unwrap().join("PatchDataBom.json");
+    let body = r#"[{ "Enabled": true, "Prototype": "A.prototype", "Path": "X", "Description": "", "ValueType": "Integer", "Value": 1 }]"#;
+    std::fs::write(&file, format!("\u{FEFF}{body}")).unwrap();
+
+    let entries = load_patch_file(server_exe, "PatchDataBom.json".to_string(), true).unwrap();
+
+    assert_eq!(entries.len(), 1);
+    assert_eq!(entries[0].value, 1);
+}

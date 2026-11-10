@@ -197,7 +197,8 @@ pub fn load_patch_file(
     let text = fs::read_to_string(&path)
         .map_err(|e| format!("Cannot read {file_name}: {e}"))?;
 
-    let disk: Vec<DiskEntry> = serde_json::from_str(&text)
+    // Some stock files (e.g. Off/PatchDataCowpocalypse.json) start with a UTF-8 BOM.
+    let disk: Vec<DiskEntry> = serde_json::from_str(text.trim_start_matches('\u{FEFF}'))
         .map_err(|e| format!("Cannot parse {file_name}: {e}"))?;
     disk.into_iter()
         .map(from_disk)
