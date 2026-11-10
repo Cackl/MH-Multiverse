@@ -125,6 +125,25 @@ export interface ScheduleRule {
   events: string[]
 }
 
+/**
+ * Why a dated rule can't be saved, or '' if it can. The server builds a SpecialDate rule's
+ * start with `new DateTime(year, month, day)` and no guard, so an impossible date (31 Apr,
+ * or 29 Feb in a non-leap year) takes it down. Lunar dates are converted inside a try, so
+ * only their duration is checked; a missing duration makes the server drop the rule.
+ */
+export function ruleDateError(
+  ruleType: string, month: number | null, day: number | null, durationDays: number | null,
+): string {
+  if (ruleType !== 'SpecialDate' && ruleType !== 'SpecialDateLunar') return ''
+  if (ruleType === 'SpecialDate') {
+    if (!Number.isInteger(month) || month! < 1 || month! > 12) return 'Month must be 1 to 12.'
+    const max = new Date(Date.UTC(2023, month!, 0)).getUTCDate() // 2023: not a leap year
+    if (!Number.isInteger(day) || day! < 1 || day! > max) return `Day must be 1 to ${max} for this month.`
+  }
+  if (!Number.isInteger(durationDays) || durationDays! < 1) return 'Duration must be at least 1 day.'
+  return ''
+}
+
 export interface ScheduleData {
   rules: ScheduleRule[]
   using_override: boolean
