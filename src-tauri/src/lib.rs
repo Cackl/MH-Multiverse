@@ -15,6 +15,9 @@ mod overlay;
 mod profile_import;
 #[cfg(test)]
 mod test_helpers;
+#[cfg(test)]
+#[path = "../../tests/rust/test_stock_patterns.rs"]
+mod stock_patterns;
 
 pub use config::*;
 
