@@ -295,3 +295,194 @@ export const KNOWN_SETTINGS: KnownSetting[] = [
   // ── Metrics Frequency ──
   { setting: 'eMFTV_SampleRate',                    category: 'Metrics Frequency', description: '',                                                                                                                                                                  requiresPrototype: true },
 ]
+
+// ── Server Rates (the Simple view of Live Tuning) ───────────────────────────────
+
+/** The file the Server Rates form owns; mirrors SERVER_RATES_FILE in tuning.rs. */
+export const SERVER_RATES_FILE = 'LiveTuningDataMultiverse.json'
+const GLOBAL_FILE = 'LiveTuningDataGlobal.json'
+
+export interface TuningEntry {
+  prototype: string
+  setting: string
+  value: number
+}
+
+// Mirror read_global_tuning in tuning.rs.
+export interface GlobalValue { setting: string; value: number }
+export interface GlobalTuningFile { file: string; values: GlobalValue[]; error: string | null }
+export interface GlobalTuning {
+  files: GlobalTuningFile[]
+  infinity_system: boolean
+}
+
+export type RateGroup = 'XP' | 'Loot' | 'Vendors' | 'Rules'
+
+export interface RateRow {
+  setting: string
+  label: string
+  group: RateGroup
+  /** times: 2×; bonus: +50% (1 = +0%); pct: 8%; toggle: 0 is Off, anything else On. */
+  format: 'times' | 'bonus' | 'pct' | 'toggle'
+  /** The slider's range and step. */
+  min: number
+  max: number
+  step: number
+  /** The highest value the number box takes; it can go past the slider. */
+  limit: number
+  /** Shown as a ? tooltip beside the label. */
+  tip?: string
+  /** A value that means "use the game data", shown as Game default. */
+  gameDefault?: number
+  /** Only one of Infinity XP and Omega XP is live, set by [GameOptions] InfinitySystemEnabled. */
+  infinity?: boolean
+}
+
+// Slider ranges from SimpleView-LiveTuning.md §5.3, with higher limits for the number box. The
+// limits stop runaway values: 1e39 becomes Infinity, which the server turns into a huge negative
+// number, and drop rates in the hundreds load the server heavily. Stock Global sets all of these.
+export const RATE_ROWS: RateRow[] = [
+  { setting: 'eGTV_XPGain',                  label: 'XP from kills and orbs', group: 'XP',      format: 'times',  min: 0.25, max: 10, step: 0.25, limit: 1000, tip: 'Mission reward XP is not affected.' },
+  { setting: 'eGTV_InfinityXPPct',           label: 'Infinity XP',            group: 'XP',      format: 'times',  min: 0,    max: 10, step: 0.5,  limit: 1000, infinity: true },
+  { setting: 'eGTV_OmegaXPPct',              label: 'Omega XP',               group: 'XP',      format: 'times',  min: 0,    max: 10, step: 0.5,  limit: 1000, infinity: false },
+  { setting: 'eGTV_PartyXPBonusPct',         label: 'Party XP bonus',         group: 'XP',      format: 'bonus',  min: 1,    max: 5,  step: 0.5,  limit: 11 },
+  { setting: 'eGTV_CosmicPrestigeXPPct',     label: 'XP at max prestige',     group: 'XP',      format: 'pct',    min: 0.01, max: 2,  step: 0.01, limit: 10, gameDefault: 1 },
+  { setting: 'eGTV_LootDropRate',            label: 'Drop rate',              group: 'Loot',    format: 'times',  min: 0.25, max: 10, step: 0.25, limit: 1000 },
+  { setting: 'eGTV_LootRarity',              label: 'Rare item find',         group: 'Loot',    format: 'times',  min: 0.5,  max: 10, step: 0.5,  limit: 1000 },
+  { setting: 'eGTV_LootSpecialDropRate',     label: 'Special item find',      group: 'Loot',    format: 'times',  min: 0.5,  max: 10, step: 0.5,  limit: 1000 },
+  { setting: 'eGTV_LootVaporizationEnabled', label: 'Enable Loot Vaporising', group: 'Loot',    format: 'toggle', min: 0,    max: 1,  step: 1,    limit: 1 },
+  { setting: 'eGTV_VendorBuyPrice',          label: 'Buy prices',             group: 'Vendors', format: 'times',  min: 0,    max: 3,  step: 0.25, limit: 1000 },
+  { setting: 'eGTV_VendorSellPrice',         label: 'Sell prices',            group: 'Vendors', format: 'times',  min: 0,    max: 3,  step: 0.25, limit: 1000 },
+  { setting: 'eGTV_VendorXPGain',            label: 'Vendor XP',              group: 'Vendors', format: 'times',  min: 0,    max: 10, step: 0.5,  limit: 1000 },
+  { setting: 'eGTV_PVPEnabled',              label: 'PvP',                    group: 'Rules',   format: 'toggle', min: 0,    max: 1,  step: 1,    limit: 1 },
+  { setting: 'eGTV_PlayerTradeEnabled',      label: 'Player trading',         group: 'Rules',   format: 'toggle', min: 0,    max: 1,  step: 1,    limit: 1 },
+  { setting: 'eGTV_BoostTimersRunning',      label: 'Boost timers run',       group: 'Rules',   format: 'toggle', min: 0,    max: 1,  step: 1,    limit: 1, tip: 'Off pauses all boost timers everywhere.' },
+]
+
+/** The rows to show: all but the dead one of Infinity XP and Omega XP. */
+export function rateRows(infinitySystem: boolean): RateRow[] {
+  return RATE_ROWS.filter(r => r.infinity === undefined || r.infinity === infinitySystem)
+}
+
+const trim = (n: number) => String(+n.toFixed(2))
+
+export function formatRate(row: RateRow, value: number): string {
+  switch (row.format) {
+    case 'toggle': return value !== 0 ? 'On' : 'Off'
+    case 'bonus':  return `+${trim((value - 1) * 100)}%`
+    case 'pct':    return value === row.gameDefault ? 'Game default' : `${trim(value * 100)}%`
+    default:       return `${trim(value)}×`
+  }
+}
+
+const round = (n: number) => Math.round(n * 1e6) / 1e6
+
+/** The value as the number box shows it: 2 for 2×, 50 for a +50% bonus, 8 for 8%. */
+export function toShown(row: RateRow, value: number): number {
+  if (row.format === 'bonus') return round((value - 1) * 100)
+  if (row.format === 'pct') return round(value * 100)
+  return value
+}
+
+/** The value for a number typed in the box, kept between the row's min and limit. */
+export function fromShown(row: RateRow, shown: number): number {
+  const value = row.format === 'bonus' ? shown / 100 + 1 : row.format === 'pct' ? shown / 100 : shown
+  return round(Math.min(row.limit, Math.max(row.min, value)))
+}
+
+export type RateBadge =
+  | { kind: 'stock' }
+  | { kind: 'yours' }
+  | { kind: 'setIn'; file: string }
+  | { kind: 'overriddenBy'; file: string }
+
+export interface RateState {
+  /** What the server uses now: the last base file that sets it, else the engine default 1. */
+  value: number
+  /** What it would be without the Server Rates file. */
+  below: number
+  badge: RateBadge
+  notes: string[]
+}
+
+const lastValue = (values: GlobalValue[], setting: string) =>
+  values.filter(v => v.setting === setting).at(-1)?.value
+
+/** Where a global's value comes from. Base files apply in load order and the last one wins. */
+export function resolveRate(tuning: GlobalTuning, row: RateRow): RateState {
+  const { setting } = row
+  const ownedAt = tuning.files.findIndex(f => f.file === SERVER_RATES_FILE)
+  const globalAt = tuning.files.findIndex(f => f.file === GLOBAL_FILE)
+  const globalSets = globalAt >= 0 && lastValue(tuning.files[globalAt].values, setting) !== undefined
+  let below = 1
+  let belowFile: string | null = null
+  let owned: number | undefined
+  let after: { file: string; value: number } | null = null
+  const noEffect: string[] = []
+
+  tuning.files.forEach((f, i) => {
+    const v = lastValue(f.values, setting)
+    if (v === undefined) return
+    if (i === ownedAt) owned = v
+    else if (i < ownedAt) { below = v; belowFile = f.file }
+    else after = { file: f.file, value: v }
+    if (globalSets && i < globalAt) {
+      noEffect.push(`${f.file} (${formatRate(row, v)}) is ignored. Global loads after it.`)
+    }
+  })
+
+  const last = after as { file: string; value: number } | null
+  const badge: RateBadge =
+    last ? { kind: 'overriddenBy', file: last.file }
+    : owned !== undefined ? { kind: 'yours' }
+    : belowFile !== null && belowFile !== GLOBAL_FILE ? { kind: 'setIn', file: belowFile }
+    : { kind: 'stock' }
+
+  return { value: last ? last.value : owned ?? below, below, badge, notes: noEffect }
+}
+
+const sameValue = (a: number, b: number) => Math.abs(a - b) < 1e-9
+
+/**
+ * The Server Rates file after saving `changes` (each with the value the setting would have
+ * without the file). A value equal to that is removed, anything else is upserted in place.
+ * Every other entry, including per-prototype ones, is kept as it was.
+ */
+export function planServerRatesWrite(
+  existing: TuningEntry[],
+  changes: { setting: string; value: number; below: number }[],
+): TuningEntry[] {
+  let out = existing
+  for (const { setting, value, below } of changes) {
+    const isIt = (e: TuningEntry) => e.prototype === '' && e.setting === setting
+    const at = out.findIndex(isIt)
+    out = out.filter((e, i) => !isIt(e) || i === at)
+    if (sameValue(value, below)) out = out.filter(e => !isIt(e))
+    else if (at >= 0) out[at] = { prototype: '', setting, value }
+    else out.push({ prototype: '', setting, value })
+  }
+  return out
+}
+
+export interface ReloadResult {
+  count: number
+  /** How many entries or files the server rejected while loading (its `Verify failed:` lines). */
+  rejected: number
+}
+
+/**
+ * The outcome of `!server reloadlivetuning` from the log lines printed after it was sent, or
+ * null while the load hasn't finished. The command prints nothing itself; the load ends with
+ * `Loaded N Live Tuning settings`, even when a file in it was skipped. A file that won't parse
+ * logs `Failed to deserialize` and then `Verify failed: Failed to parse <file>`, so the Verify
+ * lines alone cover both.
+ */
+export function reloadResult(lines: string[]): ReloadResult | null {
+  let rejected = 0
+  for (const line of lines) {
+    const loaded = /Loaded (\d+) Live Tuning settings/.exec(line)
+    if (loaded) return { count: Number(loaded[1]), rejected }
+    if (line.includes('Verify failed:')) rejected++
+  }
+  return null
+}

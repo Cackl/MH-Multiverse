@@ -352,7 +352,7 @@ fn sync_show_omega(app: &tauri::AppHandle, cfg: &OverlayConfig) {
 fn inject_into(cfg: &OverlayConfig, pid: u32, fresh_launch: bool, mut alive: impl FnMut() -> bool) -> Result<(), String> {
     use inject::InjectError;
     if status_of(cfg).state != "trusted" {
-        return Err("The overlay files changed since they were trusted; not injecting. Re-trust it in Settings.".into());
+        return Err("The overlay files changed since you trusted them. Re-trust them in Settings to inject.".into());
     }
     let dir = PathBuf::from(&cfg.dir);
     // '0' on a fresh launch so the hook arms its loading gate (a stale '1' would skip it)
@@ -366,7 +366,7 @@ fn inject_into(cfg: &OverlayConfig, pid: u32, fresh_launch: bool, mut alive: imp
         }
         // verify right before loading; anything changed since Trust is refused
         if status_of(cfg).state != "trusted" {
-            return Err("Overlay files changed since they were trusted; not injecting.".into());
+            return Err("The overlay files changed since you trusted them, so they weren't injected.".into());
         }
         match inject::inject(pid, &dll) {
             Ok(()) => return Ok(()),

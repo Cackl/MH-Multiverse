@@ -302,7 +302,7 @@
         <div class="file-notice">No LiveTuning files found.</div>
       {:else}
         {#if enabledSidebarFiles.length > 0}
-          <div class="file-group-label">Active</div>
+          <div class="file-group-label" use:tip={'The server loads these top to bottom. For the same setting, the lower file wins.'}>Active · load order</div>
           {#each enabledSidebarFiles as file (file.canonical_name)}
             {@const tag = effectiveTag(file.canonical_name)}
             <div

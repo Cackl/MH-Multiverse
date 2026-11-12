@@ -117,7 +117,7 @@
     <div class="opt-row">
       <div class="opt-label">
         <span class="opt-name">Match existing profiles by</span>
-        <span class="opt-desc">Matches are skipped; click a server below to override.</span>
+        <span class="opt-desc">Matches are skipped. Click a server below to override.</span>
       </div>
       <select class="field-select" bind:value={matchBy} on:change={refresh}>
         <option value="host_email">Host + email</option>

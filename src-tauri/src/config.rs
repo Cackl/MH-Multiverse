@@ -153,6 +153,11 @@ pub struct AppConfig {
     pub console_presets: Vec<String>,
     #[serde(default)]
     pub overlay: OverlayConfig,
+    /// Data tab view: true = Advanced (the full editors), false = Simple. A config written
+    /// before the field existed keeps the editors its owner already knows; a fresh install
+    /// (`AppConfig::default()`) starts in Simple.
+    #[serde(default = "default_true")]
+    pub advanced_data: bool,
 }
 
 impl Default for AppConfig {
@@ -171,6 +176,7 @@ impl Default for AppConfig {
             backup_targets: default_backup_targets(),
             store_html_output_dir: String::new(),
             overlay: OverlayConfig::default(),
+            advanced_data: false,
         }
     }
 }
@@ -402,6 +408,13 @@ pub fn set_backup_targets(app: tauri::AppHandle, targets: Vec<String>) -> Result
 pub fn set_store_html_output_dir(app: tauri::AppHandle, dir: String) -> Result<(), String> {
     let mut config = load_config(&app);
     config.store_html_output_dir = dir;
+    save_config(&app, &config)
+}
+
+#[tauri::command]
+pub fn set_advanced_data(app: tauri::AppHandle, advanced: bool) -> Result<(), String> {
+    let mut config = load_config(&app);
+    config.advanced_data = advanced;
     save_config(&app, &config)
 }
 

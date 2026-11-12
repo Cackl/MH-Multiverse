@@ -258,12 +258,9 @@ pub fn scan_tuning_files(
         });
     }
 
-    // Toggleable (root, non-event) files first, then alphabetical by relative_path.
-    files.sort_by(|a, b| {
-        b.toggleable
-            .cmp(&a.toggleable)
-            .then(a.relative_path.cmp(&b.relative_path))
-    });
+    // Toggleable (root, non-event) files first, then in the order the server loads them, so
+    // the list reads top to bottom as "later files win".
+    files.sort_by_cached_key(|f| (!f.toggleable, server_sort_key(&f.relative_path)));
 
     Ok(files)
 }
@@ -448,6 +445,110 @@ pub fn toggle_tuning_file(
     }
 
     Ok(())
+}
+
+// ── Global settings across files (effective values) ──────────────────────────
+
+/// One global (`eGTV_`, empty `Prototype`) setting as a file sets it.
+#[derive(Debug, Clone, Serialize, PartialEq)]
+pub struct GlobalValue {
+    pub setting: String,
+    pub value: f64,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct GlobalTuningFile {
+    pub file: String,
+    pub values: Vec<GlobalValue>,
+    /// Set when the server would skip the whole file (unreadable or invalid JSON).
+    pub error: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct GlobalTuning {
+    /// Base files in the order the server loads them; for a setting, the last file wins.
+    pub files: Vec<GlobalTuningFile>,
+    /// `[GameOptions] InfinitySystemEnabled`: true means Infinity XP is live, false Omega XP.
+    pub infinity_system: bool,
+}
+
+/// The file the Server Rates form owns. It loads after `LiveTuningDataGlobal.json`, and user
+/// files that sort after it (such as `LiveTuningDataUser...`) win over it.
+pub(crate) const SERVER_RATES_FILE: &str = "LiveTuningDataMultiverse.json";
+
+/// Sort key matching the server's `Array.Sort` of file names, which is culture-sensitive
+/// (ICU) rather than ordinal: `_` < `-` < `.` < other punctuation < digits < letters, letters
+/// ignoring case first. This is why `LiveTuningData_X.json` loads before
+/// `LiveTuningDataGlobal.json`.
+// ponytail: covers the characters that appear in tuning file names, not full ICU collation.
+fn server_sort_key(name: &str) -> (Vec<(u8, u32)>, String) {
+    let primary = name
+        .chars()
+        .map(|c| match c {
+            '_' => (0, 0),
+            '-' => (1, 0),
+            '.' => (2, 0),
+            c if c.is_ascii_digit() => (4, c as u32),
+            c if c.is_alphabetic() => (5, c.to_lowercase().next().unwrap_or(c) as u32),
+            c => (3, c as u32),
+        })
+        .collect();
+    (primary, name.to_string())
+}
+
+pub(crate) fn sort_like_server(names: &mut [String]) {
+    names.sort_by_cached_key(|n| server_sort_key(n));
+}
+
+fn globals_in(path: &Path) -> Result<Vec<GlobalValue>, String> {
+    let contents = std::fs::read_to_string(path).map_err(|e| e.to_string())?;
+    let raw: Vec<RawEntryIn> = serde_json::from_str(contents.trim_start_matches('\u{FEFF}'))
+        .map_err(|e| e.to_string())?;
+    Ok(raw
+        .into_iter()
+        .filter(|e| e.prototype.is_empty() && e.setting.starts_with("eGTV_"))
+        .map(|e| GlobalValue { setting: e.setting, value: e.value })
+        .collect())
+}
+
+/// What the server would load for global settings: the base files in its own order.
+#[tauri::command]
+pub fn read_global_tuning(server_exe: String) -> Result<GlobalTuning, String> {
+    let dir = live_tuning_dir(&server_exe)?;
+    let infinity_system = crate::ini::read_merged_value(&server_exe, "GameOptions", "InfinitySystemEnabled", "true")
+        .trim()
+        .eq_ignore_ascii_case("true");
+    if !dir.exists() {
+        let files = vec![GlobalTuningFile { file: SERVER_RATES_FILE.into(), values: vec![], error: None }];
+        return Ok(GlobalTuning { files, infinity_system });
+    }
+
+    // The server reads only top-level LiveTuningData*.json (FileHelper.GetFilesWithPrefix),
+    // so OFF_ files and subfolders are not part of the base chain.
+    let mut names: Vec<String> = std::fs::read_dir(&dir)
+        .map_err(|e| format!("Cannot read {}: {e}", dir.display()))?
+        .flatten()
+        .filter(|e| e.path().is_file())
+        .map(|e| e.file_name().to_string_lossy().to_string())
+        .filter(|n| n.starts_with("LiveTuningData") && n.ends_with(".json"))
+        .collect();
+    // Listed even before it exists, so callers can tell which files load after it; a missing
+    // file loads the same nothing as an empty one.
+    if !names.iter().any(|n| n == SERVER_RATES_FILE) {
+        names.push(SERVER_RATES_FILE.to_string());
+    }
+    sort_like_server(&mut names);
+
+    let files = names
+        .into_iter()
+        .map(|file| match globals_in(&dir.join(&file)) {
+            _ if !dir.join(&file).exists() => GlobalTuningFile { file, values: vec![], error: None },
+            Ok(values) => GlobalTuningFile { file, values, error: None },
+            Err(e) => GlobalTuningFile { file, values: vec![], error: Some(e) },
+        })
+        .collect();
+
+    Ok(GlobalTuning { files, infinity_system })
 }
 
 #[cfg(test)]

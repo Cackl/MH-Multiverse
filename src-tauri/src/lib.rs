@@ -15,6 +15,9 @@ mod overlay;
 mod profile_import;
 #[cfg(test)]
 mod test_helpers;
+#[cfg(test)]
+#[path = "../../tests/rust/test_stock_patterns.rs"]
+mod stock_patterns;
 
 pub use config::*;
 
@@ -92,6 +95,7 @@ pub fn run() {
             config::set_backup_targets,
             config::set_store_html_output_dir,
             config::set_console_presets,
+            config::set_advanced_data,
             launcher::launch_game,
             launcher::game_is_running,
             launcher::normalize_host,
@@ -113,6 +117,7 @@ pub fn run() {
             tuning::create_tuning_file,
             tuning::get_live_tuning_dir,
             tuning::toggle_tuning_file,
+            tuning::read_global_tuning,
             updater::check_update_available,
             updater::run_update,
             updater::create_backup,

@@ -268,3 +268,122 @@ fn write_keeps_backup_of_previous_contents() {
     assert_eq!(fs::read_to_string(file.with_extension("json.bak")).unwrap(), before);
     assert_eq!(fs::read_to_string(&file).unwrap().trim(), "[]");
 }
+
+#[test]
+fn files_sort_in_the_order_the_server_loads_them() {
+    // Parse order seen on a throwaway MHServerEmu 1.0.2 server (.NET 8, ICU), see
+    // SimpleView-LiveTuning.md §2.1.
+    let observed = [
+        "LiveTuningData_MultiverseRates.json",
+        "LiveTuningData_TEST.json",
+        "LiveTuningData.json",
+        "LiveTuningDataGlobal.json",
+        "LiveTuningDataMultiverseRates.json",
+        "LiveTuningDataPvP.json",
+        "LiveTuningDataUser1.json",
+        "LiveTuningDataZZMultiverse.json",
+    ];
+    let mut names: Vec<String> = observed.iter().rev().map(|s| s.to_string()).collect();
+    names.swap(1, 5);
+    sort_like_server(&mut names);
+    assert_eq!(names, observed);
+
+    // The two the launcher relies on: owned and user files load after Global, case ignored.
+    let mut ours: Vec<String> = ["LiveTuningDataUserrates.json", "LiveTuningDataMultiverse.json", "LiveTuningDataglobal.json", "LiveTuningData-x.json"]
+        .iter().map(|s| s.to_string()).collect();
+    sort_like_server(&mut ours);
+    assert_eq!(ours, ["LiveTuningData-x.json", "LiveTuningDataglobal.json", "LiveTuningDataMultiverse.json", "LiveTuningDataUserrates.json"]);
+}
+
+#[test]
+fn global_tuning_lists_what_the_server_would_load() {
+    let (_tmp, server_exe) = crate::test_helpers::empty_server();
+    let dir = live_tuning_dir(&server_exe).unwrap();
+    fs::create_dir_all(dir.join("Events/Weekly")).unwrap();
+    let write = |rel: &str, body: &str| fs::write(dir.join(rel), body).unwrap();
+    let g = |s: &str, v: f64| format!(r#"{{ "Prototype": "", "Setting": "{s}", "Value": {v:?} }}"#);
+
+    write("LiveTuningDataMultiverse.json", &format!("[{}]", g("eGTV_XPGain", 2.0)));
+    write("LiveTuningDataGlobal.json", &format!("[{}, {}]", g("eGTV_XPGain", 1.0), g("eGTV_LootDropRate", 1.0)));
+    write("LiveTuningData_Old.json", &format!("\u{FEFF}[{}]", g("eGTV_XPGain", 3.0)));
+    write("LiveTuningDataPvP.json", r#"[{ "Prototype": "Entity/Mobs/Brute.prototype", "Setting": "eWETV_MobHealth", "Value": 15.0 },
+                                        { "Prototype": "Entity/Mobs/Brute.prototype", "Setting": "eGTV_XPGain", "Value": 9.0 }]"#);
+    write("LiveTuningDataBroken.json", "[{ \"Prototype\": \"\", ");
+    write("OFF_LiveTuningDataUserOff.json", &format!("[{}]", g("eGTV_XPGain", 5.0)));
+    write("Events/Weekly/LiveTuningDataNested.json", &format!("[{}]", g("eGTV_XPGain", 6.0)));
+
+    let state = read_global_tuning(server_exe).unwrap();
+
+    let order: Vec<&str> = state.files.iter().map(|f| f.file.as_str()).collect();
+    assert_eq!(order, [
+        "LiveTuningData_Old.json",
+        "LiveTuningDataBroken.json",
+        "LiveTuningDataGlobal.json",
+        "LiveTuningDataMultiverse.json",
+        "LiveTuningDataPvP.json",
+    ]);
+    let values = |i: usize| state.files[i].values.iter().map(|v| (v.setting.as_str(), v.value)).collect::<Vec<_>>();
+    assert_eq!(values(0), [("eGTV_XPGain", 3.0)]);
+    assert!(state.files[1].error.is_some() && state.files[1].values.is_empty());
+    assert_eq!(values(2), [("eGTV_XPGain", 1.0), ("eGTV_LootDropRate", 1.0)]);
+    assert_eq!(values(3), [("eGTV_XPGain", 2.0)]);
+    assert!(values(4).is_empty(), "per-prototype entries, even eGTV_ ones, are not globals");
+}
+
+#[test]
+fn global_tuning_without_a_live_tuning_folder_lists_only_the_server_rates_file() {
+    let (_tmp, server_exe) = crate::test_helpers::empty_server();
+    let state = read_global_tuning(server_exe).unwrap();
+    let names: Vec<&str> = state.files.iter().map(|f| f.file.as_str()).collect();
+    assert_eq!(names, [SERVER_RATES_FILE]);
+    assert!(state.files[0].values.is_empty());
+}
+
+#[test]
+fn global_tuning_lists_the_server_rates_file_where_it_would_load_before_it_exists() {
+    let (_tmp, server_exe) = crate::test_helpers::empty_server();
+    let dir = live_tuning_dir(&server_exe).unwrap();
+    fs::create_dir_all(&dir).unwrap();
+    for name in ["LiveTuningDataUserRates.json", "LiveTuningDataGlobal.json", "LiveTuningDataPvP.json"] {
+        fs::write(dir.join(name), "[]").unwrap();
+    }
+
+    let state = read_global_tuning(server_exe).unwrap();
+
+    let names: Vec<&str> = state.files.iter().map(|f| f.file.as_str()).collect();
+    assert_eq!(names, ["LiveTuningDataGlobal.json", SERVER_RATES_FILE, "LiveTuningDataPvP.json", "LiveTuningDataUserRates.json"]);
+    assert!(state.files[1].values.is_empty() && state.files[1].error.is_none(), "{:?}", state.files[1]);
+}
+
+#[test]
+fn global_tuning_reads_the_infinity_switch() {
+    // (Config.ini, ConfigOverride.ini, infinity_system); the server default is true.
+    let cases = [
+        (None, None, true),
+        (Some("[GameOptions]\nInfinitySystemEnabled=False\n"), None, false),
+        (Some("[GameOptions]\nInfinitySystemEnabled=true\n"), Some("[GameOptions]\nInfinitySystemEnabled=false\n"), false),
+        (Some("[GameOptions]\nInfinitySystemEnabled=false\n"), Some("[GameOptions]\nInfinitySystemEnabled=True\n"), true),
+    ];
+    for (config, over, infinity) in cases {
+        let (tmp, server_exe) = crate::test_helpers::empty_server();
+        if let Some(c) = config { fs::write(tmp.path().join("Config.ini"), c).unwrap(); }
+        if let Some(o) = over { fs::write(tmp.path().join("ConfigOverride.ini"), o).unwrap(); }
+        let state = read_global_tuning(server_exe).unwrap();
+        assert_eq!(state.infinity_system, infinity, "{config:?} / {over:?}");
+    }
+}
+
+#[test]
+fn scan_lists_root_files_in_load_order() {
+    let (_tmp, server_exe) = crate::test_helpers::empty_server();
+    let dir = live_tuning_dir(&server_exe).unwrap();
+    fs::create_dir_all(&dir).unwrap();
+    for name in ["LiveTuningDataUserRates.json", "LiveTuningDataGlobal.json", "LiveTuningData.json", "LiveTuningData_TEST.json"] {
+        fs::write(dir.join(name), "[]").unwrap();
+    }
+
+    let files = scan_tuning_files(server_exe, false).unwrap();
+
+    let names: Vec<&str> = files.iter().map(|f| f.relative_path.as_str()).collect();
+    assert_eq!(names, ["LiveTuningData_TEST.json", "LiveTuningData.json", "LiveTuningDataGlobal.json", "LiveTuningDataUserRates.json"]);
+}

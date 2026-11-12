@@ -422,6 +422,25 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
   border: 1px solid rgba(46, 134, 193, 0.25);
 }
 
+/* ── Info button ("?" with a tooltip) ── */
+.info-btn {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 1px solid var(--border-lit);
+  background: var(--bg-3);
+  color: var(--text-3);
+  font-size: var(--fs-min);
+  cursor: help;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: all 0.12s;
+  padding: 0;
+}
+.info-btn:hover { border-color: var(--accent-dim); color: var(--accent-bright); }
+
 /* ── Toggle switch ── */
 .toggle-switch {
   width: 36px;
@@ -1068,6 +1087,124 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
   text-align: center;
   max-width: 280px;
   line-height: 1.5;
+}
+
+/* ── Data pages (plan 2.28) ──
+   Sidebar on the left, main panel on the right. The main panel is solid, so the panel
+   background and grid only show through the see-through sidebar. */
+.panel-bg {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, var(--panel-grad-top) 0%, transparent var(--panel-grad-mid));
+  pointer-events: none;
+}
+.grid-overlay {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(var(--border) 1px, transparent 1px),
+    linear-gradient(90deg, var(--border) 1px, transparent 1px);
+  background-size: 32px 32px;
+  opacity: 0.18;
+  pointer-events: none;
+}
+.data-main {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-1);
+}
+.page-head {
+  min-height: 53px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 16px 0 20px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.page-title {
+  margin: 0;
+  font-family: var(--font-head);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-0);
+  white-space: nowrap;
+}
+.page-acts {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+/* Sidebar groups and rows: [mark] name [end]. Rows match the Config nav buttons. */
+.side-label {
+  margin-top: 6px;
+  border-top: 1px solid var(--border);
+  padding: 12px 12px 6px;
+  font-family: var(--font-head);
+  font-size: var(--fs-min);
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-3);
+}
+.side-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  margin-bottom: 2px;
+  padding: 10px 12px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--text-1);
+  font-family: var(--font-head);
+  font-size: 13px;
+  font-weight: 600;
+  text-align: left;
+}
+button.side-item { cursor: pointer; transition: all 0.12s; }
+button.side-item:hover { color: var(--text-0); background: var(--bg-3); border-color: var(--border-mid); }
+.side-mark {
+  flex-shrink: 0;
+  font-family: var(--font-body);
+  font-size: 11px;
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-3);
+}
+.side-name {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Label pill (Core, Custom, Chest, Hidden...). Grey on purpose: colour marks state only. */
+.tag {
+  display: inline-flex;
+  align-items: center;
+  height: 18px;
+  padding: 0 6px;
+  border: 1px solid var(--border-mid);
+  border-radius: 2px;
+  font-family: var(--font-head);
+  font-size: var(--fs-min);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-2);
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 /* ── Subsection title ── */

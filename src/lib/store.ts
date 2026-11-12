@@ -378,6 +378,8 @@ export interface AppConfig {
   tuning_favourites: string[]
   backup_targets: string[]
   store_html_output_dir: string
+  /** Data tab view: true = Advanced, false = Simple (fresh installs start in Simple). */
+  advanced_data: boolean
 }
 
 const defaultLaunchOptions: LaunchOptions = {
@@ -412,7 +414,9 @@ export const appConfig = writable<AppConfig>({
   tuning_tags: {},
   tuning_favourites: [],
   backup_targets: ['Config.ini', 'ConfigOverride.ini', 'Data/Game/LiveTuning', 'Data/Account.db'],
-  store_html_output_dir: ''
+  store_html_output_dir: '',
+  // Until the real config loads, show the existing editors rather than flash Simple.
+  advanced_data: true,
 })
 
 export const activeTheme = writable<string>('')
@@ -530,6 +534,10 @@ export async function setStoreHtmlOutputDir(dir: string): Promise<void> {
 
 export async function setConsolePresets(presets: string[]): Promise<void> {
   await updateConfigOptimistic(c => ({ ...c, console_presets: presets }), 'set_console_presets', { presets })
+}
+
+export async function setAdvancedData(advanced: boolean): Promise<void> {
+  await updateConfigOptimistic(c => ({ ...c, advanced_data: advanced }), 'set_advanced_data', { advanced })
 }
 
 export function setSchedulerNow(dt: Date) {
