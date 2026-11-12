@@ -194,7 +194,6 @@
     <section class="data-main">
       <header class="page-head">
         <h3 class="page-title">Server Rates</h3>
-        <span class="page-sub">Saves to {SERVER_RATES_FILE}</span>
         <div class="page-acts">
           {#if reloadError}<span class="error">{reloadError}</span>{/if}
           <button
@@ -325,6 +324,7 @@
         <button
           class="btn btn-sm btn-accent"
           on:click={save}
+          use:tip={`Saves to ${SERVER_RATES_FILE}`}
           disabled={saving || dirty.length === 0 || !!ownedError}
         >{saving ? 'Saving...' : 'Save'}</button>
       </footer>
@@ -492,8 +492,9 @@
     border: 0;
     background: transparent;
     color: var(--text-0);
-    font-family: var(--font-mono);
+    font-family: var(--font-body);
     font-size: 12px;
+    font-variant-numeric: tabular-nums;
     text-align: right;
     outline: none;
   }
