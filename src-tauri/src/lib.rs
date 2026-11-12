@@ -148,6 +148,7 @@ pub fn run() {
             events::load_event_schedule,
             events::save_events_override,
             events::save_schedule_override,
+            events::save_event_bundle,
             events::reset_events_override,
             events::reset_schedule_override,
             events::merge_events_override,

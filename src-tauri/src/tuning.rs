@@ -52,6 +52,19 @@ struct RawEntryOut {
     value: f64,
 }
 
+/// A tuning file's JSON: every entry with all three keys, as the server needs.
+pub(crate) fn entries_json(entries: Vec<TuningEntry>) -> Result<String, String> {
+    let raw: Vec<RawEntryOut> = entries
+        .into_iter()
+        .map(|e| RawEntryOut {
+            prototype: e.prototype,
+            setting: e.setting,
+            value: e.value,
+        })
+        .collect();
+    serde_json::to_string_pretty(&raw).map_err(|e| format!("JSON serialisation error: {e}"))
+}
+
 // ── Path helpers ──────────────────────────────────────────────────────────────
 
 pub(crate) fn live_tuning_dir(server_exe: &str) -> Result<std::path::PathBuf, String> {
@@ -324,17 +337,7 @@ pub fn write_tuning_file(
         return Err(format!("File not found: {relative_path}"));
     };
 
-    let raw: Vec<RawEntryOut> = entries
-        .into_iter()
-        .map(|e| RawEntryOut {
-            prototype: e.prototype,
-            setting: e.setting,
-            value: e.value,
-        })
-        .collect();
-
-    let contents = serde_json::to_string_pretty(&raw)
-        .map_err(|e| format!("JSON serialisation error: {e}"))?;
+    let contents = entries_json(entries)?;
 
     crate::store::write_with_backup(&path, &contents)
         .map_err(|e| format!("Cannot write {}: {e}", path.display()))?;
@@ -383,17 +386,7 @@ pub fn create_tuning_file(
         return Err(format!("File already exists: {relative_path}"));
     }
 
-    let raw: Vec<RawEntryOut> = entries
-        .into_iter()
-        .map(|e| RawEntryOut {
-            prototype: e.prototype,
-            setting: e.setting,
-            value: e.value,
-        })
-        .collect();
-
-    let contents = serde_json::to_string_pretty(&raw)
-        .map_err(|e| format!("JSON serialisation error: {e}"))?;
+    let contents = entries_json(entries)?;
 
     std::fs::write(&active_path, contents)
         .map_err(|e| format!("Cannot write {}: {e}", active_path.display()))?;

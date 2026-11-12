@@ -290,6 +290,63 @@ pub fn save_schedule_override(
     write_schedule_to_path(&dir.join("EventScheduleOverride.json"), &rules)
 }
 
+/// One custom event's tuning file, saved as `Events/Multiverse/LiveTuningData<slug>.json`.
+#[derive(Debug, Deserialize)]
+pub struct OwnedEventFile {
+    pub slug: String,
+    pub entries: Vec<crate::tuning::TuningEntry>,
+}
+
+/// Refuses a bundle the server would choke on. The slug becomes part of a path that the server
+/// joins onto the LiveTuning folder, so only letters and digits get through (no `..`, no
+/// absolute path). A rule naming an event that isn't in the same save is dropped whole by the
+/// server, so that is refused too.
+fn check_bundle(
+    definitions: &[EventDefinition],
+    rules: &[ScheduleRule],
+    files: &[OwnedEventFile],
+) -> Result<(), String> {
+    for f in files {
+        let ok = (1..=60).contains(&f.slug.len()) && f.slug.chars().all(|c| c.is_ascii_alphanumeric());
+        if !ok {
+            return Err(format!("Invalid event file name '{}': use 1 to 60 letters and digits", f.slug));
+        }
+    }
+    let ids: HashSet<&str> = definitions.iter().map(|d| d.id.as_str()).collect();
+    for r in rules {
+        if let Some(id) = r.events.iter().find(|id| !id.trim().is_empty() && !ids.contains(id.as_str())) {
+            return Err(format!("Rule '{}' names an event that doesn't exist: '{id}'", r.name));
+        }
+    }
+    Ok(())
+}
+
+/// Saves custom events in one go: their tuning files first, then both override files, which
+/// must always be written together (a schedule naming an id missing from the events list loses
+/// that rule).
+#[tauri::command]
+pub fn save_event_bundle(
+    server_exe: String,
+    definitions: Vec<EventDefinition>,
+    rules: Vec<ScheduleRule>,
+    owned_files: Vec<OwnedEventFile>,
+) -> Result<(), String> {
+    check_bundle(&definitions, &rules, &owned_files)?;
+    let dir = live_tuning_dir(&server_exe)?;
+    let owned_dir = dir.join("Events").join("Multiverse");
+    if !owned_files.is_empty() {
+        std::fs::create_dir_all(&owned_dir)
+            .map_err(|e| format!("Cannot create {}: {e}", owned_dir.display()))?;
+    }
+    for f in owned_files {
+        let path = owned_dir.join(format!("LiveTuningData{}.json", f.slug));
+        crate::store::write_with_backup(&path, &crate::tuning::entries_json(f.entries)?)
+            .map_err(|e| format!("Cannot write {}: {e}", path.display()))?;
+    }
+    write_events_to_path(&dir.join("EventsOverride.json"), &definitions)?;
+    write_schedule_to_path(&dir.join("EventScheduleOverride.json"), &rules)
+}
+
 #[tauri::command]
 pub fn reset_events_override(server_exe: String) -> Result<EventsData, String> {
     let dir = live_tuning_dir(&server_exe)?;
