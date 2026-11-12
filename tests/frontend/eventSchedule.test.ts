@@ -94,3 +94,96 @@ describe('lunarToGregorian', () => {
     expect(lunarToGregorian(y, m, d)?.toISOString().slice(0, 10) ?? null).toBe(expected)
   })
 })
+
+// ── Simple view ──────────────────────────────────────────────────────────────────
+
+import { eventMode, setEventMode, scheduleText, ALWAYS_RULE } from '../../src/lib/eventSchedule'
+
+const permanent = rule({ name: 'Permanent Events', events: ['DailyBugle'] })
+const midtown = rule({ name: 'Midtown Madness', rule_type: 'DayOfWeek', start_day_of_week: 'Monday', events: ['MidtownMadness'] })
+const stock = [
+  permanent, midtown,
+  { ...core, name: 'Core Weekly Rotation' }, { ...secondary, name: 'Secondary Weekly Rotation' },
+  { ...winter, name: 'Winter Holiday' }, { ...lunar, name: 'Lunar New Year' },
+]
+
+describe('eventMode', () => {
+  it.each([
+    ['in an AlwaysOn stock rule',   'DailyBugle',     'schedule'],
+    ['in a rotation',               'CosmicChaos',    'schedule'],
+    ['in no rule',                  'Cowpocalypse',   'off'],
+  ])('%s', (_, id, expected) => {
+    expect(eventMode(stock, id)).toBe(expected)
+  })
+})
+
+describe('setEventMode', () => {
+  const byName = (rules: ScheduleRule[], name: string) => rules.find(r => r.name === name)
+
+  it('Off switches off a stock rule that only runs this event and keeps its contents', () => {
+    const out = setEventMode(stock, stock, 'MidtownMadness', 'off')
+    expect(byName(out, 'Midtown Madness')).toEqual({ ...midtown, is_enabled: false })
+    expect(eventMode(out, 'MidtownMadness')).toBe('off')
+  })
+
+  it('Off blanks a rotation slot so the other weeks keep their place', () => {
+    const out = setEventMode(stock, stock, 'OdinsBounty', 'off')
+    expect(byName(out, 'Core Weekly Rotation')!.events).toEqual(['CosmicChaos', '', 'OperationOmega', 'MysticMayhem', 'ArmorIncursion'])
+    expect(eventMode(out, 'OdinsBounty')).toBe('off')
+  })
+
+  it.each(['MidtownMadness', 'OdinsBounty', 'DailyBugle', 'WinterHoliday', 'Cowpocalypse'])(
+    'Off then On schedule gives back the stock schedule for %s', id => {
+      expect(setEventMode(setEventMode(stock, stock, id, 'off'), stock, id, 'schedule')).toEqual(stock)
+    })
+
+  it('Always on adds Simple\'s own rule and keeps the stock date rule', () => {
+    const out = setEventMode(stock, stock, 'WinterHoliday', 'always')
+    expect(out.slice(0, stock.length)).toEqual(stock)
+    expect(out[stock.length]).toMatchObject({ name: ALWAYS_RULE, is_enabled: true, rule_type: 'AlwaysOn', events: ['WinterHoliday'] })
+    expect(eventMode(out, 'WinterHoliday')).toBe('always')
+  })
+
+  it('Always on events share one rule, and the rule goes when the last one leaves', () => {
+    let out = setEventMode(stock, stock, 'Cowpocalypse', 'always')
+    out = setEventMode(out, stock, 'GuardiansOfTheGalaxy', 'always')
+    expect(byName(out, ALWAYS_RULE)!.events).toEqual(['Cowpocalypse', 'GuardiansOfTheGalaxy'])
+    out = setEventMode(out, stock, 'Cowpocalypse', 'off')
+    expect(byName(out, ALWAYS_RULE)!.events).toEqual(['GuardiansOfTheGalaxy'])
+    expect(setEventMode(out, stock, 'GuardiansOfTheGalaxy', 'schedule')).toEqual(stock)
+  })
+
+  it('a switched-off Always on rule counts as off, and Always on switches it back on', () => {
+    const disabled = setEventMode(stock, stock, 'Cowpocalypse', 'always').map(r => r.name === ALWAYS_RULE ? { ...r, is_enabled: false } : r)
+    expect(eventMode(disabled, 'Cowpocalypse')).toBe('off')
+    const out = setEventMode(disabled, stock, 'GuardiansOfTheGalaxy', 'always')
+    expect(eventMode(out, 'GuardiansOfTheGalaxy')).toBe('always')
+  })
+
+  it('On schedule leaves a stock rule removed in Advanced removed', () => {
+    const edited = stock.filter(r => r.name !== 'Midtown Madness')
+    expect(setEventMode(edited, stock, 'MidtownMadness', 'schedule')).toEqual(edited)
+  })
+})
+
+describe('scheduleText', () => {
+  const now = at('2026-11-09T12:00:00')
+  const dated = (m: number, d: number, n: number) => [rule({ rule_type: 'SpecialDate', start_month: m, start_day: d, duration_days: n })]
+  it.each([
+    ['every day',                 stock,                                                       'DailyBugle',     'Every day'],
+    ['one weekday',               stock,                                                       'MidtownMadness', 'Every Monday'],
+    ['a weekend',                 [rule({ rule_type: 'DayOfWeek', start_day_of_week: 'Sunday' }), rule({ rule_type: 'DayOfWeek', start_day_of_week: 'Saturday' })], 'A', 'Every Saturday and Sunday'],
+    ['a date range',              dated(2, 13, 7),                                             'A',              '13 to 19 Feb'],
+    ['one day',                   dated(4, 1, 1),                                              'A',              '1 Apr'],
+    ['across months',             dated(10, 26, 7),                                            'A',              '26 Oct to 1 Nov'],
+    ['cut off at 31 Dec',         stock,                                                       'WinterHoliday',  '20 to 31 Dec'],
+    ['lunar',                     stock,                                                       'LunarNewYear',   'Lunar calendar, date varies'],
+    ['rotation, this week',       stock,                                                       'CosmicChaos',    'Weekly rotation, this week'],
+    ['rotation, next week',       stock,                                                       'OdinsBounty',    'Weekly rotation, next week'],
+    ['rotation, later',           stock,                                                       'OperationOmega', 'Weekly rotation, in 2 weeks'],
+    ['not on the calendar',       stock,                                                       'Cowpocalypse',   'Not on the calendar'],
+    ['always on and a date',      setEventMode(stock, stock, 'WinterHoliday', 'always'),       'WinterHoliday',  'Every day; 20 to 31 Dec'],
+  ])('%s', (_, rules, id, expected) => {
+    expect(scheduleText(rules, id, now)).toBe(expected)
+  })
+})

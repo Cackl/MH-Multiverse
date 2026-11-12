@@ -290,6 +290,24 @@ pub fn save_schedule_override(
     write_schedule_to_path(&dir.join("EventScheduleOverride.json"), &rules)
 }
 
+/// The stock Events.json and EventSchedule.json, whether or not overrides exist; empty when missing.
+#[derive(Debug, Serialize)]
+pub struct StockEvents {
+    pub definitions: Vec<EventDefinition>,
+    pub rules: Vec<ScheduleRule>,
+}
+
+#[tauri::command]
+pub fn load_stock_events(server_exe: String) -> Result<StockEvents, String> {
+    let dir = live_tuning_dir(&server_exe)?;
+    let (_, events_path) = events_file_paths(&dir);
+    let (_, schedule_path) = schedule_file_paths(&dir);
+    Ok(StockEvents {
+        definitions: if events_path.exists() { read_events_from_path(&events_path)? } else { vec![] },
+        rules: if schedule_path.exists() { read_schedule_from_path(&schedule_path)? } else { vec![] },
+    })
+}
+
 /// One custom event's tuning file, saved as `Events/Multiverse/LiveTuningData<slug>.json`.
 #[derive(Debug, Deserialize)]
 pub struct OwnedEventFile {

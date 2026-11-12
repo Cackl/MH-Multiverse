@@ -247,3 +247,13 @@ fn bundle_refuses_a_rule_naming_a_missing_event() {
     // Blank slots are allowed.
     save_event_bundle(server_exe, defs, vec![day_rule("Saturday", &["zzMultiverse_A", "", " "])], vec![]).unwrap();
 }
+
+#[test]
+fn stock_events_ignore_overrides() {
+    let (_tmp, server_exe) = setup();
+    save_event_bundle(server_exe.clone(), vec![custom_event("zzMultiverse_A", "A")], vec![], vec![]).unwrap();
+    let stock = load_stock_events(server_exe).unwrap();
+    assert_eq!(stock.definitions.len(), 2);
+    assert!(stock.definitions.iter().all(|d| d.id != "zzMultiverse_A"));
+    assert!(!stock.rules.is_empty());
+}

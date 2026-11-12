@@ -101,3 +101,88 @@ export function nextInRotation(rule: ScheduleRule, now: Date): { id: string; wee
   }
   return null
 }
+
+// ── Simple view: one control per event ──────────────────────────────────────────
+
+export type EventMode = 'schedule' | 'off' | 'always'
+
+/** The rule Simple adds "Always on" events to, kept apart from the stock "Permanent Events". */
+export const ALWAYS_RULE = 'Multiverse: Always on'
+
+const lists = (r: ScheduleRule, id: string) => r.events.includes(id)
+const named = (r: ScheduleRule) => r.events.filter(id => !blank(id))
+
+/** Always on (in Simple's own rule), On schedule (in another enabled rule) or Off. */
+export function eventMode(rules: ScheduleRule[], id: string): EventMode {
+  if (rules.some(r => r.name === ALWAYS_RULE && r.is_enabled && lists(r, id))) return 'always'
+  return rules.some(r => r.is_enabled && lists(r, id)) ? 'schedule' : 'off'
+}
+
+/**
+ * The schedule after switching one event. Off takes it out of every rule: a stock rule that
+ * only runs this event is switched off (so On schedule can bring it back), any other rule of
+ * its own is removed, and rotation slots are blanked so the other weeks don't shift. On
+ * schedule then puts it back where the stock schedule has it. Always on keeps that and adds it
+ * to ALWAYS_RULE. ponytail: stock rules are matched by name, which is unique in v52.
+ */
+export function setEventMode(rules: ScheduleRule[], stock: ScheduleRule[], id: string, mode: EventMode): ScheduleRule[] {
+  let out = rules.flatMap(r => {
+    if (!lists(r, id)) return [r]
+    if (named(r).some(x => x !== id)) {
+      const events = r.rule_type === 'WeeklyRotation' ? r.events.map(x => x === id ? '' : x) : r.events.filter(x => x !== id)
+      return [{ ...r, events }]
+    }
+    return stock.some(s => s.name === r.name) ? [{ ...r, is_enabled: false }] : []
+  })
+  if (mode === 'off') return out
+
+  for (const s of stock.filter(s => lists(s, id))) {
+    const i = out.findIndex(r => r.name === s.name)
+    if (i < 0) continue // removed in Advanced
+    const r = out[i]
+    out[i] = named(s).every(x => x === id)
+      ? { ...r, is_enabled: s.is_enabled, events: s.events }
+      : r.rule_type === 'WeeklyRotation' && r.events.length === s.events.length
+        ? { ...r, events: r.events.map((x, k) => s.events[k] === id ? id : x) }
+        : { ...r, events: [...r.events, id] }
+  }
+  if (mode === 'schedule') return out
+
+  const i = out.findIndex(r => r.name === ALWAYS_RULE)
+  if (i >= 0) out[i] = { ...out[i], is_enabled: true, events: [...named(out[i]), id] }
+  else out = [...out, {
+    name: ALWAYS_RULE, is_enabled: true, rule_type: 'AlwaysOn', start_day_of_week: null,
+    start_month: null, start_day: null, duration_days: null, events: [id],
+  }]
+  return out
+}
+
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+
+function dateRange(month: number, day: number, days: number): string {
+  const start = new Date(Date.UTC(2023, month - 1, day))
+  // The window ends at 31 Dec, whatever its length (the server only checks this year).
+  const end = new Date(Math.min(start.getTime() + (days - 1) * DAY_MS, Date.UTC(2023, 11, 31)))
+  const d = (x: Date) => `${x.getUTCDate()} ${MONTHS[x.getUTCMonth()]}`
+  if (days <= 1) return d(start)
+  return start.getUTCMonth() === end.getUTCMonth() ? `${start.getUTCDate()} to ${d(end)}` : `${d(start)} to ${d(end)}`
+}
+
+/** When an event runs, in words, from the rules that list it. */
+export function scheduleText(rules: ScheduleRule[], id: string, now: Date): string {
+  const own = rules.filter(r => lists(r, id))
+  const days = [...DAYS.slice(1), DAYS[0]].filter(day => own.some(r => r.rule_type === 'DayOfWeek' && r.start_day_of_week === day))
+  const parts: string[] = []
+  if (own.some(r => r.rule_type === 'AlwaysOn')) parts.push('Every day')
+  if (days.length) parts.push(`Every ${days.join(' and ')}`)
+  for (const r of own) {
+    if (r.rule_type === 'SpecialDate') parts.push(dateRange(r.start_month ?? 1, r.start_day ?? 1, r.duration_days ?? 1))
+    if (r.rule_type === 'SpecialDateLunar') parts.push('Lunar calendar, date varies')
+    if (r.rule_type === 'WeeklyRotation' && r.events.length) {
+      const week = rotationWeek(r, now)
+      const k = r.events.findIndex((_, n) => r.events[(week + n) % r.events.length] === id)
+      parts.push(k === 0 ? 'Weekly rotation, this week' : k === 1 ? 'Weekly rotation, next week' : `Weekly rotation, in ${k} weeks`)
+    }
+  }
+  return parts.join('; ') || 'Not on the calendar'
+}
