@@ -4,8 +4,8 @@
   import { openPath } from '@tauri-apps/plugin-opener'
   import { appConfig } from '../lib/store'
   import { activeDataTab, tuningFocusFile, confirmLeave } from '../lib/store'
-  import { get } from 'svelte/store'
   import { eventTimezoneOffset } from '../lib/store'
+  import { serverNow, ruleIsValid, ruleActiveIds, activeEventIds as eventsActiveAt } from '../lib/eventSchedule'
   import type { TuningFileInfo, EventDefinition, EventsData, ScheduleRule, ScheduleData } from '../lib/tuningMeta'
   import PanelSidebar from './PanelSidebar.svelte'
   import EventRuleEditorModal from './EventRuleEditorModal.svelte'
@@ -37,7 +37,6 @@
   let editingDefinition:  EventDefinition | null = null
   let creatingDefinition  = false
   let allEventsExpanded   = true
-  let activeEventIds: string[] = []
 
   type PendingAction = 'resetEvents' | 'mergeEvents' | 'resetSchedule' | 'mergeSchedule'
   let pendingAction: PendingAction | null = null
@@ -72,31 +71,20 @@
     }))
     .filter(g => g.rules.length > 0)
 
+  // What the server runs now, from the shared schedule model.
+  $: knownIds = new Set(definitions.map(d => d.id))
+  $: now = serverNow($eventTimezoneOffset)
+  $: activeIds = eventsActiveAt(rules, knownIds, now)
+  $: activeEventIds = [...activeIds]
+
   // Active items for the dashboard
-  $: activeItems = (() => {
-    const items: ActiveItem[] = []
-    const now = getAdjustedNow()
-    const activeIds = getActiveEventIds(now)
-
-    for (const rule of rules) {
-      if (!isActiveNow(rule, now)) continue
-
-      if (rule.rule_type === 'WeeklyRotation') {
-        items.push({ kind: 'rotation', rule })
-        continue
-      }
-
-      for (const id of rule.events) {
-        if (!activeIds.has(id)) continue
-        const def = definitionById[id]
-        if (def) items.push({ kind: 'event', rule, definition: def })
-      }
-    }
-
-    return items
-  })()
-
-  $: activeEventIds = rules.length >= 0 ? Array.from(getActiveEventIds(getAdjustedNow())) : []
+  $: activeItems = rules.flatMap((rule): ActiveItem[] => {
+    if (!ruleIsValid(rule, knownIds)) return []
+    const ids = ruleActiveIds(rule, now)
+    if (ids.length === 0) return []
+    if (rule.rule_type === 'WeeklyRotation') return [{ kind: 'rotation', rule }]
+    return ids.flatMap(id => definitionById[id] ? [{ kind: 'event' as const, rule, definition: definitionById[id] }] : [])
+  })
 
   // Key for {#key} block — forces rule editor remount on selection change.
   // By object reference: rule names are not unique in real EventSchedule.json.
@@ -104,38 +92,9 @@
 
   // ── Status helpers ──────────────────────────────────────────────────────────
 
-  function dayIndex(day: string): number {
-    return ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'].indexOf(day)
-  }
-
-  function isActiveNow(rule: ScheduleRule, now: Date): boolean {
-    if (!rule.is_enabled) return false
-    switch (rule.rule_type) {
-      case 'AlwaysOn':
-      case 'WeeklyRotation':
-        return true
-      case 'DayOfWeek':
-        return rule.start_day_of_week != null
-          && now.getUTCDay() === dayIndex(rule.start_day_of_week)  // was getDay()
-      case 'SpecialDate':
-      case 'SpecialDateLunar': {
-        if (rule.start_month == null || rule.start_day == null || rule.duration_days == null) return false
-        const y = now.getUTCFullYear()  // was getFullYear()
-        for (const yr of [y - 1, y]) {
-          const start = new Date(Date.UTC(yr, rule.start_month - 1, rule.start_day))  // was new Date(yr, ...)
-          const end   = new Date(start.getTime() + rule.duration_days * 86400000)
-          if (now >= start && now < end) return true
-        }
-        return false
-      }
-      default: return false
-    }
-  }
-
   function ruleStatus(rule: ScheduleRule): RuleStatus {
     if (!rule.is_enabled) return 'disabled'
-    const now = getAdjustedNow()
-    return isActiveNow(rule, now) ? 'active' : 'scheduled'
+    return ruleIsValid(rule, knownIds) && ruleActiveIds(rule, now).length > 0 ? 'active' : 'scheduled'
   }
 
   function ruleTypeLabel(rule: ScheduleRule): string {
@@ -147,48 +106,6 @@
       case 'SpecialDateLunar': return 'Lunar date'
       default:                 return rule.rule_type
     }
-  }
-
-  function getAdjustedNow(): Date {
-    const offset = get(eventTimezoneOffset)
-    return new Date(Date.now() + offset * 60 * 60 * 1000)
-    
-  }
-
-  function getWeeklyRotationEvent(events: string[], startDayOfWeek: number, now: Date): string | null {
-    if (!events.length) return null
-
-    const epoch = new Date(Date.UTC(2000, 0, 2 + startDayOfWeek))  // was new Date(2000, 0, ...)
-    const diffDays = Math.floor((now.getTime() - epoch.getTime()) / 86400000)
-    const weekNumber = Math.floor(diffDays / 7)
-    const index = ((weekNumber % events.length) + events.length) % events.length
-
-    return events[index] ?? null
-  }
-
-  function getActiveEventIds(now: Date): Set<string> {
-    const ids = new Set<string>()
-
-    for (const rule of rules) {
-      if (!isActiveNow(rule, now)) continue
-
-      if (rule.rule_type === 'WeeklyRotation') {
-        const startDay = rule.start_day_of_week != null ? dayIndex(rule.start_day_of_week) : 0
-        const activeId = getWeeklyRotationEvent(rule.events, startDay, now)
-        if (activeId) ids.add(activeId)
-      } else {
-        for (const id of rule.events) {
-          if (id) ids.add(id)
-        }
-      }
-    }
-
-    return ids
-  }
-
-  function definitionActive(def: EventDefinition): boolean {
-    const now = getAdjustedNow()
-    return getActiveEventIds(now).has(def.id)
   }
 
   // ── Data loading ─────────────────────────────────────────────────────────────
@@ -594,7 +511,7 @@
               <div class="active-grid">
                 {#each activeItems as item}
                   {#if item.kind === 'rotation'}
-                    {@const rotationActiveId = getWeeklyRotationEvent(item.rule.events, item.rule.start_day_of_week != null ? dayIndex(item.rule.start_day_of_week) : 0, getAdjustedNow())}
+                    {@const rotationActiveId = ruleActiveIds(item.rule, now)[0]}
                     {@const rotationActiveName = rotationActiveId ? (definitionById[rotationActiveId]?.display_name ?? rotationActiveId) : null}
                     <div class="active-card rotation-card event-card"
                         role="button"
@@ -683,7 +600,7 @@
               {:else}
                 <div class="def-list">
                   {#each definitions as def (def.id)}
-                    {@const isActive = definitionActive(def)}
+                    {@const isActive = activeIds.has(def.id)}
                     <div class="def-row">
                       <span class="status-dot dot-{isActive ? 'active' : 'disabled'}"></span>
                       <div class="def-info">
