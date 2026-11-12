@@ -130,7 +130,7 @@ fn read_events_from_path(path: &Path) -> Result<Vec<EventDefinition>, String> {
     let contents = std::fs::read_to_string(path)
         .map_err(|e| format!("Cannot read {}: {e}", path.display()))?;
 
-    let raw: HashMap<String, RawEventDefIn> = serde_json::from_str(&contents)
+    let raw: HashMap<String, RawEventDefIn> = serde_json::from_str(contents.trim_start_matches('\u{FEFF}'))
         .map_err(|e| format!("JSON parse error in {}: {e}", path.display()))?;
 
     Ok(raw
@@ -150,7 +150,7 @@ fn read_schedule_from_path(path: &Path) -> Result<Vec<ScheduleRule>, String> {
     let contents = std::fs::read_to_string(path)
         .map_err(|e| format!("Cannot read {}: {e}", path.display()))?;
 
-    let raw: Vec<RawScheduleRule> = serde_json::from_str(&contents)
+    let raw: Vec<RawScheduleRule> = serde_json::from_str(contents.trim_start_matches('\u{FEFF}'))
         .map_err(|e| format!("JSON parse error in {}: {e}", path.display()))?;
 
     Ok(raw

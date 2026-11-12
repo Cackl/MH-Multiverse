@@ -101,7 +101,7 @@ fn load_events_file_map(live_tuning_dir: &Path) -> HashMap<String, String> {
         Err(_) => return HashMap::new(),
     };
 
-    let raw: HashMap<String, serde_json::Value> = match serde_json::from_str(&contents) {
+    let raw: HashMap<String, serde_json::Value> = match serde_json::from_str(contents.trim_start_matches('\u{FEFF}')) {
         Ok(m) => m,
         Err(_) => return HashMap::new(),
     };

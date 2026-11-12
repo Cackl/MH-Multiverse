@@ -387,3 +387,14 @@ fn scan_lists_root_files_in_load_order() {
     let names: Vec<&str> = files.iter().map(|f| f.relative_path.as_str()).collect();
     assert_eq!(names, ["LiveTuningData_TEST.json", "LiveTuningData.json", "LiveTuningDataGlobal.json", "LiveTuningDataUserRates.json"]);
 }
+
+#[test]
+fn scan_maps_event_files_when_events_json_has_bom() {
+    let (_tmp, server_exe) = setup();
+    let path = live_tuning_dir(&server_exe).unwrap().join("Events.json");
+    let text = fs::read_to_string(&path).unwrap();
+    fs::write(&path, format!("\u{FEFF}{text}")).unwrap();
+    let files = scan_tuning_files(server_exe, false).unwrap();
+    let f = find(&files, "Events/Weekly/LiveTuningDataArmorIncursion.json");
+    assert_eq!(f.event_id.as_deref(), Some("ArmorIncursion"));
+}

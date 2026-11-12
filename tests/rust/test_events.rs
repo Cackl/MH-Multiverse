@@ -151,3 +151,15 @@ fn schedule_merge_by_name() {
 
     assert!(data.rules.iter().any(|r| r.name == "CosmicChaosWeekly"));
 }
+
+#[test]
+fn load_strips_bom() {
+    let (_tmp, server_exe) = setup();
+    let dir = dir_for(&server_exe);
+    for name in ["Events.json", "EventSchedule.json"] {
+        let text = fs::read_to_string(dir.join(name)).unwrap();
+        fs::write(dir.join(name), format!("\u{FEFF}{text}")).unwrap();
+    }
+    assert_eq!(load_events(server_exe.clone()).unwrap().definitions.len(), 2);
+    assert!(!load_event_schedule(server_exe).unwrap().rules.is_empty());
+}
