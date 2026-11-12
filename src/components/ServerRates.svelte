@@ -92,7 +92,6 @@
       }
       edits = {}
       stopWatching()
-      reloadMsg = ''
       reloadError = ''
       saveMsg = 'Saved'
       await load(serverExe)
@@ -105,9 +104,8 @@
 
   // ── Reload ────────────────────────────────────────────────────────────────
   // send_command only proves the text reached the server console, so the result comes from
-  // the log lines that follow it.
+  // the log lines that follow it. Only a failure shows a message.
 
-  let reloadMsg = ''
   let reloadError = ''
   let unlisten: UnlistenFn | null = null
   let timer: ReturnType<typeof setTimeout> | null = null
@@ -121,12 +119,10 @@
 
   function finish(result: ReloadResult) {
     stopWatching()
-    if (result.rejected === 0) reloadMsg = `Reloaded: ${result.count} settings live`
-    else showReloadError(`Reloaded with ${result.rejected} rejected ${result.rejected === 1 ? 'entry' : 'entries'}. See the Server log.`)
+    if (result.rejected > 0) showReloadError(`${result.rejected} ${result.rejected === 1 ? 'entry' : 'entries'} rejected. See the Server log.`)
   }
 
   function showReloadError(message: string) {
-    reloadMsg = ''
     reloadError = message
   }
 
@@ -143,7 +139,6 @@
       stopWatching()
       showReloadError('No reply from the server. See the Server log.')
     }, 5000)
-    reloadMsg = 'Reload sent'
     try {
       await invoke('send_command', { cmd: '!server reloadlivetuning' })
     } catch (e) {
@@ -201,8 +196,7 @@
         <h3 class="page-title">Server Rates</h3>
         <span class="page-sub">Saves to {SERVER_RATES_FILE}</span>
         <div class="page-acts">
-          {#if reloadError}<span class="error">{reloadError}</span>
-          {:else if reloadMsg}<span class="rates-status">{reloadMsg}</span>{/if}
+          {#if reloadError}<span class="error">{reloadError}</span>{/if}
           <button
             class="btn btn-sm btn-outline"
             on:click={reload}
@@ -367,7 +361,6 @@
     font-size: 12px;
     color: var(--text-1);
   }
-  .page-acts .rates-status { flex: none; }
 
   .rates-group { margin: 14px 0 0; scroll-margin-top: 4px; }
 
