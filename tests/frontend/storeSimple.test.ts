@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { entryPrice, type CatalogEntry, type CatalogEntryWithMeta } from '../../src/lib/catalogMeta'
 import {
-  isHidden, setHidden, setPrice, planWrites, reverted, salePrice, saleLabel, startSale, endSale, catalogReloadResult,
+  isHidden, setHidden, setPrice, planWrites, reverted, salePrice, saleLabel, startSale, endSale, catalogReloadResult, displayTitle,
 } from '../../src/lib/storeSimple'
 
 function entry(sku: string, type: string, price: number, mods: string[] = ['Giftable']): CatalogEntry {
@@ -143,6 +143,19 @@ describe('sale', () => {
     const end = endSale([hiddenDuringSale], sale)
     expect(entryPrice(end.edited[0])).toBe(1000)
     expect(isHidden(end.edited[0])).toBe(true)
+  })
+})
+
+describe('displayTitle', () => {
+  it.each([
+    ['BlackPantherManWithoutFear', 'Black Panther Man Without Fear'],
+    ['XMenBlueMagneto', 'X Men Blue Magneto'],
+    ['Spider-Man: Classic', 'Spider-Man: Classic'],
+    ['Deadpool', 'Deadpool'],
+    ['Hulk2099Classic', 'Hulk2099 Classic'],
+    ['Iron Man MkII', 'Iron Man MkII'],
+  ])('%s', (raw, shown) => {
+    expect(displayTitle(raw)).toBe(shown)
   })
 })
 

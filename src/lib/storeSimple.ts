@@ -63,6 +63,11 @@ export function reverted(e: CatalogEntryWithMeta): CatalogEntryWithMeta | null {
   return e.stock ? { ...e, ...e.stock } : null
 }
 
+/** A one-word CamelCase title (raw ids, as in CatalogLimitedCostumes.json) gets spaces between words. */
+export function displayTitle(title: string): string {
+  return /\s/.test(title) ? title : title.replace(/([a-z0-9])([A-Z])/g, '$1 $2').replace(/([A-Z])([A-Z][a-z])/g, '$1 $2')
+}
+
 // ── Sale ──────────────────────────────────────────────────────────────────────
 
 export interface SalePrice { before: number; after: number; hadOverlay: boolean }

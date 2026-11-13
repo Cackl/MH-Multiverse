@@ -6,6 +6,7 @@
   import PatchesPanel from './PatchesPanel.svelte'
   import EventsPanel from './EventsPanel.svelte';
   import EventsSimple from './EventsSimple.svelte'
+  import StoreSimple from './StoreSimple.svelte'
 
   const TABS: { id: DataTab; label: string }[] = [
     { id: 'events',  label: 'Events'       },
@@ -30,7 +31,7 @@
         {tab.label}
       </button>
     {/each}
-    <!-- Simple and Advanced differ only on Live Tuning so far; the other areas follow in their own sections. -->
+    <!-- Patches has no Simple view yet; it follows in its own section. -->
     <div class="mode-switch">
       <span>Advanced</span>
       <div
@@ -61,7 +62,11 @@
         <ServerRates />
       {/if}
     {:else if $activeDataTab === 'store'}
-      <StorePanel />
+      {#if $appConfig.advanced_data}
+        <StorePanel />
+      {:else}
+        <StoreSimple />
+      {/if}
     {:else if $activeDataTab === 'patches'}
       <PatchesPanel />
     {/if}
