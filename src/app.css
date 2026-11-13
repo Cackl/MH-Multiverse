@@ -1044,6 +1044,17 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 .close-btn:hover { color: var(--text-0); background: var(--bg-3); border-color: var(--border-mid); }
 .close-btn svg { width: 14px; height: 14px; }
 
+/* Row remove button in editor tables. */
+.del-btn {
+  width: 22px; height: 22px;
+  display: flex; align-items: center; justify-content: center;
+  background: none; border: 1px solid transparent;
+  border-radius: var(--radius-sm); color: var(--text-3);
+  cursor: pointer; transition: all 0.1s;
+}
+.del-btn:hover { border-color: color-mix(in srgb, var(--red) 40%, transparent); color: var(--text-error); background: var(--red-dim); }
+.del-btn svg { width: 10px; height: 10px; }
+
 /* ── Panel footer ── */
 .panel-footer {
   padding: 12px 20px;

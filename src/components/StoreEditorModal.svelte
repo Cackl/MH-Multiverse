@@ -1831,16 +1831,6 @@
   }
   .qty-input:focus { border-color: var(--accent-dim); }
 
-  .del-btn {
-    width: 22px; height: 22px;
-    display: flex; align-items: center; justify-content: center;
-    background: none; border: 1px solid transparent;
-    border-radius: var(--radius-sm); color: var(--text-3);
-    cursor: pointer; transition: all 0.1s;
-  }
-  .del-btn:hover { border-color: color-mix(in srgb, var(--red) 40%, transparent); color: var(--text-error); background: var(--red-dim); }
-  .del-btn svg { width: 10px; height: 10px; }
-
   .empty-note {
     font-family: var(--font-head);
     font-size: var(--fs-min);
