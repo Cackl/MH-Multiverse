@@ -257,3 +257,78 @@ fn bom_file_parses_and_values_beyond_i32_round_trip() {
     assert!(written.contains("\"ItemPrice\": 5000000000"), "{written}");
     assert!(written.contains("\"SkuId\": 8"), "{written}");
 }
+
+fn upsert(sku: &str, price: i64, target: &str) -> StoreUpsert {
+    let mut entry = sample_entry(sku);
+    entry.localized_entries[0].item_price = price;
+    StoreUpsert { entry, target_file: target.to_string() }
+}
+
+fn removal(sku: &str, source: &str) -> StoreRemoval {
+    StoreRemoval { sku_id: sku.to_string(), source_file: source.to_string() }
+}
+
+fn skus(path: &std::path::Path) -> Vec<u64> {
+    load_disk_entries(path).unwrap().iter().map(|e| e.sku_id).collect()
+}
+
+#[test]
+fn apply_store_changes_writes_each_file_once_and_never_touches_base() {
+    let (_tmp, server_exe) = empty_mtxstore();
+    let dir = mtxstore_dir(&server_exe).unwrap();
+    write_entries(&dir, "Catalog.json", &[("1", 100), ("2", 200)]);
+    write_entries(&dir, "CatalogMODIFIED.json", &[("1", 110), ("2", 210)]);
+    write_entries(&dir, "CatalogLimitedCostumesMODIFIED.json", &[("5", 500)]);
+    let base_before = fs::read_to_string(dir.join("Catalog.json")).unwrap();
+    let limited_before = fs::read_to_string(dir.join("CatalogLimitedCostumesMODIFIED.json")).unwrap();
+
+    apply_store_changes(
+        server_exe.clone(),
+        vec![upsert("1", 120, "Catalog.json"), upsert("3", 300, "Catalog.json"), upsert("6", 600, "CatalogLimitedCostumes.json")],
+        vec![removal("2", "Catalog.json"), removal("7", "Catalog.json")],
+        Some(serde_json::json!({ "version": 1 })),
+    )
+    .unwrap();
+
+    assert_eq!(fs::read_to_string(dir.join("Catalog.json")).unwrap(), base_before);
+    assert_eq!(skus(&dir.join("CatalogMODIFIED.json")), vec![1, 3]);
+    assert_eq!(load_disk_entries(&dir.join("CatalogMODIFIED.json")).unwrap()[0].localized_entries[0].item_price, 120);
+    assert_eq!(skus(&dir.join("CatalogLimitedCostumesMODIFIED.json")), vec![5, 6]);
+    // One .bak per file, holding the file as it was before this call.
+    assert_eq!(skus(&dir.join("CatalogMODIFIED.json.bak")), vec![1, 2]);
+    assert_eq!(fs::read_to_string(dir.join("CatalogLimitedCostumesMODIFIED.json.bak")).unwrap(), limited_before);
+    assert_eq!(load_store_state(server_exe).unwrap()["version"], 1);
+}
+
+#[test]
+fn apply_store_changes_writes_nothing_when_any_file_fails_to_parse() {
+    let (_tmp, server_exe) = empty_mtxstore();
+    let dir = mtxstore_dir(&server_exe).unwrap();
+    write_entries(&dir, "CatalogMODIFIED.json", &[("1", 110)]);
+    fs::write(dir.join("CatalogRestoredHeroesMODIFIED.json"), "{oops").unwrap();
+    let good_before = fs::read_to_string(dir.join("CatalogMODIFIED.json")).unwrap();
+
+    let err = apply_store_changes(
+        server_exe.clone(),
+        vec![upsert("1", 120, "Catalog.json"), upsert("3", 300, "CatalogRestoredHeroes.json")],
+        vec![],
+        Some(serde_json::json!({ "version": 1 })),
+    )
+    .unwrap_err();
+
+    assert!(err.contains("CatalogRestoredHeroesMODIFIED.json"), "{err}");
+    assert_eq!(fs::read_to_string(dir.join("CatalogMODIFIED.json")).unwrap(), good_before);
+    assert_eq!(fs::read_to_string(dir.join("CatalogRestoredHeroesMODIFIED.json")).unwrap(), "{oops");
+    assert!(!dir.join("CatalogMODIFIED.json.bak").exists());
+    assert!(load_store_state(server_exe).unwrap().is_null());
+}
+
+#[test]
+fn apply_store_changes_refuses_bad_targets_and_negative_prices() {
+    for (target, price) in [("../Catalog.json", 1), ("CatalogMODIFIED.json", 1), ("Events.json", 1), ("Catalog.json", -1)] {
+        let (_tmp, server_exe) = empty_mtxstore();
+        let dir = mtxstore_dir(&server_exe).unwrap();
+        apply_store_changes(server_exe, vec![upsert("1", price, target)], vec![], None).unwrap_err();
+        assert_eq!(fs::read_dir(&dir).unwrap().count(), 0, "{target} {price}");
+    }
+}

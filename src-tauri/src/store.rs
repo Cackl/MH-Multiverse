@@ -492,6 +492,104 @@ pub fn delete_catalog_entry(
     Ok(())
 }
 
+/// One entry to write, into `{target_file stem}MODIFIED.json`.
+#[derive(Debug, Deserialize)]
+pub struct StoreUpsert {
+    pub entry: CatalogEntry,
+    pub target_file: String,
+}
+
+/// One overlay row to drop from `{source_file stem}MODIFIED.json`.
+#[derive(Debug, Deserialize)]
+pub struct StoreRemoval {
+    pub sku_id: String,
+    pub source_file: String,
+}
+
+/// The launcher's own record of Store changes (the running sale). The name doesn't start
+/// with `Catalog`, so the server never loads it.
+const STORE_STATE_FILE: &str = "MultiverseStore.json";
+
+/// `name` must be a plain base catalog file name, so a write can't leave the MTXStore folder.
+fn checked_base_name(name: &str) -> Result<&str, String> {
+    let plain = !name.contains(['/', '\\']) && name.starts_with("Catalog") && name.ends_with(".json");
+    if plain && base_of_modified(name).is_none() {
+        Ok(name)
+    } else {
+        Err(format!("'{name}' is not a base catalog file name"))
+    }
+}
+
+/// Write many Store changes at once: every touched `*MODIFIED.json` is read and parsed once,
+/// and nothing is written unless all of them parse. Each file then gets one `.bak` and one
+/// write; `state`, when given, is written to `MultiverseStore.json` last. Base files are never
+/// written, and removing a SKU that isn't in the file is not an error.
+#[tauri::command]
+pub fn apply_store_changes(
+    server_exe: String,
+    upserts: Vec<StoreUpsert>,
+    removes: Vec<StoreRemoval>,
+    state: Option<serde_json::Value>,
+) -> Result<(), String> {
+    let dir = mtxstore_dir(&server_exe)?;
+    let mut files: std::collections::BTreeMap<PathBuf, Vec<CatalogEntryDisk>> = Default::default();
+    let mut open = |base: &str| -> Result<PathBuf, String> {
+        let path = modified_path_for(&dir.join(checked_base_name(base)?));
+        if !files.contains_key(&path) {
+            files.insert(path.clone(), load_disk_entries(&path)?);
+        }
+        Ok(path)
+    };
+
+    let mut ops = Vec::new();
+    for r in removes {
+        let sku: u64 = r.sku_id.parse().map_err(|e| format!("Invalid SKU ID '{}': {e}", r.sku_id))?;
+        ops.push((open(&r.source_file)?, sku, None));
+    }
+    for u in upserts {
+        if u.entry.localized_entries.iter().any(|l| l.item_price < 0) {
+            return Err(format!("SKU {}: a price can't be negative", u.entry.sku_id));
+        }
+        let disk = view_to_disk(u.entry)?;
+        ops.push((open(&u.target_file)?, disk.sku_id, Some(disk)));
+    }
+
+    for (path, sku, entry) in ops {
+        let list = files.get_mut(&path).expect("opened above");
+        let pos = list.iter().position(|e| e.sku_id == sku);
+        match (entry, pos) {
+            (Some(e), Some(i)) => list[i] = e,
+            (Some(e), None) => list.push(e),
+            (None, Some(i)) => {
+                list.remove(i);
+            }
+            (None, None) => {}
+        }
+    }
+
+    for (path, list) in &files {
+        let json = serde_json::to_string_pretty(list).map_err(|e| format!("Serialisation failed: {e}"))?;
+        write_with_backup(path, &json)?;
+    }
+    if let Some(state) = state {
+        let json = serde_json::to_string_pretty(&state).map_err(|e| format!("Serialisation failed: {e}"))?;
+        write_atomic(&dir.join(STORE_STATE_FILE), &json)?;
+    }
+    Ok(())
+}
+
+/// The contents of `MultiverseStore.json`, or `null` when it doesn't exist yet.
+#[tauri::command]
+pub fn load_store_state(server_exe: String) -> Result<serde_json::Value, String> {
+    let path = mtxstore_dir(&server_exe)?.join(STORE_STATE_FILE);
+    match fs::read_to_string(&path) {
+        Ok(s) => serde_json::from_str(s.trim_start_matches('\u{FEFF}'))
+            .map_err(|e| format!("{STORE_STATE_FILE} is not valid JSON ({e}). Fix or remove the file.")),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(serde_json::Value::Null),
+        Err(e) => Err(format!("Cannot read {STORE_STATE_FILE}: {e}")),
+    }
+}
+
 /// Scan all JSON files in the MTXStore directory (base and MODIFIED) and return the
 /// next available SKU ID: `max_found + 1`, floored at 1001.
 #[tauri::command]

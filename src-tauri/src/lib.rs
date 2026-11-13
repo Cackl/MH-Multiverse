@@ -134,6 +134,8 @@ pub fn run() {
             store::load_catalog_entries,
             store::save_catalog_entry,
             store::delete_catalog_entry,
+            store::apply_store_changes,
+            store::load_store_state,
             store::get_next_sku_id,
             store::resolve_display_name,
             store::generate_bundle_html,
