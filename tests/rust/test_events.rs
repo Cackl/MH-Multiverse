@@ -205,7 +205,7 @@ fn bundle_writes_the_tuning_file_and_both_overrides() {
     rules.push(day_rule("Saturday", &[id]));
     rules.push(day_rule("Sunday", &[id]));
 
-    save_event_bundle(server_exe.clone(), defs, rules, vec![xp_file("DoubleXPWeekend")]).unwrap();
+    save_event_bundle(server_exe.clone(), defs, rules, vec![xp_file("DoubleXPWeekend")], vec![]).unwrap();
 
     let entries = crate::tuning::read_tuning_file(
         server_exe.clone(),
@@ -228,7 +228,7 @@ fn bundle_writes_the_tuning_file_and_both_overrides() {
 fn bundle_refuses_bad_slugs_and_writes_nothing() {
     for slug in ["", "../Evil", "a/b", r"a\b", "C:", "Dé", "Has Space", &"a".repeat(61)] {
         let (_tmp, server_exe) = setup();
-        let err = save_event_bundle(server_exe.clone(), vec![], vec![], vec![xp_file(slug)]).unwrap_err();
+        let err = save_event_bundle(server_exe.clone(), vec![], vec![], vec![xp_file(slug)], vec![]).unwrap_err();
         assert!(err.contains("Invalid event file name"), "{slug}: {err}");
         assert!(!dir_for(&server_exe).join("EventsOverride.json").exists(), "{slug}");
         assert!(!dir_for(&server_exe).join("Events").join("Multiverse").exists(), "{slug}");
@@ -239,21 +239,36 @@ fn bundle_refuses_bad_slugs_and_writes_nothing() {
 fn bundle_refuses_a_rule_naming_a_missing_event() {
     let (_tmp, server_exe) = setup();
     let defs = vec![custom_event("zzMultiverse_A", "A")];
-    let err = save_event_bundle(server_exe.clone(), defs.clone(), vec![day_rule("Saturday", &["zzMultiverse_A", "Gone"])], vec![])
+    let err = save_event_bundle(server_exe.clone(), defs.clone(), vec![day_rule("Saturday", &["zzMultiverse_A", "Gone"])], vec![], vec![])
         .unwrap_err();
     assert!(err.contains("'Gone'"), "{err}");
     assert!(!dir_for(&server_exe).join("EventScheduleOverride.json").exists());
 
     // Blank slots are allowed.
-    save_event_bundle(server_exe, defs, vec![day_rule("Saturday", &["zzMultiverse_A", "", " "])], vec![]).unwrap();
+    save_event_bundle(server_exe, defs, vec![day_rule("Saturday", &["zzMultiverse_A", "", " "])], vec![], vec![]).unwrap();
 }
 
 #[test]
 fn stock_events_ignore_overrides() {
     let (_tmp, server_exe) = setup();
-    save_event_bundle(server_exe.clone(), vec![custom_event("zzMultiverse_A", "A")], vec![], vec![]).unwrap();
+    save_event_bundle(server_exe.clone(), vec![custom_event("zzMultiverse_A", "A")], vec![], vec![], vec![]).unwrap();
     let stock = load_stock_events(server_exe).unwrap();
     assert_eq!(stock.definitions.len(), 2);
     assert!(stock.definitions.iter().all(|d| d.id != "zzMultiverse_A"));
     assert!(!stock.rules.is_empty());
+}
+
+#[test]
+fn bundle_keeps_a_removed_event_file_as_bak() {
+    let (_tmp, server_exe) = setup();
+    let defs = vec![custom_event("zzMultiverse_A", "A")];
+    save_event_bundle(server_exe.clone(), defs, vec![], vec![xp_file("A")], vec![]).unwrap();
+    let owned = dir_for(&server_exe).join("Events").join("Multiverse");
+
+    save_event_bundle(server_exe.clone(), vec![], vec![], vec![], vec!["A".into()]).unwrap();
+    assert!(!owned.join("LiveTuningDataA.json").exists());
+    assert!(owned.join("LiveTuningDataA.json.bak").exists());
+
+    let err = save_event_bundle(server_exe, vec![], vec![], vec![], vec!["../Events".into()]).unwrap_err();
+    assert!(err.contains("Invalid event file name"), "{err}");
 }

@@ -322,12 +322,12 @@ pub struct OwnedEventFile {
 fn check_bundle(
     definitions: &[EventDefinition],
     rules: &[ScheduleRule],
-    files: &[OwnedEventFile],
+    slugs: &[&str],
 ) -> Result<(), String> {
-    for f in files {
-        let ok = (1..=60).contains(&f.slug.len()) && f.slug.chars().all(|c| c.is_ascii_alphanumeric());
+    for slug in slugs {
+        let ok = (1..=60).contains(&slug.len()) && slug.chars().all(|c| c.is_ascii_alphanumeric());
         if !ok {
-            return Err(format!("Invalid event file name '{}': use 1 to 60 letters and digits", f.slug));
+            return Err(format!("Invalid event file name '{slug}': use 1 to 60 letters and digits"));
         }
     }
     let ids: HashSet<&str> = definitions.iter().map(|d| d.id.as_str()).collect();
@@ -341,15 +341,17 @@ fn check_bundle(
 
 /// Saves custom events in one go: their tuning files first, then both override files, which
 /// must always be written together (a schedule naming an id missing from the events list loses
-/// that rule).
+/// that rule), then the files of deleted events, which are kept as `.json.bak`.
 #[tauri::command]
 pub fn save_event_bundle(
     server_exe: String,
     definitions: Vec<EventDefinition>,
     rules: Vec<ScheduleRule>,
     owned_files: Vec<OwnedEventFile>,
+    removed_slugs: Vec<String>,
 ) -> Result<(), String> {
-    check_bundle(&definitions, &rules, &owned_files)?;
+    let slugs: Vec<&str> = owned_files.iter().map(|f| f.slug.as_str()).chain(removed_slugs.iter().map(String::as_str)).collect();
+    check_bundle(&definitions, &rules, &slugs)?;
     let dir = live_tuning_dir(&server_exe)?;
     let owned_dir = dir.join("Events").join("Multiverse");
     if !owned_files.is_empty() {
@@ -362,7 +364,15 @@ pub fn save_event_bundle(
             .map_err(|e| format!("Cannot write {}: {e}", path.display()))?;
     }
     write_events_to_path(&dir.join("EventsOverride.json"), &definitions)?;
-    write_schedule_to_path(&dir.join("EventScheduleOverride.json"), &rules)
+    write_schedule_to_path(&dir.join("EventScheduleOverride.json"), &rules)?;
+    for slug in removed_slugs {
+        let path = owned_dir.join(format!("LiveTuningData{slug}.json"));
+        if path.exists() {
+            std::fs::rename(&path, path.with_extension("json.bak"))
+                .map_err(|e| format!("Cannot remove {}: {e}", path.display()))?;
+        }
+    }
+    Ok(())
 }
 
 #[tauri::command]

@@ -11,12 +11,14 @@
   export let multiline = false
   export let compact = false
   export let blueprintHint: string | undefined = undefined
+  /** Only prototypes of this class or one derived from it, e.g. "ItemPrototype". */
+  export let classFilter: string | undefined = undefined
   export let onInput: ((value: string) => void) | undefined = undefined
   export let onSelect: ((match: PrototypeMatch) => void) | undefined = undefined
   export let onEnter: (() => void) | undefined = undefined
 
   const search = createPrototypeSearch(query =>
-    invoke<PrototypeMatch[]>('search_prototypes', { serverExe, query, blueprintHint })
+    invoke<PrototypeMatch[]>('search_prototypes', { serverExe, query, blueprintHint, classFilter })
   )
   const { state: searchState } = search
 

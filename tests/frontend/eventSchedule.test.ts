@@ -187,3 +187,137 @@ describe('scheduleText', () => {
     expect(scheduleText(rules, id, now)).toBe(expected)
   })
 })
+
+// ── Custom events ────────────────────────────────────────────────────────────────
+
+import {
+  eventNameError, slugFor, yearlyMaxDays, putCustomEvent, readCustomEvent, deleteCustomEvent, setCustomEnabled,
+  type CustomEvent,
+} from '../../src/lib/eventSchedule'
+import type { EventDefinition } from '../../src/lib/tuningMeta'
+
+const ID = 'zzMultiverse_DoubleXPWeekend'
+const weekend: CustomEvent = {
+  name: 'Double XP Weekend', when: { kind: 'weekly', days: ['Sunday', 'Saturday'] },
+  values: { eGTV_XPGain: 2, eGTV_LootDropRate: 1 }, gift: '', announce: true,
+}
+const stockDef: EventDefinition = { id: 'DailyBugle', display_name: 'Daily Bugle', file_path: 'x', daily_gift: null, instanced_missions: null, is_hidden: true }
+
+describe('eventNameError', () => {
+  it.each([
+    ['Double XP Weekend', ''],
+    ["D'Arcy's Day - 2", ''],
+    ['Fête', ''],
+    ['XP', 'Use 3 to 40 characters.'],
+    ['x'.repeat(41), 'Use 3 to 40 characters.'],
+    ['../evil', 'Use letters, digits, spaces, apostrophes and hyphens.'],
+    ['Loot!', 'Use letters, digits, spaces, apostrophes and hyphens.'],
+  ])('%s', (name, expected) => {
+    expect(eventNameError(name)).toBe(expected)
+  })
+})
+
+describe('slugFor', () => {
+  it.each([
+    ['Double XP Weekend', [],              'DoubleXPWeekend'],
+    ['double xp weekend', [ID],            'DoubleXpWeekend2'],
+    ['Double XP Weekend', [ID, `${ID}2`],  'DoubleXPWeekend3'],
+    ["D'Arcy's Day",      [],              'DArcysDay'],
+    ['Fête de la Loot',   [],              'FeteDeLaLoot'],
+    ['日本',      [],              'Event'],
+  ])('%s', (name, taken, expected) => {
+    expect(slugFor(name, new Set(taken))).toBe(expected)
+  })
+})
+
+describe('yearlyMaxDays', () => {
+  it.each([[12, 20, 12], [12, 31, 1], [1, 1, 365], [2, 28, 307]])('%i/%i', (m, d, expected) => {
+    expect(yearlyMaxDays(m, d)).toBe(expected)
+  })
+})
+
+describe('putCustomEvent', () => {
+  it('adds the definition, one rule per day after every other rule, and only sliders off 1', () => {
+    const out = putCustomEvent([stockDef], stock, ID, weekend, [])
+    expect(out.definitions).toEqual([stockDef, {
+      id: ID, display_name: 'Double XP Weekend', file_path: 'Events/Multiverse/LiveTuningDataDoubleXPWeekend.json',
+      daily_gift: null, instanced_missions: null, is_hidden: null,
+    }])
+    expect(out.rules.slice(0, stock.length)).toEqual(stock)
+    expect(out.rules.slice(stock.length).map(r => [r.name, r.rule_type, r.start_day_of_week, r.events, r.is_enabled])).toEqual([
+      ['Multiverse: Double XP Weekend (Sat)', 'DayOfWeek', 'Saturday', [ID], true],
+      ['Multiverse: Double XP Weekend (Sun)', 'DayOfWeek', 'Sunday', [ID], true],
+    ])
+    expect(out.entries).toEqual([{ prototype: '', setting: 'eGTV_XPGain', value: 2 }])
+  })
+
+  it.each([
+    ['every day',  { kind: 'daily' } as const,                             [['Multiverse: Party', 'AlwaysOn', null, null]]],
+    ['one day',    { kind: 'weekly', days: ['Friday'] } as const,          [['Multiverse: Party', 'DayOfWeek', 'Friday', null]]],
+    ['every year', { kind: 'yearly', month: 7, day: 4, days: 3 } as const, [['Multiverse: Party', 'SpecialDate', null, 3]]],
+  ])('rules for %s', (_, when, expected) => {
+    const out = putCustomEvent([], [], 'zzMultiverse_Party', { ...weekend, name: 'Party', when }, [])
+    expect(out.rules.map(r => [r.name, r.rule_type, r.start_day_of_week, r.duration_days])).toEqual(expected)
+  })
+
+  it('a gift and announce off go into the definition', () => {
+    const def = putCustomEvent([], [], ID, { ...weekend, gift: ' Entity/Items/Gift.prototype ', announce: false }, []).definitions[0]
+    expect([def.daily_gift, def.is_hidden]).toEqual(['Entity/Items/Gift.prototype', true])
+  })
+
+  it('editing replaces its own rules, keeps it off, and keeps other rules and entries', () => {
+    const first = putCustomEvent([], stock, ID, weekend, [])
+    const off = setCustomEnabled([...first.rules, { ...permanent, name: ALWAYS_RULE, events: [ID] }], ID, false)
+    const extra = { prototype: 'Entity/Characters/Mobs/Doom.prototype', setting: 'eWETV_MobHealth', value: 2 }
+    const out = putCustomEvent(first.definitions, off, ID, { ...weekend, when: { kind: 'daily' }, values: { eGTV_LootRarity: 3 } },
+      [...first.entries, extra])
+    expect(out.rules.filter(r => r.events.includes(ID)).map(r => [r.name, r.is_enabled])).toEqual([
+      [ALWAYS_RULE, true], ['Multiverse: Double XP Weekend', false],
+    ])
+    expect(out.entries).toEqual([extra, { prototype: '', setting: 'eGTV_LootRarity', value: 3 }])
+    expect(out.definitions).toHaveLength(1)
+  })
+})
+
+describe('readCustomEvent', () => {
+  const sortDays = (ev: CustomEvent) => ev.when.kind === 'weekly' ? { ...ev, when: { ...ev.when, days: [...ev.when.days].sort() } } : ev
+  it.each([
+    ['weekly', weekend],
+    ['daily', { ...weekend, when: { kind: 'daily' } }],
+    ['yearly', { ...weekend, when: { kind: 'yearly', month: 12, day: 20, days: 12 }, gift: 'G', announce: false }],
+  ] as [string, CustomEvent][])('reads back a %s event', (_, ev) => {
+    const out = putCustomEvent([], stock, ID, ev, [])
+    const read = readCustomEvent(out.definitions[0], out.rules, out.entries)!
+    expect(sortDays(read)).toEqual(sortDays({ ...ev, values: { eGTV_XPGain: 2 } }))
+  })
+
+  it.each([
+    ['a rule that also runs another event',   (r: ScheduleRule) => ({ ...r, events: [ID, 'DailyBugle'] })],
+    ['a rule renamed in Advanced',            (r: ScheduleRule) => ({ ...r, name: 'My weekend' })],
+    ['a weekday rule turned into a rotation', (r: ScheduleRule) => ({ ...r, rule_type: 'WeeklyRotation' })],
+  ])('gives null for %s', (_, edit) => {
+    const out = putCustomEvent([], [], ID, weekend, [])
+    expect(readCustomEvent(out.definitions[0], [edit(out.rules[0]), out.rules[1]], out.entries)).toBeNull()
+  })
+})
+
+describe('deleteCustomEvent', () => {
+  it('removes the definition, its own rules and its place in the Always on rule', () => {
+    const added = putCustomEvent([stockDef], stock, ID, weekend, [])
+    const always = setEventMode(added.rules, stock, 'Cowpocalypse', 'always')
+    const withUs = always.map(r => r.name === ALWAYS_RULE ? { ...r, events: [...r.events, ID] } : r)
+    const out = deleteCustomEvent(added.definitions, withUs, ID)
+    expect(out.definitions).toEqual([stockDef])
+    expect(out.rules).toEqual(setEventMode(stock, stock, 'Cowpocalypse', 'always'))
+  })
+})
+
+describe('setCustomEnabled', () => {
+  it('switches only its own rules', () => {
+    const added = putCustomEvent([], stock, ID, weekend, []).rules
+    const off = setCustomEnabled(added, ID, false)
+    expect(off.slice(0, stock.length)).toEqual(stock)
+    expect(eventMode(off, ID)).toBe('off')
+    expect(setCustomEnabled(off, ID, true)).toEqual(added)
+  })
+})

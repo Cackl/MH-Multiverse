@@ -4,17 +4,25 @@
   import { appConfig, serverRunning, eventTimezoneOffset } from '../lib/store'
   import { tip } from '../lib/tooltip'
   import PanelSidebar from './PanelSidebar.svelte'
+  import CustomEventModal from './CustomEventModal.svelte'
   import type { EventDefinition, EventsData, ScheduleData, ScheduleRule } from '../lib/tuningMeta'
   import {
     serverNow, activeEventIds, ruleIsValid, nextInRotation, eventMode, setEventMode, scheduleText,
-    type EventMode,
+    CUSTOM_PREFIX, EVENT_SLIDERS, slugFor, putCustomEvent, readCustomEvent, deleteCustomEvent, setCustomEnabled,
+    type EventMode, type CustomEvent, type EventEntry,
   } from '../lib/eventSchedule'
 
-  type Group = 'Weekly rotation' | 'Day of week' | 'Yearly' | 'Every day' | 'Not on the calendar' | 'Other'
-  const GROUPS: Group[] = ['Weekly rotation', 'Day of week', 'Yearly', 'Every day', 'Not on the calendar', 'Other']
+  type Group = 'Yours' | 'Weekly rotation' | 'Day of week' | 'Yearly' | 'Every day' | 'Not on the calendar' | 'Other'
+  const GROUPS: Group[] = ['Yours', 'Weekly rotation', 'Day of week', 'Yearly', 'Every day', 'Not on the calendar', 'Other']
   const MODE_LABEL: Record<EventMode, string> = { schedule: 'On schedule', off: 'Off', always: 'Always on' }
 
+  let savedDefs: EventDefinition[] = []
   let definitions: EventDefinition[] = []
+  /** Custom event tuning files to write on Save, by slug, and the slugs of deleted ones. */
+  let pendingFiles: Record<string, EventEntry[]> = {}
+  let removedSlugs: string[] = []
+  /** The custom event open in the form: its id (null when new), what the form shows, and its file's entries. */
+  let editing: { id: string | null; ev: CustomEvent | null; entries: EventEntry[] } | null = null
   let saved: ScheduleRule[] = []
   let rules: ScheduleRule[] = []
   let stock: { definitions: EventDefinition[]; rules: ScheduleRule[] } = { definitions: [], rules: [] }
@@ -38,7 +46,10 @@
         invoke<ScheduleData>('load_event_schedule', { serverExe: exe }),
         invoke<{ definitions: EventDefinition[]; rules: ScheduleRule[] }>('load_stock_events', { serverExe: exe }),
       ])
-      definitions = events.definitions.slice().sort((a, b) => a.display_name.localeCompare(b.display_name))
+      savedDefs = byName(events.definitions)
+      definitions = savedDefs
+      pendingFiles = {}
+      removedSlugs = []
       saved = schedule.rules
       rules = saved
       stock = stockEvents
@@ -47,6 +58,9 @@
       loadError = String(e)
     }
   }
+
+  const byName = (defs: EventDefinition[]) => defs.slice().sort((a, b) => a.display_name.localeCompare(b.display_name))
+  const slugOf = (id: string) => id.slice(CUSTOM_PREFIX.length)
 
   $: if (!$serverRunning) sawStopped = true
   $: if ($serverRunning && sawStopped && pendingRestart) pendingRestart = false
@@ -70,6 +84,7 @@
   $: dayStart = new Date(Date.UTC(2000, 0, 1, -$eventTimezoneOffset)).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
 
   function groupOf(id: string): Group {
+    if (id.startsWith(CUSTOM_PREFIX)) return 'Yours'
     if (!stockIds.has(id)) return 'Other'
     const types = stock.rules.filter(r => r.events.includes(id)).map(r => r.rule_type)
     if (types.includes('WeeklyRotation')) return 'Weekly rotation'
@@ -98,6 +113,8 @@
     const stockable = stockIds.has(def.id)
     const mode = eventMode(rules, def.id)
     const defaultMode = eventMode(stock.rules, def.id)
+    const custom = def.id.startsWith(CUSTOM_PREFIX)
+    const savedDef = savedDefs.find(d => d.id === def.id)
     return {
       def,
       group: groupOf(def.id),
@@ -105,14 +122,17 @@
       mode,
       defaultMode,
       stockable,
+      custom,
+      // The form can only show schedules it made; anything reshaped in Advanced stays there.
+      editable: custom && readCustomEvent(def, rules, []) !== null,
       active: running.includes(def.display_name),
-      changed: mode !== eventMode(saved, def.id),
+      changed: mode !== eventMode(saved, def.id) || JSON.stringify(def) !== JSON.stringify(savedDef) || slugOf(def.id) in pendingFiles,
       yours: stockable && mode !== defaultMode,
       // An event that is off still shows when it would run.
       text: scheduleText(mode === 'off' && stockable ? stock.rules : rules, def.id, now),
     }
   })
-  $: dirty = rows.filter(r => r.changed).length
+  $: dirty = rows.filter(r => r.changed).length + removedSlugs.length
 
   function setMode(id: string, mode: EventMode) {
     rules = setEventMode(rules, stock.rules, id, mode)
@@ -124,7 +144,8 @@
     saving = true
     saveError = ''
     try {
-      await invoke('save_event_bundle', { serverExe, definitions, rules, ownedFiles: [] })
+      const ownedFiles = Object.entries(pendingFiles).map(([slug, entries]) => ({ slug, entries }))
+      await invoke('save_event_bundle', { serverExe, definitions, rules, ownedFiles, removedSlugs })
       pendingRestart = true
       sawStopped = !$serverRunning
       await load(serverExe)
@@ -133,6 +154,52 @@
     } finally {
       saving = false
     }
+  }
+
+  async function openEditor(def: EventDefinition | null) {
+    saveError = ''
+    if (!def) {
+      editing = { id: null, ev: null, entries: [] }
+      return
+    }
+    let entries = pendingFiles[slugOf(def.id)]
+    if (!entries) {
+      try {
+        entries = await invoke<EventEntry[]>('read_tuning_file', { serverExe, relativePath: def.file_path })
+      } catch (e) {
+        // A missing file is fine (the form writes a new one); anything else would lose its entries.
+        if (!String(e).startsWith('File not found')) {
+          saveError = `Can't read ${def.file_path}: ${e}`
+          return
+        }
+        entries = []
+      }
+    }
+    editing = { id: def.id, ev: readCustomEvent(def, rules, entries), entries }
+  }
+
+  function saveCustom(ev: CustomEvent) {
+    if (!editing) return
+    // Deleted ids count as taken: their files are renamed after the new ones are written.
+    const taken = new Set([...definitions, ...savedDefs].map(d => d.id).concat(removedSlugs.map(s => CUSTOM_PREFIX + s)))
+    const id = editing.id ?? CUSTOM_PREFIX + slugFor(ev.name, taken)
+    const out = putCustomEvent(definitions, rules, id, ev, editing.entries)
+    definitions = byName(out.definitions)
+    rules = out.rules
+    pendingFiles = { ...pendingFiles, [slugOf(id)]: out.entries }
+    editing = null
+  }
+
+  function deleteCustom() {
+    if (!editing?.id) return
+    const { id } = editing
+    const out = deleteCustomEvent(definitions, rules, id)
+    definitions = out.definitions
+    rules = out.rules
+    const { [slugOf(id)]: _, ...rest } = pendingFiles
+    pendingFiles = rest
+    if (savedDefs.some(d => d.id === id)) removedSlugs = [...removedSlugs, slugOf(id)]
+    editing = null
   }
 
   async function openFolder() {
@@ -179,6 +246,7 @@
       <header class="page-head">
         <h3 class="page-title">Events</h3>
         <div class="page-acts">
+          <button class="btn btn-sm btn-outline" on:click={() => openEditor(null)} disabled={!loaded}>Make your own</button>
           <span class="day-start" use:tip={`The server's day starts at ${String(-$eventTimezoneOffset).padStart(2, '0')}:00 UTC`}>
             Event days start at {dayStart} your time
           </span>
@@ -215,6 +283,8 @@
 
                   {#if row.changed}
                     <span class="event-badge changed">Changed</span>
+                  {:else if row.custom}
+                    <span class="event-badge yours">Yours</span>
                   {:else if !row.stockable}
                     <span class="event-badge">Advanced</span>
                   {:else if row.yours}
@@ -225,7 +295,17 @@
 
                   <span class="event-when">{row.text}</span>
 
-                  {#if row.stockable}
+                  {#if row.custom}
+                    <select
+                      class="field-select event-mode"
+                      aria-label="{row.def.display_name} schedule"
+                      value={row.mode === 'off' ? 'off' : 'schedule'}
+                      on:change={(e) => rules = setCustomEnabled(rules, row.def.id, e.currentTarget.value !== 'off')}
+                    >
+                      <option value="schedule">On schedule</option>
+                      <option value="off">Off</option>
+                    </select>
+                  {:else if row.stockable}
                     <select
                       class="field-select event-mode"
                       aria-label="{row.def.display_name} schedule"
@@ -239,7 +319,20 @@
                   {/if}
 
                   <span class="event-revert">
-                    {#if row.stockable && row.mode !== row.defaultMode}
+                    {#if row.custom}
+                      <button
+                        class="btn-icon"
+                        on:click={() => openEditor(row.def)}
+                        disabled={!row.editable}
+                        aria-label="Edit {row.def.display_name}"
+                        use:tip={row.editable ? 'Edit' : 'Its schedule was changed in Advanced. Edit it there.'}
+                      >
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                          <path d="M12 20h9"/>
+                          <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/>
+                        </svg>
+                      </button>
+                    {:else if row.stockable && row.mode !== row.defaultMode}
                       <button
                         class="btn-icon"
                         on:click={() => setMode(row.def.id, row.defaultMode)}
@@ -277,6 +370,17 @@
     </section>
   </div>
 </div>
+
+{#if editing && serverExe}
+  <CustomEventModal
+    event={editing.ev}
+    extraCount={editing.entries.filter(e => !(e.prototype === '' && EVENT_SLIDERS.includes(e.setting))).length}
+    {serverExe}
+    onSave={saveCustom}
+    onDelete={editing.id ? deleteCustom : null}
+    onClose={() => editing = null}
+  />
+{/if}
 
 <style>
   .events {

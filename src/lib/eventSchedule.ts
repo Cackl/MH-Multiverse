@@ -1,7 +1,7 @@
 // Which events the server runs on a given day, mirroring LiveTuningEventRule.cs in MHServerEmu.
 // Dates are server clock times: UTC shifted by the server's offset and read with getUTC* methods.
 
-import type { ScheduleRule } from './tuningMeta'
+import type { EventDefinition, ScheduleRule } from './tuningMeta'
 
 export const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
 const DAY_MS = 86_400_000
@@ -159,7 +159,7 @@ export function setEventMode(rules: ScheduleRule[], stock: ScheduleRule[], id: s
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 
-function dateRange(month: number, day: number, days: number): string {
+export function dateRange(month: number, day: number, days: number): string {
   const start = new Date(Date.UTC(2023, month - 1, day))
   // The window ends at 31 Dec, whatever its length (the server only checks this year).
   const end = new Date(Math.min(start.getTime() + (days - 1) * DAY_MS, Date.UTC(2023, 11, 31)))
@@ -185,4 +185,126 @@ export function scheduleText(rules: ScheduleRule[], id: string, now: Date): stri
     }
   }
   return parts.join('; ') || 'Not on the calendar'
+}
+
+// ── Custom events (Make your own) ────────────────────────────────────────────────
+
+export const CUSTOM_PREFIX = 'zzMultiverse_'
+const RULE_PREFIX = 'Multiverse: '
+/** The globals an event's sliders set, from the Server Rates rows of the same names. */
+export const EVENT_SLIDERS = ['eGTV_XPGain', 'eGTV_LootDropRate', 'eGTV_LootRarity', 'eGTV_LootSpecialDropRate']
+/** Monday first, for display and rule order. */
+export const WEEK = [...DAYS.slice(1), DAYS[0]]
+
+export type EventWhen =
+  | { kind: 'daily' }
+  | { kind: 'weekly'; days: string[] }
+  | { kind: 'yearly'; month: number; day: number; days: number }
+
+export interface CustomEvent {
+  name: string
+  when: EventWhen
+  /** Slider values by setting; 1 means "leave it alone" and isn't written. */
+  values: Record<string, number>
+  gift: string
+  announce: boolean
+}
+
+export interface EventEntry { prototype: string; setting: string; value: number }
+
+export function eventNameError(name: string): string {
+  const n = name.trim()
+  if (n.length < 3 || n.length > 40) return 'Use 3 to 40 characters.'
+  if (!/^[\p{L}\p{N} '-]+$/u.test(n)) return 'Use letters, digits, spaces, apostrophes and hyphens.'
+  return ''
+}
+
+/** The file and id part for a new event: its name in PascalCase ASCII, numbered if taken. */
+export function slugFor(name: string, takenIds: Set<string>): string {
+  const words = name.normalize('NFKD').replace(/[̀-ͯ']/g, '').replace(/[^A-Za-z0-9]+/g, ' ').trim().split(' ')
+  const base = (words.filter(Boolean).map(w => w[0].toUpperCase() + w.slice(1)).join('') || 'Event').slice(0, 55)
+  // Case is ignored: Windows sees DoubleXp and DoubleXP as the same file name.
+  const taken = new Set([...takenIds].map(id => id.toLowerCase()))
+  let slug = base
+  for (let n = 2; taken.has((CUSTOM_PREFIX + slug).toLowerCase()); n++) slug = `${base}${n}`
+  return slug
+}
+
+/** The longest a yearly event starting on this date can run: the server cuts it off at 31 Dec. */
+export function yearlyMaxDays(month: number, day: number): number {
+  return (Date.UTC(2023, 11, 31) - Date.UTC(2023, month - 1, day)) / DAY_MS + 1
+}
+
+function customRules(name: string, id: string, when: EventWhen, enabled: boolean): ScheduleRule[] {
+  const rule = (r: Partial<ScheduleRule>): ScheduleRule => ({
+    name: `${RULE_PREFIX}${name}`, is_enabled: enabled, rule_type: 'AlwaysOn', start_day_of_week: null,
+    start_month: null, start_day: null, duration_days: null, events: [id], ...r,
+  })
+  if (when.kind === 'daily') return [rule({})]
+  if (when.kind === 'yearly') return [rule({ rule_type: 'SpecialDate', start_month: when.month, start_day: when.day, duration_days: when.days })]
+  const days = WEEK.filter(d => when.days.includes(d))
+  return days.map(d => rule({
+    name: days.length === 1 ? `${RULE_PREFIX}${name}` : `${RULE_PREFIX}${name} (${d.slice(0, 3)})`,
+    rule_type: 'DayOfWeek', start_day_of_week: d,
+  }))
+}
+
+/** A custom event's own rules: named "Multiverse: ..." and running only that event. */
+const isOwnRule = (r: ScheduleRule, id: string) =>
+  r.name.startsWith(RULE_PREFIX) && r.name !== ALWAYS_RULE && lists(r, id) && named(r).every(x => x === id)
+
+/**
+ * The files after adding or editing a custom event. Its own rules are replaced and go after
+ * every other rule; an event that was off stays off. Its tuning file keeps entries the sliders
+ * don't cover, and a slider at 1 is left out.
+ */
+export function putCustomEvent(
+  definitions: EventDefinition[], rules: ScheduleRule[], id: string, ev: CustomEvent, entries: EventEntry[],
+): { definitions: EventDefinition[]; rules: ScheduleRule[]; entries: EventEntry[] } {
+  const slug = id.slice(CUSTOM_PREFIX.length)
+  const def: EventDefinition = {
+    id,
+    display_name: ev.name.trim(),
+    file_path: `Events/Multiverse/LiveTuningData${slug}.json`,
+    daily_gift: ev.gift.trim() || null,
+    instanced_missions: null,
+    is_hidden: ev.announce ? null : true,
+  }
+  const own = rules.filter(r => isOwnRule(r, id))
+  const enabled = own.length === 0 || own.some(r => r.is_enabled)
+  const ours = (e: EventEntry) => e.prototype === '' && EVENT_SLIDERS.includes(e.setting)
+  return {
+    definitions: [...definitions.filter(d => d.id !== id), def],
+    rules: [...rules.filter(r => !isOwnRule(r, id)), ...customRules(def.display_name, id, ev.when, enabled)],
+    entries: [
+      ...entries.filter(e => !ours(e)),
+      ...EVENT_SLIDERS.filter(s => (ev.values[s] ?? 1) !== 1).map(s => ({ prototype: '', setting: s, value: ev.values[s] })),
+    ],
+  }
+}
+
+/** The form's view of a custom event, or null when its rules were changed into something the form can't show. */
+export function readCustomEvent(def: EventDefinition, rules: ScheduleRule[], entries: EventEntry[]): CustomEvent | null {
+  const own = rules.filter(r => lists(r, def.id) && r.name !== ALWAYS_RULE)
+  if (own.length === 0 || !own.every(r => isOwnRule(r, def.id))) return null
+  let when: EventWhen | null = null
+  if (own.length === 1 && own[0].rule_type === 'AlwaysOn') when = { kind: 'daily' }
+  else if (own.every(r => r.rule_type === 'DayOfWeek' && DAYS.includes(r.start_day_of_week ?? ''))) when = { kind: 'weekly', days: own.map(r => r.start_day_of_week!) }
+  else if (own.length === 1 && own[0].rule_type === 'SpecialDate') {
+    const r = own[0]
+    if (r.start_month != null && r.start_day != null && r.duration_days != null) when = { kind: 'yearly', month: r.start_month, day: r.start_day, days: r.duration_days }
+  }
+  if (!when) return null
+  const values = Object.fromEntries(entries.filter(e => e.prototype === '' && EVENT_SLIDERS.includes(e.setting)).map(e => [e.setting, e.value]))
+  return { name: def.display_name, when, values, gift: def.daily_gift ?? '', announce: !def.is_hidden }
+}
+
+/** The files without a custom event: its definition and own rules go, and it leaves any other rule. */
+export function deleteCustomEvent(definitions: EventDefinition[], rules: ScheduleRule[], id: string) {
+  return { definitions: definitions.filter(d => d.id !== id), rules: setEventMode(rules, [], id, 'off') }
+}
+
+/** Switches a custom event's own rules on or off, keeping them. */
+export function setCustomEnabled(rules: ScheduleRule[], id: string, on: boolean): ScheduleRule[] {
+  return rules.map(r => isOwnRule(r, id) ? { ...r, is_enabled: on } : r)
 }
