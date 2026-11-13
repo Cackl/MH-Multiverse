@@ -117,7 +117,9 @@ export const overlayStatus = writable<OverlayStatus | null>(null)
 export const overlayInject = writable<{ ok: boolean; message: string } | null>(null)
 export const tuningFocusFile = writable<string | null>(null)
 export const schedulerNow = writable<Date | null>(null)
-export const eventTimezoneOffset = writable<number>(0)
+// The server's event clock is UTC + GlobalsPrototype.TimeZone, which the v52 game data sets to -10.
+// setSchedulerNow corrects it from the server log.
+export const eventTimezoneOffset = writable<number>(-10)
 
 
 let _uptimeTimer: ReturnType<typeof setInterval> | null = null

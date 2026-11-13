@@ -169,7 +169,7 @@
         <label class="field-label" for="def-filepath">Tuning file</label>
         <div class="field-control">
           <select id="def-filepath" class="field-select" bind:value={file_path}>
-            <option value="">— None —</option>
+            <option value="">None</option>
             {#each fileOptions as f}
               <option value={f.relative_path}>{f.canonical_name}</option>
             {/each}
@@ -194,23 +194,7 @@
       <div class="field-group">
         <label class="field-label" for="def-gift">Daily gift</label>
         <div class="field-control">
-          <PrototypePicker id="def-gift" bind:value={daily_gift} {serverExe} />
-        </div>
-      </div>
-
-      <!-- Is hidden -->
-      <div class="field-group">
-        <span class="field-label">Hidden</span>
-        <div class="field-control field-row">
-          <button
-            class="editor-toggle"
-            class:on={is_hidden}
-            role="switch"
-            aria-checked={is_hidden}
-            aria-label="Is Hidden"
-            on:click={() => is_hidden = !is_hidden}
-          ></button>
-          <span class="toggle-hint">{is_hidden ? 'Hidden from public schedule' : 'Visible'}</span>
+          <PrototypePicker id="def-gift" bind:value={daily_gift} {serverExe} classFilter="ItemPrototype" />
         </div>
       </div>
 
@@ -237,6 +221,7 @@
             <PrototypePicker
               bind:value={newMission}
               {serverExe}
+              classFilter="MissionPrototype"
               onSelect={m => { newMission = m.path; addMission() }}
               onEnter={addMission}
             />
@@ -246,6 +231,22 @@
               on:click={addMission}
             >Add</button>
           </div>
+        </div>
+      </div>
+
+      <!-- Is hidden -->
+      <div class="field-group field-group-center">
+        <span class="field-label">Hidden</span>
+        <div class="field-control field-row">
+          <button
+            class="editor-toggle"
+            class:on={is_hidden}
+            role="switch"
+            aria-checked={is_hidden}
+            aria-label="Is Hidden"
+            on:click={() => is_hidden = !is_hidden}
+          ></button>
+          <span class="toggle-hint">{is_hidden ? 'Left out of the "Today\'s Events" message' : 'Named in the "Today\'s Events" message'}</span>
         </div>
       </div>
 
@@ -302,6 +303,10 @@
     flex-direction: column;
     gap: 4px;
   }
+
+  /* A row with a toggle, not a text box: centre the label on it. */
+  .field-group-center { align-items: center; }
+  .field-group-center .field-label { padding-top: 0; margin-bottom: 0; }
 
   .field-row {
     flex-direction: row;

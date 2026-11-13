@@ -359,7 +359,7 @@
               on:change={() => applyCopyFrom(copyFromName)}
               disabled={copyFromLoading}
             >
-              <option value="">— blank —</option>
+              <option value="">Blank</option>
               {#each copyFromOptions as name}
                 <option value={name}>
                   {tuningDisplayName(name)}

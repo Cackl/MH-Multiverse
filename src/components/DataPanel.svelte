@@ -5,6 +5,7 @@
   import StorePanel  from './StorePanel.svelte'
   import PatchesPanel from './PatchesPanel.svelte'
   import EventsPanel from './EventsPanel.svelte';
+  import EventsSimple from './EventsSimple.svelte'
 
   const TABS: { id: DataTab; label: string }[] = [
     { id: 'events',  label: 'Events'       },
@@ -48,7 +49,11 @@
   <!-- ── Active panel ── -->
   <div class="data-content">
     {#if $activeDataTab === 'events'}
-      <EventsPanel />
+      {#if $appConfig.advanced_data}
+        <EventsPanel />
+      {:else}
+        <EventsSimple />
+      {/if}
     {:else if $activeDataTab === 'tuning'}
       {#if $appConfig.advanced_data}
         <TuningPanel />
