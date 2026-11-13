@@ -6,7 +6,10 @@ import {
   entryTitle,
   entryPrice,
   defaultLocalizedEntry,
+  removeKind,
+  stockVersion,
   type CatalogEntry,
+  type CatalogEntryWithMeta,
 } from '../../src/lib/catalogMeta'
 
 function entryWithType(name: string, additional: unknown[] = []): CatalogEntry {
@@ -63,5 +66,28 @@ describe('entryTitle / entryPrice', () => {
     entry.LocalizedEntries = [{ LanguageId: 'de_de', Description: '', Title: 'Titel', ReleaseDate: '', ItemPrice: 200 }]
     expect(entryTitle(entry)).toBe('Titel')
     expect(entryPrice(entry)).toBe(200)
+  })
+})
+
+describe('removeKind / stockVersion', () => {
+  const stock = entryWithType('Hero')
+  const changed = { ...stock, TypeModifiers: [{ Name: 'NoDisplay', Order: 5 }] }
+  const row = (from_modified: boolean, hasStock: boolean): CatalogEntryWithMeta =>
+    ({ ...changed, source_file: 'Catalog.json', from_modified, stock: hasStock ? stock : null })
+
+  it.each([
+    ['stock row', false, true, null],
+    ['changed stock entry', true, true, 'revert'],
+    ['entry only MODIFIED has', true, false, 'delete'],
+  ] as const)('%s', (_, fromModified, hasStock, kind) => {
+    expect(removeKind(row(fromModified, hasStock))).toBe(kind)
+  })
+
+  it('a reverted entry shows stock and no longer counts as modified', () => {
+    const r = stockVersion(row(true, true))
+    expect(r.TypeModifiers).toEqual([])
+    expect(r.from_modified).toBe(false)
+    expect(r.source_file).toBe('Catalog.json')
+    expect(removeKind(r)).toBeNull()
   })
 })

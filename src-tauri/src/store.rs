@@ -444,11 +444,9 @@ pub fn save_catalog_entry(
     Ok(())
 }
 
-/// Delete a catalog entry by SKU.
-///
-/// `source_file` is the base filename (e.g. `"CatalogBundle.json"`).
-/// When `from_modified` is `true` the MODIFIED file is targeted; otherwise the base
-/// file. A `.bak` snapshot of the target file is written before deletion.
+/// Delete a catalog entry's row from `{source_file stem}MODIFIED.json`, which reverts a
+/// changed stock entry or deletes one only MODIFIED has. Stock files are never written, so
+/// `from_modified = false` is refused. A `.bak` snapshot is written before deletion.
 #[tauri::command]
 pub fn delete_catalog_entry(
     server_exe: String,
@@ -456,18 +454,15 @@ pub fn delete_catalog_entry(
     source_file: String,
     from_modified: bool,
 ) -> Result<(), String> {
+    if !from_modified {
+        return Err(format!("SKU {sku_id} is a stock entry; stock files are never changed"));
+    }
     let sku: u64 = sku_id
         .parse()
         .map_err(|e| format!("Invalid SKU ID '{sku_id}': {e}"))?;
 
     let dir = mtxstore_dir(&server_exe)?;
-    let base_path = dir.join(&source_file);
-
-    let target_path = if from_modified {
-        modified_path_for(&base_path)
-    } else {
-        base_path
-    };
+    let target_path = modified_path_for(&dir.join(checked_base_name(&source_file)?));
 
     if !target_path.exists() {
         return Err(format!(

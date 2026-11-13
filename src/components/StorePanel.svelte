@@ -9,6 +9,8 @@
     buildModifiers,
     entryTitle,
     entryPrice,
+    removeKind,
+    stockVersion,
     type CatalogEntryWithMeta,
   } from '../lib/catalogMeta'
   import PanelSidebar from './PanelSidebar.svelte'
@@ -51,7 +53,8 @@
   let batchRunning  = false
   let batchError    = ''
   let batchSuccess  = ''
-  let batchDeleteConfirming = false
+  /** Which removal is waiting for Confirm. */
+  let batchConfirm: null | 'revert' | 'delete' = null
 
   // ── Derived: filter pipeline ───────────────────────────────────────────────
 
@@ -111,6 +114,10 @@
   $: allVisibleSelected  = sortedEntries.length > 0 && sortedEntries.every(e => selectedSkus.has(e.SkuId))
   $: someVisibleSelected = sortedEntries.some(e => selectedSkus.has(e.SkuId))
   $: totalSelectedCount  = selectedSkus.size
+  // Stock rows are in neither list: stock files are never written.
+  $: revertTargets = entries.filter(e => selectedSkus.has(e.SkuId) && removeKind(e) === 'revert')
+  $: deleteTargets = entries.filter(e => selectedSkus.has(e.SkuId) && removeKind(e) === 'delete')
+  $: confirmCount  = (batchConfirm === 'revert' ? revertTargets : deleteTargets).length
 
   // Imperatively set indeterminate; Svelte has no binding for this property.
   $: if (headerCheckEl) {
@@ -167,7 +174,7 @@
     batchPriceStr = ''
     batchError = ''
     batchSuccess = ''
-    batchDeleteConfirming = false
+    batchConfirm = null
     batchRunning = false
   }
 
@@ -175,7 +182,7 @@
     batchMode = mode
     batchError = ''
     batchSuccess = ''
-    batchDeleteConfirming = false
+    batchConfirm = null
     // Default the modifier select to the first available option when opening
     // an add/remove modifier operation so the Apply button is immediately usable.
     if ((mode === 'add-mod' || mode === 'remove-mod') && !batchModifier) {
@@ -318,37 +325,31 @@
     }
   }
 
-  // ── Batch: delete ──────────────────────────────────────────────────────────
+  // ── Batch: revert to stock / delete ────────────────────────────────────────
 
-  async function confirmBatchDelete() {
+  // Both drop MODIFIED rows, in one write: a reverted entry falls back to stock, a deleted one is gone.
+  async function confirmBatchRemove() {
+    const kind = batchConfirm
+    const targets = kind === 'revert' ? revertTargets : deleteTargets
     batchRunning = true
     batchError   = ''
     batchSuccess = ''
-    // Snapshot the targets before the loop since handleDeleted mutates entries.
-    const targets = entries.filter(e => selectedSkus.has(e.SkuId))
-    let deleted = 0
-    const failed: string[] = []
     try {
-      for (const orig of targets) {
-        try {
-          await invoke('delete_catalog_entry', {
-            serverExe:   $appConfig.server_exe,
-            skuId:       orig.SkuId,
-            sourceFile:  orig.source_file,
-            fromModified: orig.from_modified,
-          })
-          handleDeleted(orig.SkuId)
-          deleted++
-        } catch {
-          failed.push(orig.SkuId)
-        }
+      await invoke('apply_store_changes', {
+        serverExe: $appConfig.server_exe,
+        upserts:   [],
+        removes:   targets.map(e => ({ sku_id: e.SkuId, source_file: e.source_file })),
+        state:     null,
+      })
+      for (const e of targets) {
+        if (kind === 'revert') handleSaved(stockVersion(e))
+        else handleDeleted(e.SkuId)
       }
-      batchDeleteConfirming = false
-      if (failed.length > 0) {
-        batchError = `Deleted ${deleted}, failed ${failed.length} (SKUs: ${failed.join(', ')}).`
-      } else {
-        batchSuccess = `Deleted ${deleted} entr${deleted !== 1 ? 'ies' : 'y'}.`
-      }
+      const n = `${targets.length} entr${targets.length !== 1 ? 'ies' : 'y'}`
+      batchSuccess = kind === 'revert' ? `Reverted ${n} to stock.` : `Deleted ${n}.`
+      batchConfirm = null
+    } catch (e) {
+      batchError = String(e)
     } finally {
       batchRunning = false
     }
@@ -535,10 +536,13 @@
       {#if totalSelectedCount > 0}
         <div class="batch-bar">
 
-          {#if batchDeleteConfirming}
+          {#if batchConfirm}
             <span class="batch-confirm-msg">
-              Delete <strong>{totalSelectedCount}</strong> entr{totalSelectedCount !== 1 ? 'ies' : 'y'}?
-              This cannot be undone.
+              {#if batchConfirm === 'revert'}
+                Revert <strong>{confirmCount}</strong> entr{confirmCount !== 1 ? 'ies' : 'y'} to stock? Your changes to them are removed.
+              {:else}
+                Delete <strong>{confirmCount}</strong> entr{confirmCount !== 1 ? 'ies' : 'y'}? This cannot be undone.
+              {/if}
             </span>
             <div class="batch-actions" style="margin-left: auto;">
               {#if batchError}
@@ -546,14 +550,16 @@
               {/if}
               <button
                 class="btn btn-sm btn-outline"
-                on:click={() => batchDeleteConfirming = false}
+                on:click={() => batchConfirm = null}
                 disabled={batchRunning}
               >Cancel</button>
               <button
-                class="btn btn-sm btn-red"
-                on:click={confirmBatchDelete}
-                disabled={batchRunning}
-              >{batchRunning ? 'Deleting...' : 'Confirm Delete'}</button>
+                class="btn btn-sm {batchConfirm === 'revert' ? 'btn-accent' : 'btn-red'}"
+                on:click={confirmBatchRemove}
+                disabled={batchRunning || confirmCount === 0}
+              >{batchConfirm === 'revert'
+                ? (batchRunning ? 'Reverting...' : 'Confirm Revert')
+                : (batchRunning ? 'Deleting...' : 'Confirm Delete')}</button>
             </div>
 
           {:else if batchMode === 'price'}
@@ -619,10 +625,20 @@
               <button class="btn btn-sm btn-outline" on:click={() => setBatchMode('price')}>Set Price</button>
               <button class="btn btn-sm btn-outline" on:click={() => setBatchMode('add-mod')}>Add Modifier</button>
               <button class="btn btn-sm btn-outline" on:click={() => setBatchMode('remove-mod')}>Remove Modifier</button>
-              <button
-                class="btn btn-sm btn-red"
-                on:click={() => { batchDeleteConfirming = true; batchError = ''; batchSuccess = '' }}
-              >Delete</button>
+              {#if revertTargets.length}
+                <button
+                  class="btn btn-sm btn-outline"
+                  on:click={() => { batchConfirm = 'revert'; batchError = ''; batchSuccess = '' }}
+                  use:tip={'Remove your changes from the selected stock items'}
+                >Revert to stock</button>
+              {/if}
+              {#if deleteTargets.length}
+                <button
+                  class="btn btn-sm btn-red"
+                  on:click={() => { batchConfirm = 'delete'; batchError = ''; batchSuccess = '' }}
+                  use:tip={'Delete the selected items you added. Stock items are skipped.'}
+                >Delete</button>
+              {/if}
             </div>
             {#if batchSuccess}
               <span class="batch-feedback ok">{batchSuccess}</span>

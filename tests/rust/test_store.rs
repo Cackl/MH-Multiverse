@@ -128,6 +128,29 @@ fn delete_removes_from_modified() {
 }
 
 #[test]
+fn delete_refuses_stock_rows_and_leaves_every_file_alone() {
+    let (_tmp, server_exe) = setup();
+    let dir = mtxstore_dir(&server_exe).unwrap();
+    let before = |f: &str| fs::read_to_string(dir.join(f)).unwrap();
+    let (base, modified) = (before("CatalogBundle.json"), before("CatalogBundleMODIFIED.json"));
+
+    // 1002 exists only in the base file; 1001 is in both.
+    for sku in ["1002", "1001"] {
+        let err = delete_catalog_entry(server_exe.clone(), sku.into(), "CatalogBundle.json".into(), false).unwrap_err();
+        assert!(err.contains("stock"), "{err}");
+    }
+    // A path is never a catalog file name, even when the file it points at exists.
+    let outside = dir.parent().unwrap().join("CatalogBundleMODIFIED.json");
+    fs::write(&outside, &modified).unwrap();
+    delete_catalog_entry(server_exe, "1001".into(), "../CatalogBundle.json".into(), true).unwrap_err();
+    assert_eq!(fs::read_to_string(&outside).unwrap(), modified);
+
+    assert_eq!(before("CatalogBundle.json"), base);
+    assert_eq!(before("CatalogBundleMODIFIED.json"), modified);
+    assert!(!dir.join("CatalogBundle.json.bak").exists());
+}
+
+#[test]
 fn delete_missing_sku_errors() {
     let (_tmp, server_exe) = setup();
     let err = delete_catalog_entry(server_exe, "9999".to_string(), "CatalogBundle.json".to_string(), true).unwrap_err();

@@ -236,3 +236,17 @@ export function entryPrice(entry: CatalogEntry): number {
     entry.LocalizedEntries[0]
   return loc?.ItemPrice ?? 0
 }
+
+/**
+ * What removing an entry's MODIFIED row does: 'revert' for a stock entry you changed,
+ * 'delete' for an entry only MODIFIED has, null for a stock row (stock files are never written).
+ */
+export function removeKind(e: CatalogEntryWithMeta): 'revert' | 'delete' | null {
+  if (!e.from_modified) return null
+  return e.stock ? 'revert' : 'delete'
+}
+
+/** The entry as it shows once its MODIFIED row is gone. Only for removeKind 'revert'. */
+export function stockVersion(e: CatalogEntryWithMeta): CatalogEntryWithMeta {
+  return { ...e, ...e.stock!, from_modified: false }
+}

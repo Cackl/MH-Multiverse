@@ -9,6 +9,8 @@
     buildModifiers,
     defaultLocalizedEntry,
     inferOfferType,
+    removeKind,
+    stockVersion,
     ITEM_CATEGORIES,
     type ItemCategory,
     type OfferType,
@@ -512,9 +514,11 @@
   let deleteConfirming = false
   let deleting         = false
   let deleteError      = ''
+  // Both drop the MODIFIED row; a stock row has nothing to drop.
+  $: removal = entry ? removeKind(entry) : null
 
   async function confirmDelete() {
-    if (!entry) return
+    if (!entry || !removal) return
     deleting     = true
     deleteError  = ''
     try {
@@ -522,9 +526,10 @@
         serverExe,
         skuId:        entry.SkuId,
         sourceFile:   entry.source_file,
-        fromModified: entry.from_modified,
+        fromModified: true,
       })
-      onDeleted(entry.SkuId)
+      if (removal === 'revert') onSaved(stockVersion(entry))
+      else onDeleted(entry.SkuId)
       onClose()
     } catch (e) {
       deleteError      = String(e)
@@ -1234,14 +1239,22 @@
         </div>
 
         <div class="footer-actions">
-          {#if !isNew}
+          {#if removal}
             {#if deleteConfirming}
               <button class="btn btn-sm btn-outline" on:click={() => deleteConfirming = false}>Cancel</button>
               <button
-                class="btn btn-sm btn-red"
+                class="btn btn-sm {removal === 'revert' ? 'btn-accent' : 'btn-red'}"
                 on:click={confirmDelete}
                 disabled={deleting}
-              >{deleting ? 'Deleting…' : 'Confirm Delete'}</button>
+              >{removal === 'revert'
+                ? (deleting ? 'Reverting…' : 'Confirm Revert')
+                : (deleting ? 'Deleting…' : 'Confirm Delete')}</button>
+            {:else if removal === 'revert'}
+              <button
+                class="btn btn-sm btn-outline"
+                on:click={() => deleteConfirming = true}
+                use:tip={'Remove your changes and go back to the stock version'}
+              >Revert to stock</button>
             {:else}
               <button
                 class="btn btn-sm btn-red"
