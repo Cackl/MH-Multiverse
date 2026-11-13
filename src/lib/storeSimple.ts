@@ -80,8 +80,12 @@ export interface Sale {
 }
 export interface StoreState { version: 1; sale?: Sale }
 
-/** Percent off, rounded to the nearest 5 G like stock prices, never below MIN_PRICE. */
+/**
+ * Percent off, rounded to the nearest 5 G like stock prices. 100% makes it free (the server
+ * accepts 0 G); any smaller discount stays at MIN_PRICE or above, so it never rounds to free.
+ */
 export function salePrice(before: number, percent: number): number {
+  if (percent >= 100) return 0
   return Math.max(MIN_PRICE, Math.round(before * (100 - percent) / 100 / 5) * 5)
 }
 

@@ -6,10 +6,11 @@
   import { appConfig, serverRunning } from '../lib/store'
   import { tip } from '../lib/tooltip'
   import PanelSidebar from './PanelSidebar.svelte'
+  import SaleModal from './SaleModal.svelte'
   import { entryTitle, entryPrice, type CatalogEntryWithMeta } from '../lib/catalogMeta'
   import {
     STORE_SECTIONS, MIN_PRICE, MAX_PRICE, isHidden, setHidden, setPrice, sameEntry, planWrites, reverted,
-    displayTitle, catalogReloadResult,
+    displayTitle, catalogReloadResult, startSale, endSale, type StoreState, type StoreWrites,
   } from '../lib/storeSimple'
 
   type View = string // a section's Type name, 'all' or 'yours'
@@ -26,6 +27,9 @@
   let folderError = ''
   let view: View = 'all'
   let query = ''
+  let state: StoreState = { version: 1 }
+  let saleOpen = false
+  let saleNote = ''
 
   $: serverExe = $appConfig.server_exe
   $: if (serverExe) load(serverExe)
@@ -33,7 +37,12 @@
   async function load(exe: string) {
     loadError = ''
     try {
-      saved = await invoke<CatalogEntryWithMeta[]>('load_catalog_entries', { serverExe: exe })
+      const [entries, stored] = await Promise.all([
+        invoke<CatalogEntryWithMeta[]>('load_catalog_entries', { serverExe: exe }),
+        invoke<StoreState | null>('load_store_state', { serverExe: exe }),
+      ])
+      saved = entries
+      state = stored ?? { version: 1 }
       edits = {}
       loaded = true
     } catch (e) {
@@ -78,22 +87,48 @@
     }
   }
 
-  async function save() {
-    if (!serverExe) return
+  /** Writes catalog changes, plus the sale record when given, then reloads the list. */
+  async function write({ upserts, removes }: StoreWrites, nextState: StoreState | null) {
+    if (!serverExe) return false
     saving = true
     saveError = ''
     try {
-      const { upserts, removes } = planWrites(dirty.map(r => r.now))
-      await invoke('apply_store_changes', { serverExe, upserts, removes, state: null })
+      await invoke('apply_store_changes', { serverExe, upserts, removes, state: nextState })
       stopWatching()
       reloadError = ''
       await load(serverExe)
+      return true
     } catch (e) {
       saveError = String(e)
+      return false
     } finally {
       saving = false
     }
   }
+
+  async function save() {
+    saleNote = ''
+    await write(planWrites(dirty.map(r => r.now)), null)
+  }
+
+  // A sale is written at once, together with its record, so End sale always knows what it changed.
+  async function beginSale(percent: number, sections: string[]) {
+    saleOpen = false
+    saleNote = ''
+    const { edited, sale } = startSale(saved, percent, sections, new Date().toISOString())
+    await write(planWrites(edited), { ...state, sale })
+  }
+
+  async function finishSale() {
+    if (!state.sale) return
+    const { edited, kept } = endSale(saved, state.sale)
+    const { sale: _, ...rest } = state
+    if (await write(planWrites(edited), rest) && kept.length) {
+      saleNote = `${kept.length} ${kept.length === 1 ? 'price was' : 'prices were'} changed during the sale and kept.`
+    }
+  }
+
+  $: onSale = (r: typeof rows[number]) => state.sale?.prices[r.saved.SkuId]?.after === entryPrice(r.saved)
 
   async function openFolder() {
     folderError = ''
@@ -188,6 +223,14 @@
             </svg>
             <input type="text" class="search-input" placeholder="Search names" aria-label="Search names" bind:value={query}>
           </div>
+          {#if !state.sale}
+            <button
+              class="btn btn-sm btn-outline"
+              on:click={() => saleOpen = true}
+              disabled={!loaded || saving || dirty.length > 0}
+              use:tip={dirty.length ? 'Save or revert your changes first' : 'Lower prices by a percentage'}
+            >Start sale</button>
+          {/if}
           <button
             class="btn btn-sm btn-outline"
             on:click={reload}
@@ -211,11 +254,25 @@
         {:else if loaded && shown.length === 0}
           <p class="store-msg">{view === 'yours' && !needle ? "You haven't changed anything in the store." : 'Nothing matches.'}</p>
         {:else if loaded}
+          {#if state.sale}
+            <div class="sale-line">
+              <span class="sale-now">On sale: {state.sale.label}</span>
+              <button
+                class="btn btn-sm btn-outline"
+                on:click={finishSale}
+                disabled={saving || dirty.length > 0}
+                use:tip={dirty.length ? 'Save or revert your changes first' : 'Put the sale prices back'}
+              >End sale</button>
+            </div>
+          {/if}
           {#each shown as r (r.saved.SkuId)}
             {@const hidden = isHidden(r.now)}
             {@const canRevert = r.changed || (r.yours && !!r.saved.stock)}
             <div class="item-row" class:off={hidden}>
-              <span class="item-name">{r.title}</span>
+              <span class="item-name">
+                <span class="item-title">{r.title}</span>
+                {#if onSale(r)}<span class="tag" use:tip={`Was ${state.sale?.prices[r.saved.SkuId].before.toLocaleString()} G`}>Sale</span>{/if}
+              </span>
               {#if r.changed}
                 <span class="item-badge changed">Changed</span>
               {:else if r.yours}
@@ -279,7 +336,8 @@
         <div class="store-status">
           {#if saveError}<span class="error">{saveError}</span>
           {:else if folderError}<span class="error">{folderError}</span>
-          {:else if dirty.length}<span class="dirty-badge">{dirty.length} unsaved {dirty.length === 1 ? 'change' : 'changes'}</span>{/if}
+          {:else if dirty.length}<span class="dirty-badge">{dirty.length} unsaved {dirty.length === 1 ? 'change' : 'changes'}</span>
+          {:else if saleNote}<span>{saleNote}</span>{/if}
         </div>
         <button
           class="btn btn-sm btn-accent"
@@ -291,6 +349,14 @@
     </section>
   </div>
 </div>
+
+{#if saleOpen}
+  <SaleModal
+    countFor={(percent, sections) => startSale(saved, percent, sections, '').edited.length}
+    onStart={beginSale}
+    onClose={() => saleOpen = false}
+  />
+{/if}
 
 <style>
   .store {
@@ -333,8 +399,23 @@
     padding: 8px 0;
     border-bottom: 1px solid var(--border);
   }
+  .sale-line {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--border);
+    font-size: 12px;
+  }
+  .sale-now { color: var(--accent); }
   .item-name {
     grid-column: 1;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    min-width: 0;
+  }
+  .item-title {
     min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -400,6 +481,6 @@
     display: flex;
     justify-content: center;
   }
-  .item-row.off .item-name,
+  .item-row.off .item-title,
   .item-row.off .item-price { opacity: var(--dimmed-opacity); }
 </style>
