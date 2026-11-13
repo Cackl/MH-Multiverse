@@ -605,7 +605,7 @@
                       <span class="status-dot dot-{isActive ? 'active' : 'disabled'}"></span>
                       <div class="def-info">
                         <span class="def-name">{def.display_name}</span>
-                        <span class="def-path">{def.file_path || '—'}</span>
+                        <span class="def-path">{def.file_path || 'No tuning file'}</span>
                       </div>
                       {#if def.is_hidden}
                         <span class="def-badge">Hidden</span>
@@ -758,14 +758,14 @@
   /* ── Status dots ── */
 
   .status-dot {
-    width: 7px;
-    height: 7px;
+    width: 8px;
+    height: 8px;
     border-radius: 50%;
+    border: 1px solid var(--border-mid);
     flex-shrink: 0;
   }
-  .dot-active    { background: var(--green-bright); box-shadow: 0 0 5px var(--green-bright); }
-  .dot-scheduled { background: var(--amber-bright); }
-  .dot-disabled  { background: var(--border-lit); }
+  .dot-active    { border-color: var(--accent-bright); background: var(--accent-bright); box-shadow: 0 0 0 3px var(--accent-glow); }
+  .dot-scheduled { border-color: var(--accent); }
 
   /* ── Override section ── */
 

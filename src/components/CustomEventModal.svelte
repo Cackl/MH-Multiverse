@@ -172,7 +172,7 @@
         </div>
       </div>
 
-      <div class="field-group">
+      <div class="field-group field-group-center">
         <span class="field-label">Announce</span>
         <div class="field-control field-inline">
           <div class="toggle-switch" class:on={announce} role="switch" aria-checked={announce} aria-label="Announce to players" tabindex="0"
@@ -224,6 +224,9 @@
     min-width: 0;
   }
   .field-inline { flex-direction: row; align-items: center; gap: 10px; }
+  /* A row with a toggle, not a text box: centre the label on it. */
+  .field-group-center { align-items: center; }
+  .field-group-center .field-label { padding-top: 0; margin-bottom: 0; }
   .field-input {
     background: var(--bg-0);
     border: 1px solid var(--border-mid);

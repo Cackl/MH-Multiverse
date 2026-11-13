@@ -319,7 +319,7 @@
             bind:value={addEventId}
             disabled={saving}
           >
-            <option value="">— Select event —</option>
+            <option value="">Select an event</option>
             {#each availableToAdd as def}
               <option value={def.id}>{def.display_name}</option>
             {/each}
@@ -567,20 +567,13 @@
   }
 
   .status-dot {
-    width: 7px;
-    height: 7px;
+    width: 8px;
+    height: 8px;
     border-radius: 50%;
+    border: 1px solid var(--border-mid);
     flex-shrink: 0;
   }
-
-  .dot-active {
-    background: var(--green-bright);
-    box-shadow: 0 0 5px var(--green-bright);
-  }
-
-  .dot-disabled {
-    background: var(--border-lit);
-  }
+  .dot-active    { border-color: var(--accent-bright); background: var(--accent-bright); box-shadow: 0 0 0 3px var(--accent-glow); }
 
   .move-btn {
     width: 22px;
