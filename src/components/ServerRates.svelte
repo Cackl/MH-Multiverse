@@ -257,7 +257,7 @@
                     ></div>
                     <span class="rate-onoff">{value !== 0 ? 'On' : 'Off'}</span>
                   {:else}
-                    <span class="rate-track" style="--stock:{pct(row, state.below)}">
+                    <span class="range-track" style="--mark:{pct(row, state.below)}">
                       <input
                         type="range"
                         aria-label={row.label}
@@ -425,52 +425,6 @@
   .rate-row.locked .rate-name,
   .rate-row.locked .rate-control { opacity: var(--dimmed-opacity); }
   .rate-onoff { font-size: 12px; color: var(--text-1); }
-
-  /* Slider with a mark at the value it has without this form. */
-  .rate-track {
-    position: relative;
-    flex: 1;
-    min-width: 80px;
-    height: 22px;
-    display: flex;
-    align-items: center;
-  }
-  .rate-track::before {
-    content: '';
-    position: absolute;
-    left: calc(7px + (100% - 14px) * var(--stock) / 100);
-    top: 4px;
-    bottom: 4px;
-    width: 2px;
-    margin-left: -1px;
-    border-radius: 1px;
-    background: var(--text-3);
-    pointer-events: none;
-  }
-  .rate-track input {
-    position: relative;
-    z-index: 1;
-    width: 100%;
-    margin: 0;
-    height: 4px;
-    border-radius: 2px;
-    -webkit-appearance: none;
-    appearance: none;
-    background: linear-gradient(90deg, var(--accent-dim) var(--fill), var(--bg-4) var(--fill));
-    cursor: pointer;
-  }
-  .rate-track input::-webkit-slider-thumb {
-    -webkit-appearance: none;
-    appearance: none;
-    width: 14px;
-    height: 14px;
-    border-radius: 50%;
-    background: var(--accent-bright);
-    border: 2px solid var(--bg-1);
-    box-shadow: 0 0 0 1px var(--accent-dim);
-  }
-  .rate-track input:disabled { cursor: not-allowed; }
-  .rate-track input:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; }
 
   .rate-box {
     display: inline-flex;
