@@ -150,6 +150,9 @@ pub struct CatalogEntryWithMeta {
     pub source_file: String,
     /// `true` when this entry's effective version came from the `*MODIFIED.json` sibling.
     pub from_modified: bool,
+    /// What the base files alone give for this SKU (the last base file wins), or `None` for
+    /// an entry that only exists in a `*MODIFIED.json` file.
+    pub stock: Option<CatalogEntry>,
 }
 
 // ── Disk ↔ view conversions ───────────────────────────────────────────────────
@@ -340,12 +343,36 @@ pub fn list_catalog_files(server_exe: String) -> Result<Vec<String>, String> {
     })
 }
 
+/// Every `Catalog*.json` file name (base and MODIFIED) in the order the server loads them:
+/// one list sorted case-insensitively, so `CatalogMODIFIED.json` loads before
+/// `CatalogRestoredHeroes.json`.
+fn catalog_files_in_load_order(dir: &Path) -> Result<Vec<String>, String> {
+    let mut names = Vec::new();
+    for entry in fs::read_dir(dir).map_err(|e| format!("Cannot read MTXStore directory: {e}"))? {
+        let name = entry.map_err(|e| e.to_string())?.file_name().to_string_lossy().to_string();
+        if name.starts_with("Catalog") && name.ends_with(".json") {
+            names.push(name);
+        }
+    }
+    // ponytail: approximates the server's culture-sensitive sort; differs only for exotic names.
+    names.sort_by_key(|n| (n.to_lowercase(), n.clone()));
+    Ok(names)
+}
+
+/// `CatalogFooMODIFIED.json` -> `Some("CatalogFoo.json")`; `None` for a base file.
+fn base_of_modified(name: &str) -> Option<String> {
+    let stem = name.strip_suffix(".json")?;
+    stem.to_ascii_uppercase()
+        .ends_with("MODIFIED")
+        .then(|| format!("{}.json", &stem[..stem.len() - "MODIFIED".len()]))
+}
+
 /// Load all catalog entries from the MTXStore directory.
 ///
-/// For each base `Catalog*.json` the corresponding `*MODIFIED.json` sibling is also
-/// read. MODIFIED entries override base entries with the same `SkuId`. Each returned
-/// entry carries `source_file` (the base filename) and `from_modified` provenance so
-/// the frontend can route save/delete operations correctly.
+/// Reads every `Catalog*.json` in the server's load order; a later file replaces an earlier
+/// entry with the same `SkuId`, as on the server. Each entry carries `source_file` (the base
+/// filename of the file it came from, so a save lands in the MODIFIED file that wins),
+/// `from_modified`, and `stock`, the entry the base files alone would give.
 #[tauri::command]
 pub fn load_catalog_entries(server_exe: String) -> Result<Vec<CatalogEntryWithMeta>, String> {
     let dir = mtxstore_dir(&server_exe)?;
@@ -353,42 +380,34 @@ pub fn load_catalog_entries(server_exe: String) -> Result<Vec<CatalogEntryWithMe
         return Ok(vec![]);
     }
 
-    let base_files = base_catalog_files(&dir)?;
     let mut result: Vec<CatalogEntryWithMeta> = Vec::new();
     let mut sku_index: HashMap<u64, usize> = HashMap::new();
+    let mut stock: HashMap<u64, CatalogEntry> = HashMap::new();
 
-    let mut upsert = |entry: CatalogEntryDisk, base_name: &str, from_modified: bool| {
-        let sku = entry.sku_id;
-        let meta = CatalogEntryWithMeta {
-            entry: disk_to_view(entry),
-            source_file: base_name.to_string(),
-            from_modified,
-        };
-        if let Some(&idx) = sku_index.get(&sku) {
-            result[idx] = meta;
-        } else {
-            sku_index.insert(sku, result.len());
-            result.push(meta);
-        }
-    };
-
-    for base_path in &base_files {
-        let base_name = base_path
-            .file_name()
-            .unwrap_or_default()
-            .to_string_lossy()
-            .to_string();
-
-        for entry in load_disk_entries(base_path)? {
-            upsert(entry, &base_name, false);
-        }
-
-        let modified = modified_path_for(base_path);
-        for entry in load_disk_entries(&modified)? {
-            upsert(entry, &base_name, true);
+    for name in catalog_files_in_load_order(&dir)? {
+        let modified_base = base_of_modified(&name);
+        let from_modified = modified_base.is_some();
+        let source_file = modified_base.unwrap_or_else(|| name.clone());
+        for entry in load_disk_entries(&dir.join(&name))? {
+            let sku = entry.sku_id;
+            let view = disk_to_view(entry);
+            if !from_modified {
+                stock.insert(sku, view.clone());
+            }
+            let meta = CatalogEntryWithMeta { entry: view, source_file: source_file.clone(), from_modified, stock: None };
+            match sku_index.get(&sku) {
+                Some(&idx) => result[idx] = meta,
+                None => {
+                    sku_index.insert(sku, result.len());
+                    result.push(meta);
+                }
+            }
         }
     }
 
+    for (sku, &idx) in &sku_index {
+        result[idx].stock = stock.remove(sku);
+    }
     Ok(result)
 }
 

@@ -488,7 +488,7 @@
       const built  = buildEntry()
       const target = isNew ? targetFile : entry!.source_file
       await invoke('save_catalog_entry', { serverExe, entry: built, targetFile: target })
-      const meta: CatalogEntryWithMeta = { ...built, source_file: target, from_modified: true }
+      const meta: CatalogEntryWithMeta = { ...built, source_file: target, from_modified: true, stock: entry?.stock ?? null }
       initialStateSerialized = currentStateSerialized
       saveSuccess = true
       setTimeout(() => (saveSuccess = false), 3000)
@@ -623,7 +623,7 @@
       const target = entry!.source_file
       await invoke('save_catalog_entry', { serverExe, entry: built, targetFile: target })
       initialStateSerialized = currentStateSerialized
-      onSaved({ ...built, source_file: target, from_modified: true })
+      onSaved({ ...built, source_file: target, from_modified: true, stock: entry?.stock ?? null })
 
       // Generate and save thumbnail.
       const pngBase64 = await generateThumbnailBase64()

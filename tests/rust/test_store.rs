@@ -48,6 +48,50 @@ fn load_merges_base_and_modified() {
     assert!(e1003.from_modified);
 }
 
+fn write_entries(dir: &std::path::Path, file: &str, entries: &[(&str, i64)]) {
+    let list: Vec<CatalogEntryDisk> = entries
+        .iter()
+        .map(|(sku, price)| {
+            let mut e = sample_entry(sku);
+            e.localized_entries[0].item_price = *price;
+            view_to_disk(e).unwrap()
+        })
+        .collect();
+    fs::write(dir.join(file), serde_json::to_string(&list).unwrap()).unwrap();
+}
+
+#[test]
+fn load_follows_server_file_order_and_reports_stock() {
+    let (_tmp, server_exe) = empty_mtxstore();
+    let dir = mtxstore_dir(&server_exe).unwrap();
+    // Server order: Catalog, CatalogMODIFIED, CatalogRestoredHeroes, CatalogRestoredHeroesMODIFIED.
+    write_entries(&dir, "Catalog.json", &[("1", 100), ("2", 200)]);
+    write_entries(&dir, "CatalogMODIFIED.json", &[("1", 110), ("2", 210), ("9", 900)]);
+    write_entries(&dir, "CatalogRestoredHeroes.json", &[("2", 250), ("3", 300)]);
+    write_entries(&dir, "CatalogRestoredHeroesMODIFIED.json", &[("3", 330)]);
+
+    let entries = load_catalog_entries(server_exe).unwrap();
+    let get = |sku: &str| entries.iter().find(|e| e.entry.sku_id == sku).unwrap();
+    let price = |e: &CatalogEntry| e.localized_entries[0].item_price;
+
+    let e1 = get("1");
+    assert_eq!((price(&e1.entry), e1.source_file.as_str(), e1.from_modified), (110, "Catalog.json", true));
+    assert_eq!(price(e1.stock.as_ref().unwrap()), 100);
+
+    // CatalogRestoredHeroes.json loads after CatalogMODIFIED.json, so its 250 wins.
+    let e2 = get("2");
+    assert_eq!((price(&e2.entry), e2.source_file.as_str(), e2.from_modified), (250, "CatalogRestoredHeroes.json", false));
+    assert_eq!(price(e2.stock.as_ref().unwrap()), 250);
+
+    let e3 = get("3");
+    assert_eq!((price(&e3.entry), e3.source_file.as_str(), e3.from_modified), (330, "CatalogRestoredHeroes.json", true));
+    assert_eq!(price(e3.stock.as_ref().unwrap()), 300);
+
+    let e9 = get("9");
+    assert!(e9.from_modified && e9.stock.is_none());
+    assert_eq!(entries.len(), 4);
+}
+
 #[test]
 fn save_creates_modified_file() {
     let (_tmp, server_exe) = empty_mtxstore();

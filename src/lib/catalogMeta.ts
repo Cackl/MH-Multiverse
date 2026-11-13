@@ -58,6 +58,8 @@ export interface CatalogEntryWithMeta extends CatalogEntry {
   source_file: string
   /** true when the effective entry came from the *MODIFIED.json sibling. */
   from_modified: boolean
+  /** What the base files alone give for this SKU; null when it only exists in a MODIFIED file. */
+  stock: CatalogEntry | null
 }
 
 // ─── Item types ───────────────────────────────────────────────────────────────
