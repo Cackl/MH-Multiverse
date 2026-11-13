@@ -1140,6 +1140,7 @@
 
   /* ── Catalog table ── */
   .catalog-table {
+    align-self: flex-start; /* a few rows keep their height instead of filling the pane */
     width: 100%;
     border-collapse: collapse;
     table-layout: fixed;
