@@ -998,6 +998,7 @@
               {/if}
             </div>
             {#if formGuidItems.length}
+              <div class="items-frame">
               <table class="items-table">
                 <thead>
                   <tr>
@@ -1031,6 +1032,7 @@
                   {/each}
                 </tbody>
               </table>
+              </div>
             {:else}
               <div class="empty-note">No items added yet.</div>
             {/if}
@@ -1049,6 +1051,7 @@
                 {/if}
               </div>
               {#if formAdditionalGuidItems.length}
+                <div class="items-frame">
                 <table class="items-table">
                   <thead>
                     <tr>
@@ -1082,6 +1085,7 @@
                     {/each}
                   </tbody>
                 </table>
+                </div>
               {:else}
                 <div class="empty-note">No bonus items added yet.</div>
               {/if}
@@ -1699,8 +1703,9 @@
     background: var(--bg-0);
     border: 1px solid var(--border-mid);
     color: var(--text-0);
-    font-family: var(--font-mono);
+    font-family: var(--font-body);
     font-size: 12px;
+    font-variant-numeric: tabular-nums;
     padding: 6px 8px;
     border-radius: var(--radius-sm);
     outline: none;
@@ -1774,33 +1779,47 @@
   }
 
   /* ── Items table (shared by both item lists) ── */
-  .items-table {
-    width: 100%;
-    border-collapse: collapse;
-    font-size: 12px;
+  /* The frame carries the border and rounded corners; a table can't clip its own. */
+  .items-frame {
     border: 1px solid var(--border);
     border-radius: var(--radius-sm);
     overflow: hidden;
     margin-bottom: 4px;
   }
+  .items-table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    font-size: 12px;
+  }
 
   .items-table thead th {
+    height: 30px;
     font-family: var(--font-head);
     font-size: var(--fs-min);
     font-weight: 600;
     letter-spacing: 0.12em;
     text-transform: uppercase;
     color: var(--text-3);
-    padding: 5px 10px;
+    padding: 0 10px;
     border-bottom: 1px solid var(--border);
     text-align: left;
-    background: var(--bg-2);
+    background: var(--bg-1);
   }
 
-  .items-table tbody tr { border-bottom: 1px solid var(--border); transition: background 0.08s; }
-  .items-table tbody tr:last-child { border-bottom: none; }
-  .items-table tbody tr:hover { background: var(--bg-2); }
-  .items-table td { padding: 5px 10px; vertical-align: middle; }
+  .items-table td {
+    height: 34px;
+    padding: 0 10px;
+    vertical-align: middle;
+    border-bottom: 1px solid var(--border);
+    transition: background 0.08s;
+  }
+  .items-table tbody tr:last-child td { border-bottom: none; }
+  .items-table tbody tr:hover td { background: var(--bg-2); }
+  .items-table th:first-child,
+  .items-table td:first-child { padding-left: 12px; }
+  .items-table th:last-child,
+  .items-table td:last-child { padding-right: 8px; }
 
   .col-name { width: auto; }
   .col-qty  { width: 72px; }
