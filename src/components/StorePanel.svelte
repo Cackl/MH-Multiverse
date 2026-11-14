@@ -102,6 +102,9 @@
     modified: entries.filter(e => e.source_file === f && e.from_modified).length,
   }))
 
+  /** "CatalogBundle.json" shows as "Bundle"; the full name is on the tooltip. */
+  const shortName = (f: string) => f.replace(/^Catalog/, '').replace(/\.json$/, '') || f
+
   // Types present within the current file filter (ignoring type filter itself
   // so the dropdown doesn't collapse while a type is selected)
   $: activeTypes = typeNames().filter(t => {
@@ -472,7 +475,10 @@
     </PanelSidebar>
 
     <!-- ── Content pane ── -->
-    <div class="content-pane">
+    <section class="data-main">
+      <header class="page-head">
+        <h3 class="page-title">{fileFilter ? shortName(fileFilter) : 'All files'}</h3>
+      </header>
 
       <!-- ── Toolbar ── -->
       <div class="toolbar">
@@ -532,7 +538,136 @@
         </span>
       </div>
 
-      <!-- ── Batch bar ── -->
+      <!-- ── Table area ── -->
+      <div class="table-scroll">
+
+        {#if !$appConfig.server_exe}
+          <div class="empty-state">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:20px;height:20px;color:var(--text-2)">
+              <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/>
+              <circle cx="12" cy="12" r="3"/>
+            </svg>
+            <span class="empty-state-label">No server configured</span>
+            <span class="empty-state-sub">Set the server exe path in Settings to load catalog files.</span>
+          </div>
+
+        {:else if loading}
+          <div class="empty-state">
+            <span class="empty-state-label">Loading...</span>
+          </div>
+
+        {:else if loadError}
+          <div class="empty-state">
+            <span class="empty-state-label error">Load error</span>
+            <span class="empty-state-sub">{loadError}</span>
+          </div>
+
+        {:else if entries.length === 0}
+          <div class="empty-state">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+              <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/>
+              <line x1="3" y1="6" x2="21" y2="6"/>
+              <path d="M16 10a4 4 0 0 1-8 0"/>
+            </svg>
+            <span class="empty-state-label">No catalog entries</span>
+            <span class="empty-state-sub">No Catalog*.json files were found in the MTXStore directory.</span>
+          </div>
+
+        {:else if sortedEntries.length === 0}
+          <div class="empty-state">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+              <circle cx="11" cy="11" r="8"/>
+              <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+            </svg>
+            <span class="empty-state-label">No results</span>
+            <span class="empty-state-sub">No entries match the current filter.</span>
+          </div>
+
+        {:else}
+          <table class="catalog-table">
+            <thead>
+              <tr>
+                <th class="col-check">
+                  <input
+                    type="checkbox"
+                    bind:this={headerCheckEl}
+                    checked={allVisibleSelected}
+                    on:change={toggleSelectAll}
+                  >
+                </th>
+                <th class="col-sku sortable" on:click={() => toggleSort('sku')}>
+                  SKU
+                  <span class="sort-ind" class:active={sortCol === 'sku'}>
+                    {sortCol === 'sku' ? (sortDir === 'asc' ? '↑' : '↓') : '↕'}
+                  </span>
+                </th>
+                <th class="col-name sortable" on:click={() => toggleSort('name')}>
+                  Name
+                  <span class="sort-ind" class:active={sortCol === 'name'}>
+                    {sortCol === 'name' ? (sortDir === 'asc' ? '↑' : '↓') : '↕'}
+                  </span>
+                </th>
+                <th class="col-type sortable" on:click={() => toggleSort('type')}>
+                  Type
+                  <span class="sort-ind" class:active={sortCol === 'type'}>
+                    {sortCol === 'type' ? (sortDir === 'asc' ? '↑' : '↓') : '↕'}
+                  </span>
+                </th>
+                <th class="col-price sortable" on:click={() => toggleSort('price')}>
+                  Price
+                  <span class="sort-ind" class:active={sortCol === 'price'}>
+                    {sortCol === 'price' ? (sortDir === 'asc' ? '↑' : '↓') : '↕'}
+                  </span>
+                </th>
+                <th class="col-source">Source</th>
+                <th class="col-actions"></th>
+              </tr>
+            </thead>
+            <tbody>
+              {#each sortedEntries as entry (entry.SkuId)}
+                {@const title    = entryTitle(entry)}
+                {@const price    = entryPrice(entry)}
+                {@const selected = selectedSkus.has(entry.SkuId)}
+                <tr
+                  class:row-selected={selected}
+                  on:click={() => toggleSelectRow(entry.SkuId)}
+                >
+                  <td class="col-check" on:click|stopPropagation>
+                    <input
+                      type="checkbox"
+                      checked={selected}
+                      on:change={() => toggleSelectRow(entry.SkuId)}
+                    >
+                  </td>
+                  <td class="col-sku">{entry.SkuId}</td>
+                  <td class="col-name" use:tip={title}>{title}</td>
+                  <td class="col-type">
+                    {#if entry.Type.Name}<span class="tag">{entry.Type.Name}</span>{/if}
+                  </td>
+                  <td class="col-price">{price.toLocaleString()} G</td>
+                  <td class="col-source">
+                    <div class="source-cell">
+                      <span class="source-name" use:tip={entry.source_file}>{shortName(entry.source_file)}</span>
+                      {#if entry.from_modified}
+                        <span class="modified">Modified</span>
+                      {/if}
+                    </div>
+                  </td>
+                  <td class="col-actions" on:click|stopPropagation>
+                    <button
+                      class="btn btn-sm btn-outline row-edit-btn"
+                      on:click={() => editingEntry = entry}
+                    >Edit</button>
+                  </td>
+                </tr>
+              {/each}
+            </tbody>
+          </table>
+        {/if}
+
+      </div><!-- /table-scroll -->
+
+      <!-- ── Batch bar (footer, so rows never move) ── -->
       {#if totalSelectedCount > 0}
         <div class="batch-bar">
 
@@ -648,139 +783,7 @@
         </div>
       {/if}
 
-      <!-- ── Table area ── -->
-      <div class="table-scroll">
-
-        {#if !$appConfig.server_exe}
-          <div class="empty-state">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:20px;height:20px;color:var(--text-2)">
-              <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/>
-              <circle cx="12" cy="12" r="3"/>
-            </svg>
-            <span class="empty-state-label">No server configured</span>
-            <span class="empty-state-sub">Set the server exe path in Settings to load catalog files.</span>
-          </div>
-
-        {:else if loading}
-          <div class="empty-state">
-            <span class="empty-state-label">Loading...</span>
-          </div>
-
-        {:else if loadError}
-          <div class="empty-state">
-            <span class="empty-state-label error">Load error</span>
-            <span class="empty-state-sub">{loadError}</span>
-          </div>
-
-        {:else if entries.length === 0}
-          <div class="empty-state">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-              <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/>
-              <line x1="3" y1="6" x2="21" y2="6"/>
-              <path d="M16 10a4 4 0 0 1-8 0"/>
-            </svg>
-            <span class="empty-state-label">No catalog entries</span>
-            <span class="empty-state-sub">No Catalog*.json files were found in the MTXStore directory.</span>
-          </div>
-
-        {:else if sortedEntries.length === 0}
-          <div class="empty-state">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-              <circle cx="11" cy="11" r="8"/>
-              <line x1="21" y1="21" x2="16.65" y2="16.65"/>
-            </svg>
-            <span class="empty-state-label">No results</span>
-            <span class="empty-state-sub">No entries match the current filter.</span>
-          </div>
-
-        {:else}
-          <table class="catalog-table">
-            <thead>
-              <tr>
-                <th class="col-check">
-                  <input
-                    type="checkbox"
-                    bind:this={headerCheckEl}
-                    checked={allVisibleSelected}
-                    on:change={toggleSelectAll}
-                  >
-                </th>
-                <th class="col-sku sortable" on:click={() => toggleSort('sku')}>
-                  SKU
-                  <span class="sort-ind" class:active={sortCol === 'sku'}>
-                    {sortCol === 'sku' ? (sortDir === 'asc' ? '↑' : '↓') : '↕'}
-                  </span>
-                </th>
-                <th class="col-name sortable" on:click={() => toggleSort('name')}>
-                  Name
-                  <span class="sort-ind" class:active={sortCol === 'name'}>
-                    {sortCol === 'name' ? (sortDir === 'asc' ? '↑' : '↓') : '↕'}
-                  </span>
-                </th>
-                <th class="col-type sortable" on:click={() => toggleSort('type')}>
-                  Type
-                  <span class="sort-ind" class:active={sortCol === 'type'}>
-                    {sortCol === 'type' ? (sortDir === 'asc' ? '↑' : '↓') : '↕'}
-                  </span>
-                </th>
-                <th class="col-price sortable" on:click={() => toggleSort('price')}>
-                  Price
-                  <span class="sort-ind" class:active={sortCol === 'price'}>
-                    {sortCol === 'price' ? (sortDir === 'asc' ? '↑' : '↓') : '↕'}
-                  </span>
-                </th>
-                <th class="col-source">Source</th>
-                <th class="col-actions"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {#each sortedEntries as entry (entry.SkuId)}
-                {@const title    = entryTitle(entry)}
-                {@const price    = entryPrice(entry)}
-                {@const typeLow  = entry.Type.Name.toLowerCase()}
-                {@const selected = selectedSkus.has(entry.SkuId)}
-                <tr
-                  class:row-selected={selected}
-                  on:click={() => toggleSelectRow(entry.SkuId)}
-                >
-                  <td class="col-check" on:click|stopPropagation>
-                    <input
-                      type="checkbox"
-                      checked={selected}
-                      on:change={() => toggleSelectRow(entry.SkuId)}
-                    >
-                  </td>
-                  <td class="col-sku">{entry.SkuId}</td>
-                  <td class="col-name" use:tip={title}>{title}</td>
-                  <td class="col-type">
-                    <span class="type-badge type-badge-{typeLow}">{entry.Type.Name}</span>
-                  </td>
-                  <td class="col-price">{price.toLocaleString()} G</td>
-                  <td class="col-source">
-                    <div class="source-cell">
-                      <span class="source-name">
-                        {entry.source_file.replace(/^Catalog/, '').replace(/\.json$/, '') || entry.source_file}
-                      </span>
-                      {#if entry.from_modified}
-                        <span class="modified-badge">M</span>
-                      {/if}
-                    </div>
-                  </td>
-                  <td class="col-actions" on:click|stopPropagation>
-                    <button
-                      class="btn btn-sm btn-outline row-edit-btn"
-                      on:click={() => editingEntry = entry}
-                    >Edit</button>
-                  </td>
-                </tr>
-              {/each}
-            </tbody>
-          </table>
-        {/if}
-
-      </div><!-- /table-scroll -->
-
-    </div><!-- /content-pane -->
+    </section>
 
   </div><!-- /store-layout -->
 </div>
@@ -921,26 +924,15 @@
 
   .modified-count { color: var(--amber-bright); }
 
-  /* ── Content pane ── */
-  .content-pane {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-    min-width: 0;
-    background: var(--bg-1);
-  }
-
   /* ── Toolbar ── */
   .toolbar {
     display: flex;
     align-items: center;
     gap: 6px;
-    padding: 8px 14px;
+    padding: 8px 16px 8px 20px;
     border-bottom: 1px solid var(--border);
     flex-shrink: 0;
-    min-height: 53px;
-    flex-wrap: nowrap;
+    flex-wrap: wrap;
   }
 
   .search-wrap { min-width: 100px; max-width: 240px; }
@@ -981,14 +973,14 @@
   }
 
   .price-label {
-    font-family: var(--font-mono);
+    font-family: var(--font-body);
     font-size: 11px;
     color: var(--text-3);
     flex-shrink: 0;
   }
 
   .price-sep {
-    font-family: var(--font-mono);
+    font-family: var(--font-body);
     font-size: 12px;
     color: var(--text-3);
     flex-shrink: 0;
@@ -1019,13 +1011,12 @@
     display: flex;
     align-items: center;
     gap: 8px;
-    padding: 7px 14px;
-    border-bottom: 1px solid var(--accent-dim);
+    padding: 7px 16px 7px 20px;
+    border-top: 1px solid var(--accent-dim);
     background: var(--accent-glow);
     flex-shrink: 0;
     min-height: 44px;
-    flex-wrap: nowrap;
-    overflow: hidden;
+    flex-wrap: wrap;
   }
 
   .batch-label {
@@ -1069,7 +1060,7 @@
     display: flex;
     align-items: center;
     gap: 6px;
-    flex-wrap: nowrap;
+    flex-wrap: wrap;
   }
 
   .batch-action-label {
@@ -1154,8 +1145,8 @@
   }
 
   .catalog-table thead th {
-    background: var(--bg-2);
-    border-bottom: 1px solid var(--border-mid);
+    background: var(--bg-1);
+    border-bottom: 1px solid var(--border);
     padding: 7px 12px;
     text-align: left;
     font-family: var(--font-head);
@@ -1216,7 +1207,8 @@
   .catalog-table .col-check input[type="checkbox"] { margin: 0; }
 
   .catalog-table .col-sku {
-    font-family: var(--font-mono);
+    font-family: var(--font-body);
+    font-variant-numeric: tabular-nums;
     font-size: 11px;
     color: var(--text-2);
     white-space: nowrap;
@@ -1233,9 +1225,10 @@
   }
 
   .catalog-table .col-price {
-    font-family: var(--font-mono);
+    font-family: var(--font-body);
     font-size: 12px;
-    color: var(--amber-bright);
+    font-variant-numeric: tabular-nums;
+    color: var(--text-1);
     text-align: right;
     white-space: nowrap;
   }
@@ -1263,7 +1256,7 @@
   }
 
   .source-name {
-    font-family: var(--font-mono);
+    font-family: var(--font-body);
     font-size: 11px;
     color: var(--text-2);
     overflow: hidden;
@@ -1283,37 +1276,14 @@
     height: 12px;
   }
 
-  /* ── Type badge ── */
-  .type-badge {
+  /* Changed from stock: state, so amber. */
+  .modified {
     font-family: var(--font-head);
     font-size: var(--fs-min);
     font-weight: 600;
     letter-spacing: 0.08em;
     text-transform: uppercase;
-    padding: 2px 6px;
-    border-radius: 2px;
-    border: 1px solid transparent;
-    white-space: nowrap;
-    display: inline-block;
-  }
-  .type-badge-boost   { color: var(--amber-bright);  border-color: color-mix(in srgb, var(--amber) 35%, transparent);  background: var(--amber-dim); }
-  .type-badge-bundle  { color: var(--accent-bright); border-color: var(--accent-dim);      background: var(--accent-glow); }
-  .type-badge-chest   { color: var(--amber-bright);  border-color: color-mix(in srgb, var(--amber) 35%, transparent);  background: var(--amber-dim); }
-  .type-badge-costume { color: var(--purple);        border-color: rgba(130,100,180,0.3);  background: var(--purple-dim); }
-  .type-badge-hero    { color: var(--blue);          border-color: rgba(46,134,193,0.3);   background: var(--blue-dim); }
-  .type-badge-service { color: var(--green-bright);  border-color: color-mix(in srgb, var(--green) 30%, transparent);    background: var(--green-dim); }
-  .type-badge-teamup  { color: var(--purple);        border-color: rgba(130,100,180,0.3);  background: var(--purple-dim); }
-
-  /* ── Modified badge ── */
-  .modified-badge {
-    font-family: var(--font-mono);
-    font-size: var(--fs-min);
-    font-weight: 600;
     color: var(--amber-bright);
-    background: var(--amber-dim);
-    border: 1px solid color-mix(in srgb, var(--amber) 35%, transparent);
-    padding: 1px 5px;
-    border-radius: 2px;
     flex-shrink: 0;
   }
 </style>
