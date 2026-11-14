@@ -6,10 +6,11 @@
   import { tip } from '../lib/tooltip'
   import PanelSidebar from './PanelSidebar.svelte'
   import SaleModal from './SaleModal.svelte'
+  import AddItemModal from './AddItemModal.svelte'
   import { entryTitle, entryPrice, type CatalogEntryWithMeta } from '../lib/catalogMeta'
   import {
     STORE_SECTIONS, MIN_PRICE, MAX_PRICE, isHidden, setHidden, setPrice, sameEntry, planWrites, reverted,
-    displayTitle, startSale, endSale, type StoreState, type StoreWrites,
+    displayTitle, startSale, newStoreItem, ADDED_ITEMS_FILE, type NewItem, endSale, type StoreState, type StoreWrites,
   } from '../lib/storeSimple'
 
   type View = string // a section's Type name, 'all' or 'yours'
@@ -28,6 +29,7 @@
   let query = ''
   let state: StoreState = { version: 1 }
   let saleOpen = false
+  let addOpen = false
   let saleNote = ''
 
   $: serverExe = $appConfig.server_exe
@@ -127,6 +129,22 @@
     }
   }
 
+  /** Creates the Multiverse catalog file on first use, then saves the item under the next free SKU. */
+  async function addItem(item: NewItem): Promise<string> {
+    if (!serverExe) return 'No server set'
+    try {
+      const files = await invoke<string[]>('list_catalog_files', { serverExe })
+      if (!files.includes(ADDED_ITEMS_FILE)) await invoke('create_catalog_file', { serverExe, suffix: 'Multiverse' })
+      const sku = await invoke<string>('get_next_sku_id', { serverExe })
+      saleNote = ''
+      if (!(await write(planWrites([newStoreItem(sku, item)]), null))) return saveError
+      addOpen = false
+      return ''
+    } catch (e) {
+      return String(e)
+    }
+  }
+
   $: onSale = (r: typeof rows[number]) => state.sale?.prices[r.saved.SkuId]?.after === entryPrice(r.saved)
 
   async function openFolder() {
@@ -195,6 +213,12 @@
             </svg>
             <input type="text" class="search-input" placeholder="Search names" aria-label="Search names" bind:value={query}>
           </div>
+          <button
+            class="btn btn-sm btn-outline"
+            on:click={() => addOpen = true}
+            disabled={!loaded || saving || dirty.length > 0}
+            use:tip={dirty.length ? 'Save or revert your changes first' : 'Add a single item to the store'}
+          >Add item</button>
           {#if !state.sale}
             <button
               class="btn btn-sm btn-outline"
@@ -321,6 +345,10 @@
     </section>
   </div>
 </div>
+
+{#if addOpen && serverExe}
+  <AddItemModal {serverExe} onAdd={addItem} onClose={() => addOpen = false} />
+{/if}
 
 {#if saleOpen}
   <SaleModal
