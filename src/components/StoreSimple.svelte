@@ -145,6 +145,18 @@
     }
   }
 
+  // Items stock doesn't have can't be reverted, only removed. The first click arms the button.
+  let armedRemove = ''
+  async function removeAdded(r: typeof rows[number]) {
+    if (armedRemove !== r.saved.SkuId) {
+      armedRemove = r.saved.SkuId
+      return
+    }
+    armedRemove = ''
+    saleNote = ''
+    await write({ upserts: [], removes: [{ sku_id: r.saved.SkuId, source_file: r.saved.source_file }] }, null)
+  }
+
   $: onSale = (r: typeof rows[number]) => state.sale?.prices[r.saved.SkuId]?.after === entryPrice(r.saved)
 
   async function openFolder() {
@@ -321,6 +333,21 @@
                       <polyline points="3 3 3 9 9 9"/>
                     </svg>
                   </button>
+                {:else if !r.saved.stock && r.saved.from_modified}
+                  <button
+                    class="del-btn"
+                    class:armed={armedRemove === r.saved.SkuId}
+                    on:click={() => removeAdded(r)}
+                    on:mouseleave={() => armedRemove === r.saved.SkuId && (armedRemove = '')}
+                    disabled={saving || dirty.length > 0}
+                    aria-label="{armedRemove === r.saved.SkuId ? 'Confirm removing' : 'Remove'} {r.title}"
+                    use:tip={dirty.length ? 'Save or revert your changes first' : armedRemove === r.saved.SkuId ? 'Click again to remove. This cannot be undone.' : 'Remove from the store'}
+                  >
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                      <line x1="18" y1="6" x2="6" y2="18"/>
+                      <line x1="6" y1="6" x2="18" y2="18"/>
+                    </svg>
+                  </button>
                 {/if}
               </span>
             </div>
@@ -481,6 +508,8 @@
     display: flex;
     justify-content: center;
   }
+  .del-btn.armed { border-color: color-mix(in srgb, var(--red) 40%, transparent); color: var(--text-error); background: var(--red-dim); }
+  .del-btn:disabled { opacity: 0.35; cursor: not-allowed; }
   .item-row.off .item-title,
   .item-row.off .item-price { opacity: var(--dimmed-opacity); }
 </style>
