@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { entryPrice, type CatalogEntry, type CatalogEntryWithMeta } from '../../src/lib/catalogMeta'
 import {
-  isHidden, setHidden, setPrice, planWrites, reverted, salePrice, saleLabel, startSale, endSale, catalogReloadResult, displayTitle,
+  isHidden, setHidden, setPrice, planWrites, reverted, salePrice, saleLabel, startSale, endSale, catalogReloadResult, displayTitle, newStoreItem,
 } from '../../src/lib/storeSimple'
 
 function entry(sku: string, type: string, price: number, mods: string[] = ['Giftable']): CatalogEntry {
@@ -76,6 +76,17 @@ describe('planWrites', () => {
     expect(entryPrice(r)).toBe(950)
     expect(planWrites([r]).removes.map(x => x.sku_id)).toEqual(['1'])
     expect(reverted(overlay(base, null))).toBeNull()
+  })
+})
+
+describe('newStoreItem', () => {
+  it('writes one item into the Multiverse file, shown in its section', () => {
+    const e = newStoreItem('9001', { itemId: '123', name: ' Free Boost ', section: 'Costume', price: 0, quantity: 3, description: 'D' })
+    expect(e.GuidItems).toEqual([{ PrototypeGuid: '0', ItemPrototypeRuntimeIdForClient: '123', Quantity: 3 }])
+    expect(e.LocalizedEntries).toEqual([{ LanguageId: 'en_us', Description: 'D', Title: 'Free Boost', ReleaseDate: '', ItemPrice: 0 }])
+    expect(e.Type.Name).toBe('Costume')
+    expect(isHidden(e)).toBe(false)
+    expect(planWrites([e])).toEqual({ upserts: [{ entry: expect.objectContaining({ SkuId: '9001' }), target_file: 'CatalogMultiverse.json' }], removes: [] })
   })
 })
 

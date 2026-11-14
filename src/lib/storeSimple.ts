@@ -13,8 +13,8 @@ export const STORE_SECTIONS = [
   { type: 'Bundle', label: 'Bundles' },
 ] as const
 
-/** Lowest price Simple writes. The server accepts 0, but the client hasn't been tested with it. */
-export const MIN_PRICE = 1
+/** 0 makes an item free. */
+export const MIN_PRICE = 0
 export const MAX_PRICE = 1_000_000
 
 const HIDE = ['NoDisplay', 'NoDisplayStore']
@@ -68,6 +68,39 @@ export function displayTitle(title: string): string {
   return /\s/.test(title) ? title : title.replace(/([a-z0-9])([A-Z])/g, '$1 $2').replace(/([A-Z])([A-Z][a-z])/g, '$1 $2')
 }
 
+// ── Add item ──────────────────────────────────────────────────────────────────
+
+/** The launcher's own catalog file for items added in Simple. Rows land in its MODIFIED file. */
+export const ADDED_ITEMS_FILE = 'CatalogMultiverse.json'
+
+export interface NewItem {
+  /** Prototype runtime id, decimal string. */
+  itemId: string
+  name: string
+  /** A STORE_SECTIONS type. */
+  section: string
+  price: number
+  quantity: number
+  description: string
+}
+
+/** A single-item entry with no modifiers or page links, ready for planWrites. */
+export function newStoreItem(sku: string, f: NewItem): CatalogEntryWithMeta {
+  return {
+    SkuId: sku,
+    GuidItems: [{ PrototypeGuid: '0', ItemPrototypeRuntimeIdForClient: f.itemId, Quantity: f.quantity }],
+    AdditionalGuidItems: [],
+    LocalizedEntries: [{ LanguageId: 'en_us', Description: f.description, Title: f.name.trim(), ReleaseDate: '', ItemPrice: f.price }],
+    InfoUrls: [],
+    ContentData: [],
+    Type: { Name: f.section, Order: 5 },
+    TypeModifiers: [],
+    source_file: ADDED_ITEMS_FILE,
+    from_modified: true,
+    stock: null,
+  }
+}
+
 // ── Sale ──────────────────────────────────────────────────────────────────────
 
 export interface SalePrice { before: number; after: number; hadOverlay: boolean }
@@ -82,11 +115,11 @@ export interface StoreState { version: 1; sale?: Sale }
 
 /**
  * Percent off, rounded to the nearest 5 G like stock prices. 100% makes it free (the server
- * accepts 0 G); any smaller discount stays at MIN_PRICE or above, so it never rounds to free.
+ * accepts 0 G); any smaller discount stays at 1 G or above, so it never rounds to free.
  */
 export function salePrice(before: number, percent: number): number {
   if (percent >= 100) return 0
-  return Math.max(MIN_PRICE, Math.round(before * (100 - percent) / 100 / 5) * 5)
+  return Math.max(1, Math.round(before * (100 - percent) / 100 / 5) * 5)
 }
 
 export function saleLabel(percent: number, sections: string[]): string {
