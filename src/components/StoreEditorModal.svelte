@@ -42,6 +42,8 @@
   export let serverExe: string
   /** Base `Catalog*.json` filenames present in MTXStore — for the target-file dropdown. */
   export let catalogFiles: string[]
+  /** The file a new entry saves to at first: the one open in the sidebar, if any. */
+  export let defaultFile = ''
   /**
    * All currently loaded catalog entries. Used by the item picker to identify
    * items already present in any entry across the catalog.
@@ -176,7 +178,7 @@
 
   // ── Target file (create mode) ─────────────────────────────────────────────
 
-  let targetFile = catalogFiles[0] ?? ''
+  let targetFile = catalogFiles.includes(defaultFile) ? defaultFile : (catalogFiles[0] ?? '')
 
   // ── Modifier state ────────────────────────────────────────────────────────
 

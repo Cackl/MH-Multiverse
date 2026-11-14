@@ -885,6 +885,7 @@
     serverExe={$appConfig.server_exe}
     catalogFiles={catalogFiles}
     allEntries={entries}
+    defaultFile={fileFilter}
     onClose={() => creatingNew = false}
     onSaved={handleCreated}
     onDeleted={() => {}}
