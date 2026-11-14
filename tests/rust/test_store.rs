@@ -237,6 +237,27 @@ fn apache_bundles_found_only_when_the_folder_sits_next_to_the_server() {
 }
 
 #[test]
+fn bundle_page_lists_bonus_items_after_the_bought_ones() {
+    let item = |id: &str, quantity| GuidItem {
+        prototype_guid: "0".to_string(),
+        item_prototype_runtime_id_for_client: id.to_string(),
+        quantity,
+    };
+    let mut entry = sample_entry("1");
+    entry.guid_items = vec![item("1", 1), item("2", 3)];
+    let name = |id: &str| format!("Item{id}");
+    assert_eq!(
+        bundle_items_html(&entry, name),
+        "            <li>Item1</li>\n            <li>Item2 x3</li>\n"
+    );
+    entry.additional_guid_items = vec![item("9", 1)];
+    assert_eq!(
+        bundle_items_html(&entry, name),
+        "            <li>Item1</li>\n            <li>Item2 x3</li>\n        </ul>\n        <p>Free with purchase:</p>\n        <ul>\n            <li>Item9</li>\n"
+    );
+}
+
+#[test]
 fn get_next_sku_id_floor_1001_empty_dir() {
     let (_tmp, server_exe) = empty_mtxstore();
     assert_eq!(get_next_sku_id(server_exe).unwrap(), "1001");

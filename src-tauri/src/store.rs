@@ -725,6 +725,28 @@ pub fn resolve_display_name(
     name_for_id(&cat_state, &prototype_runtime_id)
 }
 
+/// The `<li>` rows for the page's item list. Bonus items (BOGO) get their own list after it.
+pub(crate) fn bundle_items_html(entry: &CatalogEntry, name: impl Fn(&str) -> String) -> String {
+    let rows = |items: &[GuidItem]| -> String {
+        items
+            .iter()
+            .map(|item| {
+                let n = name(&item.item_prototype_runtime_id_for_client);
+                match item.quantity {
+                    1 => format!("            <li>{n}</li>\n"),
+                    q => format!("            <li>{n} x{q}</li>\n"),
+                }
+            })
+            .collect()
+    };
+    let mut html = rows(&entry.guid_items);
+    if !entry.additional_guid_items.is_empty() {
+        html.push_str("        </ul>\n        <p>Free with purchase:</p>\n        <ul>\n");
+        html.push_str(&rows(&entry.additional_guid_items));
+    }
+    html
+}
+
 /// Generate the HTML page for a bundle catalog entry and write it to disk.
 ///
 /// Always writes a backup to:
@@ -767,18 +789,7 @@ pub fn generate_bundle_html(
     let price = loc.item_price;
     let sku_hex = format!("0x{:X}", sku);
 
-    let mut items_html = String::new();
-    for item in &entry.guid_items {
-        let name = name_for_id(&cat_state, &item.item_prototype_runtime_id_for_client);
-        if item.quantity == 1 {
-            items_html.push_str(&format!("            <li>{name}</li>\n"));
-        } else {
-            items_html.push_str(&format!(
-                "            <li>{name} x{}</li>\n",
-                item.quantity
-            ));
-        }
-    }
+    let items_html = bundle_items_html(&entry, |id| name_for_id(&cat_state, id));
 
     let html = HTML_TEMPLATE
         .replace("{title}", title)
