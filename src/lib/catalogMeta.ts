@@ -110,6 +110,16 @@ export function additionalItemsToSave(offerType: OfferType, items: GuidItem[]): 
   return offerType === 'bundle' ? [] : items
 }
 
+/**
+ * Whether saving this entry should also write its store page and image: a Bundle whose
+ * saved URLs are exactly the ones the launcher generates. Stock bundles keep their own.
+ */
+export function usesGeneratedPage(entry: CatalogEntry, infoUrl: string, thumbUrl: string): boolean {
+  return entry.Type.Name === 'Bundle'
+    && entry.InfoUrls[0]?.Url === infoUrl
+    && entry.ContentData[0]?.Url === thumbUrl
+}
+
 // ─── Item categories ──────────────────────────────────────────────────────────
 
 /**

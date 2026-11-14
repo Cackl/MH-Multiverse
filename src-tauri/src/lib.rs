@@ -143,6 +143,7 @@ pub fn run() {
             store::resolve_display_name,
             store::generate_bundle_html,
             store::save_thumbnail,
+            store::apache_bundles_found,
             patches::scan_patch_files,
             patches::load_patch_file,
             patches::save_patch_file,

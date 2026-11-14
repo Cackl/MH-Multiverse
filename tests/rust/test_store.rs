@@ -226,6 +226,17 @@ fn create_catalog_file_makes_an_empty_list_and_refuses_bad_or_taken_names() {
 }
 
 #[test]
+fn apache_bundles_found_only_when_the_folder_sits_next_to_the_server() {
+    let tmp = tempfile::tempdir().unwrap();
+    let server_exe = tmp.path().join("MHServerEmu").join("MHServerEmu.exe").to_string_lossy().to_string();
+    assert!(!apache_bundles_found(server_exe.clone()));
+    fs::create_dir_all(tmp.path().join("Apache24").join("htdocs")).unwrap();
+    assert!(!apache_bundles_found(server_exe.clone()));
+    fs::create_dir_all(tmp.path().join("Apache24").join("htdocs").join("bundles")).unwrap();
+    assert!(apache_bundles_found(server_exe));
+}
+
+#[test]
 fn get_next_sku_id_floor_1001_empty_dir() {
     let (_tmp, server_exe) = empty_mtxstore();
     assert_eq!(get_next_sku_id(server_exe).unwrap(), "1001");

@@ -12,6 +12,7 @@
     removeKind,
     stockVersion,
     additionalItemsToSave,
+    usesGeneratedPage,
     ITEM_CATEGORIES,
     type ItemCategory,
     type OfferType,
@@ -500,9 +501,19 @@
       await invoke('save_catalog_entry', { serverExe, entry: built, targetFile: target })
       const meta: CatalogEntryWithMeta = { ...built, source_file: target, from_modified: true, stock: entry?.stock ?? null }
       initialStateSerialized = currentStateSerialized
+      onSaved(meta)
+      // Write the page and image now, so the game never caches a missing image.
+      if (usesGeneratedPage(built, autoInfoUrl, autoThumbUrl)
+          && await invoke<boolean>('apache_bundles_found', { serverExe })) {
+        try {
+          await writeStorePage(built, true)
+        } catch (e) {
+          saveError = `Saved. The store page was not made: ${e}`
+          return
+        }
+      }
       saveSuccess = true
       setTimeout(() => (saveSuccess = false), 3000)
-      onSaved(meta)
       if (isNew) onClose()
     } catch (e) {
       saveError = String(e)
@@ -637,29 +648,25 @@
       await invoke('save_catalog_entry', { serverExe, entry: built, targetFile: target })
       initialStateSerialized = currentStateSerialized
       onSaved({ ...built, source_file: target, from_modified: true, stock: entry?.stock ?? null })
-
-      // Generate and save thumbnail.
-      const pngBase64 = await generateThumbnailBase64()
-      await invoke('save_thumbnail', {
-        serverExe,
-        slug:        slugify(formTitle),
-        skuId:       workingSku,
-        pngBase64,
-        saveToApache: !overrideApache,
-      })
-
-      // Generate and save HTML.
-      generatePath = await invoke<string>('generate_bundle_html', {
-        serverExe,
-        entry:        built,
-        slug:         slugify(formTitle),
-        saveToApache: !overrideApache,
-      })
+      generatePath = await writeStorePage(built, !overrideApache)
     } catch (e) {
       generateError = String(e)
     } finally {
       generating = false
     }
+  }
+
+  // Thumbnail first, then the HTML page. Returns the backup HTML path.
+  async function writeStorePage(built: CatalogEntry, saveToApache: boolean): Promise<string> {
+    const slug = slugify(formTitle)
+    await invoke('save_thumbnail', {
+      serverExe,
+      slug,
+      skuId:     workingSku,
+      pngBase64: await generateThumbnailBase64(),
+      saveToApache,
+    })
+    return invoke<string>('generate_bundle_html', { serverExe, entry: built, slug, saveToApache })
   }
 
   // ── Close guard ───────────────────────────────────────────────────────────

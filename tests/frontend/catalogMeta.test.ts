@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import {
   inferOfferType,
   additionalItemsToSave,
+  usesGeneratedPage,
   modifiersForType,
   buildModifiers,
   entryTitle,
@@ -35,6 +36,24 @@ describe('inferOfferType', () => {
   })
   it('Bundle with additional items is bogo', () => {
     expect(inferOfferType(entryWithType('Bundle', [{ PrototypeGuid: '1', ItemPrototypeRuntimeIdForClient: '1', Quantity: 1 }]))).toBe('bogo')
+  })
+})
+
+describe('usesGeneratedPage', () => {
+  const info = 'http://cdn/x_1_en_bundle.html', thumb = 'http://cdn/images/MTXStore_x_1.png'
+  const withUrls = (type: string, i: string, t: string): CatalogEntry => ({
+    ...entryWithType(type),
+    InfoUrls: [{ LanguageId: 'en_us', Url: i, ImageData: '' }],
+    ContentData: [{ LanguageId: 'en_us', Url: t, ImageData: '' }],
+  })
+  it.each([
+    ['our bundle', withUrls('Bundle', info, thumb), true],
+    ['stock bundle image', withUrls('Bundle', info, 'http://cdn/images/MTXStore_Bundle_Thumb_X.png'), false],
+    ['stock bundle page', withUrls('Bundle', 'http://cdn/x_bundle.html', thumb), false],
+    ['not a bundle', withUrls('Boost', info, thumb), false],
+    ['no urls', entryWithType('Bundle'), false],
+  ] as const)('%s', (_, entry, want) => {
+    expect(usesGeneratedPage(entry, info, thumb)).toBe(want)
   })
 })
 

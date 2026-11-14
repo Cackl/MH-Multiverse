@@ -236,6 +236,22 @@ fn server_dir_of(server_exe: &str) -> Result<PathBuf, String> {
     crate::paths::server_dir(server_exe)
 }
 
+/// `Apache24/htdocs/bundles` next to the server folder, as the server package lays it out.
+fn apache_bundles_dir(server_exe: &str) -> Result<PathBuf, String> {
+    Ok(server_dir_of(server_exe)?
+        .parent()
+        .ok_or_else(|| "Cannot determine root directory from server exe path".to_string())?
+        .join("Apache24")
+        .join("htdocs")
+        .join("bundles"))
+}
+
+/// Whether the bundled Apache's `htdocs/bundles` folder exists, so bundle pages can be served.
+#[tauri::command]
+pub fn apache_bundles_found(server_exe: String) -> bool {
+    apache_bundles_dir(&server_exe).is_ok_and(|d| d.is_dir())
+}
+
 fn mtxstore_dir(server_exe: &str) -> Result<PathBuf, String> {
     Ok(server_dir_of(server_exe)?
         .join("Data")
@@ -801,12 +817,7 @@ pub fn generate_bundle_html(
     // ── Optional Apache htdocs write ──────────────────────────────────────────
 
     if save_to_apache {
-        let apache_bundles_dir = server_dir_of(&server_exe)?
-            .parent()
-            .ok_or_else(|| "Cannot determine root directory from server exe path".to_string())?
-            .join("Apache24")
-            .join("htdocs")
-            .join("bundles");
+        let apache_bundles_dir = apache_bundles_dir(&server_exe)?;
         if !apache_bundles_dir.exists() {
             return Err(format!(
                 "Apache bundles directory not found: {}",
@@ -993,13 +1004,7 @@ pub fn save_thumbnail(
     // ── Optional Apache htdocs write ──────────────────────────────────────────
 
     if save_to_apache {
-        let apache_images_dir = server_dir_of(&server_exe)?
-            .parent()
-            .ok_or_else(|| "Cannot determine root directory from server exe path".to_string())?
-            .join("Apache24")
-            .join("htdocs")
-            .join("bundles")
-            .join("images");
+        let apache_images_dir = apache_bundles_dir(&server_exe)?.join("images");
 
         if !apache_images_dir.exists() {
             return Err(format!(
