@@ -102,6 +102,14 @@ export function inferOfferType(entry: CatalogEntry): OfferType {
   return 'bundle'
 }
 
+/**
+ * The AdditionalGuidItems to save. Bundle drops them. Single keeps them unedited,
+ * because stock non-Bundle entries carry them too (the Boost mystery boxes).
+ */
+export function additionalItemsToSave(offerType: OfferType, items: GuidItem[]): GuidItem[] {
+  return offerType === 'bundle' ? [] : items
+}
+
 // ─── Item categories ──────────────────────────────────────────────────────────
 
 /**

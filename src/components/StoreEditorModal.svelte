@@ -11,6 +11,7 @@
     inferOfferType,
     removeKind,
     stockVersion,
+    additionalItemsToSave,
     ITEM_CATEGORIES,
     type ItemCategory,
     type OfferType,
@@ -440,7 +441,7 @@
     return {
       SkuId: workingSku,
       GuidItems: cloneGuidItems(formGuidItems),
-      AdditionalGuidItems: offerType === 'bogo' ? cloneGuidItems(formAdditionalGuidItems) : [],
+      AdditionalGuidItems: cloneGuidItems(additionalItemsToSave(offerType, formAdditionalGuidItems)),
       LocalizedEntries: [{
         LanguageId:   'en_us',
         Description:  formDesc,
@@ -1044,11 +1045,11 @@
             {/if}
           </div>
 
-          <!-- AdditionalGuidItems (BOGO bonus) -->
-          {#if offerType === 'bogo'}
+          <!-- AdditionalGuidItems (BOGO bonus, read-only on Single Item entries) -->
+          {#if offerType === 'bogo' || formAdditionalGuidItems.length}
             <div
               class="items-subsection bogo-bonus"
-              class:bogo-target-active={bogoTarget === 'additional'}
+              class:bogo-target-active={offerType === 'bogo' && bogoTarget === 'additional'}
             >
               <div class="items-subsection-header">
                 <span class="items-subsection-title">Bonus Items</span>
@@ -1072,21 +1073,26 @@
                         <td class="col-name" use:tip={item.ItemPrototypeRuntimeIdForClient}>
                           <span class="item-name">{additionalGuidNames[i] ?? item.ItemPrototypeRuntimeIdForClient}</span>
                         </td>
-                        <td class="col-qty">
-                          <input
-                            type="number" class="qty-input"
-                            value={item.Quantity} min="1" step="1"
-                            on:change={e => updateAdditionalItemQty(i, (e.target as HTMLInputElement).value)}
-                          >
-                        </td>
-                        <td class="col-del">
-                          <button class="del-btn" aria-label="Remove item" on:click={() => removeAdditionalGuidItem(i)}>
-                            <svg viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.5">
-                              <line x1="2" y1="2" x2="8" y2="8"/>
-                              <line x1="8" y1="2" x2="2" y2="8"/>
-                            </svg>
-                          </button>
-                        </td>
+                        {#if offerType === 'bogo'}
+                          <td class="col-qty">
+                            <input
+                              type="number" class="qty-input"
+                              value={item.Quantity} min="1" step="1"
+                              on:change={e => updateAdditionalItemQty(i, (e.target as HTMLInputElement).value)}
+                            >
+                          </td>
+                          <td class="col-del">
+                            <button class="del-btn" aria-label="Remove item" on:click={() => removeAdditionalGuidItem(i)}>
+                              <svg viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.5">
+                                <line x1="2" y1="2" x2="8" y2="8"/>
+                                <line x1="8" y1="2" x2="2" y2="8"/>
+                              </svg>
+                            </button>
+                          </td>
+                        {:else}
+                          <td class="col-qty qty-static">{item.Quantity}</td>
+                          <td class="col-del"></td>
+                        {/if}
                       </tr>
                     {/each}
                   </tbody>
@@ -1830,6 +1836,7 @@
   .col-name { width: auto; }
   .col-qty  { width: 72px; }
   .col-del  { width: 36px; }
+  .qty-static { font-size: 12px; font-variant-numeric: tabular-nums; color: var(--text-1); padding-left: 13px; }
 
   .item-name {
     font-family: var(--font-mono);

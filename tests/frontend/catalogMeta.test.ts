@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   inferOfferType,
+  additionalItemsToSave,
   modifiersForType,
   buildModifiers,
   entryTitle,
@@ -34,6 +35,17 @@ describe('inferOfferType', () => {
   })
   it('Bundle with additional items is bogo', () => {
     expect(inferOfferType(entryWithType('Bundle', [{ PrototypeGuid: '1', ItemPrototypeRuntimeIdForClient: '1', Quantity: 1 }]))).toBe('bogo')
+  })
+})
+
+describe('additionalItemsToSave', () => {
+  const bonus = [{ PrototypeGuid: '1', ItemPrototypeRuntimeIdForClient: '2', Quantity: 1 }]
+  it.each([
+    ['single', bonus],
+    ['bogo', bonus],
+    ['bundle', []],
+  ] as const)('%s saves %j', (offerType, expected) => {
+    expect(additionalItemsToSave(offerType, bonus)).toEqual(expected)
   })
 })
 
