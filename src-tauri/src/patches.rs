@@ -262,11 +262,20 @@ pub fn set_patch_file_enabled(
     let src = file_path(&patches, &file_name, currently_enabled);
     let new_enabled = !currently_enabled;
     let dst_dir = if new_enabled { patches.clone() } else { off.clone() };
+    let dst = dst_dir.join(&file_name);
+
+    // fs::rename replaces the target on Windows, which would delete the other copy.
+    if dst.exists() {
+        return Err(format!(
+            "Cannot move {file_name}: there is already a copy in {}",
+            if new_enabled { "Patches" } else { "Patches/Off" }
+        ));
+    }
 
     fs::create_dir_all(&dst_dir)
         .map_err(|e| format!("Cannot create target directory: {e}"))?;
 
-    fs::rename(&src, dst_dir.join(&file_name))
+    fs::rename(&src, &dst)
         .map_err(|e| format!("Cannot move {file_name}: {e}"))?;
 
     Ok(new_enabled)
