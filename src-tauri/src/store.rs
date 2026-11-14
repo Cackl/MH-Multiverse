@@ -335,12 +335,57 @@ pub fn list_catalog_files(server_exe: String) -> Result<Vec<String>, String> {
     if !dir.exists() {
         return Ok(vec![]);
     }
-    base_catalog_files(&dir).map(|paths| {
-        paths
-            .into_iter()
-            .filter_map(|p| p.file_name().map(|n| n.to_string_lossy().to_string()))
-            .collect()
-    })
+    base_catalog_files(&dir).map(file_names)
+}
+
+fn file_names(paths: Vec<PathBuf>) -> Vec<String> {
+    paths.into_iter().filter_map(|p| p.file_name().map(|n| n.to_string_lossy().to_string())).collect()
+}
+
+/// Switched-off catalog files wait in `MTXStore/Off/`; the server only reads the MTXStore folder itself.
+const OFF_DIR: &str = "Off";
+
+/// Base catalog file names that are switched off, sorted.
+#[tauri::command]
+pub fn list_off_catalog_files(server_exe: String) -> Result<Vec<String>, String> {
+    let off = mtxstore_dir(&server_exe)?.join(OFF_DIR);
+    if !off.exists() {
+        return Ok(vec![]);
+    }
+    base_catalog_files(&off).map(file_names)
+}
+
+/// Switch a catalog file off (move it and its MODIFIED file into `MTXStore/Off/`) or back on.
+/// Nothing moves if the destination already has either file.
+#[tauri::command]
+pub fn set_catalog_file_enabled(server_exe: String, file: String, enabled: bool) -> Result<(), String> {
+    let name = checked_base_name(&file)?;
+    let dir = mtxstore_dir(&server_exe)?;
+    let off = dir.join(OFF_DIR);
+    let (from, to) = if enabled { (&off, &dir) } else { (&dir, &off) };
+    let base = from.join(name);
+    if !base.exists() {
+        return Err(format!("{name} was not found in {}", from.display()));
+    }
+    let modified = modified_path_for(&base);
+    let mut moves = vec![base];
+    if modified.exists() {
+        moves.push(modified);
+    }
+    // Switching off moves MODIFIED first, switching on moves the base first, so a failed second
+    // move never leaves a MODIFIED file loaded without its base (its rows would turn into new items).
+    if !enabled {
+        moves.reverse();
+    }
+    let dest = |p: &PathBuf| to.join(p.file_name().unwrap_or_default());
+    if let Some(p) = moves.iter().find(|p| dest(p).exists()) {
+        return Err(format!("{} already exists in {}. Nothing was moved.", dest(p).display(), to.display()));
+    }
+    fs::create_dir_all(to).map_err(|e| format!("Cannot create {}: {e}", to.display()))?;
+    for p in &moves {
+        fs::rename(p, dest(p)).map_err(|e| format!("Cannot move {}: {e}", p.display()))?;
+    }
+    Ok(())
 }
 
 /// Every `Catalog*.json` file name (base and MODIFIED) in the order the server loads them:
@@ -596,17 +641,24 @@ pub fn get_next_sku_id(server_exe: String) -> Result<String, String> {
 
     let mut max_sku: u64 = 1000;
 
-    for entry in
-        fs::read_dir(&dir).map_err(|e| format!("Cannot read MTXStore directory: {e}"))?
-    {
-        let entry = entry.map_err(|e| e.to_string())?;
-        let name = entry.file_name().to_string_lossy().to_string();
-        if !name.starts_with("Catalog") || !name.ends_with(".json") {
+    // Switched-off files count too, so a new SKU can't clash once they're switched back on.
+    let off = dir.join(OFF_DIR);
+    for folder in [&dir, &off] {
+        if !folder.exists() {
             continue;
         }
-        for e in load_disk_entries(&entry.path())? {
-            if e.sku_id > max_sku {
-                max_sku = e.sku_id;
+        for entry in
+            fs::read_dir(folder).map_err(|e| format!("Cannot read MTXStore directory: {e}"))?
+        {
+            let entry = entry.map_err(|e| e.to_string())?;
+            let name = entry.file_name().to_string_lossy().to_string();
+            if !name.starts_with("Catalog") || !name.ends_with(".json") {
+                continue;
+            }
+            for e in load_disk_entries(&entry.path())? {
+                if e.sku_id > max_sku {
+                    max_sku = e.sku_id;
+                }
             }
         }
     }

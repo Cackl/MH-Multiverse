@@ -21,6 +21,9 @@
 
   let entries: CatalogEntryWithMeta[] = []
   let catalogFiles: string[] = []
+  /** Files switched off: they sit in MTXStore\Off, which the server doesn't read. */
+  let offFiles: string[] = []
+  let switchError = ''
   let loading = false
   let loadError = ''
   let openDirError = ''
@@ -201,17 +204,30 @@
     loadError = ''
     clearSelection()
     try {
-      const [files, loaded] = await Promise.all([
+      const [files, off, loaded] = await Promise.all([
         invoke<string[]>('list_catalog_files', { serverExe: $appConfig.server_exe }),
+        invoke<string[]>('list_off_catalog_files', { serverExe: $appConfig.server_exe }),
         invoke<CatalogEntryWithMeta[]>('load_catalog_entries', { serverExe: $appConfig.server_exe }),
       ])
       catalogFiles = files
+      offFiles = off
       entries = loaded
       if (fileFilter && !files.includes(fileFilter)) fileFilter = ''
     } catch (e) {
       loadError = String(e)
     } finally {
       loading = false
+    }
+  }
+
+  /** Moves the file and its MODIFIED file into MTXStore\Off (off) or back (on), then reloads. */
+  async function setFileEnabled(file: string, enabled: boolean) {
+    switchError = ''
+    try {
+      await invoke('set_catalog_file_enabled', { serverExe: $appConfig.server_exe, file, enabled })
+      await load()
+    } catch (e) {
+      switchError = String(e)
     }
   }
 
@@ -433,7 +449,7 @@
           <div class="file-notice error">{loadError}</div>
         {:else if openDirError}
           <div class="file-notice error">{openDirError}</div>
-        {:else if catalogFiles.length === 0}
+        {:else if catalogFiles.length === 0 && offFiles.length === 0}
           <div class="file-notice">No Catalog*.json files found in MTXStore.</div>
         {:else}
           <div
@@ -468,8 +484,44 @@
                   {/if}
                 </span>
               </div>
+              <div
+                class="toggle-switch on"
+                role="switch"
+                aria-checked="true"
+                aria-label="{stat.name} on"
+                tabindex="0"
+                use:tip={'On. Switch off to stop the server loading this file and your changes to it.'}
+                on:click|stopPropagation={() => setFileEnabled(stat.name, false)}
+                on:keydown|stopPropagation={e => e.key === 'Enter' && setFileEnabled(stat.name, false)}
+              ></div>
             </div>
           {/each}
+
+          {#if offFiles.length}
+            <div class="side-label">Switched off</div>
+            {#each offFiles as name (name)}
+              <div class="file-item off">
+                <div class="file-info">
+                  <span class="file-name" use:tip={`${name}, kept in MTXStore\\Off`}>
+                    {name.replace(/^Catalog/, '').replace(/\.json$/, '') || name}
+                  </span>
+                </div>
+                <div
+                  class="toggle-switch"
+                  role="switch"
+                  aria-checked="false"
+                  aria-label="{name} off"
+                  tabindex="0"
+                  use:tip={'Off. Switch on to load this file again.'}
+                  on:click={() => setFileEnabled(name, true)}
+                  on:keydown={e => e.key === 'Enter' && setFileEnabled(name, true)}
+                ></div>
+              </div>
+            {/each}
+          {/if}
+          {#if switchError}
+            <div class="file-notice error">{switchError}</div>
+          {/if}
         {/if}
       </div>
     </PanelSidebar>
@@ -923,6 +975,10 @@
   }
 
   .modified-count { color: var(--amber-bright); }
+
+  .file-item.off { cursor: default; }
+  .file-item.off:hover { background: none; border-color: transparent; }
+  .file-item.off .file-name { color: var(--text-3); }
 
   /* ── Toolbar ── */
   .toolbar {

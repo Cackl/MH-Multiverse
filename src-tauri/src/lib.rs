@@ -131,6 +131,8 @@ pub fn run() {
             calligraphy::search_prototypes,
             store::get_mtxstore_dir,
             store::list_catalog_files,
+            store::list_off_catalog_files,
+            store::set_catalog_file_enabled,
             store::load_catalog_entries,
             store::save_catalog_entry,
             store::delete_catalog_entry,

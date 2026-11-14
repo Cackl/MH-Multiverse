@@ -164,6 +164,48 @@ fn get_next_sku_id_scans_all_files() {
 }
 
 #[test]
+fn switching_a_file_off_and_on_moves_it_with_its_modified_file() {
+    let (_tmp, server_exe) = setup();
+    let dir = mtxstore_dir(&server_exe).unwrap();
+    let off = dir.join("Off");
+    let read = |p: std::path::PathBuf| fs::read_to_string(p).unwrap();
+    let (base, modified) = (read(dir.join("CatalogBundle.json")), read(dir.join("CatalogBundleMODIFIED.json")));
+
+    set_catalog_file_enabled(server_exe.clone(), "CatalogBundle.json".into(), false).unwrap();
+    for f in ["CatalogBundle.json", "CatalogBundleMODIFIED.json"] {
+        assert!(!dir.join(f).exists() && off.join(f).exists(), "{f}");
+    }
+    assert!(!list_catalog_files(server_exe.clone()).unwrap().contains(&"CatalogBundle.json".to_string()));
+    assert_eq!(list_off_catalog_files(server_exe.clone()).unwrap(), ["CatalogBundle.json"]);
+    assert!(load_catalog_entries(server_exe.clone()).unwrap().iter().all(|e| e.source_file != "CatalogBundle.json"));
+    // Its SKUs stay taken, so a new entry can't clash with them later.
+    assert_eq!(get_next_sku_id(server_exe.clone()).unwrap(), "1004");
+
+    set_catalog_file_enabled(server_exe.clone(), "CatalogBundle.json".into(), true).unwrap();
+    assert_eq!(read(dir.join("CatalogBundle.json")), base);
+    assert_eq!(read(dir.join("CatalogBundleMODIFIED.json")), modified);
+    assert!(list_off_catalog_files(server_exe).unwrap().is_empty());
+}
+
+#[test]
+fn switching_refuses_bad_names_and_clashes_and_moves_nothing() {
+    let (_tmp, server_exe) = setup();
+    let dir = mtxstore_dir(&server_exe).unwrap();
+    for name in ["../CatalogBundle.json", "CatalogBundleMODIFIED.json", "CatalogNope.json"] {
+        set_catalog_file_enabled(server_exe.clone(), name.into(), false).unwrap_err();
+    }
+    assert!(!dir.join("Off").exists());
+
+    // An older copy of the MODIFIED file already waits in Off: nothing moves, nothing is overwritten.
+    fs::create_dir_all(dir.join("Off")).unwrap();
+    fs::write(dir.join("Off").join("CatalogBundleMODIFIED.json"), "old").unwrap();
+    let err = set_catalog_file_enabled(server_exe, "CatalogBundle.json".into(), false).unwrap_err();
+    assert!(err.contains("Nothing was moved"), "{err}");
+    assert!(dir.join("CatalogBundle.json").exists() && dir.join("CatalogBundleMODIFIED.json").exists());
+    assert_eq!(fs::read_to_string(dir.join("Off").join("CatalogBundleMODIFIED.json")).unwrap(), "old");
+}
+
+#[test]
 fn get_next_sku_id_floor_1001_empty_dir() {
     let (_tmp, server_exe) = empty_mtxstore();
     assert_eq!(get_next_sku_id(server_exe).unwrap(), "1001");
