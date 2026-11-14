@@ -1,8 +1,7 @@
 <script lang="ts">
-  import { onDestroy } from 'svelte'
   import { invoke } from '@tauri-apps/api/core'
-  import { listen, type UnlistenFn } from '@tauri-apps/api/event'
   import { openPath } from '@tauri-apps/plugin-opener'
+  import { reloadCatalog } from '../lib/catalogReload'
   import { appConfig, serverRunning } from '../lib/store'
   import { tip } from '../lib/tooltip'
   import PanelSidebar from './PanelSidebar.svelte'
@@ -10,7 +9,7 @@
   import { entryTitle, entryPrice, type CatalogEntryWithMeta } from '../lib/catalogMeta'
   import {
     STORE_SECTIONS, MIN_PRICE, MAX_PRICE, isHidden, setHidden, setPrice, sameEntry, planWrites, reverted,
-    displayTitle, catalogReloadResult, startSale, endSale, type StoreState, type StoreWrites,
+    displayTitle, startSale, endSale, type StoreState, type StoreWrites,
   } from '../lib/storeSimple'
 
   type View = string // a section's Type name, 'all' or 'yours'
@@ -94,7 +93,7 @@
     saveError = ''
     try {
       await invoke('apply_store_changes', { serverExe, upserts, removes, state: nextState })
-      stopWatching()
+      reloadRun++
       reloadError = ''
       await load(serverExe)
       return true
@@ -140,44 +139,17 @@
   }
 
   // ── Reload ────────────────────────────────────────────────────────────────
-  // send_command only proves the text reached the server console, so the result comes from
-  // the log lines that follow it. Only a failure shows a message.
+  // Only a failure shows a message. A newer reload or a save drops an older result.
 
   let reloadError = ''
-  let unlisten: UnlistenFn | null = null
-  let timer: ReturnType<typeof setTimeout> | null = null
-
-  function stopWatching() {
-    unlisten?.()
-    unlisten = null
-    if (timer) clearTimeout(timer)
-    timer = null
-  }
+  let reloadRun = 0
 
   async function reload() {
-    stopWatching()
+    const run = ++reloadRun
     reloadError = ''
-    const lines: string[] = []
-    unlisten = await listen<{ msg: string }[]>('server-log', e => {
-      lines.push(...e.payload.map(l => l.msg))
-      const result = catalogReloadResult(lines)
-      if (!result) return
-      stopWatching()
-      if (result.skipped > 0) reloadError = `${result.skipped} catalog ${result.skipped === 1 ? 'file' : 'files'} skipped. See the Server log.`
-    })
-    timer = setTimeout(() => {
-      stopWatching()
-      reloadError = 'No reply from the server. See the Server log.'
-    }, 5000)
-    try {
-      await invoke('send_command', { cmd: '!server reloadcatalog' })
-    } catch (e) {
-      stopWatching()
-      reloadError = `Reload not sent: ${e}`
-    }
+    const error = await reloadCatalog()
+    if (run === reloadRun) reloadError = error
   }
-
-  onDestroy(stopWatching)
 </script>
 
 <div class="store">

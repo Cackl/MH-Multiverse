@@ -2,7 +2,8 @@
   import { onMount } from 'svelte'
   import { invoke } from '@tauri-apps/api/core'
   import { openPath } from '@tauri-apps/plugin-opener'
-  import { appConfig } from '../lib/store'
+  import { appConfig, serverRunning } from '../lib/store'
+  import { reloadCatalog } from '../lib/catalogReload'
   import {
     typeNames,
     modifiersForType,
@@ -29,6 +30,15 @@
   let loading = false
   let loadError = ''
   let openDirError = ''
+  // Only a failed reload shows a message. A newer reload drops an older result.
+  let reloadError = ''
+  let reloadRun = 0
+  async function reload() {
+    const run = ++reloadRun
+    reloadError = ''
+    const error = await reloadCatalog()
+    if (run === reloadRun) reloadError = error
+  }
 
   // Filters — price uses strings to avoid Svelte's numeric coercion on empty inputs
   let fileFilter   = ''
@@ -541,11 +551,24 @@
       <header class="page-head">
         <h3 class="page-title">{fileFilter ? shortName(fileFilter) : 'All files'}</h3>
         <div class="page-acts">
+          {#if reloadError}<span class="reload-error">{reloadError}</span>{/if}
           <button
             class="btn btn-sm btn-outline"
             on:click={() => { creatingNew = true; editingEntry = null }}
             disabled={!$appConfig.server_exe || catalogFiles.length === 0}
           >New entry</button>
+          <button
+            class="btn btn-sm btn-outline"
+            on:click={reload}
+            disabled={!$serverRunning}
+            use:tip={$serverRunning ? 'Send !server reloadcatalog. Players see changes next time they open the store.' : 'Server not running'}
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="23 4 23 10 17 10"/>
+              <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+            </svg>
+            Reload Store
+          </button>
         </div>
       </header>
 
@@ -1196,6 +1219,7 @@
     flex-shrink: 0;
   }
   .batch-feedback.error { color: var(--text-error); }
+  .reload-error { font-size: 12px; color: var(--text-error); }
   .batch-feedback.ok {
     color: var(--text-success);
     font-family: var(--font-head);
