@@ -126,6 +126,8 @@ export interface ItemCategory {
   DisplayName: string
   Path: string
   IsInventoryType: boolean
+  /** Only prototypes of this class or one derived from it (`search_prototypes` class_filter). */
+  ClassFilter?: string
 }
 
 /**
@@ -133,6 +135,13 @@ export interface ItemCategory {
  * Each category maps to one or more Calligraphy prototype path prefixes.
  */
 export const ITEM_CATEGORIES: ItemCategory[] = [
+  {
+    // Every item class (gear, legendaries, artifacts, costumes...), wherever it lives.
+    DisplayName: 'All Items',
+    Path: 'Entity',
+    IsInventoryType: false,
+    ClassFilter: 'ItemPrototype',
+  },
   {
     DisplayName: 'Consumables',
     Path: 'Entity/Items/Consumables',

@@ -349,6 +349,7 @@
           query,
           categoryPath: selectedCategory.Path,
           isInventoryType: selectedCategory.IsInventoryType,
+          classFilter: selectedCategory.ClassFilter,
           // Legacy arg kept for backend compatibility with older builds.
           blueprintHint: selectedCategory.Path,
         }
