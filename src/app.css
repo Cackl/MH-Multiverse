@@ -83,6 +83,9 @@
 }
 
 :root {
+  /* Native controls (unchecked checkboxes, scrollbars, select popups) follow the theme. */
+  color-scheme: dark;
+
   /* Surface layers */
   --bg-0: #08090c;
   --bg-1: #0e1015;
@@ -616,6 +619,8 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 
 /* Light theme */
 [data-theme="light"] {
+  color-scheme: light;
+
   /* Surface layers */
   --bg-0: #f7fafc;
   --bg-1: #f0f5f9;
