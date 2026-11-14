@@ -167,6 +167,10 @@
 
   let formTypeName = initialState.typeName
   let formOrder    = initialState.typeOrder
+  // How the client sorts a store tab: Order ascending, then Title by byte order (SimpleView-StoreCatalog.md §2.7).
+  $: orderTip = 'Position within this item\'s store tab. Lower numbers come first, and any whole number works, including negatives. '
+    + 'Items with the same number sort by Title, A to Z, with capitals before lowercase.'
+    + (formTypeName === 'Bundle' ? '' : ' The store tile shows the game\'s own item name, not this Title, so items sharing a number may not look alphabetical in game.')
 
   let formInfoUrl    = initialState.infoUrl
   let formContentUrl = initialState.contentUrl
@@ -785,13 +789,13 @@
 
               <div class="field">
                 <label class="field-label" for="f-order">
-                  Order
-                  <span class="label-hint" use:tip={'1 = Top Priority, 2 = Alphabetical, 3->999 = After Alphabetical'}>?</span>
+                  Sort order
+                  <span class="label-hint" use:tip={orderTip}>?</span>
                 </label>
                 <input
                   id="f-order" class="field-input" type="number"
                   bind:value={formOrder}
-                  min="0" step="1"
+                  step="1"
                 >
               </div>
             </div>

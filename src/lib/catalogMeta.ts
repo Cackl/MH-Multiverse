@@ -29,15 +29,9 @@ export interface UrlEntry {
 export interface NamedItem {
   Name: string
   /**
-   * Per-entry display sort order. NOT a fixed value per type name.
-   * Type.Order and every TypeModifier.Order on the same entry are always
-   * identical — it is one logical value stored redundantly in both places.
-   *
-   * Observed values in stock catalog files:
-   *   0   — fully hidden items (NoDisplay + NoDisplayStore); login rewards, internal grants
-   *   1   — hidden-from-store items or standard purchasable boosts
-   *   5   — regular visible store items
-   *   999 — crafting ingredients (sorted to end)
+   * Sort group within the item's store tab: the client sorts each tab by Type.Order
+   * (signed int32, lower first, no special values), then by Title in byte order.
+   * TypeModifier.Order mirrors it on every stock entry but the client never reads it.
    */
   Order: number
 }
