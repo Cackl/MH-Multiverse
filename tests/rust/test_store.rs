@@ -206,6 +206,26 @@ fn switching_refuses_bad_names_and_clashes_and_moves_nothing() {
 }
 
 #[test]
+fn create_catalog_file_makes_an_empty_list_and_refuses_bad_or_taken_names() {
+    let (_tmp, server_exe) = setup();
+    let dir = mtxstore_dir(&server_exe).unwrap();
+
+    assert_eq!(create_catalog_file(server_exe.clone(), "My_Items-2".into()).unwrap(), "CatalogMy_Items-2.json");
+    assert_eq!(fs::read_to_string(dir.join("CatalogMy_Items-2.json")).unwrap(), "[]");
+    assert!(list_catalog_files(server_exe.clone()).unwrap().contains(&"CatalogMy_Items-2.json".to_string()));
+
+    set_catalog_file_enabled(server_exe.clone(), "CatalogMy_Items-2.json".into(), false).unwrap();
+    let bundle = fs::read_to_string(dir.join("CatalogBundle.json")).unwrap();
+    // Bundle and its MODIFIED file are on, My_Items-2 is off: none can be made again.
+    for suffix in ["", "../Bad", "Has Space", "a.json", "Bundle", "bundle", "BundleMODIFIED", "Modified", "My_Items-2"] {
+        create_catalog_file(server_exe.clone(), suffix.into()).unwrap_err();
+    }
+    assert_eq!(fs::read_to_string(dir.join("CatalogBundle.json")).unwrap(), bundle);
+    assert!(!dir.join("CatalogMy_Items-2.json").exists());
+    assert!(!dir.join("CatalogModified.json").exists());
+}
+
+#[test]
 fn get_next_sku_id_floor_1001_empty_dir() {
     let (_tmp, server_exe) = empty_mtxstore();
     assert_eq!(get_next_sku_id(server_exe).unwrap(), "1001");

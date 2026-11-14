@@ -133,6 +133,7 @@ pub fn run() {
             store::list_catalog_files,
             store::list_off_catalog_files,
             store::set_catalog_file_enabled,
+            store::create_catalog_file,
             store::load_catalog_entries,
             store::save_catalog_entry,
             store::delete_catalog_entry,

@@ -355,6 +355,31 @@ pub fn list_off_catalog_files(server_exe: String) -> Result<Vec<String>, String>
     base_catalog_files(&off).map(file_names)
 }
 
+/// Create an empty `Catalog<suffix>.json` (`[]`) for new entries. The suffix is letters, digits,
+/// `_` or `-`, without MODIFIED (that name is the overlay of another file), and the file must not
+/// exist yet, switched on or off. Entries saved into it still go to its MODIFIED file.
+#[tauri::command]
+pub fn create_catalog_file(server_exe: String, suffix: String) -> Result<String, String> {
+    let ok_chars = !suffix.is_empty() && suffix.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-');
+    if !ok_chars {
+        return Err("Use letters, numbers, _ or - for the name".into());
+    }
+    if suffix.to_ascii_uppercase().contains("MODIFIED") {
+        return Err("The name can't contain MODIFIED".into());
+    }
+    let name = format!("Catalog{suffix}.json");
+    let dir = mtxstore_dir(&server_exe)?;
+    if dir.join(OFF_DIR).join(&name).exists() {
+        return Err(format!("{name} already exists and is switched off"));
+    }
+    fs::create_dir_all(&dir).map_err(|e| format!("Cannot create {}: {e}", dir.display()))?;
+    let mut f = fs::OpenOptions::new().write(true).create_new(true).open(dir.join(&name)).map_err(|e| {
+        if e.kind() == std::io::ErrorKind::AlreadyExists { format!("{name} already exists") } else { format!("Cannot create {name}: {e}") }
+    })?;
+    std::io::Write::write_all(&mut f, b"[]").map_err(|e| format!("Cannot write {name}: {e}"))?;
+    Ok(name)
+}
+
 /// Switch a catalog file off (move it and its MODIFIED file into `MTXStore/Off/`) or back on.
 /// Nothing moves if the destination already has either file.
 #[tauri::command]

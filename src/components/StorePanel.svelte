@@ -15,6 +15,7 @@
   } from '../lib/catalogMeta'
   import PanelSidebar from './PanelSidebar.svelte'
   import StoreEditorModal from './StoreEditorModal.svelte'
+  import NewCatalogFileModal from './NewCatalogFileModal.svelte'
   import { tip } from '../lib/tooltip'
 
   // ── State ──────────────────────────────────────────────────────────────────
@@ -24,6 +25,7 @@
   /** Files switched off: they sit in MTXStore\Off, which the server doesn't read. */
   let offFiles: string[] = []
   let switchError = ''
+  let creatingFile = false
   let loading = false
   let loadError = ''
   let openDirError = ''
@@ -231,6 +233,14 @@
     }
   }
 
+  /** Shows a file the New catalog file modal just made. */
+  async function handleFileCreated(name: string) {
+    creatingFile = false
+    await load()
+    fileFilter = name
+    typeFilter = ''
+  }
+
   async function openMtxStoreDir() {
     if (!$appConfig.server_exe) return
     openDirError = ''
@@ -390,10 +400,10 @@
         <div class="section-title">Catalog Files</div>
         <button
           class="btn-icon"
-          on:click={() => { creatingNew = true; editingEntry = null }}
-          aria-label="Add new catalog entry"
-          use:tip={'Add new catalog entry'}
-          disabled={!$appConfig.server_exe || catalogFiles.length === 0}
+          on:click={() => creatingFile = true}
+          aria-label="New catalog file"
+          use:tip={'New catalog file'}
+          disabled={!$appConfig.server_exe}
           style="margin-left: auto;"
         >
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -530,6 +540,13 @@
     <section class="data-main">
       <header class="page-head">
         <h3 class="page-title">{fileFilter ? shortName(fileFilter) : 'All files'}</h3>
+        <div class="page-acts">
+          <button
+            class="btn btn-sm btn-outline"
+            on:click={() => { creatingNew = true; editingEntry = null }}
+            disabled={!$appConfig.server_exe || catalogFiles.length === 0}
+          >New entry</button>
+        </div>
       </header>
 
       <!-- ── Toolbar ── -->
@@ -850,6 +867,14 @@
     onClose={() => editingEntry = null}
     onSaved={handleSaved}
     onDeleted={handleDeleted}
+  />
+{/if}
+
+{#if creatingFile}
+  <NewCatalogFileModal
+    serverExe={$appConfig.server_exe}
+    onCreated={handleFileCreated}
+    onClose={() => creatingFile = false}
   />
 {/if}
 
