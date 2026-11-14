@@ -9,6 +9,10 @@
     buildModifiers,
     defaultLocalizedEntry,
     inferOfferType,
+    removeKind,
+    stockVersion,
+    additionalItemsToSave,
+    usesGeneratedPage,
     ITEM_CATEGORIES,
     type ItemCategory,
     type OfferType,
@@ -40,6 +44,8 @@
   export let serverExe: string
   /** Base `Catalog*.json` filenames present in MTXStore — for the target-file dropdown. */
   export let catalogFiles: string[]
+  /** The file a new entry saves to at first: the one open in the sidebar, if any. */
+  export let defaultFile = ''
   /**
    * All currently loaded catalog entries. Used by the item picker to identify
    * items already present in any entry across the catalog.
@@ -163,6 +169,10 @@
 
   let formTypeName = initialState.typeName
   let formOrder    = initialState.typeOrder
+  // How the client sorts a store tab: Order ascending, then Title by byte order (SimpleView-StoreCatalog.md §2.7).
+  $: orderTip = 'Position within this item\'s store tab. Lower numbers come first, and any whole number works, including negatives. '
+    + 'Items with the same number sort by Title, A to Z, with capitals before lowercase.'
+    + (formTypeName === 'Bundle' ? '' : ' The store tile shows the game\'s own item name, not this Title, so items sharing a number may not look alphabetical in game.')
 
   let formInfoUrl    = initialState.infoUrl
   let formContentUrl = initialState.contentUrl
@@ -174,7 +184,7 @@
 
   // ── Target file (create mode) ─────────────────────────────────────────────
 
-  let targetFile = catalogFiles[0] ?? ''
+  let targetFile = catalogFiles.includes(defaultFile) ? defaultFile : (catalogFiles[0] ?? '')
 
   // ── Modifier state ────────────────────────────────────────────────────────
 
@@ -340,6 +350,7 @@
           query,
           categoryPath: selectedCategory.Path,
           isInventoryType: selectedCategory.IsInventoryType,
+          classFilter: selectedCategory.ClassFilter,
           // Legacy arg kept for backend compatibility with older builds.
           blueprintHint: selectedCategory.Path,
         }
@@ -432,7 +443,7 @@
     return {
       SkuId: workingSku,
       GuidItems: cloneGuidItems(formGuidItems),
-      AdditionalGuidItems: offerType === 'bogo' ? cloneGuidItems(formAdditionalGuidItems) : [],
+      AdditionalGuidItems: cloneGuidItems(additionalItemsToSave(offerType, formAdditionalGuidItems)),
       LocalizedEntries: [{
         LanguageId:   'en_us',
         Description:  formDesc,
@@ -488,11 +499,21 @@
       const built  = buildEntry()
       const target = isNew ? targetFile : entry!.source_file
       await invoke('save_catalog_entry', { serverExe, entry: built, targetFile: target })
-      const meta: CatalogEntryWithMeta = { ...built, source_file: target, from_modified: true }
+      const meta: CatalogEntryWithMeta = { ...built, source_file: target, from_modified: true, stock: entry?.stock ?? null }
       initialStateSerialized = currentStateSerialized
+      onSaved(meta)
+      // Write the page and image now, so the game never caches a missing image.
+      if (usesGeneratedPage(built, autoInfoUrl, autoThumbUrl)
+          && await invoke<boolean>('apache_bundles_found', { serverExe })) {
+        try {
+          await writeStorePage(built, true)
+        } catch (e) {
+          saveError = `Saved. The store page was not made: ${e}`
+          return
+        }
+      }
       saveSuccess = true
       setTimeout(() => (saveSuccess = false), 3000)
-      onSaved(meta)
       if (isNew) onClose()
     } catch (e) {
       saveError = String(e)
@@ -512,9 +533,11 @@
   let deleteConfirming = false
   let deleting         = false
   let deleteError      = ''
+  // Both drop the MODIFIED row; a stock row has nothing to drop.
+  $: removal = entry ? removeKind(entry) : null
 
   async function confirmDelete() {
-    if (!entry) return
+    if (!entry || !removal) return
     deleting     = true
     deleteError  = ''
     try {
@@ -522,9 +545,10 @@
         serverExe,
         skuId:        entry.SkuId,
         sourceFile:   entry.source_file,
-        fromModified: entry.from_modified,
+        fromModified: true,
       })
-      onDeleted(entry.SkuId)
+      if (removal === 'revert') onSaved(stockVersion(entry))
+      else onDeleted(entry.SkuId)
       onClose()
     } catch (e) {
       deleteError      = String(e)
@@ -623,30 +647,26 @@
       const target = entry!.source_file
       await invoke('save_catalog_entry', { serverExe, entry: built, targetFile: target })
       initialStateSerialized = currentStateSerialized
-      onSaved({ ...built, source_file: target, from_modified: true })
-
-      // Generate and save thumbnail.
-      const pngBase64 = await generateThumbnailBase64()
-      await invoke('save_thumbnail', {
-        serverExe,
-        slug:        slugify(formTitle),
-        skuId:       workingSku,
-        pngBase64,
-        saveToApache: !overrideApache,
-      })
-
-      // Generate and save HTML.
-      generatePath = await invoke<string>('generate_bundle_html', {
-        serverExe,
-        entry:        built,
-        slug:         slugify(formTitle),
-        saveToApache: !overrideApache,
-      })
+      onSaved({ ...built, source_file: target, from_modified: true, stock: entry?.stock ?? null })
+      generatePath = await writeStorePage(built, !overrideApache)
     } catch (e) {
       generateError = String(e)
     } finally {
       generating = false
     }
+  }
+
+  // Thumbnail first, then the HTML page. Returns the backup HTML path.
+  async function writeStorePage(built: CatalogEntry, saveToApache: boolean): Promise<string> {
+    const slug = slugify(formTitle)
+    await invoke('save_thumbnail', {
+      serverExe,
+      slug,
+      skuId:     workingSku,
+      pngBase64: await generateThumbnailBase64(),
+      saveToApache,
+    })
+    return invoke<string>('generate_bundle_html', { serverExe, entry: built, slug, saveToApache })
   }
 
   // ── Close guard ───────────────────────────────────────────────────────────
@@ -778,13 +798,13 @@
 
               <div class="field">
                 <label class="field-label" for="f-order">
-                  Order
-                  <span class="label-hint" use:tip={'1 = Top Priority, 2 = Alphabetical, 3->999 = After Alphabetical'}>?</span>
+                  Sort order
+                  <span class="label-hint" use:tip={orderTip}>?</span>
                 </label>
                 <input
                   id="f-order" class="field-input" type="number"
                   bind:value={formOrder}
-                  min="0" step="1"
+                  step="1"
                 >
               </div>
             </div>
@@ -993,6 +1013,7 @@
               {/if}
             </div>
             {#if formGuidItems.length}
+              <div class="items-frame">
               <table class="items-table">
                 <thead>
                   <tr>
@@ -1026,16 +1047,17 @@
                   {/each}
                 </tbody>
               </table>
+              </div>
             {:else}
               <div class="empty-note">No items added yet.</div>
             {/if}
           </div>
 
-          <!-- AdditionalGuidItems (BOGO bonus) -->
-          {#if offerType === 'bogo'}
+          <!-- AdditionalGuidItems (BOGO bonus, read-only on Single Item entries) -->
+          {#if offerType === 'bogo' || formAdditionalGuidItems.length}
             <div
               class="items-subsection bogo-bonus"
-              class:bogo-target-active={bogoTarget === 'additional'}
+              class:bogo-target-active={offerType === 'bogo' && bogoTarget === 'additional'}
             >
               <div class="items-subsection-header">
                 <span class="items-subsection-title">Bonus Items</span>
@@ -1044,6 +1066,7 @@
                 {/if}
               </div>
               {#if formAdditionalGuidItems.length}
+                <div class="items-frame">
                 <table class="items-table">
                   <thead>
                     <tr>
@@ -1058,25 +1081,31 @@
                         <td class="col-name" use:tip={item.ItemPrototypeRuntimeIdForClient}>
                           <span class="item-name">{additionalGuidNames[i] ?? item.ItemPrototypeRuntimeIdForClient}</span>
                         </td>
-                        <td class="col-qty">
-                          <input
-                            type="number" class="qty-input"
-                            value={item.Quantity} min="1" step="1"
-                            on:change={e => updateAdditionalItemQty(i, (e.target as HTMLInputElement).value)}
-                          >
-                        </td>
-                        <td class="col-del">
-                          <button class="del-btn" aria-label="Remove item" on:click={() => removeAdditionalGuidItem(i)}>
-                            <svg viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.5">
-                              <line x1="2" y1="2" x2="8" y2="8"/>
-                              <line x1="8" y1="2" x2="2" y2="8"/>
-                            </svg>
-                          </button>
-                        </td>
+                        {#if offerType === 'bogo'}
+                          <td class="col-qty">
+                            <input
+                              type="number" class="qty-input"
+                              value={item.Quantity} min="1" step="1"
+                              on:change={e => updateAdditionalItemQty(i, (e.target as HTMLInputElement).value)}
+                            >
+                          </td>
+                          <td class="col-del">
+                            <button class="del-btn" aria-label="Remove item" on:click={() => removeAdditionalGuidItem(i)}>
+                              <svg viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.5">
+                                <line x1="2" y1="2" x2="8" y2="8"/>
+                                <line x1="8" y1="2" x2="2" y2="8"/>
+                              </svg>
+                            </button>
+                          </td>
+                        {:else}
+                          <td class="col-qty qty-static">{item.Quantity}</td>
+                          <td class="col-del"></td>
+                        {/if}
                       </tr>
                     {/each}
                   </tbody>
                 </table>
+                </div>
               {:else}
                 <div class="empty-note">No bonus items added yet.</div>
               {/if}
@@ -1234,14 +1263,22 @@
         </div>
 
         <div class="footer-actions">
-          {#if !isNew}
+          {#if removal}
             {#if deleteConfirming}
               <button class="btn btn-sm btn-outline" on:click={() => deleteConfirming = false}>Cancel</button>
               <button
-                class="btn btn-sm btn-red"
+                class="btn btn-sm {removal === 'revert' ? 'btn-accent' : 'btn-red'}"
                 on:click={confirmDelete}
                 disabled={deleting}
-              >{deleting ? 'Deleting…' : 'Confirm Delete'}</button>
+              >{removal === 'revert'
+                ? (deleting ? 'Reverting…' : 'Confirm Revert')
+                : (deleting ? 'Deleting…' : 'Confirm Delete')}</button>
+            {:else if removal === 'revert'}
+              <button
+                class="btn btn-sm btn-outline"
+                on:click={() => deleteConfirming = true}
+                use:tip={'Remove your changes and go back to the stock version'}
+              >Revert to stock</button>
             {:else}
               <button
                 class="btn btn-sm btn-red"
@@ -1686,8 +1723,9 @@
     background: var(--bg-0);
     border: 1px solid var(--border-mid);
     color: var(--text-0);
-    font-family: var(--font-mono);
+    font-family: var(--font-body);
     font-size: 12px;
+    font-variant-numeric: tabular-nums;
     padding: 6px 8px;
     border-radius: var(--radius-sm);
     outline: none;
@@ -1761,37 +1799,52 @@
   }
 
   /* ── Items table (shared by both item lists) ── */
-  .items-table {
-    width: 100%;
-    border-collapse: collapse;
-    font-size: 12px;
+  /* The frame carries the border and rounded corners; a table can't clip its own. */
+  .items-frame {
     border: 1px solid var(--border);
     border-radius: var(--radius-sm);
     overflow: hidden;
     margin-bottom: 4px;
   }
+  .items-table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    font-size: 12px;
+  }
 
   .items-table thead th {
+    height: 30px;
     font-family: var(--font-head);
     font-size: var(--fs-min);
     font-weight: 600;
     letter-spacing: 0.12em;
     text-transform: uppercase;
     color: var(--text-3);
-    padding: 5px 10px;
+    padding: 0 10px;
     border-bottom: 1px solid var(--border);
     text-align: left;
-    background: var(--bg-2);
+    background: var(--bg-1);
   }
 
-  .items-table tbody tr { border-bottom: 1px solid var(--border); transition: background 0.08s; }
-  .items-table tbody tr:last-child { border-bottom: none; }
-  .items-table tbody tr:hover { background: var(--bg-2); }
-  .items-table td { padding: 5px 10px; vertical-align: middle; }
+  .items-table td {
+    height: 34px;
+    padding: 0 10px;
+    vertical-align: middle;
+    border-bottom: 1px solid var(--border);
+    transition: background 0.08s;
+  }
+  .items-table tbody tr:last-child td { border-bottom: none; }
+  .items-table tbody tr:hover td { background: var(--bg-2); }
+  .items-table th:first-child,
+  .items-table td:first-child { padding-left: 12px; }
+  .items-table th:last-child,
+  .items-table td:last-child { padding-right: 8px; }
 
   .col-name { width: auto; }
   .col-qty  { width: 72px; }
   .col-del  { width: 36px; }
+  .qty-static { font-size: 12px; font-variant-numeric: tabular-nums; color: var(--text-1); padding-left: 13px; }
 
   .item-name {
     font-family: var(--font-mono);
@@ -1817,16 +1870,6 @@
     transition: border-color 0.12s;
   }
   .qty-input:focus { border-color: var(--accent-dim); }
-
-  .del-btn {
-    width: 22px; height: 22px;
-    display: flex; align-items: center; justify-content: center;
-    background: none; border: 1px solid transparent;
-    border-radius: var(--radius-sm); color: var(--text-3);
-    cursor: pointer; transition: all 0.1s;
-  }
-  .del-btn:hover { border-color: color-mix(in srgb, var(--red) 40%, transparent); color: var(--text-error); background: var(--red-dim); }
-  .del-btn svg { width: 10px; height: 10px; }
 
   .empty-note {
     font-family: var(--font-head);

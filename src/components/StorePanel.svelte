@@ -2,26 +2,43 @@
   import { onMount } from 'svelte'
   import { invoke } from '@tauri-apps/api/core'
   import { openPath } from '@tauri-apps/plugin-opener'
-  import { appConfig } from '../lib/store'
+  import { appConfig, serverRunning } from '../lib/store'
+  import { reloadCatalog } from '../lib/catalogReload'
   import {
     typeNames,
     modifiersForType,
     buildModifiers,
     entryTitle,
     entryPrice,
+    removeKind,
+    stockVersion,
     type CatalogEntryWithMeta,
   } from '../lib/catalogMeta'
   import PanelSidebar from './PanelSidebar.svelte'
   import StoreEditorModal from './StoreEditorModal.svelte'
+  import NewCatalogFileModal from './NewCatalogFileModal.svelte'
   import { tip } from '../lib/tooltip'
 
   // ── State ──────────────────────────────────────────────────────────────────
 
   let entries: CatalogEntryWithMeta[] = []
   let catalogFiles: string[] = []
+  /** Files switched off: they sit in MTXStore\Off, which the server doesn't read. */
+  let offFiles: string[] = []
+  let switchError = ''
+  let creatingFile = false
   let loading = false
   let loadError = ''
   let openDirError = ''
+  // Only a failed reload shows a message. A newer reload drops an older result.
+  let reloadError = ''
+  let reloadRun = 0
+  async function reload() {
+    const run = ++reloadRun
+    reloadError = ''
+    const error = await reloadCatalog()
+    if (run === reloadRun) reloadError = error
+  }
 
   // Filters — price uses strings to avoid Svelte's numeric coercion on empty inputs
   let fileFilter   = ''
@@ -51,7 +68,8 @@
   let batchRunning  = false
   let batchError    = ''
   let batchSuccess  = ''
-  let batchDeleteConfirming = false
+  /** Which removal is waiting for Confirm. */
+  let batchConfirm: null | 'revert' | 'delete' = null
 
   // ── Derived: filter pipeline ───────────────────────────────────────────────
 
@@ -99,6 +117,9 @@
     modified: entries.filter(e => e.source_file === f && e.from_modified).length,
   }))
 
+  /** "CatalogBundle.json" shows as "Bundle"; the full name is on the tooltip. */
+  const shortName = (f: string) => f.replace(/^Catalog/, '').replace(/\.json$/, '') || f
+
   // Types present within the current file filter (ignoring type filter itself
   // so the dropdown doesn't collapse while a type is selected)
   $: activeTypes = typeNames().filter(t => {
@@ -111,6 +132,10 @@
   $: allVisibleSelected  = sortedEntries.length > 0 && sortedEntries.every(e => selectedSkus.has(e.SkuId))
   $: someVisibleSelected = sortedEntries.some(e => selectedSkus.has(e.SkuId))
   $: totalSelectedCount  = selectedSkus.size
+  // Stock rows are in neither list: stock files are never written.
+  $: revertTargets = entries.filter(e => selectedSkus.has(e.SkuId) && removeKind(e) === 'revert')
+  $: deleteTargets = entries.filter(e => selectedSkus.has(e.SkuId) && removeKind(e) === 'delete')
+  $: confirmCount  = (batchConfirm === 'revert' ? revertTargets : deleteTargets).length
 
   // Imperatively set indeterminate; Svelte has no binding for this property.
   $: if (headerCheckEl) {
@@ -167,7 +192,7 @@
     batchPriceStr = ''
     batchError = ''
     batchSuccess = ''
-    batchDeleteConfirming = false
+    batchConfirm = null
     batchRunning = false
   }
 
@@ -175,7 +200,7 @@
     batchMode = mode
     batchError = ''
     batchSuccess = ''
-    batchDeleteConfirming = false
+    batchConfirm = null
     // Default the modifier select to the first available option when opening
     // an add/remove modifier operation so the Apply button is immediately usable.
     if ((mode === 'add-mod' || mode === 'remove-mod') && !batchModifier) {
@@ -191,11 +216,13 @@
     loadError = ''
     clearSelection()
     try {
-      const [files, loaded] = await Promise.all([
+      const [files, off, loaded] = await Promise.all([
         invoke<string[]>('list_catalog_files', { serverExe: $appConfig.server_exe }),
+        invoke<string[]>('list_off_catalog_files', { serverExe: $appConfig.server_exe }),
         invoke<CatalogEntryWithMeta[]>('load_catalog_entries', { serverExe: $appConfig.server_exe }),
       ])
       catalogFiles = files
+      offFiles = off
       entries = loaded
       if (fileFilter && !files.includes(fileFilter)) fileFilter = ''
     } catch (e) {
@@ -203,6 +230,25 @@
     } finally {
       loading = false
     }
+  }
+
+  /** Moves the file and its MODIFIED file into MTXStore\Off (off) or back (on), then reloads. */
+  async function setFileEnabled(file: string, enabled: boolean) {
+    switchError = ''
+    try {
+      await invoke('set_catalog_file_enabled', { serverExe: $appConfig.server_exe, file, enabled })
+      await load()
+    } catch (e) {
+      switchError = String(e)
+    }
+  }
+
+  /** Shows a file the New catalog file modal just made. */
+  async function handleFileCreated(name: string) {
+    creatingFile = false
+    await load()
+    fileFilter = name
+    typeFilter = ''
   }
 
   async function openMtxStoreDir() {
@@ -318,37 +364,31 @@
     }
   }
 
-  // ── Batch: delete ──────────────────────────────────────────────────────────
+  // ── Batch: revert to stock / delete ────────────────────────────────────────
 
-  async function confirmBatchDelete() {
+  // Both drop MODIFIED rows, in one write: a reverted entry falls back to stock, a deleted one is gone.
+  async function confirmBatchRemove() {
+    const kind = batchConfirm
+    const targets = kind === 'revert' ? revertTargets : deleteTargets
     batchRunning = true
     batchError   = ''
     batchSuccess = ''
-    // Snapshot the targets before the loop since handleDeleted mutates entries.
-    const targets = entries.filter(e => selectedSkus.has(e.SkuId))
-    let deleted = 0
-    const failed: string[] = []
     try {
-      for (const orig of targets) {
-        try {
-          await invoke('delete_catalog_entry', {
-            serverExe:   $appConfig.server_exe,
-            skuId:       orig.SkuId,
-            sourceFile:  orig.source_file,
-            fromModified: orig.from_modified,
-          })
-          handleDeleted(orig.SkuId)
-          deleted++
-        } catch {
-          failed.push(orig.SkuId)
-        }
+      await invoke('apply_store_changes', {
+        serverExe: $appConfig.server_exe,
+        upserts:   [],
+        removes:   targets.map(e => ({ sku_id: e.SkuId, source_file: e.source_file })),
+        state:     null,
+      })
+      for (const e of targets) {
+        if (kind === 'revert') handleSaved(stockVersion(e))
+        else handleDeleted(e.SkuId)
       }
-      batchDeleteConfirming = false
-      if (failed.length > 0) {
-        batchError = `Deleted ${deleted}, failed ${failed.length} (SKUs: ${failed.join(', ')}).`
-      } else {
-        batchSuccess = `Deleted ${deleted} entr${deleted !== 1 ? 'ies' : 'y'}.`
-      }
+      const n = `${targets.length} entr${targets.length !== 1 ? 'ies' : 'y'}`
+      batchSuccess = kind === 'revert' ? `Reverted ${n} to stock.` : `Deleted ${n}.`
+      batchConfirm = null
+    } catch (e) {
+      batchError = String(e)
     } finally {
       batchRunning = false
     }
@@ -370,10 +410,10 @@
         <div class="section-title">Catalog Files</div>
         <button
           class="btn-icon"
-          on:click={() => { creatingNew = true; editingEntry = null }}
-          aria-label="Add new catalog entry"
-          use:tip={'Add new catalog entry'}
-          disabled={!$appConfig.server_exe || catalogFiles.length === 0}
+          on:click={() => creatingFile = true}
+          aria-label="New catalog file"
+          use:tip={'New catalog file'}
+          disabled={!$appConfig.server_exe}
           style="margin-left: auto;"
         >
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -429,7 +469,7 @@
           <div class="file-notice error">{loadError}</div>
         {:else if openDirError}
           <div class="file-notice error">{openDirError}</div>
-        {:else if catalogFiles.length === 0}
+        {:else if catalogFiles.length === 0 && offFiles.length === 0}
           <div class="file-notice">No Catalog*.json files found in MTXStore.</div>
         {:else}
           <div
@@ -464,14 +504,73 @@
                   {/if}
                 </span>
               </div>
+              <div
+                class="toggle-switch on"
+                role="switch"
+                aria-checked="true"
+                aria-label="{stat.name} on"
+                tabindex="0"
+                use:tip={'On. Switch off to stop the server loading this file and your changes to it.'}
+                on:click|stopPropagation={() => setFileEnabled(stat.name, false)}
+                on:keydown|stopPropagation={e => e.key === 'Enter' && setFileEnabled(stat.name, false)}
+              ></div>
             </div>
           {/each}
+
+          {#if offFiles.length}
+            <div class="side-label">Switched off</div>
+            {#each offFiles as name (name)}
+              <div class="file-item off">
+                <div class="file-info">
+                  <span class="file-name" use:tip={`${name}, kept in MTXStore\\Off`}>
+                    {name.replace(/^Catalog/, '').replace(/\.json$/, '') || name}
+                  </span>
+                </div>
+                <div
+                  class="toggle-switch"
+                  role="switch"
+                  aria-checked="false"
+                  aria-label="{name} off"
+                  tabindex="0"
+                  use:tip={'Off. Switch on to load this file again.'}
+                  on:click={() => setFileEnabled(name, true)}
+                  on:keydown={e => e.key === 'Enter' && setFileEnabled(name, true)}
+                ></div>
+              </div>
+            {/each}
+          {/if}
+          {#if switchError}
+            <div class="file-notice error">{switchError}</div>
+          {/if}
         {/if}
       </div>
     </PanelSidebar>
 
     <!-- ── Content pane ── -->
-    <div class="content-pane">
+    <section class="data-main">
+      <header class="page-head">
+        <h3 class="page-title">{fileFilter ? shortName(fileFilter) : 'All files'}</h3>
+        <div class="page-acts">
+          {#if reloadError}<span class="reload-error">{reloadError}</span>{/if}
+          <button
+            class="btn btn-sm btn-outline"
+            on:click={() => { creatingNew = true; editingEntry = null }}
+            disabled={!$appConfig.server_exe || catalogFiles.length === 0}
+          >New entry</button>
+          <button
+            class="btn btn-sm btn-outline"
+            on:click={reload}
+            disabled={!$serverRunning}
+            use:tip={$serverRunning ? 'Send !server reloadcatalog. Players see changes next time they open the store.' : 'Server not running'}
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="23 4 23 10 17 10"/>
+              <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+            </svg>
+            Reload Store
+          </button>
+        </div>
+      </header>
 
       <!-- ── Toolbar ── -->
       <div class="toolbar">
@@ -530,107 +629,6 @@
           {sortedEntries.length}{anyFilterActive ? ` of ${entries.length}` : ''} entr{sortedEntries.length !== 1 ? 'ies' : 'y'}
         </span>
       </div>
-
-      <!-- ── Batch bar ── -->
-      {#if totalSelectedCount > 0}
-        <div class="batch-bar">
-
-          {#if batchDeleteConfirming}
-            <span class="batch-confirm-msg">
-              Delete <strong>{totalSelectedCount}</strong> entr{totalSelectedCount !== 1 ? 'ies' : 'y'}?
-              This cannot be undone.
-            </span>
-            <div class="batch-actions" style="margin-left: auto;">
-              {#if batchError}
-                <span class="batch-feedback error">{batchError}</span>
-              {/if}
-              <button
-                class="btn btn-sm btn-outline"
-                on:click={() => batchDeleteConfirming = false}
-                disabled={batchRunning}
-              >Cancel</button>
-              <button
-                class="btn btn-sm btn-red"
-                on:click={confirmBatchDelete}
-                disabled={batchRunning}
-              >{batchRunning ? 'Deleting...' : 'Confirm Delete'}</button>
-            </div>
-
-          {:else if batchMode === 'price'}
-            <span class="batch-label">{totalSelectedCount} selected</span>
-            <button class="batch-clear" on:click={clearSelection} use:tip={'Clear selection'}>×</button>
-            <div class="batch-sep"></div>
-            <span class="batch-action-label">New price (G):</span>
-            <input
-              type="text"
-              inputmode="numeric"
-              class="batch-inline-input"
-              placeholder="0"
-              bind:value={batchPriceStr}
-              disabled={batchRunning}
-            >
-            <button
-              class="btn btn-sm btn-accent"
-              on:click={applyBatchPrice}
-              disabled={batchRunning || batchPriceStr === ''}
-            >{batchRunning ? 'Applying...' : 'Apply'}</button>
-            <button
-              class="btn btn-sm btn-outline"
-              on:click={() => setBatchMode(null)}
-              disabled={batchRunning}
-            >Cancel</button>
-            {#if batchError}<span class="batch-feedback error">{batchError}</span>{/if}
-            {#if batchSuccess}<span class="batch-feedback ok">{batchSuccess}</span>{/if}
-
-          {:else if batchMode === 'add-mod' || batchMode === 'remove-mod'}
-            <span class="batch-label">{totalSelectedCount} selected</span>
-            <button class="batch-clear" on:click={clearSelection} use:tip={'Clear selection'}>×</button>
-            <div class="batch-sep"></div>
-            <span class="batch-action-label">
-              {batchMode === 'add-mod' ? 'Add modifier:' : 'Remove modifier:'}
-            </span>
-            <select class="batch-inline-select" bind:value={batchModifier} disabled={batchRunning}>
-              {#if batchModifiers.length === 0}
-                <option value="">No modifiers available</option>
-              {:else}
-                {#each batchModifiers as m}
-                  <option value={m}>{m}</option>
-                {/each}
-              {/if}
-            </select>
-            <button
-              class="btn btn-sm btn-accent"
-              on:click={() => applyBatchModifier(batchMode === 'add-mod' ? 'add' : 'remove')}
-              disabled={batchRunning || !batchModifier}
-            >{batchRunning ? 'Applying...' : (batchMode === 'add-mod' ? 'Add' : 'Remove')}</button>
-            <button
-              class="btn btn-sm btn-outline"
-              on:click={() => setBatchMode(null)}
-              disabled={batchRunning}
-            >Cancel</button>
-            {#if batchError}<span class="batch-feedback error">{batchError}</span>{/if}
-            {#if batchSuccess}<span class="batch-feedback ok">{batchSuccess}</span>{/if}
-
-          {:else}
-            <span class="batch-label">{totalSelectedCount} selected</span>
-            <button class="batch-clear" on:click={clearSelection} use:tip={'Clear selection'}>×</button>
-            <div class="batch-sep"></div>
-            <div class="batch-actions">
-              <button class="btn btn-sm btn-outline" on:click={() => setBatchMode('price')}>Set Price</button>
-              <button class="btn btn-sm btn-outline" on:click={() => setBatchMode('add-mod')}>Add Modifier</button>
-              <button class="btn btn-sm btn-outline" on:click={() => setBatchMode('remove-mod')}>Remove Modifier</button>
-              <button
-                class="btn btn-sm btn-red"
-                on:click={() => { batchDeleteConfirming = true; batchError = ''; batchSuccess = '' }}
-              >Delete</button>
-            </div>
-            {#if batchSuccess}
-              <span class="batch-feedback ok">{batchSuccess}</span>
-            {/if}
-          {/if}
-
-        </div>
-      {/if}
 
       <!-- ── Table area ── -->
       <div class="table-scroll">
@@ -721,7 +719,6 @@
               {#each sortedEntries as entry (entry.SkuId)}
                 {@const title    = entryTitle(entry)}
                 {@const price    = entryPrice(entry)}
-                {@const typeLow  = entry.Type.Name.toLowerCase()}
                 {@const selected = selectedSkus.has(entry.SkuId)}
                 <tr
                   class:row-selected={selected}
@@ -737,16 +734,14 @@
                   <td class="col-sku">{entry.SkuId}</td>
                   <td class="col-name" use:tip={title}>{title}</td>
                   <td class="col-type">
-                    <span class="type-badge type-badge-{typeLow}">{entry.Type.Name}</span>
+                    {#if entry.Type.Name}<span class="tag">{entry.Type.Name}</span>{/if}
                   </td>
                   <td class="col-price">{price.toLocaleString()} G</td>
                   <td class="col-source">
                     <div class="source-cell">
-                      <span class="source-name">
-                        {entry.source_file.replace(/^Catalog/, '').replace(/\.json$/, '') || entry.source_file}
-                      </span>
+                      <span class="source-name" use:tip={entry.source_file}>{shortName(entry.source_file)}</span>
                       {#if entry.from_modified}
-                        <span class="modified-badge">M</span>
+                        <span class="modified">Modified</span>
                       {/if}
                     </div>
                   </td>
@@ -764,7 +759,123 @@
 
       </div><!-- /table-scroll -->
 
-    </div><!-- /content-pane -->
+      <!-- ── Batch bar (footer, so rows never move) ── -->
+      {#if totalSelectedCount > 0}
+        <div class="batch-bar">
+
+          {#if batchConfirm}
+            <span class="batch-confirm-msg">
+              {#if batchConfirm === 'revert'}
+                Revert <strong>{confirmCount}</strong> entr{confirmCount !== 1 ? 'ies' : 'y'} to stock? Your changes to them are removed.
+              {:else}
+                Delete <strong>{confirmCount}</strong> entr{confirmCount !== 1 ? 'ies' : 'y'}? This cannot be undone.
+              {/if}
+            </span>
+            <div class="batch-actions" style="margin-left: auto;">
+              {#if batchError}
+                <span class="batch-feedback error">{batchError}</span>
+              {/if}
+              <button
+                class="btn btn-sm btn-outline"
+                on:click={() => batchConfirm = null}
+                disabled={batchRunning}
+              >Cancel</button>
+              <button
+                class="btn btn-sm {batchConfirm === 'revert' ? 'btn-accent' : 'btn-red'}"
+                on:click={confirmBatchRemove}
+                disabled={batchRunning || confirmCount === 0}
+              >{batchConfirm === 'revert'
+                ? (batchRunning ? 'Reverting...' : 'Confirm Revert')
+                : (batchRunning ? 'Deleting...' : 'Confirm Delete')}</button>
+            </div>
+
+          {:else if batchMode === 'price'}
+            <span class="batch-label">{totalSelectedCount} selected</span>
+            <button class="batch-clear" on:click={clearSelection} use:tip={'Clear selection'}>×</button>
+            <div class="batch-sep"></div>
+            <span class="batch-action-label">New price (G):</span>
+            <input
+              type="text"
+              inputmode="numeric"
+              class="batch-inline-input"
+              placeholder="0"
+              bind:value={batchPriceStr}
+              disabled={batchRunning}
+            >
+            <button
+              class="btn btn-sm btn-accent"
+              on:click={applyBatchPrice}
+              disabled={batchRunning || batchPriceStr === ''}
+            >{batchRunning ? 'Applying...' : 'Apply'}</button>
+            <button
+              class="btn btn-sm btn-outline"
+              on:click={() => setBatchMode(null)}
+              disabled={batchRunning}
+            >Cancel</button>
+            {#if batchError}<span class="batch-feedback error">{batchError}</span>{/if}
+            {#if batchSuccess}<span class="batch-feedback ok">{batchSuccess}</span>{/if}
+
+          {:else if batchMode === 'add-mod' || batchMode === 'remove-mod'}
+            <span class="batch-label">{totalSelectedCount} selected</span>
+            <button class="batch-clear" on:click={clearSelection} use:tip={'Clear selection'}>×</button>
+            <div class="batch-sep"></div>
+            <span class="batch-action-label">
+              {batchMode === 'add-mod' ? 'Add modifier:' : 'Remove modifier:'}
+            </span>
+            <select class="batch-inline-select" bind:value={batchModifier} disabled={batchRunning}>
+              {#if batchModifiers.length === 0}
+                <option value="">No modifiers available</option>
+              {:else}
+                {#each batchModifiers as m}
+                  <option value={m}>{m}</option>
+                {/each}
+              {/if}
+            </select>
+            <button
+              class="btn btn-sm btn-accent"
+              on:click={() => applyBatchModifier(batchMode === 'add-mod' ? 'add' : 'remove')}
+              disabled={batchRunning || !batchModifier}
+            >{batchRunning ? 'Applying...' : (batchMode === 'add-mod' ? 'Add' : 'Remove')}</button>
+            <button
+              class="btn btn-sm btn-outline"
+              on:click={() => setBatchMode(null)}
+              disabled={batchRunning}
+            >Cancel</button>
+            {#if batchError}<span class="batch-feedback error">{batchError}</span>{/if}
+            {#if batchSuccess}<span class="batch-feedback ok">{batchSuccess}</span>{/if}
+
+          {:else}
+            <span class="batch-label">{totalSelectedCount} selected</span>
+            <button class="batch-clear" on:click={clearSelection} use:tip={'Clear selection'}>×</button>
+            <div class="batch-sep"></div>
+            <div class="batch-actions">
+              <button class="btn btn-sm btn-outline" on:click={() => setBatchMode('price')}>Set Price</button>
+              <button class="btn btn-sm btn-outline" on:click={() => setBatchMode('add-mod')}>Add Modifier</button>
+              <button class="btn btn-sm btn-outline" on:click={() => setBatchMode('remove-mod')}>Remove Modifier</button>
+              {#if revertTargets.length}
+                <button
+                  class="btn btn-sm btn-outline"
+                  on:click={() => { batchConfirm = 'revert'; batchError = ''; batchSuccess = '' }}
+                  use:tip={'Remove your changes from the selected stock items'}
+                >Revert to stock</button>
+              {/if}
+              {#if deleteTargets.length}
+                <button
+                  class="btn btn-sm btn-red"
+                  on:click={() => { batchConfirm = 'delete'; batchError = ''; batchSuccess = '' }}
+                  use:tip={'Delete the selected items you added. Stock items are skipped.'}
+                >Delete</button>
+              {/if}
+            </div>
+            {#if batchSuccess}
+              <span class="batch-feedback ok">{batchSuccess}</span>
+            {/if}
+          {/if}
+
+        </div>
+      {/if}
+
+    </section>
 
   </div><!-- /store-layout -->
 </div>
@@ -782,6 +893,14 @@
   />
 {/if}
 
+{#if creatingFile}
+  <NewCatalogFileModal
+    serverExe={$appConfig.server_exe}
+    onCreated={handleFileCreated}
+    onClose={() => creatingFile = false}
+  />
+{/if}
+
 <!-- Create new entry -->
 {#if creatingNew}
   <StoreEditorModal
@@ -789,6 +908,7 @@
     serverExe={$appConfig.server_exe}
     catalogFiles={catalogFiles}
     allEntries={entries}
+    defaultFile={fileFilter}
     onClose={() => creatingNew = false}
     onSaved={handleCreated}
     onDeleted={() => {}}
@@ -905,26 +1025,19 @@
 
   .modified-count { color: var(--amber-bright); }
 
-  /* ── Content pane ── */
-  .content-pane {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-    min-width: 0;
-    background: var(--bg-1);
-  }
+  .file-item.off { cursor: default; }
+  .file-item.off:hover { background: none; border-color: transparent; }
+  .file-item.off .file-name { color: var(--text-3); }
 
   /* ── Toolbar ── */
   .toolbar {
     display: flex;
     align-items: center;
     gap: 6px;
-    padding: 8px 14px;
+    padding: 8px 16px 8px 20px;
     border-bottom: 1px solid var(--border);
     flex-shrink: 0;
-    min-height: 53px;
-    flex-wrap: nowrap;
+    flex-wrap: wrap;
   }
 
   .search-wrap { min-width: 100px; max-width: 240px; }
@@ -965,14 +1078,14 @@
   }
 
   .price-label {
-    font-family: var(--font-mono);
+    font-family: var(--font-body);
     font-size: 11px;
     color: var(--text-3);
     flex-shrink: 0;
   }
 
   .price-sep {
-    font-family: var(--font-mono);
+    font-family: var(--font-body);
     font-size: 12px;
     color: var(--text-3);
     flex-shrink: 0;
@@ -1003,13 +1116,12 @@
     display: flex;
     align-items: center;
     gap: 8px;
-    padding: 7px 14px;
-    border-bottom: 1px solid var(--accent-dim);
+    padding: 7px 16px 7px 20px;
+    border-top: 1px solid var(--accent-dim);
     background: var(--accent-glow);
     flex-shrink: 0;
     min-height: 44px;
-    flex-wrap: nowrap;
-    overflow: hidden;
+    flex-wrap: wrap;
   }
 
   .batch-label {
@@ -1053,7 +1165,7 @@
     display: flex;
     align-items: center;
     gap: 6px;
-    flex-wrap: nowrap;
+    flex-wrap: wrap;
   }
 
   .batch-action-label {
@@ -1107,6 +1219,7 @@
     flex-shrink: 0;
   }
   .batch-feedback.error { color: var(--text-error); }
+  .reload-error { font-size: 12px; color: var(--text-error); }
   .batch-feedback.ok {
     color: var(--text-success);
     font-family: var(--font-head);
@@ -1124,6 +1237,7 @@
 
   /* ── Catalog table ── */
   .catalog-table {
+    align-self: flex-start; /* a few rows keep their height instead of filling the pane */
     width: 100%;
     border-collapse: collapse;
     table-layout: fixed;
@@ -1137,8 +1251,8 @@
   }
 
   .catalog-table thead th {
-    background: var(--bg-2);
-    border-bottom: 1px solid var(--border-mid);
+    background: var(--bg-1);
+    border-bottom: 1px solid var(--border);
     padding: 7px 12px;
     text-align: left;
     font-family: var(--font-head);
@@ -1199,7 +1313,8 @@
   .catalog-table .col-check input[type="checkbox"] { margin: 0; }
 
   .catalog-table .col-sku {
-    font-family: var(--font-mono);
+    font-family: var(--font-body);
+    font-variant-numeric: tabular-nums;
     font-size: 11px;
     color: var(--text-2);
     white-space: nowrap;
@@ -1216,9 +1331,10 @@
   }
 
   .catalog-table .col-price {
-    font-family: var(--font-mono);
+    font-family: var(--font-body);
     font-size: 12px;
-    color: var(--amber-bright);
+    font-variant-numeric: tabular-nums;
+    color: var(--text-1);
     text-align: right;
     white-space: nowrap;
   }
@@ -1246,7 +1362,7 @@
   }
 
   .source-name {
-    font-family: var(--font-mono);
+    font-family: var(--font-body);
     font-size: 11px;
     color: var(--text-2);
     overflow: hidden;
@@ -1266,37 +1382,14 @@
     height: 12px;
   }
 
-  /* ── Type badge ── */
-  .type-badge {
+  /* Changed from stock: state, so amber. */
+  .modified {
     font-family: var(--font-head);
     font-size: var(--fs-min);
     font-weight: 600;
     letter-spacing: 0.08em;
     text-transform: uppercase;
-    padding: 2px 6px;
-    border-radius: 2px;
-    border: 1px solid transparent;
-    white-space: nowrap;
-    display: inline-block;
-  }
-  .type-badge-boost   { color: var(--amber-bright);  border-color: color-mix(in srgb, var(--amber) 35%, transparent);  background: var(--amber-dim); }
-  .type-badge-bundle  { color: var(--accent-bright); border-color: var(--accent-dim);      background: var(--accent-glow); }
-  .type-badge-chest   { color: var(--amber-bright);  border-color: color-mix(in srgb, var(--amber) 35%, transparent);  background: var(--amber-dim); }
-  .type-badge-costume { color: var(--purple);        border-color: rgba(130,100,180,0.3);  background: var(--purple-dim); }
-  .type-badge-hero    { color: var(--blue);          border-color: rgba(46,134,193,0.3);   background: var(--blue-dim); }
-  .type-badge-service { color: var(--green-bright);  border-color: color-mix(in srgb, var(--green) 30%, transparent);    background: var(--green-dim); }
-  .type-badge-teamup  { color: var(--purple);        border-color: rgba(130,100,180,0.3);  background: var(--purple-dim); }
-
-  /* ── Modified badge ── */
-  .modified-badge {
-    font-family: var(--font-mono);
-    font-size: var(--fs-min);
-    font-weight: 600;
     color: var(--amber-bright);
-    background: var(--amber-dim);
-    border: 1px solid color-mix(in srgb, var(--amber) 35%, transparent);
-    padding: 1px 5px;
-    border-radius: 2px;
     flex-shrink: 0;
   }
 </style>

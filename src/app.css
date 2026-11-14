@@ -83,6 +83,9 @@
 }
 
 :root {
+  /* Native controls (unchecked checkboxes, scrollbars, select popups) follow the theme. */
+  color-scheme: dark;
+
   /* Surface layers */
   --bg-0: #08090c;
   --bg-1: #0e1015;
@@ -616,6 +619,8 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 
 /* Light theme */
 [data-theme="light"] {
+  color-scheme: light;
+
   /* Surface layers */
   --bg-0: #f7fafc;
   --bg-1: #f0f5f9;
@@ -1044,6 +1049,17 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 .close-btn:hover { color: var(--text-0); background: var(--bg-3); border-color: var(--border-mid); }
 .close-btn svg { width: 14px; height: 14px; }
 
+/* Row remove button in editor tables. */
+.del-btn {
+  width: 22px; height: 22px;
+  display: flex; align-items: center; justify-content: center;
+  background: none; border: 1px solid transparent;
+  border-radius: var(--radius-sm); color: var(--text-3);
+  cursor: pointer; transition: all 0.1s;
+}
+.del-btn:hover { border-color: color-mix(in srgb, var(--red) 40%, transparent); color: var(--text-error); background: var(--red-dim); }
+.del-btn svg { width: 10px; height: 10px; }
+
 /* ── Panel footer ── */
 .panel-footer {
   padding: 12px 20px;
@@ -1222,6 +1238,8 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 }
 button.side-item { cursor: pointer; transition: all 0.12s; }
 button.side-item:hover { color: var(--text-0); background: var(--bg-3); border-color: var(--border-mid); }
+.side-item.active,
+button.side-item.active:hover { color: var(--accent-bright); background: var(--accent-glow); border-color: var(--accent-dim); }
 .side-mark {
   flex-shrink: 0;
   font-family: var(--font-body);

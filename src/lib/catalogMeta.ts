@@ -29,15 +29,9 @@ export interface UrlEntry {
 export interface NamedItem {
   Name: string
   /**
-   * Per-entry display sort order. NOT a fixed value per type name.
-   * Type.Order and every TypeModifier.Order on the same entry are always
-   * identical — it is one logical value stored redundantly in both places.
-   *
-   * Observed values in stock catalog files:
-   *   0   — fully hidden items (NoDisplay + NoDisplayStore); login rewards, internal grants
-   *   1   — hidden-from-store items or standard purchasable boosts
-   *   5   — regular visible store items
-   *   999 — crafting ingredients (sorted to end)
+   * Sort group within the item's store tab: the client sorts each tab by Type.Order
+   * (signed int32, lower first, no special values), then by Title in byte order.
+   * TypeModifier.Order mirrors it on every stock entry but the client never reads it.
    */
   Order: number
 }
@@ -58,6 +52,8 @@ export interface CatalogEntryWithMeta extends CatalogEntry {
   source_file: string
   /** true when the effective entry came from the *MODIFIED.json sibling. */
   from_modified: boolean
+  /** What the base files alone give for this SKU; null when it only exists in a MODIFIED file. */
+  stock: CatalogEntry | null
 }
 
 // ─── Item types ───────────────────────────────────────────────────────────────
@@ -106,6 +102,24 @@ export function inferOfferType(entry: CatalogEntry): OfferType {
   return 'bundle'
 }
 
+/**
+ * The AdditionalGuidItems to save. Bundle drops them. Single keeps them unedited,
+ * because stock non-Bundle entries carry them too (the Boost mystery boxes).
+ */
+export function additionalItemsToSave(offerType: OfferType, items: GuidItem[]): GuidItem[] {
+  return offerType === 'bundle' ? [] : items
+}
+
+/**
+ * Whether saving this entry should also write its store page and image: a Bundle whose
+ * saved URLs are exactly the ones the launcher generates. Stock bundles keep their own.
+ */
+export function usesGeneratedPage(entry: CatalogEntry, infoUrl: string, thumbUrl: string): boolean {
+  return entry.Type.Name === 'Bundle'
+    && entry.InfoUrls[0]?.Url === infoUrl
+    && entry.ContentData[0]?.Url === thumbUrl
+}
+
 // ─── Item categories ──────────────────────────────────────────────────────────
 
 /**
@@ -122,6 +136,8 @@ export interface ItemCategory {
   DisplayName: string
   Path: string
   IsInventoryType: boolean
+  /** Only prototypes of this class or one derived from it (`search_prototypes` class_filter). */
+  ClassFilter?: string
 }
 
 /**
@@ -129,6 +145,13 @@ export interface ItemCategory {
  * Each category maps to one or more Calligraphy prototype path prefixes.
  */
 export const ITEM_CATEGORIES: ItemCategory[] = [
+  {
+    // Every item class (gear, legendaries, artifacts, costumes...), wherever it lives.
+    DisplayName: 'All Items',
+    Path: 'Entity',
+    IsInventoryType: false,
+    ClassFilter: 'ItemPrototype',
+  },
   {
     DisplayName: 'Consumables',
     Path: 'Entity/Items/Consumables',
@@ -233,4 +256,18 @@ export function entryPrice(entry: CatalogEntry): number {
     entry.LocalizedEntries.find(e => e.LanguageId === 'en_us') ??
     entry.LocalizedEntries[0]
   return loc?.ItemPrice ?? 0
+}
+
+/**
+ * What removing an entry's MODIFIED row does: 'revert' for a stock entry you changed,
+ * 'delete' for an entry only MODIFIED has, null for a stock row (stock files are never written).
+ */
+export function removeKind(e: CatalogEntryWithMeta): 'revert' | 'delete' | null {
+  if (!e.from_modified) return null
+  return e.stock ? 'revert' : 'delete'
+}
+
+/** The entry as it shows once its MODIFIED row is gone. Only for removeKind 'revert'. */
+export function stockVersion(e: CatalogEntryWithMeta): CatalogEntryWithMeta {
+  return { ...e, ...e.stock!, from_modified: false }
 }

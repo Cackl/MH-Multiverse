@@ -150,6 +150,9 @@ pub struct CatalogEntryWithMeta {
     pub source_file: String,
     /// `true` when this entry's effective version came from the `*MODIFIED.json` sibling.
     pub from_modified: bool,
+    /// What the base files alone give for this SKU (the last base file wins), or `None` for
+    /// an entry that only exists in a `*MODIFIED.json` file.
+    pub stock: Option<CatalogEntry>,
 }
 
 // ── Disk ↔ view conversions ───────────────────────────────────────────────────
@@ -231,6 +234,22 @@ fn guid_view_to_disk(g: GuidItem) -> Result<GuidItemDisk, String> {
 
 fn server_dir_of(server_exe: &str) -> Result<PathBuf, String> {
     crate::paths::server_dir(server_exe)
+}
+
+/// `Apache24/htdocs/bundles` next to the server folder, as the server package lays it out.
+fn apache_bundles_dir(server_exe: &str) -> Result<PathBuf, String> {
+    Ok(server_dir_of(server_exe)?
+        .parent()
+        .ok_or_else(|| "Cannot determine root directory from server exe path".to_string())?
+        .join("Apache24")
+        .join("htdocs")
+        .join("bundles"))
+}
+
+/// Whether the bundled Apache's `htdocs/bundles` folder exists, so bundle pages can be served.
+#[tauri::command]
+pub fn apache_bundles_found(server_exe: String) -> bool {
+    apache_bundles_dir(&server_exe).is_ok_and(|d| d.is_dir())
 }
 
 fn mtxstore_dir(server_exe: &str) -> Result<PathBuf, String> {
@@ -332,20 +351,114 @@ pub fn list_catalog_files(server_exe: String) -> Result<Vec<String>, String> {
     if !dir.exists() {
         return Ok(vec![]);
     }
-    base_catalog_files(&dir).map(|paths| {
-        paths
-            .into_iter()
-            .filter_map(|p| p.file_name().map(|n| n.to_string_lossy().to_string()))
-            .collect()
-    })
+    base_catalog_files(&dir).map(file_names)
+}
+
+fn file_names(paths: Vec<PathBuf>) -> Vec<String> {
+    paths.into_iter().filter_map(|p| p.file_name().map(|n| n.to_string_lossy().to_string())).collect()
+}
+
+/// Switched-off catalog files wait in `MTXStore/Off/`; the server only reads the MTXStore folder itself.
+const OFF_DIR: &str = "Off";
+
+/// Base catalog file names that are switched off, sorted.
+#[tauri::command]
+pub fn list_off_catalog_files(server_exe: String) -> Result<Vec<String>, String> {
+    let off = mtxstore_dir(&server_exe)?.join(OFF_DIR);
+    if !off.exists() {
+        return Ok(vec![]);
+    }
+    base_catalog_files(&off).map(file_names)
+}
+
+/// Create an empty `Catalog<suffix>.json` (`[]`) for new entries. The suffix is letters, digits,
+/// `_` or `-`, without MODIFIED (that name is the overlay of another file), and the file must not
+/// exist yet, switched on or off. Entries saved into it still go to its MODIFIED file.
+#[tauri::command]
+pub fn create_catalog_file(server_exe: String, suffix: String) -> Result<String, String> {
+    let ok_chars = !suffix.is_empty() && suffix.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-');
+    if !ok_chars {
+        return Err("Use letters, numbers, _ or - for the name".into());
+    }
+    if suffix.to_ascii_uppercase().contains("MODIFIED") {
+        return Err("The name can't contain MODIFIED".into());
+    }
+    let name = format!("Catalog{suffix}.json");
+    let dir = mtxstore_dir(&server_exe)?;
+    if dir.join(OFF_DIR).join(&name).exists() {
+        return Err(format!("{name} already exists and is switched off"));
+    }
+    fs::create_dir_all(&dir).map_err(|e| format!("Cannot create {}: {e}", dir.display()))?;
+    let mut f = fs::OpenOptions::new().write(true).create_new(true).open(dir.join(&name)).map_err(|e| {
+        if e.kind() == std::io::ErrorKind::AlreadyExists { format!("{name} already exists") } else { format!("Cannot create {name}: {e}") }
+    })?;
+    std::io::Write::write_all(&mut f, b"[]").map_err(|e| format!("Cannot write {name}: {e}"))?;
+    Ok(name)
+}
+
+/// Switch a catalog file off (move it and its MODIFIED file into `MTXStore/Off/`) or back on.
+/// Nothing moves if the destination already has either file.
+#[tauri::command]
+pub fn set_catalog_file_enabled(server_exe: String, file: String, enabled: bool) -> Result<(), String> {
+    let name = checked_base_name(&file)?;
+    let dir = mtxstore_dir(&server_exe)?;
+    let off = dir.join(OFF_DIR);
+    let (from, to) = if enabled { (&off, &dir) } else { (&dir, &off) };
+    let base = from.join(name);
+    if !base.exists() {
+        return Err(format!("{name} was not found in {}", from.display()));
+    }
+    let modified = modified_path_for(&base);
+    let mut moves = vec![base];
+    if modified.exists() {
+        moves.push(modified);
+    }
+    // Switching off moves MODIFIED first, switching on moves the base first, so a failed second
+    // move never leaves a MODIFIED file loaded without its base (its rows would turn into new items).
+    if !enabled {
+        moves.reverse();
+    }
+    let dest = |p: &PathBuf| to.join(p.file_name().unwrap_or_default());
+    if let Some(p) = moves.iter().find(|p| dest(p).exists()) {
+        return Err(format!("{} already exists in {}. Nothing was moved.", dest(p).display(), to.display()));
+    }
+    fs::create_dir_all(to).map_err(|e| format!("Cannot create {}: {e}", to.display()))?;
+    for p in &moves {
+        fs::rename(p, dest(p)).map_err(|e| format!("Cannot move {}: {e}", p.display()))?;
+    }
+    Ok(())
+}
+
+/// Every `Catalog*.json` file name (base and MODIFIED) in the order the server loads them:
+/// one list sorted case-insensitively, so `CatalogMODIFIED.json` loads before
+/// `CatalogRestoredHeroes.json`.
+fn catalog_files_in_load_order(dir: &Path) -> Result<Vec<String>, String> {
+    let mut names = Vec::new();
+    for entry in fs::read_dir(dir).map_err(|e| format!("Cannot read MTXStore directory: {e}"))? {
+        let name = entry.map_err(|e| e.to_string())?.file_name().to_string_lossy().to_string();
+        if name.starts_with("Catalog") && name.ends_with(".json") {
+            names.push(name);
+        }
+    }
+    // ponytail: approximates the server's culture-sensitive sort; differs only for exotic names.
+    names.sort_by_key(|n| (n.to_lowercase(), n.clone()));
+    Ok(names)
+}
+
+/// `CatalogFooMODIFIED.json` -> `Some("CatalogFoo.json")`; `None` for a base file.
+fn base_of_modified(name: &str) -> Option<String> {
+    let stem = name.strip_suffix(".json")?;
+    stem.to_ascii_uppercase()
+        .ends_with("MODIFIED")
+        .then(|| format!("{}.json", &stem[..stem.len() - "MODIFIED".len()]))
 }
 
 /// Load all catalog entries from the MTXStore directory.
 ///
-/// For each base `Catalog*.json` the corresponding `*MODIFIED.json` sibling is also
-/// read. MODIFIED entries override base entries with the same `SkuId`. Each returned
-/// entry carries `source_file` (the base filename) and `from_modified` provenance so
-/// the frontend can route save/delete operations correctly.
+/// Reads every `Catalog*.json` in the server's load order; a later file replaces an earlier
+/// entry with the same `SkuId`, as on the server. Each entry carries `source_file` (the base
+/// filename of the file it came from, so a save lands in the MODIFIED file that wins),
+/// `from_modified`, and `stock`, the entry the base files alone would give.
 #[tauri::command]
 pub fn load_catalog_entries(server_exe: String) -> Result<Vec<CatalogEntryWithMeta>, String> {
     let dir = mtxstore_dir(&server_exe)?;
@@ -353,42 +466,34 @@ pub fn load_catalog_entries(server_exe: String) -> Result<Vec<CatalogEntryWithMe
         return Ok(vec![]);
     }
 
-    let base_files = base_catalog_files(&dir)?;
     let mut result: Vec<CatalogEntryWithMeta> = Vec::new();
     let mut sku_index: HashMap<u64, usize> = HashMap::new();
+    let mut stock: HashMap<u64, CatalogEntry> = HashMap::new();
 
-    let mut upsert = |entry: CatalogEntryDisk, base_name: &str, from_modified: bool| {
-        let sku = entry.sku_id;
-        let meta = CatalogEntryWithMeta {
-            entry: disk_to_view(entry),
-            source_file: base_name.to_string(),
-            from_modified,
-        };
-        if let Some(&idx) = sku_index.get(&sku) {
-            result[idx] = meta;
-        } else {
-            sku_index.insert(sku, result.len());
-            result.push(meta);
-        }
-    };
-
-    for base_path in &base_files {
-        let base_name = base_path
-            .file_name()
-            .unwrap_or_default()
-            .to_string_lossy()
-            .to_string();
-
-        for entry in load_disk_entries(base_path)? {
-            upsert(entry, &base_name, false);
-        }
-
-        let modified = modified_path_for(base_path);
-        for entry in load_disk_entries(&modified)? {
-            upsert(entry, &base_name, true);
+    for name in catalog_files_in_load_order(&dir)? {
+        let modified_base = base_of_modified(&name);
+        let from_modified = modified_base.is_some();
+        let source_file = modified_base.unwrap_or_else(|| name.clone());
+        for entry in load_disk_entries(&dir.join(&name))? {
+            let sku = entry.sku_id;
+            let view = disk_to_view(entry);
+            if !from_modified {
+                stock.insert(sku, view.clone());
+            }
+            let meta = CatalogEntryWithMeta { entry: view, source_file: source_file.clone(), from_modified, stock: None };
+            match sku_index.get(&sku) {
+                Some(&idx) => result[idx] = meta,
+                None => {
+                    sku_index.insert(sku, result.len());
+                    result.push(meta);
+                }
+            }
         }
     }
 
+    for (sku, &idx) in &sku_index {
+        result[idx].stock = stock.remove(sku);
+    }
     Ok(result)
 }
 
@@ -425,11 +530,9 @@ pub fn save_catalog_entry(
     Ok(())
 }
 
-/// Delete a catalog entry by SKU.
-///
-/// `source_file` is the base filename (e.g. `"CatalogBundle.json"`).
-/// When `from_modified` is `true` the MODIFIED file is targeted; otherwise the base
-/// file. A `.bak` snapshot of the target file is written before deletion.
+/// Delete a catalog entry's row from `{source_file stem}MODIFIED.json`, which reverts a
+/// changed stock entry or deletes one only MODIFIED has. Stock files are never written, so
+/// `from_modified = false` is refused. A `.bak` snapshot is written before deletion.
 #[tauri::command]
 pub fn delete_catalog_entry(
     server_exe: String,
@@ -437,18 +540,15 @@ pub fn delete_catalog_entry(
     source_file: String,
     from_modified: bool,
 ) -> Result<(), String> {
+    if !from_modified {
+        return Err(format!("SKU {sku_id} is a stock entry; stock files are never changed"));
+    }
     let sku: u64 = sku_id
         .parse()
         .map_err(|e| format!("Invalid SKU ID '{sku_id}': {e}"))?;
 
     let dir = mtxstore_dir(&server_exe)?;
-    let base_path = dir.join(&source_file);
-
-    let target_path = if from_modified {
-        modified_path_for(&base_path)
-    } else {
-        base_path
-    };
+    let target_path = modified_path_for(&dir.join(checked_base_name(&source_file)?));
 
     if !target_path.exists() {
         return Err(format!(
@@ -473,6 +573,104 @@ pub fn delete_catalog_entry(
     Ok(())
 }
 
+/// One entry to write, into `{target_file stem}MODIFIED.json`.
+#[derive(Debug, Deserialize)]
+pub struct StoreUpsert {
+    pub entry: CatalogEntry,
+    pub target_file: String,
+}
+
+/// One overlay row to drop from `{source_file stem}MODIFIED.json`.
+#[derive(Debug, Deserialize)]
+pub struct StoreRemoval {
+    pub sku_id: String,
+    pub source_file: String,
+}
+
+/// The launcher's own record of Store changes (the running sale). The name doesn't start
+/// with `Catalog`, so the server never loads it.
+const STORE_STATE_FILE: &str = "MultiverseStore.json";
+
+/// `name` must be a plain base catalog file name, so a write can't leave the MTXStore folder.
+fn checked_base_name(name: &str) -> Result<&str, String> {
+    let plain = !name.contains(['/', '\\']) && name.starts_with("Catalog") && name.ends_with(".json");
+    if plain && base_of_modified(name).is_none() {
+        Ok(name)
+    } else {
+        Err(format!("'{name}' is not a base catalog file name"))
+    }
+}
+
+/// Write many Store changes at once: every touched `*MODIFIED.json` is read and parsed once,
+/// and nothing is written unless all of them parse. Each file then gets one `.bak` and one
+/// write; `state`, when given, is written to `MultiverseStore.json` last. Base files are never
+/// written, and removing a SKU that isn't in the file is not an error.
+#[tauri::command]
+pub fn apply_store_changes(
+    server_exe: String,
+    upserts: Vec<StoreUpsert>,
+    removes: Vec<StoreRemoval>,
+    state: Option<serde_json::Value>,
+) -> Result<(), String> {
+    let dir = mtxstore_dir(&server_exe)?;
+    let mut files: std::collections::BTreeMap<PathBuf, Vec<CatalogEntryDisk>> = Default::default();
+    let mut open = |base: &str| -> Result<PathBuf, String> {
+        let path = modified_path_for(&dir.join(checked_base_name(base)?));
+        if !files.contains_key(&path) {
+            files.insert(path.clone(), load_disk_entries(&path)?);
+        }
+        Ok(path)
+    };
+
+    let mut ops = Vec::new();
+    for r in removes {
+        let sku: u64 = r.sku_id.parse().map_err(|e| format!("Invalid SKU ID '{}': {e}", r.sku_id))?;
+        ops.push((open(&r.source_file)?, sku, None));
+    }
+    for u in upserts {
+        if u.entry.localized_entries.iter().any(|l| l.item_price < 0) {
+            return Err(format!("SKU {}: a price can't be negative", u.entry.sku_id));
+        }
+        let disk = view_to_disk(u.entry)?;
+        ops.push((open(&u.target_file)?, disk.sku_id, Some(disk)));
+    }
+
+    for (path, sku, entry) in ops {
+        let list = files.get_mut(&path).expect("opened above");
+        let pos = list.iter().position(|e| e.sku_id == sku);
+        match (entry, pos) {
+            (Some(e), Some(i)) => list[i] = e,
+            (Some(e), None) => list.push(e),
+            (None, Some(i)) => {
+                list.remove(i);
+            }
+            (None, None) => {}
+        }
+    }
+
+    for (path, list) in &files {
+        let json = serde_json::to_string_pretty(list).map_err(|e| format!("Serialisation failed: {e}"))?;
+        write_with_backup(path, &json)?;
+    }
+    if let Some(state) = state {
+        let json = serde_json::to_string_pretty(&state).map_err(|e| format!("Serialisation failed: {e}"))?;
+        write_atomic(&dir.join(STORE_STATE_FILE), &json)?;
+    }
+    Ok(())
+}
+
+/// The contents of `MultiverseStore.json`, or `null` when it doesn't exist yet.
+#[tauri::command]
+pub fn load_store_state(server_exe: String) -> Result<serde_json::Value, String> {
+    let path = mtxstore_dir(&server_exe)?.join(STORE_STATE_FILE);
+    match fs::read_to_string(&path) {
+        Ok(s) => serde_json::from_str(s.trim_start_matches('\u{FEFF}'))
+            .map_err(|e| format!("{STORE_STATE_FILE} is not valid JSON ({e}). Fix or remove the file.")),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(serde_json::Value::Null),
+        Err(e) => Err(format!("Cannot read {STORE_STATE_FILE}: {e}")),
+    }
+}
+
 /// Scan all JSON files in the MTXStore directory (base and MODIFIED) and return the
 /// next available SKU ID: `max_found + 1`, floored at 1001.
 #[tauri::command]
@@ -484,17 +682,24 @@ pub fn get_next_sku_id(server_exe: String) -> Result<String, String> {
 
     let mut max_sku: u64 = 1000;
 
-    for entry in
-        fs::read_dir(&dir).map_err(|e| format!("Cannot read MTXStore directory: {e}"))?
-    {
-        let entry = entry.map_err(|e| e.to_string())?;
-        let name = entry.file_name().to_string_lossy().to_string();
-        if !name.starts_with("Catalog") || !name.ends_with(".json") {
+    // Switched-off files count too, so a new SKU can't clash once they're switched back on.
+    let off = dir.join(OFF_DIR);
+    for folder in [&dir, &off] {
+        if !folder.exists() {
             continue;
         }
-        for e in load_disk_entries(&entry.path())? {
-            if e.sku_id > max_sku {
-                max_sku = e.sku_id;
+        for entry in
+            fs::read_dir(folder).map_err(|e| format!("Cannot read MTXStore directory: {e}"))?
+        {
+            let entry = entry.map_err(|e| e.to_string())?;
+            let name = entry.file_name().to_string_lossy().to_string();
+            if !name.starts_with("Catalog") || !name.ends_with(".json") {
+                continue;
+            }
+            for e in load_disk_entries(&entry.path())? {
+                if e.sku_id > max_sku {
+                    max_sku = e.sku_id;
+                }
             }
         }
     }
@@ -518,6 +723,28 @@ pub fn resolve_display_name(
     let _ = ensure_catalogue_loaded(&cat_state, &dn_state, &server_exe, &game_exe);
 
     name_for_id(&cat_state, &prototype_runtime_id)
+}
+
+/// The `<li>` rows for the page's item list. Bonus items (BOGO) get their own list after it.
+pub(crate) fn bundle_items_html(entry: &CatalogEntry, name: impl Fn(&str) -> String) -> String {
+    let rows = |items: &[GuidItem]| -> String {
+        items
+            .iter()
+            .map(|item| {
+                let n = name(&item.item_prototype_runtime_id_for_client);
+                match item.quantity {
+                    1 => format!("            <li>{n}</li>\n"),
+                    q => format!("            <li>{n} x{q}</li>\n"),
+                }
+            })
+            .collect()
+    };
+    let mut html = rows(&entry.guid_items);
+    if !entry.additional_guid_items.is_empty() {
+        html.push_str("        </ul>\n        <p>Free with purchase:</p>\n        <ul>\n");
+        html.push_str(&rows(&entry.additional_guid_items));
+    }
+    html
 }
 
 /// Generate the HTML page for a bundle catalog entry and write it to disk.
@@ -562,18 +789,7 @@ pub fn generate_bundle_html(
     let price = loc.item_price;
     let sku_hex = format!("0x{:X}", sku);
 
-    let mut items_html = String::new();
-    for item in &entry.guid_items {
-        let name = name_for_id(&cat_state, &item.item_prototype_runtime_id_for_client);
-        if item.quantity == 1 {
-            items_html.push_str(&format!("            <li>{name}</li>\n"));
-        } else {
-            items_html.push_str(&format!(
-                "            <li>{name} x{}</li>\n",
-                item.quantity
-            ));
-        }
-    }
+    let items_html = bundle_items_html(&entry, |id| name_for_id(&cat_state, id));
 
     let html = HTML_TEMPLATE
         .replace("{title}", title)
@@ -612,12 +828,7 @@ pub fn generate_bundle_html(
     // ── Optional Apache htdocs write ──────────────────────────────────────────
 
     if save_to_apache {
-        let apache_bundles_dir = server_dir_of(&server_exe)?
-            .parent()
-            .ok_or_else(|| "Cannot determine root directory from server exe path".to_string())?
-            .join("Apache24")
-            .join("htdocs")
-            .join("bundles");
+        let apache_bundles_dir = apache_bundles_dir(&server_exe)?;
         if !apache_bundles_dir.exists() {
             return Err(format!(
                 "Apache bundles directory not found: {}",
@@ -804,13 +1015,7 @@ pub fn save_thumbnail(
     // ── Optional Apache htdocs write ──────────────────────────────────────────
 
     if save_to_apache {
-        let apache_images_dir = server_dir_of(&server_exe)?
-            .parent()
-            .ok_or_else(|| "Cannot determine root directory from server exe path".to_string())?
-            .join("Apache24")
-            .join("htdocs")
-            .join("bundles")
-            .join("images");
+        let apache_images_dir = apache_bundles_dir(&server_exe)?.join("images");
 
         if !apache_images_dir.exists() {
             return Err(format!(
