@@ -3,7 +3,7 @@
   import { invoke } from '@tauri-apps/api/core'
   import { openPath } from '@tauri-apps/plugin-opener'
   import { appConfig, setUnsaved } from '../lib/store'
-  import type { PatchFileInfo, PatchEntry } from '../lib/patchesMeta'
+  import { patchPack, type PatchFileInfo, type PatchEntry } from '../lib/patchesMeta'
   import PanelSidebar from './PanelSidebar.svelte'
   import PatchEditorModal from './PatchEditorModal.svelte'
   import { tip } from '../lib/tooltip'
@@ -48,7 +48,6 @@
   onDestroy(() => setUnsaved('patches', null))
   $: enabledCount  = dirtyEntries.filter(e => e.Enabled).length
   $: disabledCount = dirtyEntries.length - enabledCount
-  $: activeFiles   = files.filter(f => f.enabled).length
   $: enabledFiles  = files.filter(f => f.enabled)
   $: disabledFiles = files.filter(f => !f.enabled)
 
@@ -99,9 +98,7 @@
 
   // ── Helpers ────────────────────────────────────────────────────────────────
 
-  function displayName(f: PatchFileInfo): string {
-    return f.file_name.replace(/^PatchData/, '').replace(/\.json$/, '') || f.file_name
-  }
+  const displayName = (f: PatchFileInfo) => patchPack(f.file_name).name
 
   function formatValue(v: unknown): string {
     if (v === null || v === undefined) return 'null'
@@ -335,26 +332,6 @@
         </div>
       {/if}
 
-      <!-- File stats -->
-      {#if files.length > 0}
-        <div class="stats-row">
-          <div class="stat">
-            <span class="stat-value">{activeFiles}</span>
-            <span class="stat-label">/ {files.length} active</span>
-          </div>
-        </div>
-      {/if}
-
-      <!-- Restart notice -->
-      <!-- <div class="restart-notice">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <circle cx="12" cy="12" r="10"/>
-          <line x1="12" y1="8" x2="12" y2="12"/>
-          <line x1="12" y1="16" x2="12.01" y2="16"/>
-        </svg>
-        Patch changes require a server restart to take effect.
-      </div> -->
-
       <!-- File list -->
       <div class="file-list">
         {#if !$appConfig.server_exe}
@@ -369,7 +346,7 @@
           <div class="file-notice">No PatchData*.json files found.</div>
         {:else}
           {#if enabledFiles.length > 0}
-            <div class="file-group-label">Active</div>
+            <div class="side-label">Active</div>
             {#each enabledFiles as f (f.file_name)}
               <div
                 class="file-item"
@@ -378,11 +355,9 @@
                 on:click={() => selectFile(f)}
                 on:keydown={e => e.key === 'Enter' && selectFile(f)}
               >
-                <div class="file-info">
-                  <span class="file-name">{displayName(f)}</span>
-                </div>
+                <span class="file-info"><span class="file-name">{displayName(f)}</span><span class="file-sub">{f.file_name}</span></span>
                 <button
-                  class="toggle-switch file-toggle"
+                  class="toggle-switch"
                   class:on={f.enabled}
                   role="switch"
                   aria-checked={f.enabled}
@@ -396,7 +371,7 @@
           {/if}
 
           {#if disabledFiles.length > 0}
-            <div class="file-group-label">Disabled</div>
+            <div class="side-label">Disabled</div>
             {#each disabledFiles as f (f.file_name)}
               <div
                 class="file-item file-item-off"
@@ -405,11 +380,9 @@
                 on:click={() => selectFile(f)}
                 on:keydown={e => e.key === 'Enter' && selectFile(f)}
               >
-                <div class="file-info">
-                  <span class="file-name">{displayName(f)}</span>
-                </div>
+                <span class="file-info"><span class="file-name">{displayName(f)}</span><span class="file-sub">{f.file_name}</span></span>
                 <button
-                  class="toggle-switch file-toggle"
+                  class="toggle-switch"
                   class:on={f.enabled}
                   role="switch"
                   aria-checked={f.enabled}
@@ -426,7 +399,7 @@
     </PanelSidebar>
 
     <!-- ── Content pane ── -->
-    <div class="content-pane">
+    <section class="data-main">
 
       {#if !selectedFile}
         <div class="empty-state">
@@ -440,12 +413,12 @@
 
       {:else}
 
-        <!-- Toolbar -->
-        <div class="toolbar">
-          <span class="toolbar-filename">{displayName(selectedFile)}</span>
+        <header class="page-head">
+          <h3 class="page-title" use:tip={selectedFile.file_name}>{displayName(selectedFile)}</h3>
           {#if dirtyEntries.length > 0}
             <span class="entry-count">{enabledCount} on · {disabledCount} off</span>
           {/if}
+          <div class="page-acts">
           <div class="search-wrap">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <circle cx="11" cy="11" r="8"/>
@@ -465,7 +438,8 @@
             </svg>
             Add Entry
           </button>
-        </div>
+          </div>
+        </header>
 
         <!-- Entry list -->
         {#if loadingEntries}
@@ -597,7 +571,7 @@
         </div>
 
       {/if}
-    </div><!-- content-pane -->
+    </section>
 
   </div><!-- patches-layout -->
 </div>
@@ -666,24 +640,6 @@
     min-height: 0;
   }
 
-  .panel-bg {
-    position: absolute;
-    inset: 0;
-    background: linear-gradient(180deg, var(--panel-grad-top) 0%, transparent var(--panel-grad-mid));
-    pointer-events: none;
-  }
-
-  .grid-overlay {
-    position: absolute;
-    inset: 0;
-    background-image:
-      linear-gradient(var(--border) 1px, transparent 1px),
-      linear-gradient(90deg, var(--border) 1px, transparent 1px);
-    background-size: 32px 32px;
-    opacity: 0.18;
-    pointer-events: none;
-  }
-
   .patches-layout {
     position: relative;
     z-index: 1;
@@ -704,44 +660,6 @@
 
   .new-file-actions { display: flex; gap: 6px; }
 
-  /* .restart-notice {
-    display: flex;
-    align-items: flex-start;
-    gap: 6px;
-    padding: 8px 12px 10px;
-    font-size: var(--fs-min);
-    color: var(--text-3);
-    border-bottom: 1px solid var(--border);
-    line-height: 1.4;
-  } */
-  /* .restart-notice svg { width: 12px; height: 12px; flex-shrink: 0; margin-top: 1px; } */
-
-  /* ── Sidebar stats ── */
-  .stats-row {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 8px 14px;
-    border-bottom: 1px solid var(--border);
-    flex-shrink: 0;
-  }
-
-  .stat { display: flex; align-items: baseline; gap: 3px; }
-
-  .stat-value {
-    font-family: var(--font-mono);
-    font-size: 13px;
-    color: var(--accent-bright);
-  }
-
-  .stat-label {
-    font-family: var(--font-head);
-    font-size: var(--fs-min);
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    color: var(--text-3);
-  }
-
   .file-list {
     flex: 1;
     overflow-y: auto;
@@ -758,10 +676,13 @@
   }
   .file-notice.error { color: var(--text-error); text-transform: none; font-family: var(--font-body); letter-spacing: 0; }
 
+  .file-list > .side-label:first-child { margin-top: 0; border-top: none; }
+
+  /* Same rows as the Store sidebar. */
   .file-item {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 6px;
     padding: 7px 10px;
     min-height: 42px;
     border: 1px solid transparent;
@@ -772,74 +693,35 @@
   }
   .file-item:hover  { background: var(--bg-3); border-color: var(--border-mid); }
   .file-item.active { background: var(--accent-glow); border-color: var(--accent-dim); }
-  .file-item.active .file-name { color: var(--accent-bright); }
   .file-item-off    { opacity: var(--dimmed-opacity); }
 
-  .file-group-label {
-    font-family: var(--font-head);
-    font-size: var(--fs-min);
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
-    color: var(--text-3);
-    padding: 10px 14px 4px;
-    border-top: 1px solid var(--border);
-    margin-top: 4px;
+  .file-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+  .file-name,
+  .file-sub {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
-
-  .file-info { flex: 1; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-
+  .file-sub { font-size: var(--fs-min); color: var(--text-3); }
   .file-name {
     font-family: var(--font-head);
     font-size: 11px;
     font-weight: 600;
     color: var(--text-1);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
   }
+  .file-item.active .file-name { color: var(--accent-bright); }
 
-  .file-toggle { width: 28px; height: 16px; flex-shrink: 0; }
-  .file-toggle::after { width: 10px; height: 10px; top: 2px; left: 2px; }
-  .file-toggle.on::after { left: calc(100% - 12px); }
-
-  /* ── Content pane ── */
-  .content-pane {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-    min-width: 0;
-    background: var(--bg-1);
-  }
-
-  /* ── Toolbar ── */
-  .toolbar {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 8px 14px;
-    border-bottom: 1px solid var(--border);
-    flex-shrink: 0;
-    min-height: 53px;
-  }
-
-  .toolbar-filename {
-    font-family: var(--font-head);
-    font-size: 11px;
-    font-weight: 600;
-    letter-spacing: 0.08em;
-    color: var(--text-1);
-    flex-shrink: 0;
-  }
+  .page-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 
   .entry-count {
-    font-family: var(--font-mono);
-    font-size: var(--fs-min);
-    color: var(--text-3);
-    flex-shrink: 0;
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+    color: var(--text-2);
+    white-space: nowrap;
   }
 
-  .search-wrap { min-width: 0; max-width: 300px; }
+  .page-acts { flex-shrink: 1; min-width: 0; }
+  .search-wrap { min-width: 120px; flex: 0 1 220px; }
 
   /* ── List view ── */
   .list-wrap { flex: 1; overflow: auto; }
