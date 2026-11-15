@@ -1,7 +1,12 @@
 <script lang="ts">
-  import { invoke } from '@tauri-apps/api/core'
-
-  export let serverExe: string
+  /** Shown in the header, e.g. "New catalog file". */
+  export let title: string
+  /** The fixed start of the file name, e.g. "Catalog". */
+  export let prefix: string
+  export let placeholder: string
+  export let hint: string
+  /** Makes the file from the typed part of its name and returns the full file name. */
+  export let create: (suffix: string) => Promise<string>
   /** Called with the new file's name once it exists. */
   export let onCreated: (name: string) => void
   export let onClose: () => void
@@ -10,12 +15,12 @@
   let error = ''
   let creating = false
 
-  async function create() {
+  async function submit() {
     if (!suffix.trim() || creating) return
     creating = true
     error = ''
     try {
-      onCreated(await invoke<string>('create_catalog_file', { serverExe, suffix: suffix.trim() }))
+      onCreated(await create(suffix.trim()))
     } catch (e) {
       error = String(e)
     } finally {
@@ -36,7 +41,7 @@
           <line x1="12" y1="12" x2="12" y2="18"/>
           <line x1="9" y1="15" x2="15" y2="15"/>
         </svg>
-        <span class="modal-display-name" id="new-file-title">New catalog file</span>
+        <span class="modal-display-name" id="new-file-title">{title}</span>
       </div>
       <button class="close-btn" aria-label="Close" on:click={onClose}>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -49,16 +54,16 @@
     <div class="modal-body">
       <label class="field-label" for="new-file-name">File name</label>
       <div class="filename-compose" class:has-error={!!error}>
-        <span class="filename-fixed">Catalog</span>
+        <span class="filename-fixed">{prefix}</span>
         <!-- svelte-ignore a11y-autofocus -->
         <input
           id="new-file-name"
           type="text"
           class="filename-input"
-          placeholder="MyItems"
+          {placeholder}
           bind:value={suffix}
           on:input={() => error = ''}
-          on:keydown={e => e.key === 'Enter' && create()}
+          on:keydown={e => e.key === 'Enter' && submit()}
           spellcheck="false"
           autocomplete="off"
           autofocus
@@ -68,13 +73,13 @@
       {#if error}
         <span class="filename-error">{error}</span>
       {:else}
-        <span class="field-hint">Letters, numbers, _ or -. Add items to it with New entry.</span>
+        <span class="field-hint">{hint}</span>
       {/if}
     </div>
 
     <div class="modal-footer">
       <button class="btn btn-sm btn-outline" on:click={onClose}>Cancel</button>
-      <button class="btn btn-sm btn-accent" disabled={!suffix.trim() || creating} on:click={create}>Create</button>
+      <button class="btn btn-sm btn-accent" disabled={!suffix.trim() || creating} on:click={submit}>Create</button>
     </div>
   </div>
 </div>

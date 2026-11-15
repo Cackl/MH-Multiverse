@@ -16,7 +16,7 @@
   } from '../lib/catalogMeta'
   import PanelSidebar from './PanelSidebar.svelte'
   import StoreEditorModal from './StoreEditorModal.svelte'
-  import NewCatalogFileModal from './NewCatalogFileModal.svelte'
+  import NewFileModal from './NewFileModal.svelte'
   import { tip } from '../lib/tooltip'
 
   // ── State ──────────────────────────────────────────────────────────────────
@@ -894,8 +894,12 @@
 {/if}
 
 {#if creatingFile}
-  <NewCatalogFileModal
-    serverExe={$appConfig.server_exe}
+  <NewFileModal
+    title="New catalog file"
+    prefix="Catalog"
+    placeholder="MyItems"
+    hint="Letters, numbers, _ or -. Add items to it with New entry."
+    create={suffix => invoke<string>('create_catalog_file', { serverExe: $appConfig.server_exe, suffix })}
     onCreated={handleFileCreated}
     onClose={() => creatingFile = false}
   />

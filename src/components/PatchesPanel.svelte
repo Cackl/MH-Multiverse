@@ -6,6 +6,7 @@
   import { patchPack, type PatchFileInfo, type PatchEntry } from '../lib/patchesMeta'
   import PanelSidebar from './PanelSidebar.svelte'
   import PatchEditorModal from './PatchEditorModal.svelte'
+  import NewFileModal from './NewFileModal.svelte'
   import { tip } from '../lib/tooltip'
 
   // ── State ──────────────────────────────────────────────────────────────────
@@ -25,10 +26,8 @@
   let saveError = ''
   let saveSuccess = ''
 
-  // New file creation
+  // New file modal open
   let creatingFile = false
-  let newFileName = ''
-  let createError = ''
 
   // Modal state — null entry = new, non-null = edit at modalIndex
   let modalOpen  = false
@@ -193,23 +192,12 @@
     }
   }
 
-  async function createFile() {
-    createError = ''
-    const name     = newFileName.trim()
-    if (!name) { createError = 'Name required.'; return }
-    try {
-      const withExt = await invoke<string>('create_patch_file', {
-        serverExe: $appConfig.server_exe,
-        suffix:    name.replace(/^PatchData/, '').replace(/\.json$/, ''),
-      })
-      newFileName  = ''
-      creatingFile = false
-      await scan()
-      const created = files.find(f => f.file_name === withExt)
-      if (created) selectFile(created)
-    } catch (e) {
-      createError = String(e)
-    }
+  /** Shows a file the New patch file modal just made. */
+  async function handleFileCreated(name: string) {
+    creatingFile = false
+    await scan()
+    const created = files.find(f => f.file_name === name)
+    if (created) selectFile(created)
   }
 
   async function openPatchesDir() {
@@ -281,7 +269,7 @@
           aria-label="New patch file"
           use:tip={'New patch file'}
           disabled={!$appConfig.server_exe}
-          on:click={() => { creatingFile = !creatingFile; createError = '' }}
+          on:click={() => creatingFile = true}
         >
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <line x1="12" y1="5" x2="12" y2="19"/>
@@ -300,25 +288,6 @@
           </svg>
         </button>
       </svelte:fragment>
-
-      <!-- New file form -->
-      {#if creatingFile}
-        <div class="new-file-form">
-          <input
-            type="text"
-            placeholder="Name (e.g. MyPatches)"
-            bind:value={newFileName}
-            on:keydown={e => { if (e.key === 'Enter') createFile(); if (e.key === 'Escape') creatingFile = false }}
-          />
-          {#if createError}
-            <span class="feedback-error">{createError}</span>
-          {/if}
-          <div class="new-file-actions">
-            <button class="btn btn-sm btn-accent" on:click={createFile}>Create</button>
-            <button class="btn btn-sm btn-outline" on:click={() => { creatingFile = false; createError = '' }}>Cancel</button>
-          </div>
-        </div>
-      {/if}
 
       <!-- File list -->
       <div class="file-list">
@@ -564,6 +533,18 @@
   </div><!-- patches-layout -->
 </div>
 
+{#if creatingFile}
+  <NewFileModal
+    title="New patch file"
+    prefix="PatchData"
+    placeholder="MyPatches"
+    hint="Letters, numbers, _ or -. Add entries to it with Add Entry."
+    create={suffix => invoke<string>('create_patch_file', { serverExe: $appConfig.server_exe, suffix })}
+    onCreated={handleFileCreated}
+    onClose={() => creatingFile = false}
+  />
+{/if}
+
 <!-- Modal -->
 {#if modalOpen && selectedFile}
   <PatchEditorModal
@@ -596,16 +577,6 @@
     min-height: 0;
   }
 
-  /* ── Sidebar internals ── */
-  .new-file-form {
-    padding: 8px 10px;
-    border-bottom: 1px solid var(--border);
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-  }
-
-  .new-file-actions { display: flex; gap: 6px; }
 
   .file-list {
     flex: 1;
