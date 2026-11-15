@@ -551,7 +551,7 @@
                     <td class="cell-desc cell-truncate">{entry.Description || '—'}</td>
                     <td class="cell-mono cell-truncate">{entry.Prototype || '—'}</td>
                     <td class="cell-mono cell-truncate">{entry.Path || '—'}</td>
-                    <td><span class="type-badge">{entry.ValueType}</span></td>
+                    <td class="cell-type cell-truncate">{entry.ValueType}</td>
                     <td class="cell-mono cell-truncate">{formatValue(entry.Value)}</td>
                     <td class="col-actions-cell">
                       <button
@@ -905,21 +905,8 @@
 
   .cell-truncate { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .cell-desc     { color: var(--text-1); }
+  .cell-type     { font-size: var(--fs-min); color: var(--text-2); }
   .cell-mono     { font-family: var(--font-mono); font-size: var(--fs-min); color: var(--text-2); }
-
-  .type-badge {
-    font-family: var(--font-head);
-    font-size: var(--fs-min);
-    font-weight: 600;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    color: var(--accent);
-    background: var(--accent-glow);
-    border: 1px solid var(--accent-dim);
-    border-radius: 2px;
-    padding: 1px 5px;
-    white-space: nowrap;
-  }
 
   .col-actions-cell {
     display: flex;
