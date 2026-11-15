@@ -7,10 +7,11 @@
   import PanelSidebar from './PanelSidebar.svelte'
   import type { PrototypeMatch } from '../lib/prototypes'
   import { patchPack, STOCK_PACKS, TWEAKS_FILE, type PatchFileInfo, type PatchEntry, type PatchNames } from '../lib/patchesMeta'
-  import AddTweakModal from './AddTweakModal.svelte'
+  import AddTweakModal, { type NewTweak } from './AddTweakModal.svelte'
   import {
     AVATAR_FOLDER, COOLDOWN_MIN, COOLDOWN_MAX, COOLDOWN_STEP, COOLDOWN_DEFAULT,
     clampCooldown, readCooldowns, withCooldowns, type PowerCooldown,
+    SUMMON_MIN, SUMMON_MAX, clampSummon, readSummonCaps, withSummonCaps, type SummonCap,
   } from '../lib/gameTweaks'
 
   // Patches by where they come from: the launcher's own tweaks, the server's stock packs, your files.
@@ -40,14 +41,23 @@
   let savedPowers: PowerCooldown[] = []
   let draftPowers: PowerCooldown[] = []
   let powerNames: Record<string, string> = {}
+  // Summon caps, saved and being edited, and power names by path.
+  let savedSummons: SummonCap[] = []
+  let draftSummons: SummonCap[] = []
+  let summonNames: Record<string, string> = {}
   let addOpen = false
   let saving = false
   let saveError = ''
 
-  const same = (a: PowerCooldown, b: PowerCooldown) => a.id === b.id && a.pct === b.pct
+  /** Rows added or changed, plus rows removed, matching rows by `key`. */
+  function changes<T>(saved: T[], draft: T[], key: (x: T) => string): number {
+    const json = (x: T) => JSON.stringify(x)
+    return draft.filter(d => !saved.some(s => json(s) === json(d))).length
+      + saved.filter(s => !draft.some(d => key(d) === key(s))).length
+  }
   $: changeCount = Number(draftPct !== savedPct)
-    + draftPowers.filter(p => !savedPowers.some(s => same(s, p))).length
-    + savedPowers.filter(s => !draftPowers.some(p => p.id === s.id)).length
+    + changes(savedPowers, draftPowers, p => p.id)
+    + changes(savedSummons, draftSummons, s => s.path)
   $: dirty = changeCount > 0
   $: setUnsaved('patches', dirty ? 'Patches' : null)
   onDestroy(() => setUnsaved('patches', null))
@@ -98,18 +108,33 @@
     boxPct = savedPct ?? COOLDOWN_DEFAULT
     savedPowers = saved.powers
     draftPowers = saved.powers
-    if (saved.powers.length) {
+    savedSummons = readSummonCaps(tweakEntries)
+    draftSummons = savedSummons
+    if (saved.powers.length || savedSummons.length) {
       try {
-        const names = await invoke<PatchNames>('name_patch_targets', { serverExe: exe, paths: [], ids: saved.powers.map(p => p.id) })
+        const names = await invoke<PatchNames>('name_patch_targets', {
+          serverExe: exe, paths: savedSummons.map(s => s.path), ids: saved.powers.map(p => p.id),
+        })
         powerNames = { ...powerNames, ...names.ids }
-      } catch { /* rows fall back to the id */ }
+        summonNames = { ...summonNames, ...names.paths }
+      } catch { /* rows fall back to the id or path */ }
     }
   }
 
-  function addPower(power: PowerCooldown, name: string) {
-    powerNames = { ...powerNames, [power.id]: name }
-    draftPowers = [...draftPowers.filter(p => p.id !== power.id), power]
+  // Adding a power that is already listed updates its row.
+  function addTweak(t: NewTweak) {
+    if (t.kind === 'cooldown') {
+      powerNames = { ...powerNames, [t.power.id]: t.name }
+      draftPowers = [...draftPowers.filter(p => p.id !== t.power.id), t.power]
+    } else {
+      summonNames = { ...summonNames, [t.cap.path]: t.name }
+      draftSummons = [...draftSummons.filter(s => s.path !== t.cap.path), t.cap]
+    }
     addOpen = false
+  }
+
+  function setSummonMax(path: string, max: number) {
+    draftSummons = draftSummons.map(s => s.path === path ? { ...s, max } : s)
   }
 
   function setPowerPct(id: string, pct: number) {
@@ -125,7 +150,7 @@
         serverExe,
         fileName: TWEAKS_FILE,
         enabled: tweaksFile?.enabled ?? true,
-        entries: withCooldowns(tweakEntries, avatars, { all: draftPct, powers: draftPowers }),
+        entries: withSummonCaps(withCooldowns(tweakEntries, avatars, { all: draftPct, powers: draftPowers }), draftSummons),
       })
       pendingRestart = true
       sawStopped = !$serverRunning
@@ -149,7 +174,7 @@
 
   $: tweaksReady = !!serverExe && loaded && avatars.length > 0
   $: tweaksOn = tweaksFile?.enabled ?? true
-  $: anyTweak = draftPct !== null || draftPowers.length > 0
+  $: anyTweak = draftPct !== null || draftPowers.length > 0 || draftSummons.length > 0
   $: views = [
     { id: 'all', label: 'All' },
     ...(tweaksReady ? [{ id: 'multiverse', label: 'Multiverse' }] : []),
@@ -225,7 +250,7 @@
         <div class="page-acts">
           <span class="restart-note">Patches load when the server starts</span>
           {#if view === 'multiverse'}
-            <button class="btn btn-sm btn-outline" on:click={() => addOpen = true} use:tip={'Add a power cooldown'}>Add tweak</button>
+            <button class="btn btn-sm btn-outline" on:click={() => addOpen = true} use:tip={'Add a power cooldown or summon cap'}>Add tweak</button>
             {#if tweaksFile}
               <span class="file-switch">
                 <span class="pct-label">All tweaks</span>
@@ -325,6 +350,45 @@
               {/if}
             </div>
           {/each}
+          {#each draftSummons as s (s.path)}
+            {@const name = summonNames[s.path] ?? s.path}
+            <div class="pack-row" class:off={!tweaksOn}>
+              <span class="pack-name"><span class="pack-title" use:tip={name}>{name}</span></span>
+              <span class="pack-desc">Sets how many this power keeps out at once</span>
+              {#if readOnly}
+                <span class="pct-read">Up to {s.max}</span>
+              {:else}
+              <label class="pct-field">
+                <span class="pct-label">Max at once</span>
+                <span class="pct-box">
+                  <input
+                    type="number"
+                    min={SUMMON_MIN}
+                    max={SUMMON_MAX}
+                    step="1"
+                    value={s.max}
+                    on:change={(e) => {
+                      const max = clampSummon(e.currentTarget.valueAsNumber)
+                      e.currentTarget.value = String(max)
+                      setSummonMax(s.path, max)
+                    }}
+                  >
+                </span>
+              </label>
+              <button
+                class="del-btn"
+                aria-label="Remove {name}"
+                use:tip={'Remove this tweak'}
+                on:click={() => draftSummons = draftSummons.filter(x => x.path !== s.path)}
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                  <line x1="18" y1="6" x2="6" y2="18"/>
+                  <line x1="6" y1="6" x2="18" y2="18"/>
+                </svg>
+              </button>
+              {/if}
+            </div>
+          {/each}
         {/if}
 
         {#if !serverExe}
@@ -380,7 +444,7 @@
 </div>
 
 {#if addOpen && serverExe}
-  <AddTweakModal {serverExe} onAdd={addPower} onClose={() => addOpen = false} />
+  <AddTweakModal {serverExe} onAdd={addTweak} onClose={() => addOpen = false} />
 {/if}
 
 <style>

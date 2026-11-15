@@ -1,21 +1,48 @@
+<script lang="ts" context="module">
+  import type { PowerCooldown, SummonCap } from '../lib/gameTweaks'
+  export type NewTweak =
+    | { kind: 'cooldown'; power: PowerCooldown; name: string }
+    | { kind: 'summon'; cap: SummonCap; name: string }
+</script>
+
 <script lang="ts">
   import PrototypePicker from './PrototypePicker.svelte'
   import type { PrototypeMatch } from '../lib/prototypes'
-  import { PLAYER_POWERS, COOLDOWN_MIN, COOLDOWN_MAX, COOLDOWN_STEP, COOLDOWN_DEFAULT, clampCooldown, type PowerCooldown } from '../lib/gameTweaks'
+  import {
+    PLAYER_POWERS, COOLDOWN_MIN, COOLDOWN_MAX, COOLDOWN_STEP, COOLDOWN_DEFAULT, clampCooldown,
+    SUMMON_MIN, SUMMON_MAX, SUMMON_DEFAULT, clampSummon,
+  } from '../lib/gameTweaks'
 
   export let serverExe: string
-  export let onAdd: (power: PowerCooldown, name: string) => void
+  export let onAdd: (tweak: NewTweak) => void
   export let onClose: () => void
 
+  const KINDS = [
+    { id: 'cooldown', label: 'Power cooldown', classFilter: 'PowerPrototype', search: 'Search player powers' },
+    { id: 'summon', label: 'Summon cap', classFilter: 'SummonPowerPrototype', search: 'Search summon powers' },
+  ] as const
+
+  let kind: NewTweak['kind'] = 'cooldown'
   let query = ''
   let picked: PrototypeMatch | null = null
   let pct = COOLDOWN_DEFAULT
+  let max = SUMMON_DEFAULT
+
+  $: spec = KINDS.find(k => k.id === kind)!
 
   const label = (r: PrototypeMatch) => (r.display_name && r.display_name !== r.path ? r.display_name : r.leaf || r.path)
 
+  function changeKind() {
+    query = ''
+    picked = null
+  }
+
   function add() {
     if (!picked) return
-    onAdd({ id: picked.prototype_id, pct: clampCooldown(pct) }, label(picked))
+    const name = label(picked)
+    onAdd(kind === 'cooldown'
+      ? { kind, power: { id: picked.prototype_id, pct: clampCooldown(pct) }, name }
+      : { kind, cap: { path: picked.path, max: clampSummon(max) }, name })
   }
 </script>
 
@@ -40,30 +67,46 @@
     </div>
 
     <div class="modal-body">
+      <div class="field-group field-group-center">
+        <label class="field-label" for="tweak-kind">Type</label>
+        <select id="tweak-kind" class="field-select" bind:value={kind} on:change={changeKind}>
+          {#each KINDS as k}<option value={k.id}>{k.label}</option>{/each}
+        </select>
+      </div>
+
       <div class="field-group">
         <label class="field-label" for="tweak-power">Power</label>
         <div class="field-control">
-          <PrototypePicker
-            id="tweak-power"
-            bind:value={query}
-            {serverExe}
-            blueprintHint={PLAYER_POWERS}
-            classFilter="PowerPrototype"
-            placeholder="Search player powers"
-            onInput={() => picked = null}
-            onSelect={(m) => picked = m}
-          />
+          {#key kind}
+            <PrototypePicker
+              id="tweak-power"
+              bind:value={query}
+              {serverExe}
+              blueprintHint={PLAYER_POWERS}
+              classFilter={spec.classFilter}
+              placeholder={spec.search}
+              onInput={() => picked = null}
+              onSelect={(m) => picked = m}
+            />
+          {/key}
           {#if picked}<span class="field-hint">{label(picked)}</span>{/if}
         </div>
       </div>
 
-      <div class="field-group field-group-center">
-        <label class="field-label" for="tweak-pct">Reduce by</label>
-        <div class="field-control field-inline">
-          <input id="tweak-pct" class="field-input num" type="number" min={COOLDOWN_MIN} max={COOLDOWN_MAX} step={COOLDOWN_STEP} bind:value={pct}>
-          <span class="field-hint">%</span>
+      {#if kind === 'cooldown'}
+        <div class="field-group field-group-center">
+          <label class="field-label" for="tweak-pct">Reduce by</label>
+          <div class="field-control field-inline">
+            <input id="tweak-pct" class="field-input num" type="number" min={COOLDOWN_MIN} max={COOLDOWN_MAX} step={COOLDOWN_STEP} bind:value={pct}>
+            <span class="field-hint">%</span>
+          </div>
         </div>
-      </div>
+      {:else}
+        <div class="field-group field-group-center">
+          <label class="field-label" for="tweak-max">Max at once</label>
+          <input id="tweak-max" class="field-input num" type="number" min={SUMMON_MIN} max={SUMMON_MAX} step="1" bind:value={max}>
+        </div>
+      {/if}
     </div>
 
     <div class="modal-footer">
@@ -110,4 +153,5 @@
   }
   .field-input:focus { border-color: var(--accent-dim); }
   .field-input.num { width: 110px; font-variant-numeric: tabular-nums; }
+  .field-select { width: 200px; }
 </style>
