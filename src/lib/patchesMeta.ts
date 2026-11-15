@@ -27,8 +27,13 @@ export const STOCK_PACKS: Record<string, PatchPack> = {
   'PatchDataTestOverrideLoot.json':{ name: 'Test loot',        description: 'Developer test that changes a mini boss loot table' },
 }
 
+/** The launcher's own patch file for Game Tweaks. Z so it loads after the stock files. */
+export const TWEAKS_FILE = 'PatchDataZMultiverseTweaks.json'
+const TWEAKS_PACK: PatchPack = { name: 'Multiverse tweaks', description: 'The tweaks you set above' }
+
 /** Curated name and description, or the file name without PatchData and .json. */
 export function patchPack(fileName: string): PatchPack {
+  if (fileName === TWEAKS_FILE) return TWEAKS_PACK
   return STOCK_PACKS[fileName]
     ?? { name: fileName.replace(/^PatchData/, '').replace(/\.json$/, '') || fileName, description: '' }
 }

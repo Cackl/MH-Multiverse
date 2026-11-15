@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { patchPack, STOCK_PACKS, idsOf, namedValue, pickedValue, type PatchEntry } from '../../src/lib/patchesMeta'
+import { patchPack, STOCK_PACKS, TWEAKS_FILE, idsOf, namedValue, pickedValue, type PatchEntry } from '../../src/lib/patchesMeta'
 
 describe('pickedValue', () => {
   const a = { prototype_id: '101', prototype_guid: '201' }
@@ -71,6 +71,11 @@ describe('patchPack', () => {
   it('stock files get their curated name and description', () => {
     expect(patchPack('PatchDataBugFixes.json')).toEqual(STOCK_PACKS['PatchDataBugFixes.json'])
     expect(patchPack('PatchDataBugFixes.json').name).toBe('Bug fixes')
+  })
+
+  it('the launcher file gets its own name and stays out of the stock list', () => {
+    expect(patchPack(TWEAKS_FILE).name).toBe('Multiverse tweaks')
+    expect(TWEAKS_FILE in STOCK_PACKS).toBe(false)
   })
 
   it('unknown files fall back to the name without PatchData and .json', () => {
