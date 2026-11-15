@@ -7,6 +7,7 @@
   import EventsPanel from './EventsPanel.svelte';
   import EventsSimple from './EventsSimple.svelte'
   import StoreSimple from './StoreSimple.svelte'
+  import PatchesSimple from './PatchesSimple.svelte'
 
   const TABS: { id: DataTab; label: string }[] = [
     { id: 'events',  label: 'Events'       },
@@ -31,7 +32,6 @@
         {tab.label}
       </button>
     {/each}
-    <!-- Patches has no Simple view yet; it follows in its own section. -->
     <div class="mode-switch">
       <span>Advanced</span>
       <div
@@ -68,7 +68,11 @@
         <StoreSimple />
       {/if}
     {:else if $activeDataTab === 'patches'}
-      <PatchesPanel />
+      {#if $appConfig.advanced_data}
+        <PatchesPanel />
+      {:else}
+        <PatchesSimple />
+      {/if}
     {/if}
   </div>
 
