@@ -6,10 +6,11 @@
   import { tip } from '../lib/tooltip'
   import PanelSidebar from './PanelSidebar.svelte'
   import type { PrototypeMatch } from '../lib/prototypes'
-  import { patchPack, STOCK_PACKS, TWEAKS_FILE, type PatchFileInfo, type PatchEntry } from '../lib/patchesMeta'
+  import { patchPack, STOCK_PACKS, TWEAKS_FILE, type PatchFileInfo, type PatchEntry, type PatchNames } from '../lib/patchesMeta'
+  import AddTweakModal from './AddTweakModal.svelte'
   import {
     AVATAR_FOLDER, COOLDOWN_MIN, COOLDOWN_MAX, COOLDOWN_STEP, COOLDOWN_DEFAULT,
-    clampCooldown, cooldownPct, withCooldown,
+    clampCooldown, readCooldowns, withCooldowns, type PowerCooldown,
   } from '../lib/gameTweaks'
 
   type View = 'all' | 'on' | 'off'
@@ -39,10 +40,19 @@
   let savedPct: number | null = null
   let draftPct: number | null = null
   let boxPct = COOLDOWN_DEFAULT
+  // Per-power reductions, saved and being edited, and power names by id.
+  let savedPowers: PowerCooldown[] = []
+  let draftPowers: PowerCooldown[] = []
+  let powerNames: Record<string, string> = {}
+  let addOpen = false
   let saving = false
   let saveError = ''
 
-  $: dirty = draftPct !== savedPct
+  const same = (a: PowerCooldown, b: PowerCooldown) => a.id === b.id && a.pct === b.pct
+  $: changeCount = Number(draftPct !== savedPct)
+    + draftPowers.filter(p => !savedPowers.some(s => same(s, p))).length
+    + savedPowers.filter(s => !draftPowers.some(p => p.id === s.id)).length
+  $: dirty = changeCount > 0
   $: setUnsaved('patches', dirty ? 'Patches' : null)
   onDestroy(() => setUnsaved('patches', null))
   /** The launcher file, preferring the copy the server loads. */
@@ -86,9 +96,28 @@
       saveError = String(e)
       return
     }
-    savedPct = cooldownPct(tweakEntries)
+    const saved = readCooldowns(tweakEntries)
+    savedPct = saved.all
     draftPct = savedPct
     boxPct = savedPct ?? COOLDOWN_DEFAULT
+    savedPowers = saved.powers
+    draftPowers = saved.powers
+    if (saved.powers.length) {
+      try {
+        const names = await invoke<PatchNames>('name_patch_targets', { serverExe: exe, paths: [], ids: saved.powers.map(p => p.id) })
+        powerNames = { ...powerNames, ...names.ids }
+      } catch { /* rows fall back to the id */ }
+    }
+  }
+
+  function addPower(power: PowerCooldown, name: string) {
+    powerNames = { ...powerNames, [power.id]: name }
+    draftPowers = [...draftPowers.filter(p => p.id !== power.id), power]
+    addOpen = false
+  }
+
+  function setPowerPct(id: string, pct: number) {
+    draftPowers = draftPowers.map(p => p.id === id ? { ...p, pct } : p)
   }
 
   async function saveTweaks() {
@@ -100,7 +129,7 @@
         serverExe,
         fileName: TWEAKS_FILE,
         enabled: tweaksFile?.enabled ?? true,
-        entries: withCooldown(tweakEntries, avatars, draftPct),
+        entries: withCooldowns(tweakEntries, avatars, { all: draftPct, powers: draftPowers }),
       })
       pendingRestart = true
       sawStopped = !$serverRunning
@@ -120,8 +149,11 @@
     .map(f => ({ file: f, key: keyOf(f), pack: patchPack(f.file_name), stock: f.file_name in STOCK_PACKS }))
     .sort((a, b) => a.pack.name.localeCompare(b.pack.name))
   // Filtered on the saved state so switching it doesn't hide the row before Save.
-  $: showTweaks = !!serverExe && loaded && avatars.length > 0
-    && (view === 'all' || (savedPct !== null) === (view === 'on'))
+  // Power rows have no switch, so they count as on.
+  $: tweaksReady = !!serverExe && loaded && avatars.length > 0
+  $: showGlobal = tweaksReady && (view === 'all' || (savedPct !== null) === (view === 'on'))
+  $: showPowers = tweaksReady && view !== 'off' && draftPowers.length > 0
+  $: showTweaks = showGlobal || showPowers
 
   async function toggle(f: PatchFileInfo) {
     const key = keyOf(f)
@@ -186,12 +218,16 @@
         <h3 class="page-title">Patches</h3>
         <div class="page-acts">
           <span class="restart-note">Patches load when the server starts</span>
+          {#if tweaksReady}
+            <button class="btn btn-sm btn-outline" on:click={() => addOpen = true} use:tip={'Add a power cooldown'}>Add tweak</button>
+          {/if}
         </div>
       </header>
 
       <div class="patches-body">
         {#if showTweaks}
           <div class="subsection-title patches-group">Tweaks</div>
+          {#if showGlobal}
           <div class="pack-row" class:off={draftPct === null}>
             <span class="pack-name"><span class="pack-title">All heroes' cooldowns</span></span>
             <span class="pack-desc">Shortens every power cooldown a hero uses</span>
@@ -223,6 +259,45 @@
               on:click={() => draftPct = draftPct === null ? boxPct : null}
             ></button>
           </div>
+          {/if}
+          {#if showPowers}
+          {#each draftPowers as p (p.id)}
+            {@const name = powerNames[p.id] ?? p.id}
+            <div class="pack-row">
+              <span class="pack-name"><span class="pack-title" use:tip={name}>{name}</span></span>
+              <span class="pack-desc">Shortens this power's cooldown on top of All heroes' cooldowns</span>
+              <label class="pct-field">
+                <span class="pct-label">Reduce by</span>
+                <span class="pct-box">
+                  <input
+                    type="number"
+                    min={COOLDOWN_MIN}
+                    max={COOLDOWN_MAX}
+                    step={COOLDOWN_STEP}
+                    value={p.pct}
+                    on:change={(e) => {
+                      const pct = clampCooldown(e.currentTarget.valueAsNumber)
+                      e.currentTarget.value = String(pct)
+                      setPowerPct(p.id, pct)
+                    }}
+                  >
+                  <span class="pct-unit">%</span>
+                </span>
+              </label>
+              <button
+                class="del-btn"
+                aria-label="Remove {name}"
+                use:tip={'Remove this tweak'}
+                on:click={() => draftPowers = draftPowers.filter(x => x.id !== p.id)}
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                  <line x1="18" y1="6" x2="6" y2="18"/>
+                  <line x1="6" y1="6" x2="18" y2="18"/>
+                </svg>
+              </button>
+            </div>
+          {/each}
+          {/if}
         {/if}
 
         {#if !serverExe}
@@ -265,7 +340,7 @@
           {#if saveError}<span class="error">{saveError}</span>
           {:else if toggleError}<span class="error">{toggleError}</span>
           {:else if folderError}<span class="error">{folderError}</span>
-          {:else if dirty}<span class="dirty-badge">1 unsaved change</span>
+          {:else if dirty}<span class="dirty-badge">{changeCount} unsaved change{changeCount === 1 ? '' : 's'}</span>
           {:else if pendingRestart}<span>{$serverRunning ? 'Takes effect after a server restart.' : 'Applies next time the server starts.'}</span>{/if}
         </div>
         {#if avatars.length}
@@ -280,6 +355,10 @@
     </section>
   </div>
 </div>
+
+{#if addOpen && serverExe}
+  <AddTweakModal {serverExe} onAdd={addPower} onClose={() => addOpen = false} />
+{/if}
 
 <style>
   .patches {
@@ -343,7 +422,8 @@
     color: var(--text-1);
   }
   .pack-desc { font-size: 12px; color: var(--text-2); }
-  .pack-row > .toggle-switch { grid-column: 4; }
+  .pack-row > .toggle-switch,
+  .pack-row > .del-btn { grid-column: 4; justify-self: center; }
 
   .pct-field { display: flex; align-items: center; gap: 8px; }
   .pct-label { font-size: 12px; color: var(--text-2); white-space: nowrap; }
