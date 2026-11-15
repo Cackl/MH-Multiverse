@@ -2,7 +2,7 @@
   import { onMount, onDestroy } from 'svelte'
   import { invoke } from '@tauri-apps/api/core'
   import { openPath } from '@tauri-apps/plugin-opener'
-  import { appConfig, setUnsaved } from '../lib/store'
+  import { appConfig, setUnsaved, askConfirm } from '../lib/store'
   import { patchPack, type PatchFileInfo, type PatchEntry } from '../lib/patchesMeta'
   import PanelSidebar from './PanelSidebar.svelte'
   import PatchEditorModal from './PatchEditorModal.svelte'
@@ -34,9 +34,6 @@
   let modalOpen  = false
   let modalEntry: PatchEntry | null = null
   let modalIndex: number | null = null
-
-  // Confirm-discard dialog — holds the target file to switch to
-  let confirmPending: PatchFileInfo | null = null
 
   // File-level enable toggle in flight
   let togglingFile: string | null = null
@@ -123,10 +120,12 @@
   }
 
   async function selectFile(f: PatchFileInfo) {
-    if (isDirty && selectedFile) {
-      confirmPending = f
-      return
-    }
+    if (isDirty && selectedFile && !await askConfirm({
+      title: 'Discard changes?',
+      message: `${displayName(selectedFile)} has unsaved changes. Discard them?`,
+      okLabel: 'Discard',
+      cancelLabel: 'Keep editing',
+    })) return
     await _doSelectFile(f)
   }
 
@@ -151,16 +150,6 @@
     } finally {
       loadingEntries = false
     }
-  }
-
-  async function confirmDiscard() {
-    const target   = confirmPending
-    confirmPending = null
-    if (target) await _doSelectFile(target)
-  }
-
-  function cancelDiscard() {
-    confirmPending = null
   }
 
   async function save() {
@@ -275,8 +264,6 @@
 
   onMount(() => { if ($appConfig.server_exe) scan() })
 </script>
-
-<svelte:window on:keydown={e => { if (e.key === 'Escape' && confirmPending) cancelDiscard() }} />
 
 <div class="patches-panel">
   <div class="panel-bg"></div>
@@ -587,47 +574,6 @@
   />
 {/if}
 
-<!-- Confirm discard dialog -->
-{#if confirmPending && selectedFile}
-  <div
-    class="confirm-backdrop"
-    role="presentation"
-    on:click={cancelDiscard}
-  >
-    <div
-      class="confirm-dialog"
-      role="alertdialog"
-      aria-modal="true"
-      tabindex="-100"
-      on:click|stopPropagation
-      on:keydown={(e) => {
-      if (e.key === 'Escape' || e.key === 'Enter' || e.key === ' ') {
-        e.preventDefault();
-        cancelDiscard();
-      }
-    }}
-    >
-      <div class="confirm-icon">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
-          <line x1="12" y1="9" x2="12" y2="13"/>
-          <line x1="12" y1="17" x2="12.01" y2="17"/>
-        </svg>
-      </div>
-      <div class="confirm-body">
-        <p class="confirm-message">
-          Discard unsaved changes to
-          <strong class="confirm-filename">{displayName(selectedFile)}</strong>?
-        </p>
-        <p class="confirm-sub">This cannot be undone.</p>
-      </div>
-      <div class="confirm-actions">
-        <button class="btn btn-sm btn-outline" tabindex="-1" on:click={cancelDiscard}>Cancel</button>
-        <button class="btn btn-sm btn-red" on:click={confirmDiscard}>Discard</button>
-      </div>
-    </div>
-  </div>
-{/if}
 
 <style>
   /* ── Shell ── */
@@ -822,74 +768,4 @@
   .move-btn:hover:not(:disabled) { color: var(--text-1); border-color: var(--border-lit); }
   .move-btn:disabled { opacity: 0.25; cursor: not-allowed; }
 
-  /* ── Confirm discard dialog ── */
-  .confirm-backdrop {
-    position: fixed;
-    inset: 0;
-    background: rgba(0, 0, 0, 0.6);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: var(--z-modal);
-    backdrop-filter: blur(2px);
-  }
-
-  .confirm-dialog {
-    background: var(--bg-2);
-    border: 1px solid var(--border-lit);
-    border-radius: var(--radius-md);
-    padding: 20px 24px;
-    width: min(380px, 90vw);
-    display: flex;
-    flex-direction: column;
-    gap: 16px;
-    box-shadow: 0 24px 80px rgba(0, 0, 0, 0.55);
-  }
-
-  .confirm-icon {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 36px;
-    height: 36px;
-    border-radius: 50%;
-    background: var(--amber-dim);
-    border: 1px solid color-mix(in srgb, var(--amber) 25%, transparent);
-    flex-shrink: 0;
-  }
-  .confirm-icon svg {
-    width: 18px;
-    height: 18px;
-    color: var(--amber-bright);
-  }
-
-  .confirm-body {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-  }
-
-  .confirm-message {
-    font-family: var(--font-body);
-    font-size: 13px;
-    color: var(--text-0);
-    line-height: 1.4;
-  }
-
-  .confirm-filename {
-    font-family: var(--font-mono);
-    font-weight: 500;
-    color: var(--accent-bright);
-  }
-
-  .confirm-sub {
-    font-size: 11px;
-    color: var(--text-3);
-  }
-
-  .confirm-actions {
-    display: flex;
-    justify-content: flex-end;
-    gap: 8px;
-  }
 </style>
