@@ -8,9 +8,9 @@ import type { PatchEntry } from './patchesMeta'
 export const AVATAR_FOLDER = 'Entity/Characters/Avatars/Shipping/'
 
 export const COOLDOWN_MIN = 5
-// At 100 the server's clamp makes every cooldown 0.
-export const COOLDOWN_MAX = 100
-export const COOLDOWN_STEP = 5
+// A 0 cooldown never schedules a charge refill (Power.cs StartCooldown), so stop short of 100.
+export const COOLDOWN_MAX = 99
+export const COOLDOWN_STEP = 1
 export const COOLDOWN_DEFAULT = 25
 
 const COOLDOWN_TAG = '[MV:cooldowns:all'

@@ -6,8 +6,8 @@ const heroes = ['Entity/Characters/Avatars/Shipping/Angela.prototype', 'Entity/C
 const mine: PatchEntry = { Enabled: true, Prototype: 'Loot/X.prototype', Path: 'Weight', Description: 'My own change', ValueType: 'Integer', Value: 5 }
 
 describe('withCooldown', () => {
-  it('writes -1 at 100%', () => {
-    expect(withCooldown([], heroes, 100)[0].Value).toBe('{"CooldownModifierPctGlobal":-1}')
+  it('writes -0.99 at 99%', () => {
+    expect(withCooldown([], heroes, 99)[0].Value).toBe('{"CooldownModifierPctGlobal":-0.99}')
   })
 
   it('writes one Properties entry per hero', () => {
@@ -48,10 +48,10 @@ describe('cooldownPct', () => {
 
 describe('clampCooldown', () => {
   it('rounds to the step and stays in range', () => {
-    expect(clampCooldown(23)).toBe(25)
+    expect(clampCooldown(23.4)).toBe(23)
     expect(clampCooldown(1)).toBe(5)
-    expect(clampCooldown(99)).toBe(100)
-    expect(clampCooldown(150)).toBe(100)
+    expect(clampCooldown(100)).toBe(99)
+    expect(clampCooldown(150)).toBe(99)
     expect(clampCooldown(NaN)).toBe(COOLDOWN_DEFAULT)
   })
 })
