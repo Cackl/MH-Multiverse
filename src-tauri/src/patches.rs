@@ -230,10 +230,14 @@ pub fn save_patch_file(
         .map_err(|e| format!("Cannot write {file_name}: {e}"))
 }
 
-/// Create a new empty patch file in Patches/ (enabled by default).
-/// Returns an error if the name already exists in either location.
+/// Create `PatchData{suffix}.json`, empty and switched on, and return its name. The suffix is
+/// letters, numbers, `_` or `-`, and the name must not exist yet in Patches/ or Patches/Off/.
 #[tauri::command]
-pub fn create_patch_file(server_exe: String, file_name: String) -> Result<(), String> {
+pub fn create_patch_file(server_exe: String, suffix: String) -> Result<String, String> {
+    if suffix.is_empty() || !suffix.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-') {
+        return Err("Use letters, numbers, _ or - for the name".into());
+    }
+    let file_name = format!("PatchData{suffix}.json");
     let patches = patches_dir(&server_exe)?;
     fs::create_dir_all(&patches)
         .map_err(|e| format!("Cannot create Patches directory: {e}"))?;
@@ -245,7 +249,8 @@ pub fn create_patch_file(server_exe: String, file_name: String) -> Result<(), St
     }
 
     fs::write(patches.join(&file_name), "[]")
-        .map_err(|e| format!("Cannot create {file_name}: {e}"))
+        .map_err(|e| format!("Cannot create {file_name}: {e}"))?;
+    Ok(file_name)
 }
 
 /// Move a patch file between Patches/ and Patches/Off/ to toggle its enabled state.

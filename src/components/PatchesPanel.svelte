@@ -197,10 +197,11 @@
     createError = ''
     const name     = newFileName.trim()
     if (!name) { createError = 'Name required.'; return }
-    const canonical = name.startsWith('PatchData') ? name : `PatchData${name}`
-    const withExt   = canonical.endsWith('.json')  ? canonical : `${canonical}.json`
     try {
-      await invoke('create_patch_file', { serverExe: $appConfig.server_exe, fileName: withExt })
+      const withExt = await invoke<string>('create_patch_file', {
+        serverExe: $appConfig.server_exe,
+        suffix:    name.replace(/^PatchData/, '').replace(/\.json$/, ''),
+      })
       newFileName  = ''
       creatingFile = false
       await scan()
