@@ -1,5 +1,35 @@
 import { describe, it, expect } from 'vitest'
-import { patchPack, STOCK_PACKS, idsOf, namedValue, type PatchEntry } from '../../src/lib/patchesMeta'
+import { patchPack, STOCK_PACKS, idsOf, namedValue, pickedValue, type PatchEntry } from '../../src/lib/patchesMeta'
+
+describe('pickedValue', () => {
+  const a = { prototype_id: '101', prototype_guid: '201' }
+  const b = { prototype_id: '102', prototype_guid: '202' }
+
+  it('fills an empty value with the picked id, GUID or a one-item list', () => {
+    expect(pickedValue('', 'PrototypeId', a, null)).toBe('101')
+    expect(pickedValue('0', 'PrototypeDataRef', a, null)).toBe('101')
+    expect(pickedValue(' ', 'PrototypeGuid', a, null)).toBe('201')
+    expect(pickedValue('[]', 'PrototypeId[]', a, null)).toBe('["101"]')
+    expect(pickedValue('', 'PrototypeDataRef[]', a, null)).toBe('["101"]')
+  })
+
+  it('keeps a value the entry already had', () => {
+    expect(pickedValue('555', 'PrototypeId', a, null)).toBe('555')
+    expect(pickedValue('["7","8"]', 'PrototypeId[]', a, null)).toBe('["7","8"]')
+  })
+
+  it('replaces what an earlier pick filled in', () => {
+    expect(pickedValue('101', 'PrototypeId', b, a)).toBe('102')
+    expect(pickedValue('201', 'PrototypeGuid', b, a)).toBe('202')
+    expect(pickedValue('["101"]', 'PrototypeId[]', b, a)).toBe('["102"]')
+    expect(pickedValue('555', 'PrototypeId', b, a)).toBe('555')
+  })
+
+  it('leaves other value types alone', () => {
+    expect(pickedValue('', 'Float', a, null)).toBe('')
+    expect(pickedValue('0', 'Integer', a, null)).toBe('0')
+  })
+})
 
 const entry = (ValueType: string, Value: unknown): PatchEntry =>
   ({ Enabled: true, Prototype: 'P', Path: 'F', Description: '', ValueType, Value })

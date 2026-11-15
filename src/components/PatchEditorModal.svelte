@@ -2,6 +2,7 @@
   import { askConfirm } from '../lib/store'
   import type { PatchEntry } from '../lib/patchesMeta'
   import type { PrototypeMatch } from '../lib/prototypes'
+  import { pickedValue } from '../lib/patchesMeta'
   import PrototypePicker from './PrototypePicker.svelte'
 
   // ── Props ──────────────────────────────────────────────────────────────────
@@ -21,10 +22,6 @@
     'Vector3', 'PrototypeId[]', 'PrototypeDataRef[]', 'Prototype', 'Prototype[]', 'Properties',
   ]
 
-  // ValueTypes where selecting a prototype auto-fills Value from prototype_id.
-  const ID_TYPES:   ReadonlySet<string> = new Set(['PrototypeId', 'PrototypeDataRef', 'PrototypeId[]', 'PrototypeDataRef[]'])
-  // ValueTypes where selecting a prototype auto-fills Value from prototype_guid.
-  const GUID_TYPES: ReadonlySet<string> = new Set(['PrototypeGuid'])
   // ValueTypes that require a JSON textarea instead of a plain text input.
   const COMPLEX:    ReadonlySet<string> = new Set(['Vector3', 'PrototypeId[]', 'PrototypeDataRef[]', 'Prototype', 'Prototype[]', 'Properties'])
   // ValueTypes kept as the file's own JSON text end to end (load_patch_file sends them as a
@@ -39,9 +36,10 @@
     ? { ...entry }
     : { Enabled: true, Prototype: '', Path: '', Description: '', ValueType: 'PrototypeId', Value: 0 }
 
-  // Last prototype selected from search — retained so Value can be re-derived
-  // if the user changes ValueType after choosing a prototype.
-  let lastMatch: PrototypeMatch | null = null
+  // The pick whose id or GUID is in Value, so a later pick or a ValueType change can swap it.
+  let filledBy: PrototypeMatch | null = null
+  // Value still holds what that pick put there (what it would fill into an empty value).
+  $: autoFilled = !!filledBy && valueStr.trim() !== '' && valueStr.trim() === pickedValue('', draft.ValueType, filledBy, null)
 
   // Prototype search
   let protoQuery    = draft.Prototype
@@ -91,26 +89,22 @@
     return ''
   }
 
-  // When ValueType changes, re-derive Value from lastMatch if applicable.
+  // When ValueType changes, swap in the matching id or GUID of the pick that filled Value.
   function onValueTypeChange() {
-    if (!lastMatch) return
-    if (ID_TYPES.has(draft.ValueType))   valueStr = lastMatch.prototype_id
-    else if (GUID_TYPES.has(draft.ValueType)) valueStr = lastMatch.prototype_guid
+    if (filledBy) valueStr = pickedValue(valueStr, draft.ValueType, filledBy, filledBy)
   }
 
   // ── Prototype search ───────────────────────────────────────────────────────
 
   function onProtoInput(value: string) {
     draft.Prototype = value
-    lastMatch       = null
   }
 
   function selectProto(match: PrototypeMatch) {
     draft.Prototype = match.path
-    lastMatch       = match
-
-    if (ID_TYPES.has(draft.ValueType))        valueStr = match.prototype_id
-    else if (GUID_TYPES.has(draft.ValueType)) valueStr = match.prototype_guid
+    const next = pickedValue(valueStr, draft.ValueType, match, filledBy)
+    if (next !== valueStr) filledBy = match
+    valueStr = next
   }
 
   // ── Save / delete ──────────────────────────────────────────────────────────
@@ -280,10 +274,10 @@
 
           {#if parseError}
             <span class="value-feedback value-error">{parseError}</span>
-          {:else if lastMatch && (ID_TYPES.has(draft.ValueType) || GUID_TYPES.has(draft.ValueType))}
+          {:else if filledBy && autoFilled}
             <span class="value-feedback value-hint">
-              Auto-filled from <em>{lastMatch.leaf}</em>
-              · {GUID_TYPES.has(draft.ValueType) ? 'GUID' : 'runtime ID'}
+              Auto-filled from <em>{filledBy.leaf}</em>
+              · {draft.ValueType === 'PrototypeGuid' ? 'GUID' : 'runtime ID'}
             </span>
           {/if}
         </div>

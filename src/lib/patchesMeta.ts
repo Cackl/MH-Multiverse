@@ -56,6 +56,31 @@ export function namedValue(entry: PatchEntry, ids: Record<string, string>): stri
   return list.map(id => ids[id] ?? id).join(', ')
 }
 
+/** The ids a prototype pick offers, as the picker returns them. */
+export interface PickedIds {
+  prototype_id: string
+  prototype_guid: string
+}
+
+/**
+ * The editor's Value text after picking a prototype. For id and GUID types it becomes the
+ * picked prototype's own id, but only over an empty value or one an earlier pick (`filledBy`)
+ * put there: in most patches the value names a different prototype than the target.
+ */
+export function pickedValue(current: string, valueType: string, pick: PickedIds, filledBy: PickedIds | null): string {
+  const text = current.trim()
+  const fromEarlierPick = !!filledBy && [filledBy.prototype_id, filledBy.prototype_guid, JSON.stringify([filledBy.prototype_id])].includes(text)
+  if (!['', '0', '[]'].includes(text) && !fromEarlierPick) return current
+  switch (valueType) {
+    case 'PrototypeId':
+    case 'PrototypeDataRef':     return pick.prototype_id
+    case 'PrototypeGuid':        return pick.prototype_guid
+    case 'PrototypeId[]':
+    case 'PrototypeDataRef[]':   return JSON.stringify([pick.prototype_id])
+    default:                     return current
+  }
+}
+
 export interface PatchEntry {
   Enabled: boolean
   Prototype: string
