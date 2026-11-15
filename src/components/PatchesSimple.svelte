@@ -119,6 +119,9 @@
     .filter(f => view === 'all' || f.enabled === (view === 'on'))
     .map(f => ({ file: f, key: keyOf(f), pack: patchPack(f.file_name), stock: f.file_name in STOCK_PACKS }))
     .sort((a, b) => a.pack.name.localeCompare(b.pack.name))
+  // Filtered on the saved state so switching it doesn't hide the row before Save.
+  $: showTweaks = !!serverExe && loaded && avatars.length > 0
+    && (view === 'all' || (savedPct !== null) === (view === 'on'))
 
   async function toggle(f: PatchFileInfo) {
     const key = keyOf(f)
@@ -187,7 +190,7 @@
       </header>
 
       <div class="patches-body">
-        {#if serverExe && loaded && avatars.length}
+        {#if showTweaks}
           <div class="subsection-title patches-group">Tweaks</div>
           <div class="pack-row" class:off={draftPct === null}>
             <span class="pack-name"><span class="pack-title">All heroes' cooldowns</span></span>
@@ -228,7 +231,7 @@
           <p class="patches-msg error">{loadError}</p>
         {:else if loaded && files.length === 0}
           <p class="patches-msg">This server has no patch files.</p>
-        {:else if loaded && rows.length === 0}
+        {:else if loaded && rows.length === 0 && !showTweaks}
           <p class="patches-msg">{view === 'on' ? 'No patches are on.' : 'No patches are off.'}</p>
         {:else}
           {#each GROUPS as group}
