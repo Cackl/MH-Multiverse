@@ -1,10 +1,16 @@
 <script lang="ts">
+  import { onDestroy } from 'svelte'
   import { invoke } from '@tauri-apps/api/core'
   import { openPath } from '@tauri-apps/plugin-opener'
-  import { appConfig, serverRunning } from '../lib/store'
+  import { appConfig, serverRunning, setUnsaved } from '../lib/store'
   import { tip } from '../lib/tooltip'
   import PanelSidebar from './PanelSidebar.svelte'
-  import { patchPack, STOCK_PACKS, type PatchFileInfo } from '../lib/patchesMeta'
+  import type { PrototypeMatch } from '../lib/prototypes'
+  import { patchPack, STOCK_PACKS, TWEAKS_FILE, type PatchFileInfo, type PatchEntry } from '../lib/patchesMeta'
+  import {
+    AVATAR_FOLDER, COOLDOWN_MIN, COOLDOWN_MAX, COOLDOWN_STEP, COOLDOWN_DEFAULT,
+    clampCooldown, cooldownPct, withCooldown,
+  } from '../lib/gameTweaks'
 
   type View = 'all' | 'on' | 'off'
   const VIEWS: { id: View; label: string }[] = [
@@ -26,6 +32,22 @@
   let pendingRestart = false
   let sawStopped = false
 
+  // Tweaks: the shipping heroes the cooldown recipe writes to, the launcher file's entries,
+  // and the reduction saved there and being edited (null = off). The box keeps its number while off.
+  let avatars: string[] = []
+  let tweakEntries: PatchEntry[] = []
+  let savedPct: number | null = null
+  let draftPct: number | null = null
+  let boxPct = COOLDOWN_DEFAULT
+  let saving = false
+  let saveError = ''
+
+  $: dirty = draftPct !== savedPct
+  $: setUnsaved('patches', dirty ? 'Patches' : null)
+  onDestroy(() => setUnsaved('patches', null))
+  /** The launcher file, preferring the copy the server loads. */
+  $: tweaksFile = files.find(f => f.file_name === TWEAKS_FILE && f.enabled) ?? files.find(f => f.file_name === TWEAKS_FILE)
+
   $: serverExe = $appConfig.server_exe
   $: if (serverExe) load(serverExe)
 
@@ -36,9 +58,57 @@
     loadError = ''
     try {
       files = await invoke<PatchFileInfo[]>('scan_patch_files', { serverExe: exe })
+      await loadTweaks(exe)
       loaded = true
     } catch (e) {
       loadError = String(e)
+    }
+  }
+
+  async function loadTweaks(exe: string) {
+    saveError = ''
+    try {
+      const heroes = await invoke<PrototypeMatch[]>('search_prototypes', {
+        serverExe: exe, query: '', categoryPath: AVATAR_FOLDER, classFilter: 'AvatarPrototype',
+      })
+      avatars = heroes.map(h => h.path)
+    } catch {
+      avatars = [] // no Calligraphy.sip: the Tweaks group stays hidden
+    }
+    const owned = files.find(f => f.file_name === TWEAKS_FILE && f.enabled) ?? files.find(f => f.file_name === TWEAKS_FILE)
+    try {
+      tweakEntries = owned
+        ? await invoke<PatchEntry[]>('load_patch_file', { serverExe: exe, fileName: TWEAKS_FILE, enabled: owned.enabled })
+        : []
+    } catch (e) {
+      // Saving would overwrite a file we couldn't read, so hide the Tweaks group instead.
+      avatars = []
+      saveError = String(e)
+      return
+    }
+    savedPct = cooldownPct(tweakEntries)
+    draftPct = savedPct
+    boxPct = savedPct ?? COOLDOWN_DEFAULT
+  }
+
+  async function saveTweaks() {
+    if (!serverExe) return
+    saving = true
+    saveError = ''
+    try {
+      await invoke('save_patch_file', {
+        serverExe,
+        fileName: TWEAKS_FILE,
+        enabled: tweaksFile?.enabled ?? true,
+        entries: withCooldown(tweakEntries, avatars, draftPct),
+      })
+      pendingRestart = true
+      sawStopped = !$serverRunning
+      await load(serverExe)
+    } catch (e) {
+      saveError = String(e)
+    } finally {
+      saving = false
     }
   }
 
@@ -117,6 +187,41 @@
       </header>
 
       <div class="patches-body">
+        {#if serverExe && loaded && avatars.length}
+          <div class="subsection-title patches-group">Tweaks</div>
+          <div class="pack-row" class:off={draftPct === null}>
+            <span class="pack-name"><span class="pack-title">All heroes' cooldowns</span></span>
+            <span class="pack-desc">Shortens every power cooldown a hero uses</span>
+            <label class="pct-field">
+              <span class="pct-label">Reduce by</span>
+              <span class="pct-box">
+                <input
+                  type="number"
+                  min={COOLDOWN_MIN}
+                  max={COOLDOWN_MAX}
+                  step={COOLDOWN_STEP}
+                  value={boxPct}
+                  disabled={draftPct === null}
+                  on:change={(e) => {
+                    boxPct = clampCooldown(e.currentTarget.valueAsNumber)
+                    e.currentTarget.value = String(boxPct) // show the clamped value
+                    draftPct = boxPct
+                  }}
+                >
+                <span class="pct-unit">%</span>
+              </span>
+            </label>
+            <button
+              class="toggle-switch"
+              class:on={draftPct !== null}
+              role="switch"
+              aria-checked={draftPct !== null}
+              aria-label="All heroes' cooldowns"
+              on:click={() => draftPct = draftPct === null ? boxPct : null}
+            ></button>
+          </div>
+        {/if}
+
         {#if !serverExe}
           <p class="patches-msg">Set the server location first.</p>
         {:else if loadError}
@@ -154,10 +259,20 @@
 
       <footer class="panel-footer">
         <div class="patches-status">
-          {#if toggleError}<span class="error">{toggleError}</span>
+          {#if saveError}<span class="error">{saveError}</span>
+          {:else if toggleError}<span class="error">{toggleError}</span>
           {:else if folderError}<span class="error">{folderError}</span>
+          {:else if dirty}<span class="dirty-badge">1 unsaved change</span>
           {:else if pendingRestart}<span>{$serverRunning ? 'Takes effect after a server restart.' : 'Applies next time the server starts.'}</span>{/if}
         </div>
+        {#if avatars.length}
+          <button
+            class="btn btn-sm btn-accent"
+            on:click={saveTweaks}
+            use:tip={`Saves to ${TWEAKS_FILE}`}
+            disabled={saving || !dirty}
+          >{saving ? 'Saving...' : 'Save'}</button>
+        {/if}
       </footer>
     </section>
   </div>
@@ -201,7 +316,7 @@
   /* Name, what it does, switch. */
   .pack-row {
     display: grid;
-    grid-template-columns: minmax(0, 0.7fr) minmax(0, 1.6fr) 36px;
+    grid-template-columns: minmax(0, 0.7fr) minmax(0, 1.6fr) auto 36px;
     column-gap: 16px;
     align-items: center;
     padding: 10px 0;
@@ -225,6 +340,37 @@
     color: var(--text-1);
   }
   .pack-desc { font-size: 12px; color: var(--text-2); }
+  .pack-row > .toggle-switch { grid-column: 4; }
+
+  .pct-field { display: flex; align-items: center; gap: 8px; }
+  .pct-label { font-size: 12px; color: var(--text-2); white-space: nowrap; }
+  .pct-box {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    width: 72px;
+    height: 30px;
+    padding: 0 8px 0 4px;
+    border: 1px solid var(--border-mid);
+    border-radius: var(--radius-sm);
+    background: var(--bg-0);
+  }
+  .pct-box:focus-within { border-color: var(--accent-dim); box-shadow: 0 0 0 2px var(--accent-glow); }
+  .pct-box input {
+    flex: 1;
+    min-width: 0;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: var(--text-0);
+    font-family: var(--font-body);
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+    outline: none;
+  }
+  .pct-box input:disabled { opacity: var(--dimmed-opacity); }
+  .pct-unit { font-size: 12px; color: var(--text-3); }
   .pack-row.off .pack-title,
   .pack-row.off .pack-desc { opacity: var(--dimmed-opacity); }
 </style>
