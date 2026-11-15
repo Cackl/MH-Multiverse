@@ -23,6 +23,52 @@ export interface PowerCooldown { id: string; pct: number }
 /** Everything the cooldown recipe writes: the reduction for every power (null = none) and per-power ones. */
 export interface Cooldowns { all: number | null; powers: PowerCooldown[] }
 
+export const SUMMON_MIN = 1
+// The shared summon inventory holds 128 (AgentSummonedEntities Capacity).
+export const SUMMON_MAX = 128
+export const SUMMON_DEFAULT = 4
+const SUMMON_TAG = '[MV:summons'
+/** Eval/Constants/LoadInt.defaults, the class of a whole-number eval. */
+const LOAD_INT = '17436925256515063008'
+
+/** How many a summon power can keep out at once. `path` is the power's prototype path. */
+export interface SummonCap { path: string; max: number }
+
+/** A typed number as a whole number between the minimum and maximum. */
+export function clampSummon(n: number): number {
+  if (!Number.isFinite(n)) return SUMMON_DEFAULT
+  return Math.min(SUMMON_MAX, Math.max(SUMMON_MIN, Math.round(n)))
+}
+
+/**
+ * The entry that sets a summon power's cap. It replaces the whole SummonMaxSimultaneous eval:
+ * editing `.Value` on an inherited eval would change every power sharing it.
+ */
+export function summonCapEntry(cap: SummonCap): PatchEntry {
+  return {
+    Enabled: true,
+    Prototype: cap.path,
+    Path: 'SummonMaxSimultaneous',
+    Description: `${SUMMON_TAG} max=${cap.max}] Up to ${cap.max} at once`,
+    ValueType: 'Prototype',
+    // Text, so the 64-bit id stays exact (see patches.rs RAW_TYPES).
+    Value: `{"ParentDataRef":${LOAD_INT},"Value":${cap.max},"Op":"LoadInt"}`,
+  }
+}
+
+/** The summon caps saved in the file. */
+export function readSummonCaps(entries: PatchEntry[]): SummonCap[] {
+  return entries.flatMap(e => {
+    const max = e.Description.startsWith(SUMMON_TAG) ? e.Description.match(/max=(\d+)/)?.[1] : undefined
+    return max === undefined ? [] : [{ path: e.Prototype, max: Number(max) }]
+  })
+}
+
+/** The file's entries with the summon caps replaced. Other entries are kept. */
+export function withSummonCaps(entries: PatchEntry[], caps: SummonCap[]): PatchEntry[] {
+  return [...entries.filter(e => !e.Description.startsWith(SUMMON_TAG)), ...caps.map(summonCapEntry)]
+}
+
 /** A typed percent as the nearest allowed step, kept between the minimum and maximum. */
 export function clampCooldown(pct: number): number {
   if (!Number.isFinite(pct)) return COOLDOWN_DEFAULT

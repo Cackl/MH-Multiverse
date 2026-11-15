@@ -1,5 +1,8 @@
 import { describe, it, expect } from 'vitest'
-import { clampCooldown, readCooldowns, withCooldowns, COOLDOWN_DEFAULT } from '../../src/lib/gameTweaks'
+import {
+  clampCooldown, readCooldowns, withCooldowns, COOLDOWN_DEFAULT,
+  clampSummon, summonCapEntry, readSummonCaps, withSummonCaps, SUMMON_DEFAULT,
+} from '../../src/lib/gameTweaks'
 import type { PatchEntry } from '../../src/lib/patchesMeta'
 
 const heroes = ['Entity/Characters/Avatars/Shipping/Angela.prototype', 'Entity/Characters/Avatars/Shipping/Blade.prototype']
@@ -77,6 +80,46 @@ describe('readCooldowns', () => {
   it('is empty without a cooldown entry', () => {
     expect(readCooldowns([mine])).toEqual({ all: null, powers: [] })
     expect(readCooldowns([])).toEqual({ all: null, powers: [] })
+  })
+})
+
+const golem = 'Powers/Player/Magik/SummonGolem.prototype'
+
+describe('summonCapEntry', () => {
+  it('replaces the whole eval with a whole-number one and an exact parent id', () => {
+    expect(summonCapEntry({ path: golem, max: 8 })).toEqual({
+      Enabled: true,
+      Prototype: golem,
+      Path: 'SummonMaxSimultaneous',
+      Description: '[MV:summons max=8] Up to 8 at once',
+      ValueType: 'Prototype',
+      Value: `{"ParentDataRef":${BIG},"Value":8,"Op":"LoadInt"}`,
+    })
+  })
+})
+
+describe('withSummonCaps and readSummonCaps', () => {
+  it('reads back what was written and keeps other entries', () => {
+    const caps = [{ path: golem, max: 8 }, { path: 'Powers/Player/X.prototype', max: 128 }]
+    const out = withSummonCaps(withCooldowns([mine], heroes, { all: 25, powers: [] }), caps)
+    expect(out.slice(0, 3).map(e => e.Path)).toEqual(['Weight', 'Properties', 'Properties'])
+    expect(readSummonCaps(out)).toEqual(caps)
+    expect(readCooldowns(out).all).toBe(25)
+  })
+
+  it('replaces its own entries', () => {
+    const once = withSummonCaps([mine], [{ path: golem, max: 8 }])
+    expect(withSummonCaps(once, [])).toEqual([mine])
+    expect(readSummonCaps([mine])).toEqual([])
+  })
+})
+
+describe('clampSummon', () => {
+  it('rounds and stays in range', () => {
+    expect(clampSummon(3.6)).toBe(4)
+    expect(clampSummon(0)).toBe(1)
+    expect(clampSummon(500)).toBe(128)
+    expect(clampSummon(NaN)).toBe(SUMMON_DEFAULT)
   })
 })
 
