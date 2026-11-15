@@ -746,6 +746,57 @@ pub fn search_prototypes(
     Ok(search_catalogue(catalogue, &query, &category_prefixes, class_filter.as_deref()))
 }
 
+/// Names for a patch file's targets and values, keyed by what was asked for.
+#[derive(Debug, Default, Serialize)]
+pub struct PatchNames {
+    /// prototype path → name. Every path gets one: paths the catalogue lacks (cells,
+    /// encounters) are named from their file name.
+    pub paths: HashMap<String, String>,
+    /// decimal prototype id or GUID → name. Ids the catalogue doesn't know are left out.
+    pub ids: HashMap<String, String>,
+}
+
+/// Names for the Prototype column and the id values of a patch file, in one call.
+#[tauri::command]
+pub fn name_patch_targets(
+    app: tauri::AppHandle,
+    state: tauri::State<CatalogueState>,
+    dn_state: tauri::State<DisplayNameState>,
+    server_exe: String,
+    paths: Vec<String>,
+    ids: Vec<String>,
+) -> Result<PatchNames, String> {
+    let game_exe = crate::config::load_config(&app).game_exe;
+    ensure_catalogue_loaded(&state, &dn_state, &server_exe, &game_exe)?;
+    let guard = state.0.lock().map_err(|_| "Catalogue state lock is poisoned".to_string())?;
+    let (_, catalogue) = guard.as_ref().unwrap();
+    Ok(patch_names(catalogue, &paths, &ids))
+}
+
+/// The lookup behind `name_patch_targets`. Paths match case-insensitively, as the server's
+/// patch loader does. An id is tried as a runtime id, then as a GUID.
+fn patch_names(catalogue: &PrototypeCatalogue, paths: &[String], ids: &[String]) -> PatchNames {
+    let by_path: HashMap<&str, &str> = catalogue.prototypes.iter().map(|p| (p.search_path.as_str(), p.name.as_str())).collect();
+    let by_guid: HashMap<u64, &str> = catalogue.prototypes.iter().map(|p| (p.prototype_guid, p.name.as_str())).collect();
+
+    let paths = paths
+        .iter()
+        .map(|path| {
+            let name = by_path.get(path.replace('\\', "/").to_lowercase().as_str()).map(|n| n.to_string());
+            (path.clone(), name.unwrap_or_else(|| leaf_words(path)))
+        })
+        .collect();
+    let ids = ids
+        .iter()
+        .filter_map(|s| {
+            let id = s.trim().parse::<u64>().ok()?;
+            let name = name_for_id(catalogue, id).or_else(|| by_guid.get(&id).copied())?;
+            Some((s.clone(), name.to_string()))
+        })
+        .collect();
+    PatchNames { paths, ids }
+}
+
 /// How well a prototype matches a lowercase query, best first: the name starts with it, a word
 /// in the name starts with it, the name contains it, the path contains it. `None` = no match.
 fn match_rank(name: &str, path: &str, query: &str) -> Option<u8> {

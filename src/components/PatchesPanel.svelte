@@ -3,7 +3,7 @@
   import { invoke } from '@tauri-apps/api/core'
   import { openPath } from '@tauri-apps/plugin-opener'
   import { appConfig, setUnsaved, askConfirm } from '../lib/store'
-  import { patchPack, type PatchFileInfo, type PatchEntry } from '../lib/patchesMeta'
+  import { patchPack, idsOf, namedValue, type PatchFileInfo, type PatchEntry, type PatchNames } from '../lib/patchesMeta'
   import PanelSidebar from './PanelSidebar.svelte'
   import PatchEditorModal from './PatchEditorModal.svelte'
   import NewFileModal from './NewFileModal.svelte'
@@ -37,6 +37,11 @@
   // File-level enable toggle in flight
   let togglingFile: string | null = null
 
+  // Names for prototype paths and id values, kept across files. `asked` holds every path
+  // and id already sent, so ones the catalogue doesn't know aren't sent again.
+  let names: PatchNames = { paths: {}, ids: {} }
+  const asked = new Set<string>()
+
   // ── Derived ────────────────────────────────────────────────────────────────
 
   $: isDirty       = JSON.stringify(entries) !== JSON.stringify(dirtyEntries)
@@ -46,6 +51,7 @@
   $: disabledCount = dirtyEntries.length - enabledCount
   $: enabledFiles  = files.filter(f => f.enabled)
   $: disabledFiles = files.filter(f => !f.enabled)
+  $: requestNames(dirtyEntries)
 
   // ── Search / sort ──────────────────────────────────────────────────────────
 
@@ -73,7 +79,9 @@
     ? indexedEntries.filter(({ entry: e }) =>
         e.Description.toLowerCase().includes(searchLower) ||
         e.Prototype.toLowerCase().includes(searchLower)   ||
-        e.Path.toLowerCase().includes(searchLower)
+        e.Path.toLowerCase().includes(searchLower)        ||
+        (names.paths[e.Prototype] ?? '').toLowerCase().includes(searchLower) ||
+        (namedValue(e, names.ids) ?? '').toLowerCase().includes(searchLower)
       )
     : indexedEntries
 
@@ -104,6 +112,19 @@
   }
 
   // ── Backend calls ──────────────────────────────────────────────────────────
+
+  async function requestNames(list: PatchEntry[]) {
+    const paths = [...new Set(list.map(e => e.Prototype))].filter(p => p && !asked.has(p))
+    const ids   = [...new Set(list.flatMap(idsOf))].filter(id => !asked.has(id))
+    if (!$appConfig.server_exe || (paths.length === 0 && ids.length === 0)) return
+    for (const k of [...paths, ...ids]) asked.add(k)
+    try {
+      const got = await invoke<PatchNames>('name_patch_targets', { serverExe: $appConfig.server_exe, paths, ids })
+      names = { paths: { ...names.paths, ...got.paths }, ids: { ...names.ids, ...got.ids } }
+    } catch {
+      // Names are a help, not needed: without Calligraphy.sip the table shows paths and ids.
+    }
+  }
 
   async function scan() {
     if (!$appConfig.server_exe) return
@@ -480,10 +501,18 @@
                       ></button>
                     </td>
                     <td class="cell-desc cell-truncate">{entry.Description || '—'}</td>
-                    <td class="cell-mono cell-truncate">{entry.Prototype || '—'}</td>
+                    {#if names.paths[entry.Prototype]}
+                      <td class="cell-name cell-truncate" use:tip={entry.Prototype}>{names.paths[entry.Prototype]}</td>
+                    {:else}
+                      <td class="cell-mono cell-truncate">{entry.Prototype || '—'}</td>
+                    {/if}
                     <td class="cell-mono cell-truncate">{entry.Path || '—'}</td>
                     <td class="cell-type cell-truncate">{entry.ValueType}</td>
-                    <td class="cell-mono cell-truncate">{formatValue(entry.Value)}</td>
+                    {#if namedValue(entry, names.ids)}
+                      <td class="cell-name cell-truncate" use:tip={formatValue(entry.Value)}>{namedValue(entry, names.ids)}</td>
+                    {:else}
+                      <td class="cell-mono cell-truncate">{formatValue(entry.Value)}</td>
+                    {/if}
                     <td class="col-actions-cell">
                       <button
                         class="move-btn"
@@ -706,6 +735,7 @@
   .cell-truncate { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .cell-desc     { color: var(--text-1); }
   .cell-type     { font-size: var(--fs-min); color: var(--text-2); }
+  .cell-name     { color: var(--text-1); }
   .cell-mono     { font-family: var(--font-mono); font-size: var(--fs-min); color: var(--text-2); }
 
   .col-actions-cell {

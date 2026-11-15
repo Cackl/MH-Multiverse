@@ -33,6 +33,29 @@ export function patchPack(fileName: string): PatchPack {
     ?? { name: fileName.replace(/^PatchData/, '').replace(/\.json$/, '') || fileName, description: '' }
 }
 
+/** What `name_patch_targets` returns: prototype path → name, decimal id or GUID → name. */
+export interface PatchNames {
+  paths: Record<string, string>
+  ids: Record<string, string>
+}
+
+// Value types that hold prototype ids or GUIDs. They arrive as decimal strings (see patches.rs).
+const ID_VALUE_TYPES = ['PrototypeId', 'PrototypeDataRef', 'PrototypeGuid', 'PrototypeId[]', 'PrototypeDataRef[]']
+
+/** The id strings in an entry's value, or none when its type holds no prototype ids. */
+export function idsOf(entry: PatchEntry): string[] {
+  if (!ID_VALUE_TYPES.includes(entry.ValueType)) return []
+  const values = Array.isArray(entry.Value) ? entry.Value : [entry.Value]
+  return values.filter((v): v is string => typeof v === 'string')
+}
+
+/** The value as names, e.g. "Doom Bot, Kadoomer", or null when none of its ids has a name. */
+export function namedValue(entry: PatchEntry, ids: Record<string, string>): string | null {
+  const list = idsOf(entry)
+  if (!list.some(id => id in ids)) return null
+  return list.map(id => ids[id] ?? id).join(', ')
+}
+
 export interface PatchEntry {
   Enabled: boolean
   Prototype: string
