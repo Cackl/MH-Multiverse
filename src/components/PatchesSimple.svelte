@@ -13,14 +13,10 @@
     clampCooldown, readCooldowns, withCooldowns, type PowerCooldown,
   } from '../lib/gameTweaks'
 
-  type View = 'all' | 'on' | 'off'
-  const VIEWS: { id: View; label: string }[] = [
-    { id: 'all', label: 'All' },
-    { id: 'on',  label: 'On' },
-    { id: 'off', label: 'Off' },
-  ]
-  // Your own files come first, the stock ones after.
-  const GROUPS = ['Yours', 'Stock'] as const
+  // Patches by where they come from: the launcher's own tweaks, the server's stock packs, your files.
+  type View = 'all' | 'multiverse' | 'stock' | 'yours'
+  type Group = 'stock' | 'yours'
+  const GROUP_LABELS: Record<Group, string> = { stock: 'Stock', yours: 'Yours' }
 
   let files: PatchFileInfo[] = []
   let loaded = false
@@ -144,16 +140,26 @@
   // A file can sit in both Patches and Patches/Off after an update, so the key includes the folder.
   const keyOf = (f: PatchFileInfo) => `${f.enabled ? 'on' : 'off'}/${f.file_name}`
 
-  $: rows = files
-    .filter(f => view === 'all' || f.enabled === (view === 'on'))
-    .map(f => ({ file: f, key: keyOf(f), pack: patchPack(f.file_name), stock: f.file_name in STOCK_PACKS }))
+  // The tweaks file is shown as the Multiverse page's switch, not as a row.
+  $: allRows = files
+    .filter(f => f.file_name !== TWEAKS_FILE)
+    .map(f => ({ file: f, key: keyOf(f), pack: patchPack(f.file_name), group: (f.file_name in STOCK_PACKS ? 'stock' : 'yours') as Group }))
     .sort((a, b) => a.pack.name.localeCompare(b.pack.name))
-  // Filtered on the saved state so switching it doesn't hide the row before Save.
-  // Power rows have no switch, so they count as on.
+  $: groups = (['stock', 'yours'] as Group[]).filter(g => (view === 'all' || view === g) && allRows.some(r => r.group === g))
+
   $: tweaksReady = !!serverExe && loaded && avatars.length > 0
-  $: showGlobal = tweaksReady && (view === 'all' || (savedPct !== null) === (view === 'on'))
-  $: showPowers = tweaksReady && view !== 'off' && draftPowers.length > 0
-  $: showTweaks = showGlobal || showPowers
+  $: tweaksOn = tweaksFile?.enabled ?? true
+  $: anyTweak = draftPct !== null || draftPowers.length > 0
+  $: views = [
+    { id: 'all', label: 'All' },
+    ...(tweaksReady ? [{ id: 'multiverse', label: 'Multiverse' }] : []),
+    { id: 'stock', label: 'Stock' },
+    ...(allRows.some(r => r.group === 'yours') ? [{ id: 'yours', label: 'Yours' }] : []),
+  ] as { id: View; label: string }[]
+  $: if (loaded && !views.some(v => v.id === view)) view = 'all'
+  // All lists the tweaks read-only, so they are edited in one place.
+  $: showTweaks = tweaksReady && (view === 'multiverse' || (view === 'all' && anyTweak))
+  $: readOnly = view !== 'multiverse'
 
   async function toggle(f: PatchFileInfo) {
     const key = keyOf(f)
@@ -207,7 +213,7 @@
       </svelte:fragment>
 
       <div class="patches-side">
-        {#each VIEWS as v}
+        {#each views as v}
           <button class="side-item" class:active={view === v.id} on:click={() => view = v.id}><span class="side-name">{v.label}</span></button>
         {/each}
       </div>
@@ -215,22 +221,40 @@
 
     <section class="data-main">
       <header class="page-head">
-        <h3 class="page-title">Patches</h3>
+        <h3 class="page-title">{view === 'multiverse' ? 'Multiverse tweaks' : 'Patches'}</h3>
         <div class="page-acts">
           <span class="restart-note">Patches load when the server starts</span>
-          {#if tweaksReady}
+          {#if view === 'multiverse'}
             <button class="btn btn-sm btn-outline" on:click={() => addOpen = true} use:tip={'Add a power cooldown'}>Add tweak</button>
+            {#if tweaksFile}
+              <span class="file-switch">
+                <span class="pct-label">All tweaks</span>
+                <button
+                  class="toggle-switch"
+                  class:on={tweaksFile.enabled}
+                  role="switch"
+                  aria-checked={tweaksFile.enabled}
+                  aria-label="All Multiverse tweaks"
+                  use:tip={tweaksFile.enabled ? 'Turn every Multiverse tweak off and keep its settings' : 'Turn every Multiverse tweak back on'}
+                  disabled={toggling === keyOf(tweaksFile)}
+                  on:click={() => tweaksFile && toggle(tweaksFile)}
+                ></button>
+              </span>
+            {/if}
           {/if}
         </div>
       </header>
 
       <div class="patches-body">
         {#if showTweaks}
-          <div class="subsection-title patches-group">Tweaks</div>
-          {#if showGlobal}
-          <div class="pack-row" class:off={draftPct === null}>
+          {#if view === 'all'}<div class="subsection-title patches-group">Multiverse</div>{/if}
+          {#if !readOnly || draftPct !== null}
+          <div class="pack-row" class:off={draftPct === null || !tweaksOn}>
             <span class="pack-name"><span class="pack-title">All heroes' cooldowns</span></span>
             <span class="pack-desc">Shortens every power cooldown a hero uses</span>
+            {#if readOnly}
+              <span class="pct-read">-{draftPct}%</span>
+            {:else}
             <label class="pct-field">
               <span class="pct-label">Reduce by</span>
               <span class="pct-box">
@@ -258,14 +282,17 @@
               aria-label="All heroes' cooldowns"
               on:click={() => draftPct = draftPct === null ? boxPct : null}
             ></button>
+            {/if}
           </div>
           {/if}
-          {#if showPowers}
           {#each draftPowers as p (p.id)}
             {@const name = powerNames[p.id] ?? p.id}
-            <div class="pack-row">
+            <div class="pack-row" class:off={!tweaksOn}>
               <span class="pack-name"><span class="pack-title" use:tip={name}>{name}</span></span>
               <span class="pack-desc">Shortens this power's cooldown on top of All heroes' cooldowns</span>
+              {#if readOnly}
+                <span class="pct-read">-{p.pct}%</span>
+              {:else}
               <label class="pct-field">
                 <span class="pct-label">Reduce by</span>
                 <span class="pct-box">
@@ -295,25 +322,22 @@
                   <line x1="6" y1="6" x2="18" y2="18"/>
                 </svg>
               </button>
+              {/if}
             </div>
           {/each}
-          {/if}
         {/if}
 
         {#if !serverExe}
           <p class="patches-msg">Set the server location first.</p>
         {:else if loadError}
           <p class="patches-msg error">{loadError}</p>
-        {:else if loaded && files.length === 0}
-          <p class="patches-msg">This server has no patch files.</p>
-        {:else if loaded && rows.length === 0 && !showTweaks}
-          <p class="patches-msg">{view === 'on' ? 'No patches are on.' : 'No patches are off.'}</p>
-        {:else}
-          {#each GROUPS as group}
-          {@const groupRows = rows.filter(r => r.stock === (group === 'Stock'))}
-          {#if groupRows.length}
-          <div class="subsection-title patches-group">{group}</div>
-          {#each groupRows as row (row.key)}
+        {:else if view !== 'multiverse'}
+          {#if loaded && !groups.length && !showTweaks}
+            <p class="patches-msg">{view === 'stock' ? 'This server has no stock patches.' : 'This server has no patch files.'}</p>
+          {/if}
+          {#each groups as group}
+          {#if view === 'all'}<div class="subsection-title patches-group">{GROUP_LABELS[group]}</div>{/if}
+          {#each allRows.filter(r => r.group === group) as row (row.key)}
             <div class="pack-row" class:off={!row.file.enabled}>
               <span class="pack-name">
                 <span class="pack-title" use:tip={row.file.file_name}>{row.pack.name}</span>
@@ -330,7 +354,6 @@
               ></button>
             </div>
           {/each}
-          {/if}
           {/each}
         {/if}
       </div>
@@ -454,6 +477,8 @@
   }
   .pct-box input:disabled { opacity: var(--dimmed-opacity); }
   .pct-unit { font-size: 12px; color: var(--text-3); }
+  .pct-read { font-size: 12px; color: var(--text-1); font-variant-numeric: tabular-nums; justify-self: end; }
+  .file-switch { display: flex; align-items: center; gap: 8px; }
   .pack-row.off .pack-title,
   .pack-row.off .pack-desc { opacity: var(--dimmed-opacity); }
 </style>
