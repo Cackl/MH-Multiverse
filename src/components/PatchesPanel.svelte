@@ -2,10 +2,11 @@
   import { onMount, onDestroy } from 'svelte'
   import { invoke } from '@tauri-apps/api/core'
   import { openPath } from '@tauri-apps/plugin-opener'
-  import { appConfig, setUnsaved } from '../lib/store'
-  import type { PatchFileInfo, PatchEntry } from '../lib/patchesMeta'
+  import { appConfig, setUnsaved, askConfirm } from '../lib/store'
+  import { patchPack, idsOf, namedValue, type PatchFileInfo, type PatchEntry, type PatchNames } from '../lib/patchesMeta'
   import PanelSidebar from './PanelSidebar.svelte'
   import PatchEditorModal from './PatchEditorModal.svelte'
+  import NewFileModal from './NewFileModal.svelte'
   import { tip } from '../lib/tooltip'
 
   // ── State ──────────────────────────────────────────────────────────────────
@@ -25,21 +26,21 @@
   let saveError = ''
   let saveSuccess = ''
 
-  // New file creation
+  // New file modal open
   let creatingFile = false
-  let newFileName = ''
-  let createError = ''
 
   // Modal state — null entry = new, non-null = edit at modalIndex
   let modalOpen  = false
   let modalEntry: PatchEntry | null = null
   let modalIndex: number | null = null
 
-  // Confirm-discard dialog — holds the target file to switch to
-  let confirmPending: PatchFileInfo | null = null
-
   // File-level enable toggle in flight
   let togglingFile: string | null = null
+
+  // Names for prototype paths and id values, kept across files. `asked` holds every path
+  // and id already sent, so ones the catalogue doesn't know aren't sent again.
+  let names: PatchNames = { paths: {}, ids: {} }
+  const asked = new Set<string>()
 
   // ── Derived ────────────────────────────────────────────────────────────────
 
@@ -48,9 +49,9 @@
   onDestroy(() => setUnsaved('patches', null))
   $: enabledCount  = dirtyEntries.filter(e => e.Enabled).length
   $: disabledCount = dirtyEntries.length - enabledCount
-  $: activeFiles   = files.filter(f => f.enabled).length
   $: enabledFiles  = files.filter(f => f.enabled)
   $: disabledFiles = files.filter(f => !f.enabled)
+  $: requestNames(dirtyEntries)
 
   // ── Search / sort ──────────────────────────────────────────────────────────
 
@@ -78,7 +79,9 @@
     ? indexedEntries.filter(({ entry: e }) =>
         e.Description.toLowerCase().includes(searchLower) ||
         e.Prototype.toLowerCase().includes(searchLower)   ||
-        e.Path.toLowerCase().includes(searchLower)
+        e.Path.toLowerCase().includes(searchLower)        ||
+        (names.paths[e.Prototype] ?? '').toLowerCase().includes(searchLower) ||
+        (namedValue(e, names.ids) ?? '').toLowerCase().includes(searchLower)
       )
     : indexedEntries
 
@@ -99,9 +102,7 @@
 
   // ── Helpers ────────────────────────────────────────────────────────────────
 
-  function displayName(f: PatchFileInfo): string {
-    return f.file_name.replace(/^PatchData/, '').replace(/\.json$/, '') || f.file_name
-  }
+  const displayName = (f: PatchFileInfo) => patchPack(f.file_name).name
 
   function formatValue(v: unknown): string {
     if (v === null || v === undefined) return 'null'
@@ -111,6 +112,19 @@
   }
 
   // ── Backend calls ──────────────────────────────────────────────────────────
+
+  async function requestNames(list: PatchEntry[]) {
+    const paths = [...new Set(list.map(e => e.Prototype))].filter(p => p && !asked.has(p))
+    const ids   = [...new Set(list.flatMap(idsOf))].filter(id => !asked.has(id))
+    if (!$appConfig.server_exe || (paths.length === 0 && ids.length === 0)) return
+    for (const k of [...paths, ...ids]) asked.add(k)
+    try {
+      const got = await invoke<PatchNames>('name_patch_targets', { serverExe: $appConfig.server_exe, paths, ids })
+      names = { paths: { ...names.paths, ...got.paths }, ids: { ...names.ids, ...got.ids } }
+    } catch {
+      // Names are a help, not needed: without Calligraphy.sip the table shows paths and ids.
+    }
+  }
 
   async function scan() {
     if (!$appConfig.server_exe) return
@@ -126,10 +140,12 @@
   }
 
   async function selectFile(f: PatchFileInfo) {
-    if (isDirty && selectedFile) {
-      confirmPending = f
-      return
-    }
+    if (isDirty && selectedFile && !await askConfirm({
+      title: 'Discard changes?',
+      message: `${displayName(selectedFile)} has unsaved changes. Discard them?`,
+      okLabel: 'Discard',
+      cancelLabel: 'Keep editing',
+    })) return
     await _doSelectFile(f)
   }
 
@@ -154,16 +170,6 @@
     } finally {
       loadingEntries = false
     }
-  }
-
-  async function confirmDiscard() {
-    const target   = confirmPending
-    confirmPending = null
-    if (target) await _doSelectFile(target)
-  }
-
-  function cancelDiscard() {
-    confirmPending = null
   }
 
   async function save() {
@@ -207,22 +213,12 @@
     }
   }
 
-  async function createFile() {
-    createError = ''
-    const name     = newFileName.trim()
-    if (!name) { createError = 'Name required.'; return }
-    const canonical = name.startsWith('PatchData') ? name : `PatchData${name}`
-    const withExt   = canonical.endsWith('.json')  ? canonical : `${canonical}.json`
-    try {
-      await invoke('create_patch_file', { serverExe: $appConfig.server_exe, fileName: withExt })
-      newFileName  = ''
-      creatingFile = false
-      await scan()
-      const created = files.find(f => f.file_name === withExt)
-      if (created) selectFile(created)
-    } catch (e) {
-      createError = String(e)
-    }
+  /** Shows a file the New patch file modal just made. */
+  async function handleFileCreated(name: string) {
+    creatingFile = false
+    await scan()
+    const created = files.find(f => f.file_name === name)
+    if (created) selectFile(created)
   }
 
   async function openPatchesDir() {
@@ -279,8 +275,6 @@
   onMount(() => { if ($appConfig.server_exe) scan() })
 </script>
 
-<svelte:window on:keydown={e => { if (e.key === 'Escape' && confirmPending) cancelDiscard() }} />
-
 <div class="patches-panel">
   <div class="panel-bg"></div>
   <div class="grid-overlay"></div>
@@ -296,7 +290,7 @@
           aria-label="New patch file"
           use:tip={'New patch file'}
           disabled={!$appConfig.server_exe}
-          on:click={() => { creatingFile = !creatingFile; createError = '' }}
+          on:click={() => creatingFile = true}
         >
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <line x1="12" y1="5" x2="12" y2="19"/>
@@ -316,45 +310,6 @@
         </button>
       </svelte:fragment>
 
-      <!-- New file form -->
-      {#if creatingFile}
-        <div class="new-file-form">
-          <input
-            type="text"
-            placeholder="Name (e.g. MyPatches)"
-            bind:value={newFileName}
-            on:keydown={e => { if (e.key === 'Enter') createFile(); if (e.key === 'Escape') creatingFile = false }}
-          />
-          {#if createError}
-            <span class="feedback-error">{createError}</span>
-          {/if}
-          <div class="new-file-actions">
-            <button class="btn btn-sm btn-accent" on:click={createFile}>Create</button>
-            <button class="btn btn-sm btn-outline" on:click={() => { creatingFile = false; createError = '' }}>Cancel</button>
-          </div>
-        </div>
-      {/if}
-
-      <!-- File stats -->
-      {#if files.length > 0}
-        <div class="stats-row">
-          <div class="stat">
-            <span class="stat-value">{activeFiles}</span>
-            <span class="stat-label">/ {files.length} active</span>
-          </div>
-        </div>
-      {/if}
-
-      <!-- Restart notice -->
-      <!-- <div class="restart-notice">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <circle cx="12" cy="12" r="10"/>
-          <line x1="12" y1="8" x2="12" y2="12"/>
-          <line x1="12" y1="16" x2="12.01" y2="16"/>
-        </svg>
-        Patch changes require a server restart to take effect.
-      </div> -->
-
       <!-- File list -->
       <div class="file-list">
         {#if !$appConfig.server_exe}
@@ -369,7 +324,7 @@
           <div class="file-notice">No PatchData*.json files found.</div>
         {:else}
           {#if enabledFiles.length > 0}
-            <div class="file-group-label">Active</div>
+            <div class="side-label">Active</div>
             {#each enabledFiles as f (f.file_name)}
               <div
                 class="file-item"
@@ -378,11 +333,9 @@
                 on:click={() => selectFile(f)}
                 on:keydown={e => e.key === 'Enter' && selectFile(f)}
               >
-                <div class="file-info">
-                  <span class="file-name">{displayName(f)}</span>
-                </div>
+                <span class="file-info"><span class="file-name">{displayName(f)}</span><span class="file-sub">{f.file_name}</span></span>
                 <button
-                  class="toggle-switch file-toggle"
+                  class="toggle-switch"
                   class:on={f.enabled}
                   role="switch"
                   aria-checked={f.enabled}
@@ -396,7 +349,7 @@
           {/if}
 
           {#if disabledFiles.length > 0}
-            <div class="file-group-label">Disabled</div>
+            <div class="side-label">Disabled</div>
             {#each disabledFiles as f (f.file_name)}
               <div
                 class="file-item file-item-off"
@@ -405,11 +358,9 @@
                 on:click={() => selectFile(f)}
                 on:keydown={e => e.key === 'Enter' && selectFile(f)}
               >
-                <div class="file-info">
-                  <span class="file-name">{displayName(f)}</span>
-                </div>
+                <span class="file-info"><span class="file-name">{displayName(f)}</span><span class="file-sub">{f.file_name}</span></span>
                 <button
-                  class="toggle-switch file-toggle"
+                  class="toggle-switch"
                   class:on={f.enabled}
                   role="switch"
                   aria-checked={f.enabled}
@@ -426,7 +377,7 @@
     </PanelSidebar>
 
     <!-- ── Content pane ── -->
-    <div class="content-pane">
+    <section class="data-main">
 
       {#if !selectedFile}
         <div class="empty-state">
@@ -440,12 +391,12 @@
 
       {:else}
 
-        <!-- Toolbar -->
-        <div class="toolbar">
-          <span class="toolbar-filename">{displayName(selectedFile)}</span>
+        <header class="page-head">
+          <h3 class="page-title" use:tip={selectedFile.file_name}>{displayName(selectedFile)}</h3>
           {#if dirtyEntries.length > 0}
             <span class="entry-count">{enabledCount} on · {disabledCount} off</span>
           {/if}
+          <div class="page-acts">
           <div class="search-wrap">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <circle cx="11" cy="11" r="8"/>
@@ -458,14 +409,9 @@
               bind:value={searchQuery}
             />
           </div>
-          <button class="btn btn-sm btn-outline" disabled={!selectedFile} on:click={openAddModal}>
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <line x1="12" y1="5" x2="12" y2="19"/>
-              <line x1="5" y1="12" x2="19" y2="12"/>
-            </svg>
-            Add Entry
-          </button>
-        </div>
+          <button class="btn btn-sm btn-outline" disabled={!selectedFile} on:click={openAddModal}>New Entry</button>
+          </div>
+        </header>
 
         <!-- Entry list -->
         {#if loadingEntries}
@@ -549,10 +495,18 @@
                       ></button>
                     </td>
                     <td class="cell-desc cell-truncate">{entry.Description || '—'}</td>
-                    <td class="cell-mono cell-truncate">{entry.Prototype || '—'}</td>
+                    {#if names.paths[entry.Prototype]}
+                      <td class="cell-name cell-truncate" use:tip={entry.Prototype}>{names.paths[entry.Prototype]}</td>
+                    {:else}
+                      <td class="cell-mono cell-truncate">{entry.Prototype || '—'}</td>
+                    {/if}
                     <td class="cell-mono cell-truncate">{entry.Path || '—'}</td>
-                    <td><span class="type-badge">{entry.ValueType}</span></td>
-                    <td class="cell-mono cell-truncate">{formatValue(entry.Value)}</td>
+                    <td class="cell-type cell-truncate">{entry.ValueType}</td>
+                    {#if namedValue(entry, names.ids)}
+                      <td class="cell-name cell-truncate" use:tip={formatValue(entry.Value)}>{namedValue(entry, names.ids)}</td>
+                    {:else}
+                      <td class="cell-mono cell-truncate">{formatValue(entry.Value)}</td>
+                    {/if}
                     <td class="col-actions-cell">
                       <button
                         class="move-btn"
@@ -597,63 +551,35 @@
         </div>
 
       {/if}
-    </div><!-- content-pane -->
+    </section>
 
   </div><!-- patches-layout -->
 </div>
+
+{#if creatingFile}
+  <NewFileModal
+    title="New patch file"
+    prefix="PatchData"
+    placeholder="MyPatches"
+    hint="Letters, numbers, _ or -. Add entries to it with New Entry."
+    create={suffix => invoke<string>('create_patch_file', { serverExe: $appConfig.server_exe, suffix })}
+    onCreated={handleFileCreated}
+    onClose={() => creatingFile = false}
+  />
+{/if}
 
 <!-- Modal -->
 {#if modalOpen && selectedFile}
   <PatchEditorModal
     entry={modalEntry}
     serverExe={$appConfig.server_exe}
+    fileName={selectedFile.file_name}
     onClose={() => modalOpen = false}
     onSave={handleModalSave}
     onDelete={handleModalDelete}
   />
 {/if}
 
-<!-- Confirm discard dialog -->
-{#if confirmPending && selectedFile}
-  <div
-    class="confirm-backdrop"
-    role="presentation"
-    on:click={cancelDiscard}
-  >
-    <div
-      class="confirm-dialog"
-      role="alertdialog"
-      aria-modal="true"
-      tabindex="-100"
-      on:click|stopPropagation
-      on:keydown={(e) => {
-      if (e.key === 'Escape' || e.key === 'Enter' || e.key === ' ') {
-        e.preventDefault();
-        cancelDiscard();
-      }
-    }}
-    >
-      <div class="confirm-icon">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
-          <line x1="12" y1="9" x2="12" y2="13"/>
-          <line x1="12" y1="17" x2="12.01" y2="17"/>
-        </svg>
-      </div>
-      <div class="confirm-body">
-        <p class="confirm-message">
-          Discard unsaved changes to
-          <strong class="confirm-filename">{displayName(selectedFile)}</strong>?
-        </p>
-        <p class="confirm-sub">This cannot be undone.</p>
-      </div>
-      <div class="confirm-actions">
-        <button class="btn btn-sm btn-outline" tabindex="-1" on:click={cancelDiscard}>Cancel</button>
-        <button class="btn btn-sm btn-red" on:click={confirmDiscard}>Discard</button>
-      </div>
-    </div>
-  </div>
-{/if}
 
 <style>
   /* ── Shell ── */
@@ -666,24 +592,6 @@
     min-height: 0;
   }
 
-  .panel-bg {
-    position: absolute;
-    inset: 0;
-    background: linear-gradient(180deg, var(--panel-grad-top) 0%, transparent var(--panel-grad-mid));
-    pointer-events: none;
-  }
-
-  .grid-overlay {
-    position: absolute;
-    inset: 0;
-    background-image:
-      linear-gradient(var(--border) 1px, transparent 1px),
-      linear-gradient(90deg, var(--border) 1px, transparent 1px);
-    background-size: 32px 32px;
-    opacity: 0.18;
-    pointer-events: none;
-  }
-
   .patches-layout {
     position: relative;
     z-index: 1;
@@ -693,54 +601,6 @@
     min-height: 0;
   }
 
-  /* ── Sidebar internals ── */
-  .new-file-form {
-    padding: 8px 10px;
-    border-bottom: 1px solid var(--border);
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-  }
-
-  .new-file-actions { display: flex; gap: 6px; }
-
-  /* .restart-notice {
-    display: flex;
-    align-items: flex-start;
-    gap: 6px;
-    padding: 8px 12px 10px;
-    font-size: var(--fs-min);
-    color: var(--text-3);
-    border-bottom: 1px solid var(--border);
-    line-height: 1.4;
-  } */
-  /* .restart-notice svg { width: 12px; height: 12px; flex-shrink: 0; margin-top: 1px; } */
-
-  /* ── Sidebar stats ── */
-  .stats-row {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 8px 14px;
-    border-bottom: 1px solid var(--border);
-    flex-shrink: 0;
-  }
-
-  .stat { display: flex; align-items: baseline; gap: 3px; }
-
-  .stat-value {
-    font-family: var(--font-mono);
-    font-size: 13px;
-    color: var(--accent-bright);
-  }
-
-  .stat-label {
-    font-family: var(--font-head);
-    font-size: var(--fs-min);
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    color: var(--text-3);
-  }
 
   .file-list {
     flex: 1;
@@ -758,10 +618,13 @@
   }
   .file-notice.error { color: var(--text-error); text-transform: none; font-family: var(--font-body); letter-spacing: 0; }
 
+  .file-list > .side-label:first-child { margin-top: 0; border-top: none; }
+
+  /* Same rows as the Store sidebar. */
   .file-item {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 6px;
     padding: 7px 10px;
     min-height: 42px;
     border: 1px solid transparent;
@@ -772,74 +635,35 @@
   }
   .file-item:hover  { background: var(--bg-3); border-color: var(--border-mid); }
   .file-item.active { background: var(--accent-glow); border-color: var(--accent-dim); }
-  .file-item.active .file-name { color: var(--accent-bright); }
   .file-item-off    { opacity: var(--dimmed-opacity); }
 
-  .file-group-label {
-    font-family: var(--font-head);
-    font-size: var(--fs-min);
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
-    color: var(--text-3);
-    padding: 10px 14px 4px;
-    border-top: 1px solid var(--border);
-    margin-top: 4px;
+  .file-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+  .file-name,
+  .file-sub {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
-
-  .file-info { flex: 1; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-
+  .file-sub { font-size: var(--fs-min); color: var(--text-3); }
   .file-name {
     font-family: var(--font-head);
     font-size: 11px;
     font-weight: 600;
     color: var(--text-1);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
   }
+  .file-item.active .file-name { color: var(--accent-bright); }
 
-  .file-toggle { width: 28px; height: 16px; flex-shrink: 0; }
-  .file-toggle::after { width: 10px; height: 10px; top: 2px; left: 2px; }
-  .file-toggle.on::after { left: calc(100% - 12px); }
-
-  /* ── Content pane ── */
-  .content-pane {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-    min-width: 0;
-    background: var(--bg-1);
-  }
-
-  /* ── Toolbar ── */
-  .toolbar {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 8px 14px;
-    border-bottom: 1px solid var(--border);
-    flex-shrink: 0;
-    min-height: 53px;
-  }
-
-  .toolbar-filename {
-    font-family: var(--font-head);
-    font-size: 11px;
-    font-weight: 600;
-    letter-spacing: 0.08em;
-    color: var(--text-1);
-    flex-shrink: 0;
-  }
+  .page-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 
   .entry-count {
-    font-family: var(--font-mono);
-    font-size: var(--fs-min);
-    color: var(--text-3);
-    flex-shrink: 0;
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+    color: var(--text-2);
+    white-space: nowrap;
   }
 
-  .search-wrap { min-width: 0; max-width: 300px; }
+  .page-acts { flex-shrink: 1; min-width: 0; }
+  .search-wrap { min-width: 120px; flex: 0 1 220px; }
 
   /* ── List view ── */
   .list-wrap { flex: 1; overflow: auto; }
@@ -905,21 +729,9 @@
 
   .cell-truncate { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .cell-desc     { color: var(--text-1); }
+  .cell-type     { font-size: var(--fs-min); color: var(--text-2); }
+  .cell-name     { color: var(--text-1); }
   .cell-mono     { font-family: var(--font-mono); font-size: var(--fs-min); color: var(--text-2); }
-
-  .type-badge {
-    font-family: var(--font-head);
-    font-size: var(--fs-min);
-    font-weight: 600;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    color: var(--accent);
-    background: var(--accent-glow);
-    border: 1px solid var(--accent-dim);
-    border-radius: 2px;
-    padding: 1px 5px;
-    white-space: nowrap;
-  }
 
   .col-actions-cell {
     display: flex;
@@ -953,74 +765,4 @@
   .move-btn:hover:not(:disabled) { color: var(--text-1); border-color: var(--border-lit); }
   .move-btn:disabled { opacity: 0.25; cursor: not-allowed; }
 
-  /* ── Confirm discard dialog ── */
-  .confirm-backdrop {
-    position: fixed;
-    inset: 0;
-    background: rgba(0, 0, 0, 0.6);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: var(--z-modal);
-    backdrop-filter: blur(2px);
-  }
-
-  .confirm-dialog {
-    background: var(--bg-2);
-    border: 1px solid var(--border-lit);
-    border-radius: var(--radius-md);
-    padding: 20px 24px;
-    width: min(380px, 90vw);
-    display: flex;
-    flex-direction: column;
-    gap: 16px;
-    box-shadow: 0 24px 80px rgba(0, 0, 0, 0.55);
-  }
-
-  .confirm-icon {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 36px;
-    height: 36px;
-    border-radius: 50%;
-    background: var(--amber-dim);
-    border: 1px solid color-mix(in srgb, var(--amber) 25%, transparent);
-    flex-shrink: 0;
-  }
-  .confirm-icon svg {
-    width: 18px;
-    height: 18px;
-    color: var(--amber-bright);
-  }
-
-  .confirm-body {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-  }
-
-  .confirm-message {
-    font-family: var(--font-body);
-    font-size: 13px;
-    color: var(--text-0);
-    line-height: 1.4;
-  }
-
-  .confirm-filename {
-    font-family: var(--font-mono);
-    font-weight: 500;
-    color: var(--accent-bright);
-  }
-
-  .confirm-sub {
-    font-size: 11px;
-    color: var(--text-3);
-  }
-
-  .confirm-actions {
-    display: flex;
-    justify-content: flex-end;
-    gap: 8px;
-  }
 </style>

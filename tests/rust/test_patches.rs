@@ -64,23 +64,53 @@ fn toggle_moves_file() {
 }
 
 #[test]
+fn toggle_refuses_when_the_other_copy_exists() {
+    let (_tmp, server_exe) = setup();
+    let off = off_dir(&patches_dir(&server_exe).unwrap());
+    fs::write(off.join("PatchDataBugFixes.json"), "[\"off copy\"]").unwrap();
+
+    let err = set_patch_file_enabled(
+        server_exe.clone(),
+        "PatchDataBugFixes.json".to_string(),
+        true,
+    )
+    .unwrap_err();
+    assert!(err.contains("already a copy"));
+
+    // Both copies are untouched.
+    assert_eq!(fs::read_to_string(off.join("PatchDataBugFixes.json")).unwrap(), "[\"off copy\"]");
+    assert_eq!(load_patch_file(server_exe, "PatchDataBugFixes.json".to_string(), true).unwrap().len(), 5);
+}
+
+#[test]
 fn create_rejects_existing() {
     let (_tmp, server_exe) = setup();
-    let err = create_patch_file(server_exe, "PatchDataBugFixes.json".to_string()).unwrap_err();
+    let err = create_patch_file(server_exe, "BugFixes".to_string()).unwrap_err();
     assert!(err.contains("already exists"));
 }
 
 #[test]
 fn create_rejects_existing_in_off_dir() {
     let (_tmp, server_exe) = setup();
-    let err = create_patch_file(server_exe, "PatchDataDisabled.json".to_string()).unwrap_err();
+    let err = create_patch_file(server_exe, "Disabled".to_string()).unwrap_err();
     assert!(err.contains("already exists"));
+}
+
+#[test]
+fn create_rejects_names_that_could_leave_the_folder() {
+    let (_tmp, server_exe) = setup();
+    for bad in ["", "..\\Evil", "../Evil", "Sub/Name", "A.json", "Has Space"] {
+        let err = create_patch_file(server_exe.clone(), bad.to_string()).unwrap_err();
+        assert!(err.contains("letters, numbers"), "{bad:?} gave {err}");
+    }
+    assert!(create_patch_file(server_exe, "My_Tweaks-2".to_string()).is_ok());
 }
 
 #[test]
 fn create_writes_new_enabled_file() {
     let (_tmp, server_exe) = setup();
-    create_patch_file(server_exe.clone(), "PatchDataNew.json".to_string()).unwrap();
+    let name = create_patch_file(server_exe.clone(), "New".to_string()).unwrap();
+    assert_eq!(name, "PatchDataNew.json");
     let files = scan_patch_files(server_exe).unwrap();
     let f = files.iter().find(|f| f.file_name == "PatchDataNew.json").unwrap();
     assert!(f.enabled);

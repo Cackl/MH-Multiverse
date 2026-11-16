@@ -192,6 +192,25 @@ fn toggle_enable() {
 }
 
 #[test]
+fn toggle_refuses_when_both_copies_exist() {
+    let (_tmp, server_exe) = setup();
+    let dir = live_tuning_dir(&server_exe).unwrap();
+    let active = dir.join("LiveTuningDataBugFixes.json");
+    let off = dir.join("OFF_LiveTuningDataBugFixes.json");
+    let active_text = fs::read_to_string(&active).unwrap();
+    fs::write(&off, "off copy").unwrap();
+
+    for enabled in [true, false] {
+        let err = toggle_tuning_file(server_exe.clone(), "LiveTuningDataBugFixes.json".to_string(), enabled)
+            .unwrap_err();
+        assert!(err.contains("also a copy"));
+    }
+
+    assert_eq!(fs::read_to_string(&active).unwrap(), active_text);
+    assert_eq!(fs::read_to_string(&off).unwrap(), "off copy");
+}
+
+#[test]
 fn toggle_disable() {
     let (_tmp, server_exe) = setup();
     let dir = live_tuning_dir(&server_exe).unwrap();

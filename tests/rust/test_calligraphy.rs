@@ -646,3 +646,24 @@ fn search_filters_by_class_ancestry_and_category_prefix() {
 
     assert!(search_catalogue(&cat, "doom", &[], Some("AvatarPrototype")).is_empty());
 }
+
+#[test]
+fn patch_names_for_paths_and_ids() {
+    let mut cat = search_fixture();
+    cat.by_id = cat.prototypes.iter().enumerate().map(|(i, p)| (p.prototype_id, i)).collect();
+    let s = |v: &[&str]| v.iter().map(|x| x.to_string()).collect::<Vec<_>>();
+
+    let names = patch_names(
+        &cat,
+        &s(&["Entity/Mobs/DoomBot.prototype", "entity\\mobs\\KADOOMER.prototype", "Resource/Cells/AvengersTowerNPE_HUB.cell"]),
+        // runtime id, GUID (id + 1000 in the fixture), unknown, not a number
+        &s(&["3", "1004", "999", "abc"]),
+    );
+
+    assert_eq!(names.paths["Entity/Mobs/DoomBot.prototype"], "Doom Bot");
+    assert_eq!(names.paths["entity\\mobs\\KADOOMER.prototype"], "Kadoomer");
+    assert_eq!(names.paths["Resource/Cells/AvengersTowerNPE_HUB.cell"], "Avengers Tower NPE HUB");
+    assert_eq!(names.ids.get("3").map(String::as_str), Some("Doctor Doom"));
+    assert_eq!(names.ids.get("1004").map(String::as_str), Some("Doom Bot"));
+    assert_eq!(names.ids.len(), 2);
+}

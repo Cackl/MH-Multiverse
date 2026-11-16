@@ -419,6 +419,13 @@ pub fn toggle_tuning_file(
     let active_path = dir.join(&relative_path);
     let inactive_path = dir.join(format!("OFF_{relative_path}"));
 
+    // fs::rename replaces the target on Windows, which would delete the other copy.
+    if active_path.exists() && inactive_path.exists() {
+        return Err(format!(
+            "Cannot toggle {relative_path}: there is also a copy named OFF_{relative_path}"
+        ));
+    }
+
     if enabled {
         if inactive_path.exists() {
             std::fs::rename(&inactive_path, &active_path)
