@@ -3,6 +3,7 @@
 // view can read its settings back and replace only its own entries.
 
 import type { PatchEntry } from './patchesMeta'
+import { LOAD_INT } from './patchEntryEdit'
 
 /** Every shipping hero is a non-abstract AvatarPrototype in this folder. */
 export const AVATAR_FOLDER = 'Entity/Characters/Avatars/Shipping/'
@@ -28,8 +29,6 @@ export const SUMMON_MIN = 1
 export const SUMMON_MAX = 128
 export const SUMMON_DEFAULT = 4
 const SUMMON_TAG = '[MV:summons'
-/** Eval/Constants/LoadInt.defaults, the class of a whole-number eval. */
-const LOAD_INT = '17436925256515063008'
 
 /** How many a summon power can keep out at once. `path` is the power's prototype path. */
 export interface SummonCap { path: string; max: number }
