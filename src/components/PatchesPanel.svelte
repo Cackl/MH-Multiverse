@@ -579,6 +579,7 @@
   <PatchEditorModal
     entry={modalEntry}
     serverExe={$appConfig.server_exe}
+    fileName={selectedFile.file_name}
     onClose={() => modalOpen = false}
     onSave={handleModalSave}
     onDelete={handleModalDelete}
