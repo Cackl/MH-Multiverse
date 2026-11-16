@@ -409,13 +409,7 @@
               bind:value={searchQuery}
             />
           </div>
-          <button class="btn btn-sm btn-outline" disabled={!selectedFile} on:click={openAddModal}>
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <line x1="12" y1="5" x2="12" y2="19"/>
-              <line x1="5" y1="12" x2="19" y2="12"/>
-            </svg>
-            Add Entry
-          </button>
+          <button class="btn btn-sm btn-outline" disabled={!selectedFile} on:click={openAddModal}>New Entry</button>
           </div>
         </header>
 
@@ -567,7 +561,7 @@
     title="New patch file"
     prefix="PatchData"
     placeholder="MyPatches"
-    hint="Letters, numbers, _ or -. Add entries to it with Add Entry."
+    hint="Letters, numbers, _ or -. Add entries to it with New Entry."
     create={suffix => invoke<string>('create_patch_file', { serverExe: $appConfig.server_exe, suffix })}
     onCreated={handleFileCreated}
     onClose={() => creatingFile = false}

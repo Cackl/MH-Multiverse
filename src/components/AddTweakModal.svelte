@@ -56,7 +56,7 @@
           <line x1="12" y1="5" x2="12" y2="19"/>
           <line x1="5" y1="12" x2="19" y2="12"/>
         </svg>
-        <span class="modal-display-name" id="tweak-title">Add a tweak</span>
+        <span class="modal-display-name" id="tweak-title">New entry</span>
       </div>
       <button class="close-btn" aria-label="Close" on:click={onClose}>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -111,7 +111,7 @@
 
     <div class="modal-footer">
       <button class="btn btn-sm btn-outline" on:click={onClose}>Cancel</button>
-      <button class="btn btn-sm btn-accent" disabled={!picked} on:click={add}>Add tweak</button>
+      <button class="btn btn-sm btn-accent" disabled={!picked} on:click={add}>Add entry</button>
     </div>
   </div>
 </div>

@@ -250,7 +250,7 @@
         <div class="page-acts">
           <span class="restart-note">Patches load when the server starts</span>
           {#if view === 'multiverse'}
-            <button class="btn btn-sm btn-outline" on:click={() => addOpen = true} use:tip={'Add a power cooldown or summon cap'}>Add tweak</button>
+            <button class="btn btn-sm btn-outline" on:click={() => addOpen = true} use:tip={'Add a power cooldown or summon cap'}>New Entry</button>
             {#if tweaksFile}
               <span class="file-switch">
                 <span class="pct-label">All tweaks</span>
