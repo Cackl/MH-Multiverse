@@ -56,10 +56,10 @@ export async function confirmLeave(): Promise<boolean> {
   const labels = Object.values(get(unsavedSources))
   if (labels.length === 0) return true
   const ok = await askConfirm({
-    title: 'Unsaved changes',
-    message: `You have unsaved changes in ${labels.join(', ')}. Leave and discard them?`,
+    title: 'Discard changes?',
+    message: `You have unsaved changes in ${labels.join(', ')}. Discard them?`,
     okLabel: 'Discard',
-    cancelLabel: 'Stay',
+    cancelLabel: 'Keep editing',
   })
   if (ok) unsavedSources.set({})
   return ok
