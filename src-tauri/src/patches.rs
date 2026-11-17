@@ -269,12 +269,11 @@ pub fn set_patch_file_enabled(
     let dst_dir = if new_enabled { patches.clone() } else { off.clone() };
     let dst = dst_dir.join(&file_name);
 
-    // fs::rename replaces the target on Windows, which would delete the other copy.
-    if dst.exists() {
-        return Err(format!(
-            "Cannot move {file_name}: there is already a copy in {}",
-            if new_enabled { "Patches" } else { "Patches/Off" }
-        ));
+    // Both copies exist when an older server update added one back. The copy being switched
+    // wins, and the one it replaces is kept as .json.bak (fs::rename would delete it).
+    if src.exists() && dst.exists() {
+        fs::rename(&dst, dst.with_extension("json.bak"))
+            .map_err(|e| format!("Cannot keep a copy of {}: {e}", dst.display()))?;
     }
 
     fs::create_dir_all(&dst_dir)

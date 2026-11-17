@@ -202,9 +202,13 @@
         fileName:         f.file_name,
         currentlyEnabled: f.enabled,
       })
-      files = files.map(x => x.file_name === f.file_name ? { ...x, enabled: newEnabled } : x)
+      // With a copy in both folders, the switched one replaced the other (kept as .json.bak).
+      files = files
+        .filter(x => x.file_name !== f.file_name || x.enabled === f.enabled)
+        .map(x => x.file_name === f.file_name ? { ...x, enabled: newEnabled } : x)
       if (selectedFile?.file_name === f.file_name) {
-        selectedFile = { ...selectedFile, enabled: newEnabled }
+        if (selectedFile.enabled === f.enabled) selectedFile = { ...selectedFile, enabled: newEnabled }
+        else await _doSelectFile({ ...f, enabled: newEnabled })
       }
     } catch (e) {
       scanError = String(e)

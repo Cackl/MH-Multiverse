@@ -419,11 +419,12 @@ pub fn toggle_tuning_file(
     let active_path = dir.join(&relative_path);
     let inactive_path = dir.join(format!("OFF_{relative_path}"));
 
-    // fs::rename replaces the target on Windows, which would delete the other copy.
+    // Both copies exist when an older server update added one back. The copy being switched
+    // wins, and the one it replaces is kept as .json.bak (fs::rename would delete it).
     if active_path.exists() && inactive_path.exists() {
-        return Err(format!(
-            "Cannot toggle {relative_path}: there is also a copy named OFF_{relative_path}"
-        ));
+        let replaced = if enabled { &active_path } else { &inactive_path };
+        std::fs::rename(replaced, replaced.with_extension("json.bak"))
+            .map_err(|e| format!("Cannot keep a copy of {}: {e}", replaced.display()))?;
     }
 
     if enabled {
