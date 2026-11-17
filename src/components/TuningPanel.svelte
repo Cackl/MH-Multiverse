@@ -2,10 +2,10 @@
   import { onMount } from 'svelte'
   import { invoke } from '@tauri-apps/api/core'
   import { openPath } from '@tauri-apps/plugin-opener'
-  import { appConfig, serverRunning, setTuningFavourites, tuningFocusFile } from '../lib/store'
+  import { appConfig, serverRunning, setTuningFavourites, tuningFocusFile, askConfirm } from '../lib/store'
   import { KNOWN_EVENTS, TUNING_GROUPS, tuningDisplayName, tuningGroup, type TuningFileInfo, type EventDefinition, type EventsData } from '../lib/tuningMeta'
   import PanelSidebar from './PanelSidebar.svelte'
-  import TuningEditorModal from './TuningEditorModal.svelte'
+  import TuningFileEditor from './TuningFileEditor.svelte'
   import { tip } from '../lib/tooltip'
   import { reloadLiveTuning } from '../lib/serverReload'
 
@@ -17,6 +17,7 @@
 
   let editingFile: TuningFileInfo | null = null
   let creatingNew = false
+  let editorDirty = false
   let eventDefsById: Record<string, EventDefinition> = {}
 
   // ── Derived ────────────────────────────────────────────────────────────────
@@ -82,8 +83,22 @@
     }
   }
 
+  /** Shows a file in the editor, or a new one with `file` null. Unsaved edits are confirmed first. */
+  async function openFile(file: TuningFileInfo | null) {
+    const isNew = file === null
+    if (isNew === creatingNew && file?.relative_path === editingFile?.relative_path) return
+    if (editorDirty && !await askConfirm({
+      title: 'Discard changes?', message: 'This file has unsaved changes. Discard them?',
+      okLabel: 'Discard', cancelLabel: 'Keep editing',
+    })) return
+    editorDirty = false
+    editingFile = file
+    creatingNew = isNew
+  }
+
   async function handleCreated(relativePath: string) {
     creatingNew = false
+    editorDirty = false
     await scan()
     const created = files.find(f => f.relative_path === relativePath)
     if (created) editingFile = created
@@ -136,10 +151,7 @@
   // When EventsPanel navigates here with a file to open, pre-select it once files are loaded.
   $: if ($tuningFocusFile && files.length > 0) {
     const target = files.find(f => f.relative_path === $tuningFocusFile)
-    if (target) {
-      editingFile = target
-      creatingNew = false
-    }
+    if (target) openFile(target)
     tuningFocusFile.set(null)
   }
 
@@ -159,7 +171,7 @@
       <div class="section-title">Tuning Files</div>
       <button
         class="btn-icon"
-        on:click={() => { creatingNew = true; editingFile = null }}
+        on:click={() => openFile(null)}
         aria-label="Create new tuning file"
         use:tip={'Create new tuning file'}
         disabled={!$appConfig.server_exe}
@@ -219,8 +231,8 @@
                 role="button"
                 tabindex="0"
                 aria-label="Edit {file.canonical_name}"
-                on:click={() => editingFile = file}
-                on:keydown={e => e.key === 'Enter' && (editingFile = file)}
+                on:click={() => openFile(file)}
+                on:keydown={e => e.key === 'Enter' && openFile(file)}
               >
                 <button
                   class="star-btn"
@@ -260,26 +272,54 @@
     </div>
   </PanelSidebar>
 
-  <!-- Right: grid -->
-  <div class="grid-pane">
+  <!-- Right: the selected file's editor -->
+  <section class="data-main">
 
-    <div class="grid-header">
-      {#if reloadError}<span class="reload-error">{reloadError}</span>{/if}
-      <button
-        class="btn btn-sm btn-outline"
-        on:click={reload}
-        disabled={!$serverRunning}
-        use:tip={$serverRunning ? 'Send !server reloadlivetuning' : 'Server not running'}
-      >
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:11px;height:11px;">
-          <polyline points="23 4 23 10 17 10"/>
-          <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
-        </svg>
-        Reload Live Tuning
-      </button>
-    </div>
+    <header class="page-head">
+      {#if creatingNew}
+        <h3 class="page-title">New Tuning File</h3>
+      {:else if editingFile}
+        <h3 class="page-title" use:tip={editingFile.relative_path}>{tuningDisplayName(editingFile.canonical_name)}</h3>
+      {:else}
+        <h3 class="page-title">Live Tuning</h3>
+      {/if}
+      <div class="page-acts">
+        {#if reloadError}<span class="reload-error">{reloadError}</span>{/if}
+        <button
+          class="btn btn-sm btn-outline"
+          on:click={reload}
+          disabled={!$serverRunning}
+          use:tip={$serverRunning ? 'Send !server reloadlivetuning' : 'Server not running'}
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:11px;height:11px;">
+            <polyline points="23 4 23 10 17 10"/>
+            <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+          </svg>
+          Reload Live Tuning
+        </button>
+      </div>
+    </header>
 
-    <div class="grid-scroll">
+    {#if creatingNew}
+      <TuningFileEditor
+        file={null}
+        serverExe={$appConfig.server_exe}
+        {existingNames}
+        bind:dirty={editorDirty}
+        onCancel={() => { editorDirty = false; creatingNew = false }}
+        onCreated={handleCreated}
+      />
+    {:else if editingFile}
+      {#key editingFile.relative_path}
+        <TuningFileEditor
+          file={editingFile}
+          serverExe={$appConfig.server_exe}
+          {existingNames}
+          bind:dirty={editorDirty}
+        />
+      {/key}
+    {:else}
+    <div class="pane-empty">
       {#if !$appConfig.server_exe}
         <div class="empty-state">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:20px;height:20px;color:var(--text-2)">
@@ -309,30 +349,8 @@
         </div>
       {/if}
     </div>
-  </div>
-
-  <!-- Editor modal (edit existing) -->
-  {#if editingFile}
-    <TuningEditorModal
-      file={editingFile}
-      serverExe={$appConfig.server_exe}
-      serverRunning={$serverRunning}
-      existingNames={existingNames}
-      onClose={() => editingFile = null}
-    />
-  {/if}
-
-  <!-- Create new file modal -->
-  {#if creatingNew}
-    <TuningEditorModal
-      file={null}
-      serverExe={$appConfig.server_exe}
-      serverRunning={$serverRunning}
-      existingNames={existingNames}
-      onClose={() => creatingNew = false}
-      onCreated={handleCreated}
-    />
-  {/if}
+    {/if}
+  </section>
 
   </div><!-- tuning-layout -->
 </div>
@@ -463,28 +481,8 @@
   .tag-event  { color: var(--green-bright);  border-color: color-mix(in srgb, var(--green) 40%, transparent);    background: var(--green-dim); }
 
   /* ── Grid pane ── */
-  .grid-pane {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-    min-width: 0;
-    background: var(--bg-1);
-  }
-
-  .grid-header {
-    display: flex;
-    align-items: center;
-    justify-content: flex-end;
-    gap: 10px;
-    padding: 10px 16px;
-    border-bottom: 1px solid var(--border);
-    flex-shrink: 0;
-    min-height: 53px;
-  }
-
   .reload-error { font-size: 12px; color: var(--text-error); }
-  .grid-scroll {
+  .pane-empty {
     flex: 1;
     overflow-y: auto;
     padding: 16px;

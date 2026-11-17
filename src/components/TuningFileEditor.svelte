@@ -1,22 +1,24 @@
 <script lang="ts">
-  import { onMount } from 'svelte'
+  import { onMount, onDestroy } from 'svelte'
   import { invoke } from '@tauri-apps/api/core'
   import { categoryForSetting, KNOWN_CORE, KNOWN_EVENTS, KNOWN_SETTINGS, NEW_TUNING_FILE_PREFIX, blueprintHintForSetting, newTuningFileName, parseTuningValue, tuningDisplayName, settingTip, type KnownSetting } from '../lib/tuningMeta'
   import { tip } from '../lib/tooltip'
-  import { reloadLiveTuning } from '../lib/serverReload'
+  import { setUnsaved } from '../lib/store'
   import PrototypePicker from './PrototypePicker.svelte'
 
   // ── Props ──────────────────────────────────────────────────────────────────
 
   /** Existing file to edit. Null when creating a new file. */
-  export let file: { canonical_name: string; enabled: boolean; toggleable: boolean; relative_path: string } | null = null
+  export let file: { canonical_name: string; relative_path: string } | null = null
   export let serverExe: string
-  export let serverRunning: boolean
   /** All canonical names currently on disk — used to validate new filenames. */
   export let existingNames: string[] = []
-  export let onClose: () => void
+  /** Cancel on a new file. */
+  export let onCancel: () => void = () => {}
   /** Called after a new file is successfully created on disk. */
   export let onCreated: (canonicalName: string) => void = () => {}
+  /** Read-only for the parent (bind:dirty): true while there are unsaved edits. */
+  export let dirty = false
 
   // ── Mode ───────────────────────────────────────────────────────────────────
 
@@ -44,7 +46,6 @@
 
   let categoryFilter = ''
   let searchQuery = ''
-  let closeBlocked = false
 
   // New file state
   let newFileSuffix = ''
@@ -61,10 +62,6 @@
 
 
   // ── Derived ────────────────────────────────────────────────────────────────
-
-  $: displayName = file
-    ? tuningDisplayName(file.canonical_name)
-    : (newFileSuffix.trim() || 'New File')
 
   $: categories = [...new Set(entries.map(e => categoryForSetting(e.setting)))].sort()
 
@@ -85,6 +82,10 @@
         const s = savedEntries[i]
         return !s || e.value !== s.value
       })
+
+  // Leaving the tab asks first while there are unsaved edits.
+  $: setUnsaved('tuning', dirty ? 'Live Tuning' : null)
+  onDestroy(() => setUnsaved('tuning', null))
 
   $: filteredSettings = newSetting.trim()
     ? KNOWN_SETTINGS.filter(s =>
@@ -183,7 +184,6 @@
       })
       savedEntries = JSON.parse(JSON.stringify(entries))
       saveSuccess = true
-      closeBlocked = false
       setTimeout(() => (saveSuccess = false), 3000)
     } catch (e) {
       saveError = String(e)
@@ -192,22 +192,9 @@
     }
   }
 
-  // "Save & Close" in the close guard: only close if the save went through.
-  async function saveAndClose() {
-    await saveEntries()
-    if (!saveError) onClose()
-  }
-
-  // ── Reload ─────────────────────────────────────────────────────────────────
-
-  // Only a failed reload shows a message. A newer reload drops an older result.
-  let reloadError = ''
-  let reloadRun = 0
-  async function reload() {
-    const run = ++reloadRun
-    reloadError = ''
-    const error = await reloadLiveTuning()
-    if (run === reloadRun) reloadError = error
+  function revert() {
+    entries = JSON.parse(JSON.stringify(savedEntries))
+    saveError = ''
   }
 
   // ── Entry management ───────────────────────────────────────────────────────
@@ -260,17 +247,8 @@
     expandedProtoKey = expandedProtoKey === key ? null : key
   }
 
-  // ── Close guard ────────────────────────────────────────────────────────────
-
-  function tryClose() {
-    if (dirty && !isNew) { closeBlocked = true } else { onClose() }
-  }
-
   function onKeydown(e: KeyboardEvent) {
-    if (e.key === 'Escape') {
-      if (settingSuggestOpen) { settingSuggestOpen = false; return }
-      tryClose()
-    }
+    if (e.key === 'Escape') settingSuggestOpen = false
   }
 
   function onWindowClick(e: MouseEvent) {
@@ -284,58 +262,7 @@
 
 <svelte:window on:keydown={onKeydown} on:click={onWindowClick} />
 
-<div class="modal-backdrop"
-  role="presentation"
-  on:click={e => { if (e.target === e.currentTarget) tryClose() }}
-  on:keydown={onKeydown}
->
-  <div
-    class="modal"
-    role="dialog"
-    aria-modal="true"
-    tabindex="-1"
-  >
-
-    <!-- ── Header ── -->
-    <div class="modal-header">
-      <div class="modal-title">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-          <polyline points="14 2 14 8 20 8"/>
-          <line x1="16" y1="13" x2="8" y2="13"/>
-          <line x1="16" y1="17" x2="8" y2="17"/>
-        </svg>
-        {#if isNew}
-          <span class="modal-display-name">New Tuning File</span>
-        {:else}
-          <span class="modal-display-name">{displayName}</span>
-          <span class="modal-filename">{file?.canonical_name}</span>
-        {/if}
-      </div>
-      <div class="modal-header-actions">
-        {#if !isNew}
-          {#if reloadError}<span class="reload-error">{reloadError}</span>{/if}
-          <button
-            class="btn btn-sm btn-outline"
-            on:click={reload}
-            disabled={!serverRunning}
-            use:tip={serverRunning ? 'Send !server reloadlivetuning' : 'Server not running'}
-          >
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:11px;height:11px;">
-              <polyline points="23 4 23 10 17 10"/>
-              <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
-            </svg>
-            Reload
-          </button>
-        {/if}
-        <button class="close-btn" aria-label="Close" on:click={tryClose}>
-          <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5">
-            <line x1="3.5" y1="3.5" x2="10.5" y2="10.5"/>
-            <line x1="10.5" y1="3.5" x2="3.5" y2="10.5"/>
-          </svg>
-        </button>
-      </div>
-    </div>
+<section class="file-editor">
 
     <!-- ── New file bar ── -->
     {#if isNew}
@@ -538,58 +465,38 @@
     {#if addError}<div class="feedback-error add-error">{addError}</div>{/if}
 
     <!-- ── Footer ── -->
-    <div class="modal-footer">
-      {#if closeBlocked}
-        <span class="feedback-error">{saveError || 'Unsaved changes. Save or discard before closing.'}</span>
-        <div class="footer-actions">
-          <button class="btn btn-sm btn-red" on:click={onClose}>Discard & Close</button>
-          <button class="btn btn-sm btn-accent btn-pulse" on:click={saveAndClose} disabled={saving}>
-            {saving ? 'Saving...' : 'Save & Close'}
-          </button>
-        </div>
-      {:else}
-        <div class="footer-left">
-          {#if dirty && !isNew}<span class="dirty-badge">Unsaved changes</span>{/if}
-          {#if saveError}<span class="feedback-error">{saveError}</span>{/if}
-          {#if saveSuccess}<span class="feedback-ok">Saved</span>{/if}
-        </div>
-        <div class="footer-actions">
-          <button class="btn btn-sm btn-outline" on:click={tryClose}>
-            {isNew ? 'Cancel' : 'Close'}
-          </button>
-          <button
-            class="btn btn-sm btn-accent"
-            class:btn-pulse={dirty}
-            on:click={saveEntries}
-            disabled={saving || (!isNew && !dirty)}
-          >
-            {saving ? 'Saving...' : isNew ? 'Create File' : 'Save'}
-          </button>
-        </div>
-      {/if}
+    <div class="editor-footer">
+      <div class="footer-left">
+        {#if dirty && !isNew}<span class="dirty-badge">Unsaved changes</span>{/if}
+        {#if saveError}<span class="feedback-error">{saveError}</span>{/if}
+        {#if saveSuccess}<span class="feedback-ok">Saved</span>{/if}
+      </div>
+      <div class="footer-actions">
+        {#if isNew}
+          <button class="btn btn-sm btn-outline" on:click={onCancel}>Cancel</button>
+        {:else}
+          <button class="btn btn-sm btn-outline" on:click={revert} disabled={saving || !dirty}>Revert</button>
+        {/if}
+        <button
+          class="btn btn-sm btn-accent"
+          class:btn-pulse={dirty}
+          on:click={saveEntries}
+          disabled={saving || (!isNew && !dirty)}
+        >
+          {saving ? 'Saving...' : isNew ? 'Create File' : 'Save'}
+        </button>
+      </div>
     </div>
 
-  </div>
-</div>
+</section>
 
 <style>
-  .modal {
-    width: min(1060px, 92vw);
-    height: min(700px, 86vh);
+  .file-editor {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
   }
-
-  /* ── Header ── */
-  .modal-filename {
-    font-family: var(--font-mono);
-    font-size: 11px;
-    color: var(--text-3);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    min-width: 0;
-  }
-
-  .modal-header-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
 
   /* ── New file bar ── */
   .new-file-bar {
@@ -646,7 +553,6 @@
   }
 
   .filename-error { font-size: 11px; color: var(--text-error); }
-  .reload-error { font-size: 12px; color: var(--text-error); }
 
   .copy-from-wrap {
     display: flex;
@@ -730,9 +636,10 @@
   .entry-table tbody tr.modified:hover { background: var(--accent-glow-strong); }
   .entry-table td { padding: 7px 14px; vertical-align: middle; overflow: hidden; }
 
-  .col-cat   { width: 120px; }
-  .col-proto { width: 28%; }
-  .col-value { width: 110px; }
+  /* Prototype takes what's left: paths are long, setting IDs are at most about 35 characters. */
+  .col-cat     { width: 120px; }
+  .col-setting { width: max(26%, 200px); }
+  .col-value   { width: 110px; }
   .col-del   { width: 50px; }
 
   /* Clickable prototype cell */
@@ -771,7 +678,10 @@
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block;
   }
 
-  .setting-text { font-family: var(--font-mono); font-size: 12px; color: var(--text-1); }
+  .setting-text {
+    font-family: var(--font-mono); font-size: 12px; color: var(--text-1);
+    display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
 
   .value-input {
     width: 90px; background: var(--bg-0);
@@ -840,7 +750,15 @@
   .setting-opt-desc { font-size: 11px; color: var(--text-2); line-height: 1.4; }
 
   /* ── Footer ── */
-  .modal-footer { justify-content: space-between; }
+  .editor-footer {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 16px;
+    border-top: 1px solid var(--border);
+    background: var(--chrome-footer-bg);
+    flex-shrink: 0;
+  }
 
   .footer-left { display: flex; align-items: center; gap: 10px; min-width: 0; }
 
