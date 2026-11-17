@@ -192,22 +192,24 @@ fn toggle_enable() {
 }
 
 #[test]
-fn toggle_refuses_when_both_copies_exist() {
-    let (_tmp, server_exe) = setup();
-    let dir = live_tuning_dir(&server_exe).unwrap();
-    let active = dir.join("LiveTuningDataBugFixes.json");
-    let off = dir.join("OFF_LiveTuningDataBugFixes.json");
-    let active_text = fs::read_to_string(&active).unwrap();
-    fs::write(&off, "off copy").unwrap();
-
+fn toggle_with_both_copies_keeps_the_switched_one_and_backs_up_the_other() {
     for enabled in [true, false] {
-        let err = toggle_tuning_file(server_exe.clone(), "LiveTuningDataBugFixes.json".to_string(), enabled)
-            .unwrap_err();
-        assert!(err.contains("also a copy"));
-    }
+        let (_tmp, server_exe) = setup();
+        let dir = live_tuning_dir(&server_exe).unwrap();
+        let active = dir.join("LiveTuningDataBugFixes.json");
+        let off = dir.join("OFF_LiveTuningDataBugFixes.json");
+        let on_text = fs::read_to_string(&active).unwrap();
+        fs::write(&off, "off copy").unwrap();
 
-    assert_eq!(fs::read_to_string(&active).unwrap(), active_text);
-    assert_eq!(fs::read_to_string(&off).unwrap(), "off copy");
+        toggle_tuning_file(server_exe, "LiveTuningDataBugFixes.json".to_string(), enabled).unwrap();
+
+        let read = |p: &std::path::Path| fs::read_to_string(p).ok();
+        let (kept, gone, kept_text, replaced_text) =
+            if enabled { (&active, &off, "off copy", on_text.as_str()) } else { (&off, &active, on_text.as_str(), "off copy") };
+        assert_eq!(read(kept).as_deref(), Some(kept_text), "enabled={enabled}");
+        assert_eq!(read(&kept.with_extension("json.bak")).as_deref(), Some(replaced_text), "enabled={enabled}");
+        assert!(!gone.exists(), "enabled={enabled}");
+    }
 }
 
 #[test]

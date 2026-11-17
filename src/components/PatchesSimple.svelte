@@ -196,7 +196,10 @@
         fileName: f.file_name,
         currentlyEnabled: f.enabled,
       })
-      files = files.map(x => keyOf(x) === key ? { ...x, enabled } : x)
+      // With a copy in both folders, the switched one replaced the other (kept as .json.bak).
+      files = files
+        .filter(x => x.file_name !== f.file_name || keyOf(x) === key)
+        .map(x => keyOf(x) === key ? { ...x, enabled } : x)
       pendingRestart = true
       sawStopped = !$serverRunning
     } catch (e) {

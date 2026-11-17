@@ -64,22 +64,39 @@ fn toggle_moves_file() {
 }
 
 #[test]
-fn toggle_refuses_when_the_other_copy_exists() {
+fn toggle_with_both_copies_keeps_the_switched_one_and_backs_up_the_other() {
+    for currently_enabled in [true, false] {
+        let (_tmp, server_exe) = setup();
+        let patches = patches_dir(&server_exe).unwrap();
+        let (on, off) = (patches.join("PatchDataBugFixes.json"), off_dir(&patches).join("PatchDataBugFixes.json"));
+        let on_text = fs::read_to_string(&on).unwrap();
+        fs::write(&off, "[\"off copy\"]").unwrap();
+
+        let now = set_patch_file_enabled(server_exe, "PatchDataBugFixes.json".to_string(), currently_enabled).unwrap();
+
+        let read = |p: &Path| fs::read_to_string(p).ok();
+        let (kept, gone, kept_text, replaced_text) = if currently_enabled {
+            (&off, &on, on_text.as_str(), "[\"off copy\"]")
+        } else {
+            (&on, &off, "[\"off copy\"]", on_text.as_str())
+        };
+        assert_eq!(now, !currently_enabled);
+        assert_eq!(read(kept).as_deref(), Some(kept_text), "was enabled={currently_enabled}");
+        assert_eq!(read(&kept.with_extension("json.bak")).as_deref(), Some(replaced_text), "was enabled={currently_enabled}");
+        assert!(!gone.exists(), "was enabled={currently_enabled}");
+    }
+}
+
+#[test]
+fn toggle_of_a_missing_file_leaves_the_other_copy_alone() {
     let (_tmp, server_exe) = setup();
-    let off = off_dir(&patches_dir(&server_exe).unwrap());
-    fs::write(off.join("PatchDataBugFixes.json"), "[\"off copy\"]").unwrap();
+    let off = off_dir(&patches_dir(&server_exe).unwrap()).join("PatchDataDisabled.json");
+    let off_text = fs::read_to_string(&off).unwrap();
 
-    let err = set_patch_file_enabled(
-        server_exe.clone(),
-        "PatchDataBugFixes.json".to_string(),
-        true,
-    )
-    .unwrap_err();
-    assert!(err.contains("already a copy"));
-
-    // Both copies are untouched.
-    assert_eq!(fs::read_to_string(off.join("PatchDataBugFixes.json")).unwrap(), "[\"off copy\"]");
-    assert_eq!(load_patch_file(server_exe, "PatchDataBugFixes.json".to_string(), true).unwrap().len(), 5);
+    // Asked to switch off a copy that isn't in Patches/: nothing may be moved aside.
+    assert!(set_patch_file_enabled(server_exe, "PatchDataDisabled.json".to_string(), true).is_err());
+    assert_eq!(fs::read_to_string(&off).unwrap(), off_text);
+    assert!(!off.with_extension("json.bak").exists());
 }
 
 #[test]
