@@ -3,6 +3,7 @@
   import { invoke } from '@tauri-apps/api/core'
   import { categoryForSetting, KNOWN_CORE, KNOWN_EVENTS, KNOWN_SETTINGS, NEW_TUNING_FILE_PREFIX, blueprintHintForSetting, newTuningFileName, parseTuningValue, tuningDisplayName, settingTip, type KnownSetting } from '../lib/tuningMeta'
   import { tip } from '../lib/tooltip'
+  import { reloadLiveTuning } from '../lib/serverReload'
   import PrototypePicker from './PrototypePicker.svelte'
 
   // ── Props ──────────────────────────────────────────────────────────────────
@@ -199,8 +200,14 @@
 
   // ── Reload ─────────────────────────────────────────────────────────────────
 
-  async function reloadLiveTuning() {
-    try { await invoke('send_command', { cmd: '!server reloadlivetuning' }) } catch {}
+  // Only a failed reload shows a message. A newer reload drops an older result.
+  let reloadError = ''
+  let reloadRun = 0
+  async function reload() {
+    const run = ++reloadRun
+    reloadError = ''
+    const error = await reloadLiveTuning()
+    if (run === reloadRun) reloadError = error
   }
 
   // ── Entry management ───────────────────────────────────────────────────────
@@ -307,9 +314,10 @@
       </div>
       <div class="modal-header-actions">
         {#if !isNew}
+          {#if reloadError}<span class="reload-error">{reloadError}</span>{/if}
           <button
             class="btn btn-sm btn-outline"
-            on:click={reloadLiveTuning}
+            on:click={reload}
             disabled={!serverRunning}
             use:tip={serverRunning ? 'Send !server reloadlivetuning' : 'Server not running'}
           >
@@ -638,6 +646,7 @@
   }
 
   .filename-error { font-size: 11px; color: var(--text-error); }
+  .reload-error { font-size: 12px; color: var(--text-error); }
 
   .copy-from-wrap {
     display: flex;

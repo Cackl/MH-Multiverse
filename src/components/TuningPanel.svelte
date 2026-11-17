@@ -7,6 +7,7 @@
   import PanelSidebar from './PanelSidebar.svelte'
   import TuningEditorModal from './TuningEditorModal.svelte'
   import { tip } from '../lib/tooltip'
+  import { reloadLiveTuning } from '../lib/serverReload'
 
   // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -183,11 +184,15 @@
   }
 
   // ── Reload ─────────────────────────────────────────────────────────────────
+  // Only a failed reload shows a message. A newer reload drops an older result.
 
-  async function reloadLiveTuning() {
-    try {
-      await invoke('send_command', { cmd: '!server reloadlivetuning' })
-    } catch {}
+  let reloadError = ''
+  let reloadRun = 0
+  async function reload() {
+    const run = ++reloadRun
+    reloadError = ''
+    const error = await reloadLiveTuning()
+    if (run === reloadRun) reloadError = error
   }
 
   let openDirError = ''
@@ -480,9 +485,10 @@
       <span class="file-count">
         {favouriteGrid.length + mainGrid.length} file{favouriteGrid.length + mainGrid.length !== 1 ? 's' : ''}
       </span>
+      {#if reloadError}<span class="reload-error">{reloadError}</span>{/if}
       <button
         class="btn btn-sm btn-outline"
-        on:click={reloadLiveTuning}
+        on:click={reload}
         disabled={!$serverRunning}
         use:tip={$serverRunning ? 'Send !server reloadlivetuning' : 'Server not running'}
       >
@@ -916,6 +922,7 @@
 
   .search-wrap { max-width: 280px; }
 
+  .reload-error { font-size: 12px; color: var(--text-error); }
   .file-count {
     font-family: var(--font-head);
     font-size: var(--fs-min);
