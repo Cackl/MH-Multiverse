@@ -1,7 +1,28 @@
 import { describe, it, expect } from 'vitest'
 import { categoryForSetting, blueprintHintForSetting, parseTuningValue, ruleDateError, newTuningFileName, tuningDisplayName, CATEGORY_PREFIXES,
   RATE_ROWS, SERVER_RATES_FILE, rateRows, formatRate, toShown, fromShown, resolveRate, planServerRatesWrite, reloadResult,
-  type GlobalTuning, type RateRow, type TuningEntry } from '../../src/lib/tuningMeta'
+  KNOWN_SETTINGS, type GlobalTuning, type RateRow, type TuningEntry } from '../../src/lib/tuningMeta'
+
+describe('KNOWN_SETTINGS', () => {
+  it('lists all 70 v52 settings once', () => {
+    expect(new Set(KNOWN_SETTINGS.map(s => s.setting)).size).toBe(70)
+    expect(KNOWN_SETTINGS).toHaveLength(70)
+  })
+
+  it('describes every setting in UI-safe text', () => {
+    for (const s of KNOWN_SETTINGS) {
+      expect(s.description, s.setting).not.toBe('')
+      expect(s.description, s.setting).not.toMatch(/[;—]/)
+    }
+  })
+
+  it('needs a prototype for every family but Global', () => {
+    for (const s of KNOWN_SETTINGS) {
+      expect(s.requiresPrototype, s.setting).toBe(!s.setting.startsWith('eGTV_'))
+      expect(s.category, s.setting).toBe(categoryForSetting(s.setting))
+    }
+  })
+})
 
 describe('categoryForSetting', () => {
   it('all prefixes map to their declared category', () => {
