@@ -518,10 +518,6 @@ export async function setShutdownConfig(shutdown: ShutdownConfig): Promise<void>
   await updateConfigOptimistic(c => ({ ...c, shutdown }), 'set_shutdown_config', { shutdown })
 }
 
-export async function setTuningTags(tags: Record<string, string>): Promise<void> {
-  await updateConfigOptimistic(c => ({ ...c, tuning_tags: tags }), 'set_tuning_tags', { tags })
-}
-
 export async function setTuningFavourites(favourites: string[]): Promise<void> {
   await updateConfigOptimistic(c => ({ ...c, tuning_favourites: favourites }), 'set_tuning_favourites', { favourites })
 }
