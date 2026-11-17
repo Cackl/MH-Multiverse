@@ -79,6 +79,7 @@ fn merge_override_wins() {
     assert_eq!(state.values["WebFrontend"]["Port"], "9090");
     assert_eq!(state.values["Frontend"]["Port"], "8888");
     assert_eq!(state.overridden["WebFrontend"], vec!["Port".to_string()]);
+    assert_eq!(state.defaults["WebFrontend"]["Port"], "8080");
 }
 
 #[test]

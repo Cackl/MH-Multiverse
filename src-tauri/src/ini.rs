@@ -15,6 +15,8 @@ pub struct ConfigState {
     pub values: IniData,
     /// Keys that exist in ConfigOverride.ini (section -> set of keys)
     pub overridden: HashMap<String, Vec<String>>,
+    /// Config.ini values alone, so the UI can reset a field to its default
+    pub defaults: IniData,
 }
 
 // ── INI parser ────────────────────────────────────────────────────────────────
@@ -155,7 +157,7 @@ pub fn read_config(server_exe: String) -> Result<ConfigState, String> {
         }
     }
 
-    Ok(ConfigState { values, overridden })
+    Ok(ConfigState { values, overridden, defaults })
 }
 
 #[tauri::command]
