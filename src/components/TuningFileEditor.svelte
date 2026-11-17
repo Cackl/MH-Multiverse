@@ -530,7 +530,6 @@
   .filename-compose.has-error { border-color: var(--red); }
 
   .filename-fixed {
-    font-family: var(--font-mono);
     font-size: 12px;
     color: var(--text-3);
     padding: 6px 8px;
@@ -545,7 +544,7 @@
     border: none;
     outline: none;
     color: var(--text-0);
-    font-family: var(--font-mono);
+    font-family: var(--font-body);
     font-size: 12px;
     padding: 6px 8px;
     min-width: 160px;
@@ -571,13 +570,7 @@
     white-space: nowrap;
   }
 
-  .copy-loading {
-    font-family: var(--font-head);
-    font-size: var(--fs-min);
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    color: var(--text-3);
-  }
+  .copy-loading { font-size: 12px; color: var(--text-3); }
 
   /* ── Toolbar ── */
   .entry-toolbar {
@@ -594,20 +587,15 @@
   .entry-toolbar .field-select { padding: 5px 8px; }
 
   .entry-count {
-    font-family: var(--font-head); font-size: var(--fs-min);
-    letter-spacing: 0.1em; text-transform: uppercase;
-    color: var(--text-3); white-space: nowrap; flex-shrink: 0;
+    font-size: 12px; font-variant-numeric: tabular-nums;
+    color: var(--text-2); white-space: nowrap; flex-shrink: 0;
   }
 
   /* ── Table ── */
   .entry-table-wrap { flex: 1; overflow-y: auto; min-height: 0; }
 
-  .entry-status {
-    padding: 24px 20px;
-    font-family: var(--font-head); font-size: 11px;
-    letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-3);
-  }
-  .entry-status.error { color: var(--text-error); text-transform: none; font-family: var(--font-body); letter-spacing: 0; }
+  .entry-status { padding: 24px 20px; font-size: 12px; color: var(--text-3); }
+  .entry-status.error { color: var(--text-error); }
   .add-error { padding: 4px 16px 0; font-size: 11px; }
 
   .entry-table { width: 100%; border-collapse: collapse; font-size: 12px; table-layout: fixed; }
@@ -669,7 +657,7 @@
   .value-input {
     width: 90px; background: var(--bg-0);
     border: 1px solid var(--border-mid); color: var(--text-0);
-    font-family: var(--font-mono); font-size: 12px;
+    font-family: var(--font-body); font-size: 12px; font-variant-numeric: tabular-nums;
     padding: 3px 7px; border-radius: var(--radius-sm);
     outline: none; transition: border-color 0.12s;
   }
@@ -696,7 +684,7 @@
   }
   .add-input:focus { border-color: var(--accent-dim); }
 
-  .value-field { flex: 1; }
+  .value-field { flex: 1; font-family: var(--font-body); font-variant-numeric: tabular-nums; }
 
   /* ── Setting autocomplete ── */
   .setting-suggest-wrap { position: relative; flex: 3; display: flex; flex-direction: column; }
