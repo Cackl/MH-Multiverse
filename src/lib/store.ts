@@ -535,6 +535,8 @@ export async function setConsolePresets(presets: string[]): Promise<void> {
 }
 
 export async function setAdvancedData(advanced: boolean): Promise<void> {
+  // Switching view unmounts the open editor, so it asks like a tab change.
+  if (!(await confirmLeave())) return
   await updateConfigOptimistic(c => ({ ...c, advanced_data: advanced }), 'set_advanced_data', { advanced })
 }
 
