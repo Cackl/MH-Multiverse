@@ -226,6 +226,162 @@ fn only_one_update_can_run_at_a_time() {
 }
 
 #[test]
+fn update_keeps_switched_stock_files_as_the_user_had_them() {
+    const P: &str = "Data/Game/Patches";
+    const LT: &str = "Data/Game/LiveTuning";
+    const MTX: &str = "Data/Game/MTXStore";
+    let bug_off_pair = || vec![
+        (format!("{P}/PatchDataBugFixes.json"), "new"),
+        (format!("{P}/Off/PatchDataBugFixes.json"), "mine"),
+    ];
+    let carnival_on_pair = || vec![
+        (format!("{P}/PatchDataCarnival.json"), "mine"),
+        (format!("{P}/Off/PatchDataCarnival.json"), "new"),
+    ];
+    // (case, files the update ships, server files after install and restore, restored targets,
+    //  files kept, server files afterwards where None means gone)
+    type Case = (&'static str, Vec<String>, Vec<(String, &'static str)>, Vec<&'static str>, Vec<(&'static str, bool)>, Vec<(String, Option<&'static str>)>);
+    let cases: Vec<Case> = vec![
+        (
+            "switched off, the update adds an on copy",
+            vec![format!("{P}/PatchDataBugFixes.json")],
+            bug_off_pair(),
+            vec![],
+            vec![("PatchDataBugFixes.json", false)],
+            vec![
+                (format!("{P}/PatchDataBugFixes.json"), None),
+                (format!("{P}/Off/PatchDataBugFixes.json"), Some("new")),
+                (format!("{P}/Off/PatchDataBugFixes.json.bak"), Some("mine")),
+            ],
+        ),
+        (
+            "a restore of another folder changes nothing",
+            vec![format!("{P}/PatchDataBugFixes.json")],
+            bug_off_pair(),
+            vec![MTX, LT],
+            vec![("PatchDataBugFixes.json", false)],
+            vec![
+                (format!("{P}/PatchDataBugFixes.json"), None),
+                (format!("{P}/Off/PatchDataBugFixes.json"), Some("new")),
+                (format!("{P}/Off/PatchDataBugFixes.json.bak"), Some("mine")),
+            ],
+        ),
+        (
+            "switched a stock-off pack on, the update adds an off copy",
+            vec![format!("{P}/Off/PatchDataCarnival.json")],
+            carnival_on_pair(),
+            vec![],
+            vec![("PatchDataCarnival.json", true)],
+            vec![
+                (format!("{P}/PatchDataCarnival.json"), Some("new")),
+                (format!("{P}/PatchDataCarnival.json.bak"), Some("mine")),
+                (format!("{P}/Off/PatchDataCarnival.json"), None),
+            ],
+        ),
+        (
+            "Live Tuning keeps its OFF_ copy",
+            vec![format!("{LT}/LiveTuningDataPvP.json")],
+            vec![(format!("{LT}/LiveTuningDataPvP.json"), "new"), (format!("{LT}/OFF_LiveTuningDataPvP.json"), "mine")],
+            vec![],
+            vec![("LiveTuningDataPvP.json", false)],
+            vec![
+                (format!("{LT}/LiveTuningDataPvP.json"), None),
+                (format!("{LT}/OFF_LiveTuningDataPvP.json"), Some("new")),
+                (format!("{LT}/OFF_LiveTuningDataPvP.json.bak"), Some("mine")),
+            ],
+        ),
+        (
+            "a restored folder keeps the restored copy",
+            vec![format!("{P}/PatchDataBugFixes.json")],
+            bug_off_pair(),
+            vec![P],
+            vec![("PatchDataBugFixes.json", false)],
+            vec![
+                (format!("{P}/PatchDataBugFixes.json"), None),
+                (format!("{P}/PatchDataBugFixes.json.bak"), Some("new")),
+                (format!("{P}/Off/PatchDataBugFixes.json"), Some("mine")),
+                (format!("{P}/Off/PatchDataBugFixes.json.bak"), None),
+            ],
+        ),
+        (
+            "a full Data restore counts as restored",
+            vec![format!("{P}/Off/PatchDataCarnival.json")],
+            carnival_on_pair(),
+            vec!["Data"],
+            vec![("PatchDataCarnival.json", true)],
+            vec![
+                (format!("{P}/PatchDataCarnival.json"), Some("mine")),
+                (format!("{P}/Off/PatchDataCarnival.json"), None),
+                (format!("{P}/Off/PatchDataCarnival.json.bak"), Some("new")),
+            ],
+        ),
+        (
+            "a store catalog leaves its MODIFIED file in Off",
+            vec![format!("{MTX}/CatalogBundles.json")],
+            vec![
+                (format!("{MTX}/CatalogBundles.json"), "new"),
+                (format!("{MTX}/Off/CatalogBundles.json"), "mine"),
+                (format!("{MTX}/Off/CatalogBundlesMODIFIED.json"), "edits"),
+            ],
+            vec![],
+            vec![("CatalogBundles.json", false)],
+            vec![
+                (format!("{MTX}/CatalogBundles.json"), None),
+                (format!("{MTX}/Off/CatalogBundles.json"), Some("new")),
+                (format!("{MTX}/Off/CatalogBundlesMODIFIED.json"), Some("edits")),
+            ],
+        ),
+        (
+            "untouched: one copy, files the update doesn't ship, files the app can't switch",
+            vec![
+                format!("{P}/PatchDataMissions.json"),
+                format!("{LT}/Events/LiveTuningDataCosmic.json"),
+                format!("{LT}/Events.json"),
+            ],
+            vec![
+                (format!("{P}/PatchDataMissions.json"), "new"),
+                (format!("{P}/PatchDataMine.json"), "mine"),
+                (format!("{P}/Off/PatchDataMine.json"), "mine too"),
+                (format!("{LT}/Events/LiveTuningDataCosmic.json"), "new"),
+                (format!("{LT}/Events/OFF_LiveTuningDataCosmic.json"), "mine"),
+                (format!("{LT}/Events.json"), "new"),
+                (format!("{LT}/OFF_Events.json"), "mine"),
+            ],
+            vec![],
+            vec![],
+            vec![
+                (format!("{P}/PatchDataMissions.json"), Some("new")),
+                (format!("{P}/PatchDataMine.json"), Some("mine")),
+                (format!("{P}/Off/PatchDataMine.json"), Some("mine too")),
+                (format!("{LT}/Events/LiveTuningDataCosmic.json"), Some("new")),
+                (format!("{LT}/Events/OFF_LiveTuningDataCosmic.json"), Some("mine")),
+                (format!("{LT}/Events.json"), Some("new")),
+                (format!("{LT}/OFF_Events.json"), Some("mine")),
+            ],
+        ),
+    ];
+    let write = |root: &Path, rel: &str, text: &str| {
+        let path = root.join(rel);
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        fs::write(path, text).unwrap();
+    };
+    for (case, ships, server_files, restored, kept, after) in cases {
+        let (source, server) = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
+        ships.iter().for_each(|rel| write(source.path(), rel, "new"));
+        server_files.iter().for_each(|(rel, text)| write(server.path(), rel, text));
+        let restored: Vec<String> = restored.into_iter().map(String::from).collect();
+
+        let got = keep_switched_files(server.path(), source.path(), &restored).unwrap();
+
+        let want: Vec<KeptFile> = kept.into_iter().map(|(file, enabled)| KeptFile { file: file.into(), enabled }).collect();
+        assert_eq!(got, want, "{case}: kept");
+        for (rel, text) in after {
+            assert_eq!(fs::read_to_string(server.path().join(&rel)).ok().as_deref(), text, "{case}: {rel}");
+        }
+    }
+}
+
+#[test]
 fn missing_or_unversioned_exe_has_no_build_date() {
     let (_tmp, server_exe) = empty_server();
     assert_eq!(installed_build_date(&server_exe), None);

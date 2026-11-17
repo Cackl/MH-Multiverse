@@ -234,6 +234,69 @@ fn detect_source_dir(staging: &Path) -> Result<PathBuf, String> {
     }
 }
 
+// ── Switched stock files ──────────────────────────────────────────────────────
+
+/// A stock file the update shipped in the other state, kept as the user had switched it.
+#[derive(Debug, Clone, Serialize, PartialEq)]
+pub struct KeptFile {
+    pub file: String,
+    pub enabled: bool,
+}
+
+/// Each `.json` file the update ships where the app can switch it: its name, where it ships, where
+/// its copy switched the other way lives, and whether that copy is the switched-on one. Live
+/// Tuning switches a root file off with an `OFF_` prefix, Patches and the Store with an Off folder.
+fn switchable_files(source: &Path) -> Vec<(String, String, String, bool)> {
+    const TUNING: &str = "Data/Game/LiveTuning";
+    let folders = [
+        (TUNING, TUNING, false),
+        ("Data/Game/Patches", "Data/Game/Patches/Off", false),
+        ("Data/Game/Patches/Off", "Data/Game/Patches", true),
+        ("Data/Game/MTXStore", "Data/Game/MTXStore/Off", false),
+        ("Data/Game/MTXStore/Off", "Data/Game/MTXStore", true),
+    ];
+    let mut out = Vec::new();
+    for (dir, other_dir, other_on) in folders {
+        let Ok(entries) = std::fs::read_dir(source.join(dir)) else { continue };
+        for entry in entries.flatten().filter(|e| e.path().is_file()) {
+            let name = entry.file_name().to_string_lossy().into_owned();
+            if !name.ends_with(".json") || (dir == TUNING && !name.starts_with("LiveTuningData")) {
+                continue;
+            }
+            let other = if dir == TUNING { format!("OFF_{name}") } else { name.clone() };
+            out.push((name.clone(), format!("{dir}/{name}"), format!("{other_dir}/{other}"), other_on));
+        }
+    }
+    out
+}
+
+/// Puts back the user's on/off choice for stock files the update shipped in the other state.
+/// Only a switch moves a stock file out of the place it ships in, so when both copies exist, the
+/// other one is the user's choice. The update's copy replaces it and the replaced copy is kept as
+/// `.json.bak`. Where the backup was just restored, the restored copy stays and the update's copy
+/// is the one kept as `.json.bak`.
+fn keep_switched_files(server_dir: &Path, source: &Path, restored: &[String]) -> Result<Vec<KeptFile>, String> {
+    let is_restored = |rel: &str| restored.iter().any(|t| rel == t || rel.starts_with(&format!("{t}/")));
+    let rename = |from: &Path, to: &Path| {
+        std::fs::rename(from, to).map_err(|e| format!("Cannot move {}: {e}", from.display()))
+    };
+    let mut kept = Vec::new();
+    for (name, shipped, other, other_on) in switchable_files(source) {
+        let (shipped_path, other_path) = (server_dir.join(&shipped), server_dir.join(&other));
+        if !shipped_path.is_file() || !other_path.is_file() {
+            continue;
+        }
+        if is_restored(&other) {
+            rename(&shipped_path, &shipped_path.with_extension("json.bak"))?;
+        } else {
+            rename(&other_path, &other_path.with_extension("json.bak"))?;
+            rename(&shipped_path, &other_path)?;
+        }
+        kept.push(KeptFile { file: name, enabled: other_on });
+    }
+    Ok(kept)
+}
+
 // ── Backup internals ──────────────────────────────────────────────────────────
 
 fn create_backup_inner(
@@ -372,7 +435,7 @@ async fn run_update_inner(
     zip_path: &Path,
     staging_dir: &Path,
     backup_targets: Vec<String>,
-) -> Result<(), String> {
+) -> Result<Vec<KeptFile>, String> {
     if crate::server::server_process_is_running(&app.state::<crate::server::ServerState>()) {
         return Err("Cannot update while the server is running. Stop the server first.".into());
     }
@@ -432,7 +495,7 @@ async fn run_update_inner(
     }
 
     // Restore user files that the update overwrote
-    if let Some(manifest) = backup_manifest {
+    if let Some(manifest) = &backup_manifest {
         emit_progress(app, "restoring", 0.0, None);
         let backup_dir = server_dir.join("Backups").join(&manifest.id);
         for (i, target) in manifest.targets.iter().enumerate() {
@@ -448,7 +511,8 @@ async fn run_update_inner(
         }
     }
 
-    Ok(())
+    let restored = backup_manifest.map(|m| m.targets).unwrap_or_default();
+    keep_switched_files(server_dir, &detect_source_dir(staging_dir)?, &restored)
 }
 
 // ── Tauri commands ────────────────────────────────────────────────────────────
@@ -503,7 +567,7 @@ pub async fn run_update(
     app: AppHandle,
     server_exe: String,
     backup_targets: Vec<String>,
-) -> Result<(), String> {
+) -> Result<Vec<KeptFile>, String> {
     // Before anything else: the cleanup below would delete the running update's files
     let _lock = UpdateLock::acquire().ok_or("An update is already running.")?;
     let server_dir = server_dir_from_exe(&server_exe)?;
