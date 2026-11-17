@@ -220,28 +220,6 @@ pub fn write_config(server_exe: String, updates: IniData) -> Result<(), String> 
     Ok(())
 }
 
-/// Reset all overrides for a specific section (restores defaults).
-#[tauri::command]
-pub fn reset_config_section(server_exe: String, section: String) -> Result<(), String> {
-    let override_path = override_ini_path(&server_exe)
-        .ok_or("Could not determine server directory")?;
-
-    if !override_path.exists() {
-        return Ok(()); // Nothing to reset
-    }
-
-    let content = std::fs::read_to_string(&override_path)
-        .map_err(|e| format!("Could not read ConfigOverride.ini: {e}"))?;
-    let mut overrides = parse_ini(&content);
-    overrides.remove(&section);
-
-    let new_content = serialize_ini(&overrides);
-    std::fs::write(&override_path, new_content)
-        .map_err(|e| format!("Could not write ConfigOverride.ini: {e}"))?;
-
-    Ok(())
-}
-
 #[tauri::command]
 pub fn get_config_dir(server_exe: String) -> Result<String, String> {
     let dir = server_dir(&server_exe)

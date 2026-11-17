@@ -118,18 +118,6 @@ fn write_config_adds_non_default() {
 }
 
 #[test]
-fn reset_section_removes_from_override() {
-    let (_tmp, server_exe) = empty_server();
-    let dir = std::path::Path::new(&server_exe).parent().unwrap().to_path_buf();
-    copy_config_fixtures(&dir, true);
-
-    reset_config_section(server_exe, "WebFrontend".to_string()).unwrap();
-
-    let content = fs::read_to_string(dir.join("ConfigOverride.ini")).unwrap();
-    assert!(!content.contains("WebFrontend"));
-}
-
-#[test]
 fn read_merged_value_fallback() {
     let (_tmp, server_exe) = empty_server();
     // No Config.ini at all — both files fail to read.

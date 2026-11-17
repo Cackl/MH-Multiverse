@@ -336,7 +336,6 @@ The stdout reader additionally calls `parse_player_log_event` on every line (reg
 |---|---|---|---|
 | `read_config` | `server_exe: String` | `ConfigState` | Merge Config.ini + ConfigOverride.ini |
 | `write_config` | `server_exe: String, updates: IniData` | `()` | Diff-write overrides only |
-| `reset_config_section` | `server_exe: String, section: String` | `()` | Remove section from ConfigOverride.ini |
 | `get_config_dir` | `server_exe: String` | `String` | Return server directory path |
 | `uses_json_persistence` | `server_exe: String` | `bool` | Whether `[PlayerManager] UseJsonDBManager` is true (merged), i.e. the server stores its one account in a JSON file |
 
