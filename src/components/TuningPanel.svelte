@@ -2,7 +2,7 @@
   import { onMount } from 'svelte'
   import { invoke } from '@tauri-apps/api/core'
   import { openPath } from '@tauri-apps/plugin-opener'
-  import { appConfig, serverRunning, setTuningFavourites, tuningFocusFile, askConfirm } from '../lib/store'
+  import { appConfig, serverRunning, tuningFocusFile, askConfirm } from '../lib/store'
   import { KNOWN_EVENTS, TUNING_GROUPS, tuningDisplayName, tuningGroup, type TuningFileInfo, type EventDefinition, type EventsData } from '../lib/tuningMeta'
   import PanelSidebar from './PanelSidebar.svelte'
   import TuningFileEditor from './TuningFileEditor.svelte'
@@ -22,7 +22,6 @@
 
   // ── Derived ────────────────────────────────────────────────────────────────
 
-  $: favourites = $appConfig.tuning_favourites ?? []
   $: existingNames = files.map(f => f.canonical_name)
 
   // At runtime, treat files with event_id as the event set; fall back to static KNOWN_EVENTS
@@ -33,24 +32,13 @@
   // Sidebar groups, each in scan order (root files in server load order).
   $: groups = TUNING_GROUPS.map(label => ({
     label,
-    files: files
-      .filter(f => tuningGroup(f, effectiveEventSet) === label)
-      .map(f => ({ ...f, starred: favourites.includes(f.canonical_name) })),
+    files: files.filter(f => tuningGroup(f, effectiveEventSet) === label),
   }))
 
   // ── Helpers ────────────────────────────────────────────────────────────────
 
   function displayName(file: TuningFileInfo): string {
     return tuningDisplayName(file.canonical_name)
-  }
-
-  // ── Favourites ─────────────────────────────────────────────────────────────
-
-  async function toggleFavourite(file: { canonical_name: string }) {
-    const updated = favourites.includes(file.canonical_name)
-      ? favourites.filter(f => f !== file.canonical_name)
-      : [...favourites, file.canonical_name]
-    await setTuningFavourites(updated)
   }
 
   // ── Scan ───────────────────────────────────────────────────────────────────
@@ -234,17 +222,6 @@
                 on:click={() => openFile(file)}
                 on:keydown={e => e.key === 'Enter' && openFile(file)}
               >
-                <button
-                  class="star-btn"
-                  class:starred={file.starred}
-                  aria-label={file.starred ? 'Remove from favourites' : 'Add to favourites'}
-                  use:tip={file.starred ? 'Remove from favourites' : 'Add to favourites'}
-                  on:click|stopPropagation={() => toggleFavourite(file)}
-                >
-                  <svg viewBox="0 0 24 24" fill={file.starred ? 'currentColor' : 'none'} stroke="currentColor" stroke-width="1.5">
-                    <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
-                  </svg>
-                </button>
                 <div class="file-info">
                   <span class="file-name">{group.label === 'Other' ? file.relative_path : displayName(file)}</span>
                   {#if file.event_id && eventDefsById[file.event_id]}
@@ -456,26 +433,6 @@
     cursor: pointer;
     transition: opacity 0.1s;
   }
-
-  /* ── Star button ── */
-  .star-btn {
-    width: 22px;
-    height: 22px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: none;
-    border: none;
-    cursor: pointer;
-    color: var(--text-3);
-    border-radius: var(--radius-sm);
-    transition: color 0.12s;
-    flex-shrink: 0;
-    padding: 0;
-  }
-  .star-btn:hover { color: var(--colour-favourite); }
-  .star-btn.starred { color: var(--colour-favourite); }
-  .star-btn svg { width: 13px; height: 13px; }
 
   /* ── Tag colour classes ── */
   .tag-event  { color: var(--green-bright);  border-color: color-mix(in srgb, var(--green) 40%, transparent);    background: var(--green-dim); }
