@@ -1,7 +1,28 @@
 import { describe, it, expect } from 'vitest'
 import { categoryForSetting, blueprintHintForSetting, parseTuningValue, ruleDateError, newTuningFileName, tuningDisplayName, CATEGORY_PREFIXES,
   RATE_ROWS, SERVER_RATES_FILE, rateRows, formatRate, toShown, fromShown, resolveRate, planServerRatesWrite, reloadResult,
-  KNOWN_SETTINGS, settingTip, type GlobalTuning, type RateRow, type TuningEntry } from '../../src/lib/tuningMeta'
+  KNOWN_SETTINGS, settingTip, tuningGroup, type GlobalTuning, type RateRow, type TuningEntry } from '../../src/lib/tuningMeta'
+
+describe('tuningGroup', () => {
+  const file = (canonical_name: string, toggleable = true, event_id: string | null = null) =>
+    ({ canonical_name, toggleable, event_id })
+  const none = new Set<string>()
+
+  it('puts event-owned files in Events, by id or by name', () => {
+    expect(tuningGroup(file('LiveTuningData_CosmicChaos.json', false, 'CosmicChaos'), none)).toBe('Events')
+    expect(tuningGroup(file('Events/Mine.json', false, 'Mine'), none)).toBe('Events')
+    expect(tuningGroup(file('LiveTuningData_OdinsBounty.json'), new Set(['LiveTuningData_OdinsBounty.json']))).toBe('Events')
+  })
+
+  it('puts subfolder files in Other', () => {
+    expect(tuningGroup(file('Sub/LiveTuningDataX.json', false), none)).toBe('Other')
+  })
+
+  it('splits root files into Core and Your files', () => {
+    expect(tuningGroup(file('LiveTuningDataGlobal.json'), none)).toBe('Core')
+    expect(tuningGroup(file('LiveTuningDataMultiverse.json'), none)).toBe('Your files')
+  })
+})
 
 describe('KNOWN_SETTINGS', () => {
   it('lists all 70 v52 settings once', () => {

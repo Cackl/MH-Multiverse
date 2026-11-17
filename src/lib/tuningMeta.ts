@@ -188,6 +188,20 @@ export const KNOWN_EVENTS = new Set([
   'LiveTuningData_PandemoniumProtocol.json',
 ])
 
+/** Sidebar groups of the Advanced Live Tuning page, in display order. */
+export const TUNING_GROUPS = ['Your files', 'Core', 'Events', 'Other'] as const
+export type TuningGroup = typeof TUNING_GROUPS[number]
+
+/**
+ * Which sidebar group a file belongs to. `eventFiles` names the event-owned files (from
+ * Events.json, else KNOWN_EVENTS on older servers). Other is the files in subfolders.
+ */
+export function tuningGroup(f: Pick<TuningFileInfo, 'canonical_name' | 'toggleable' | 'event_id'>, eventFiles: Set<string>): TuningGroup {
+  if (f.event_id !== null || eventFiles.has(f.canonical_name)) return 'Events'
+  if (!f.toggleable) return 'Other'
+  return KNOWN_CORE.has(f.canonical_name) ? 'Core' : 'Your files'
+}
+
 // ── Known settings ─────────────────────────────────────────────────────────────
 // Source: MHServerEmu docs/Game/LiveTuning.md and SimpleView-LiveTuning.md, checked against the
 // server source (v52). requiresPrototype: false only for Global (eGTV_).
