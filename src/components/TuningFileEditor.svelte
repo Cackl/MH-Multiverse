@@ -289,7 +289,7 @@
           <div class="copy-from-wrap">
             <span class="copy-from-label">Copy from</span>
             <select
-              class="filter-select"
+              class="field-select"
               bind:value={copyFromName}
               on:change={() => applyCopyFrom(copyFromName)}
               disabled={copyFromLoading}
@@ -311,7 +311,7 @@
 
     <!-- ── Toolbar ── -->
     <div class="entry-toolbar">
-      <select class="filter-select" bind:value={categoryFilter}>
+      <select class="field-select" bind:value={categoryFilter}>
         <option value="">All categories</option>
         {#each categories as cat}
           <option value={cat}>{cat}</option>
@@ -363,7 +363,7 @@
               {@const rowKey = entry.prototype + '|' + entry.setting}
               {@const isExpanded = expandedProtoKey === rowKey}
               <tr class:modified>
-                <td class="col-cat"><span class="cat-badge">{categoryForSetting(entry.setting)}</span></td>
+                <td class="col-cat"><span class="tag">{categoryForSetting(entry.setting)}</span></td>
                 <td
                   class="col-proto"
                   class:proto-expandable={!!entry.prototype}
@@ -590,18 +590,8 @@
     background: var(--chrome-sunken-bg);
   }
 
-  .filter-select {
-    background: var(--bg-0);
-    border: 1px solid var(--border-mid);
-    color: var(--text-1);
-    font-family: var(--font-body);
-    font-size: 12px;
-    padding: 5px 8px;
-    border-radius: var(--radius-sm);
-    outline: none;
-    cursor: pointer;
-  }
-  .filter-select:focus { border-color: var(--accent-dim); }
+  /* Same height as the search box beside it. */
+  .entry-toolbar .field-select { padding: 5px 8px; }
 
   .entry-count {
     font-family: var(--font-head); font-size: var(--fs-min);
@@ -664,13 +654,6 @@
     word-break: break-all;
     user-select: text;
     background: var(--bg-0);
-  }
-
-  .cat-badge {
-    font-family: var(--font-head); font-size: var(--fs-min); font-weight: 600;
-    letter-spacing: 0.06em; text-transform: uppercase;
-    color: var(--text-3); background: var(--bg-3);
-    border: 1px solid var(--border-mid); padding: 2px 6px; border-radius: 2px; white-space: nowrap;
   }
 
   .proto-text {
@@ -745,7 +728,7 @@
   .setting-opt-name { font-family: var(--font-mono); font-size: 12px; color: var(--text-0); }
   .setting-opt-cat {
     font-family: var(--font-head); font-size: var(--fs-min);
-    letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent);
+    letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-2);
   }
   .setting-opt-desc { font-size: 11px; color: var(--text-2); line-height: 1.4; }
 
