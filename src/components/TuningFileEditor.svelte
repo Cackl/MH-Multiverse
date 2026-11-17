@@ -4,6 +4,7 @@
   import { categoryForSetting, KNOWN_CORE, KNOWN_EVENTS, KNOWN_SETTINGS, NEW_TUNING_FILE_PREFIX, blueprintHintForSetting, newTuningFileName, parseTuningValue, tuningDisplayName, settingTip, type KnownSetting } from '../lib/tuningMeta'
   import { tip } from '../lib/tooltip'
   import { setUnsaved } from '../lib/store'
+  import type { PatchNames } from '../lib/patchesMeta'
   import PrototypePicker from './PrototypePicker.svelte'
 
   // ── Props ──────────────────────────────────────────────────────────────────
@@ -60,6 +61,10 @@
   let settingSuggestOpen = false
   let settingInputEl: HTMLInputElement
 
+  // Display names for prototype paths, as in Patches. `asked` holds every path already
+  // sent, so each one is looked up once.
+  let protoNames: Record<string, string> = {}
+  const asked = new Set<string>()
 
   // ── Derived ────────────────────────────────────────────────────────────────
 
@@ -70,9 +75,12 @@
     const q = searchQuery.toLowerCase()
     const matchSearch = !q ||
       e.setting.toLowerCase().includes(q) ||
-      e.prototype.toLowerCase().includes(q)
+      e.prototype.toLowerCase().includes(q) ||
+      (protoNames[e.prototype] ?? '').toLowerCase().includes(q)
     return matchCat && matchSearch
   })
+
+  $: requestNames(entries)
 
   $: if (newSetting || newPrototype) addError = ''
   $: dirty = isNew
@@ -124,6 +132,18 @@
       entryError = String(e)
     } finally {
       loadingEntries = false
+    }
+  }
+
+  async function requestNames(list: TuningEntry[]) {
+    const paths = [...new Set(list.map(e => e.prototype))].filter(p => p && !asked.has(p))
+    if (!serverExe || paths.length === 0) return
+    for (const p of paths) asked.add(p)
+    try {
+      const got = await invoke<PatchNames>('name_patch_targets', { serverExe, paths, ids: [] })
+      protoNames = { ...protoNames, ...got.paths }
+    } catch {
+      // Names are a help, not needed: without Calligraphy.sip the table shows paths.
     }
   }
 
@@ -370,7 +390,7 @@
                   class:proto-expanded={isExpanded}
                   on:click={() => toggleProtoExpand(entry)}
                 >
-                  <span class="proto-text">{entry.prototype || '—'}</span>
+                  <span class="proto-text" class:proto-name={protoNames[entry.prototype]}>{protoNames[entry.prototype] ?? (entry.prototype || '—')}</span>
                 </td>
                 <td class="col-setting">
                   <span class="setting-text" use:tip={settingTip(entry.setting)}>{entry.setting}</span>
@@ -648,6 +668,8 @@
     font-family: var(--font-mono); font-size: 11px; color: var(--text-2);
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block;
   }
+
+  .proto-text.proto-name { font-family: var(--font-body); font-size: 12px; color: var(--text-1); }
 
   .setting-text {
     font-family: var(--font-mono); font-size: 12px; color: var(--text-1);
