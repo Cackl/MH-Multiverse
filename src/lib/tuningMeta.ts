@@ -295,6 +295,13 @@ export const KNOWN_SETTINGS: KnownSetting[] = [
   mf('eMFTV_SampleRate',                   'No effect.'),
 ]
 
+const KNOWN_BY_ID = new Map(KNOWN_SETTINGS.map(s => [s.setting, s]))
+
+/** Hover text for a setting: its description, or nothing when it isn't known. */
+export function settingTip(setting: string): string {
+  return KNOWN_BY_ID.get(setting)?.description ?? ''
+}
+
 // ── Server Rates (the Simple view of Live Tuning) ───────────────────────────────
 
 /** The file the Server Rates form owns; mirrors SERVER_RATES_FILE in tuning.rs. */

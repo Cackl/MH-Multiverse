@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { categoryForSetting, blueprintHintForSetting, parseTuningValue, ruleDateError, newTuningFileName, tuningDisplayName, CATEGORY_PREFIXES,
   RATE_ROWS, SERVER_RATES_FILE, rateRows, formatRate, toShown, fromShown, resolveRate, planServerRatesWrite, reloadResult,
-  KNOWN_SETTINGS, type GlobalTuning, type RateRow, type TuningEntry } from '../../src/lib/tuningMeta'
+  KNOWN_SETTINGS, settingTip, type GlobalTuning, type RateRow, type TuningEntry } from '../../src/lib/tuningMeta'
 
 describe('KNOWN_SETTINGS', () => {
   it('lists all 70 v52 settings once', () => {
@@ -14,6 +14,11 @@ describe('KNOWN_SETTINGS', () => {
       expect(s.description, s.setting).not.toBe('')
       expect(s.description, s.setting).not.toMatch(/[;—]/)
     }
+  })
+
+  it('gives each known setting its description as hover text, and unknown ones none', () => {
+    for (const s of KNOWN_SETTINGS) expect(settingTip(s.setting), s.setting).toBe(s.description)
+    expect(settingTip('eGTV_Made_Up')).toBe('')
   })
 
   it('needs a prototype for every family but Global', () => {

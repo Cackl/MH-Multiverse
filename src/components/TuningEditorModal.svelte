@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte'
   import { invoke } from '@tauri-apps/api/core'
-  import { categoryForSetting, KNOWN_CORE, KNOWN_EVENTS, KNOWN_SETTINGS, NEW_TUNING_FILE_PREFIX, blueprintHintForSetting, newTuningFileName, parseTuningValue, tuningDisplayName, type KnownSetting } from '../lib/tuningMeta'
+  import { categoryForSetting, KNOWN_CORE, KNOWN_EVENTS, KNOWN_SETTINGS, NEW_TUNING_FILE_PREFIX, blueprintHintForSetting, newTuningFileName, parseTuningValue, tuningDisplayName, settingTip, type KnownSetting } from '../lib/tuningMeta'
   import { tip } from '../lib/tooltip'
   import PrototypePicker from './PrototypePicker.svelte'
 
@@ -438,7 +438,7 @@
                   <span class="proto-text">{entry.prototype || '—'}</span>
                 </td>
                 <td class="col-setting">
-                  <span class="setting-text">{entry.setting}</span>
+                  <span class="setting-text" use:tip={settingTip(entry.setting)}>{entry.setting}</span>
                 </td>
                 <td class="col-value">
                   <input
@@ -509,9 +509,7 @@
               >
                 <span class="setting-opt-name">{s.setting}</span>
                 <span class="setting-opt-cat">{s.category}</span>
-                {#if s.description}
-                  <span class="setting-opt-desc">{s.description}</span>
-                {/if}
+                <span class="setting-opt-desc">{s.description}</span>
               </button>
             {/each}
           </div>
