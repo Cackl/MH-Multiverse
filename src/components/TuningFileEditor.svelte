@@ -1,21 +1,25 @@
 <script lang="ts">
-  import { onMount } from 'svelte'
+  import { onMount, onDestroy } from 'svelte'
   import { invoke } from '@tauri-apps/api/core'
-  import { categoryForSetting, KNOWN_CORE, KNOWN_EVENTS, KNOWN_SETTINGS, NEW_TUNING_FILE_PREFIX, blueprintHintForSetting, newTuningFileName, parseTuningValue, tuningDisplayName, type KnownSetting } from '../lib/tuningMeta'
+  import { categoryForSetting, KNOWN_CORE, KNOWN_EVENTS, KNOWN_SETTINGS, NEW_TUNING_FILE_PREFIX, blueprintHintForSetting, newTuningFileName, parseTuningValue, tuningDisplayName, settingTip, type KnownSetting } from '../lib/tuningMeta'
   import { tip } from '../lib/tooltip'
+  import { setUnsaved } from '../lib/store'
+  import type { PatchNames } from '../lib/patchesMeta'
   import PrototypePicker from './PrototypePicker.svelte'
 
   // ── Props ──────────────────────────────────────────────────────────────────
 
   /** Existing file to edit. Null when creating a new file. */
-  export let file: { canonical_name: string; enabled: boolean; toggleable: boolean; relative_path: string } | null = null
+  export let file: { canonical_name: string; relative_path: string } | null = null
   export let serverExe: string
-  export let serverRunning: boolean
   /** All canonical names currently on disk — used to validate new filenames. */
   export let existingNames: string[] = []
-  export let onClose: () => void
+  /** Cancel on a new file. */
+  export let onCancel: () => void = () => {}
   /** Called after a new file is successfully created on disk. */
   export let onCreated: (canonicalName: string) => void = () => {}
+  /** Read-only for the parent (bind:dirty): true while there are unsaved edits. */
+  export let dirty = false
 
   // ── Mode ───────────────────────────────────────────────────────────────────
 
@@ -43,7 +47,6 @@
 
   let categoryFilter = ''
   let searchQuery = ''
-  let closeBlocked = false
 
   // New file state
   let newFileSuffix = ''
@@ -58,12 +61,12 @@
   let settingSuggestOpen = false
   let settingInputEl: HTMLInputElement
 
+  // Display names for prototype paths, as in Patches. `asked` holds every path already
+  // sent, so each one is looked up once.
+  let protoNames: Record<string, string> = {}
+  const asked = new Set<string>()
 
   // ── Derived ────────────────────────────────────────────────────────────────
-
-  $: displayName = file
-    ? tuningDisplayName(file.canonical_name)
-    : (newFileSuffix.trim() || 'New File')
 
   $: categories = [...new Set(entries.map(e => categoryForSetting(e.setting)))].sort()
 
@@ -72,9 +75,12 @@
     const q = searchQuery.toLowerCase()
     const matchSearch = !q ||
       e.setting.toLowerCase().includes(q) ||
-      e.prototype.toLowerCase().includes(q)
+      e.prototype.toLowerCase().includes(q) ||
+      (protoNames[e.prototype] ?? '').toLowerCase().includes(q)
     return matchCat && matchSearch
   })
+
+  $: requestNames(entries)
 
   $: if (newSetting || newPrototype) addError = ''
   $: dirty = isNew
@@ -84,6 +90,10 @@
         const s = savedEntries[i]
         return !s || e.value !== s.value
       })
+
+  // Leaving the tab asks first while there are unsaved edits.
+  $: setUnsaved('tuning', dirty ? 'Live Tuning' : null)
+  onDestroy(() => setUnsaved('tuning', null))
 
   $: filteredSettings = newSetting.trim()
     ? KNOWN_SETTINGS.filter(s =>
@@ -122,6 +132,18 @@
       entryError = String(e)
     } finally {
       loadingEntries = false
+    }
+  }
+
+  async function requestNames(list: TuningEntry[]) {
+    const paths = [...new Set(list.map(e => e.prototype))].filter(p => p && !asked.has(p))
+    if (!serverExe || paths.length === 0) return
+    for (const p of paths) asked.add(p)
+    try {
+      const got = await invoke<PatchNames>('name_patch_targets', { serverExe, paths, ids: [] })
+      protoNames = { ...protoNames, ...got.paths }
+    } catch {
+      // Names are a help, not needed: without Calligraphy.sip the table shows paths.
     }
   }
 
@@ -182,7 +204,6 @@
       })
       savedEntries = JSON.parse(JSON.stringify(entries))
       saveSuccess = true
-      closeBlocked = false
       setTimeout(() => (saveSuccess = false), 3000)
     } catch (e) {
       saveError = String(e)
@@ -191,16 +212,9 @@
     }
   }
 
-  // "Save & Close" in the close guard: only close if the save went through.
-  async function saveAndClose() {
-    await saveEntries()
-    if (!saveError) onClose()
-  }
-
-  // ── Reload ─────────────────────────────────────────────────────────────────
-
-  async function reloadLiveTuning() {
-    try { await invoke('send_command', { cmd: '!server reloadlivetuning' }) } catch {}
+  function revert() {
+    entries = JSON.parse(JSON.stringify(savedEntries))
+    saveError = ''
   }
 
   // ── Entry management ───────────────────────────────────────────────────────
@@ -253,17 +267,8 @@
     expandedProtoKey = expandedProtoKey === key ? null : key
   }
 
-  // ── Close guard ────────────────────────────────────────────────────────────
-
-  function tryClose() {
-    if (dirty && !isNew) { closeBlocked = true } else { onClose() }
-  }
-
   function onKeydown(e: KeyboardEvent) {
-    if (e.key === 'Escape') {
-      if (settingSuggestOpen) { settingSuggestOpen = false; return }
-      tryClose()
-    }
+    if (e.key === 'Escape') settingSuggestOpen = false
   }
 
   function onWindowClick(e: MouseEvent) {
@@ -277,57 +282,7 @@
 
 <svelte:window on:keydown={onKeydown} on:click={onWindowClick} />
 
-<div class="modal-backdrop"
-  role="presentation"
-  on:click={e => { if (e.target === e.currentTarget) tryClose() }}
-  on:keydown={onKeydown}
->
-  <div
-    class="modal"
-    role="dialog"
-    aria-modal="true"
-    tabindex="-1"
-  >
-
-    <!-- ── Header ── -->
-    <div class="modal-header">
-      <div class="modal-title">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-          <polyline points="14 2 14 8 20 8"/>
-          <line x1="16" y1="13" x2="8" y2="13"/>
-          <line x1="16" y1="17" x2="8" y2="17"/>
-        </svg>
-        {#if isNew}
-          <span class="modal-display-name">New Tuning File</span>
-        {:else}
-          <span class="modal-display-name">{displayName}</span>
-          <span class="modal-filename">{file?.canonical_name}</span>
-        {/if}
-      </div>
-      <div class="modal-header-actions">
-        {#if !isNew}
-          <button
-            class="btn btn-sm btn-outline"
-            on:click={reloadLiveTuning}
-            disabled={!serverRunning}
-            use:tip={serverRunning ? 'Send !server reloadlivetuning' : 'Server not running'}
-          >
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:11px;height:11px;">
-              <polyline points="23 4 23 10 17 10"/>
-              <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
-            </svg>
-            Reload
-          </button>
-        {/if}
-        <button class="close-btn" aria-label="Close" on:click={tryClose}>
-          <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5">
-            <line x1="3.5" y1="3.5" x2="10.5" y2="10.5"/>
-            <line x1="10.5" y1="3.5" x2="3.5" y2="10.5"/>
-          </svg>
-        </button>
-      </div>
-    </div>
+<section class="file-editor">
 
     <!-- ── New file bar ── -->
     {#if isNew}
@@ -354,7 +309,7 @@
           <div class="copy-from-wrap">
             <span class="copy-from-label">Copy from</span>
             <select
-              class="filter-select"
+              class="field-select"
               bind:value={copyFromName}
               on:change={() => applyCopyFrom(copyFromName)}
               disabled={copyFromLoading}
@@ -376,7 +331,7 @@
 
     <!-- ── Toolbar ── -->
     <div class="entry-toolbar">
-      <select class="filter-select" bind:value={categoryFilter}>
+      <select class="field-select" bind:value={categoryFilter}>
         <option value="">All categories</option>
         {#each categories as cat}
           <option value={cat}>{cat}</option>
@@ -428,17 +383,17 @@
               {@const rowKey = entry.prototype + '|' + entry.setting}
               {@const isExpanded = expandedProtoKey === rowKey}
               <tr class:modified>
-                <td class="col-cat"><span class="cat-badge">{categoryForSetting(entry.setting)}</span></td>
+                <td class="col-cat"><span class="tag">{categoryForSetting(entry.setting)}</span></td>
                 <td
                   class="col-proto"
                   class:proto-expandable={!!entry.prototype}
                   class:proto-expanded={isExpanded}
                   on:click={() => toggleProtoExpand(entry)}
                 >
-                  <span class="proto-text">{entry.prototype || '—'}</span>
+                  <span class="proto-text" class:proto-name={protoNames[entry.prototype]}>{protoNames[entry.prototype] ?? (entry.prototype || '—')}</span>
                 </td>
                 <td class="col-setting">
-                  <span class="setting-text">{entry.setting}</span>
+                  <span class="setting-text" use:tip={settingTip(entry.setting)}>{entry.setting}</span>
                 </td>
                 <td class="col-value">
                   <input
@@ -509,9 +464,7 @@
               >
                 <span class="setting-opt-name">{s.setting}</span>
                 <span class="setting-opt-cat">{s.category}</span>
-                {#if s.description}
-                  <span class="setting-opt-desc">{s.description}</span>
-                {/if}
+                <span class="setting-opt-desc">{s.description}</span>
               </button>
             {/each}
           </div>
@@ -532,58 +485,38 @@
     {#if addError}<div class="feedback-error add-error">{addError}</div>{/if}
 
     <!-- ── Footer ── -->
-    <div class="modal-footer">
-      {#if closeBlocked}
-        <span class="feedback-error">{saveError || 'Unsaved changes. Save or discard before closing.'}</span>
-        <div class="footer-actions">
-          <button class="btn btn-sm btn-red" on:click={onClose}>Discard & Close</button>
-          <button class="btn btn-sm btn-accent btn-pulse" on:click={saveAndClose} disabled={saving}>
-            {saving ? 'Saving...' : 'Save & Close'}
-          </button>
-        </div>
-      {:else}
-        <div class="footer-left">
-          {#if dirty && !isNew}<span class="dirty-badge">Unsaved changes</span>{/if}
-          {#if saveError}<span class="feedback-error">{saveError}</span>{/if}
-          {#if saveSuccess}<span class="feedback-ok">Saved</span>{/if}
-        </div>
-        <div class="footer-actions">
-          <button class="btn btn-sm btn-outline" on:click={tryClose}>
-            {isNew ? 'Cancel' : 'Close'}
-          </button>
-          <button
-            class="btn btn-sm btn-accent"
-            class:btn-pulse={dirty}
-            on:click={saveEntries}
-            disabled={saving || (!isNew && !dirty)}
-          >
-            {saving ? 'Saving...' : isNew ? 'Create File' : 'Save'}
-          </button>
-        </div>
-      {/if}
+    <div class="editor-footer">
+      <div class="footer-left">
+        {#if dirty && !isNew}<span class="dirty-badge">Unsaved changes</span>{/if}
+        {#if saveError}<span class="feedback-error">{saveError}</span>{/if}
+        {#if saveSuccess}<span class="feedback-ok">Saved</span>{/if}
+      </div>
+      <div class="footer-actions">
+        {#if isNew}
+          <button class="btn btn-sm btn-outline" on:click={onCancel}>Cancel</button>
+        {:else}
+          <button class="btn btn-sm btn-outline" on:click={revert} disabled={saving || !dirty}>Revert</button>
+        {/if}
+        <button
+          class="btn btn-sm btn-accent"
+          class:btn-pulse={dirty}
+          on:click={saveEntries}
+          disabled={saving || (!isNew && !dirty)}
+        >
+          {saving ? 'Saving...' : isNew ? 'Create File' : 'Save'}
+        </button>
+      </div>
     </div>
 
-  </div>
-</div>
+</section>
 
 <style>
-  .modal {
-    width: min(1060px, 92vw);
-    height: min(700px, 86vh);
+  .file-editor {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
   }
-
-  /* ── Header ── */
-  .modal-filename {
-    font-family: var(--font-mono);
-    font-size: 11px;
-    color: var(--text-3);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    min-width: 0;
-  }
-
-  .modal-header-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
 
   /* ── New file bar ── */
   .new-file-bar {
@@ -617,7 +550,6 @@
   .filename-compose.has-error { border-color: var(--red); }
 
   .filename-fixed {
-    font-family: var(--font-mono);
     font-size: 12px;
     color: var(--text-3);
     padding: 6px 8px;
@@ -632,7 +564,7 @@
     border: none;
     outline: none;
     color: var(--text-0);
-    font-family: var(--font-mono);
+    font-family: var(--font-body);
     font-size: 12px;
     padding: 6px 8px;
     min-width: 160px;
@@ -658,13 +590,7 @@
     white-space: nowrap;
   }
 
-  .copy-loading {
-    font-family: var(--font-head);
-    font-size: var(--fs-min);
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    color: var(--text-3);
-  }
+  .copy-loading { font-size: 12px; color: var(--text-3); }
 
   /* ── Toolbar ── */
   .entry-toolbar {
@@ -677,34 +603,19 @@
     background: var(--chrome-sunken-bg);
   }
 
-  .filter-select {
-    background: var(--bg-0);
-    border: 1px solid var(--border-mid);
-    color: var(--text-1);
-    font-family: var(--font-body);
-    font-size: 12px;
-    padding: 5px 8px;
-    border-radius: var(--radius-sm);
-    outline: none;
-    cursor: pointer;
-  }
-  .filter-select:focus { border-color: var(--accent-dim); }
+  /* Same height as the search box beside it. */
+  .entry-toolbar .field-select { padding: 5px 8px; }
 
   .entry-count {
-    font-family: var(--font-head); font-size: var(--fs-min);
-    letter-spacing: 0.1em; text-transform: uppercase;
-    color: var(--text-3); white-space: nowrap; flex-shrink: 0;
+    font-size: 12px; font-variant-numeric: tabular-nums;
+    color: var(--text-2); white-space: nowrap; flex-shrink: 0;
   }
 
   /* ── Table ── */
   .entry-table-wrap { flex: 1; overflow-y: auto; min-height: 0; }
 
-  .entry-status {
-    padding: 24px 20px;
-    font-family: var(--font-head); font-size: 11px;
-    letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-3);
-  }
-  .entry-status.error { color: var(--text-error); text-transform: none; font-family: var(--font-body); letter-spacing: 0; }
+  .entry-status { padding: 24px 20px; font-size: 12px; color: var(--text-3); }
+  .entry-status.error { color: var(--text-error); }
   .add-error { padding: 4px 16px 0; font-size: 11px; }
 
   .entry-table { width: 100%; border-collapse: collapse; font-size: 12px; table-layout: fixed; }
@@ -723,9 +634,10 @@
   .entry-table tbody tr.modified:hover { background: var(--accent-glow-strong); }
   .entry-table td { padding: 7px 14px; vertical-align: middle; overflow: hidden; }
 
-  .col-cat   { width: 120px; }
-  .col-proto { width: 28%; }
-  .col-value { width: 110px; }
+  /* Prototype takes what's left: paths are long, setting IDs are at most about 35 characters. */
+  .col-cat     { width: 120px; }
+  .col-setting { width: max(26%, 200px); }
+  .col-value   { width: 110px; }
   .col-del   { width: 50px; }
 
   /* Clickable prototype cell */
@@ -752,24 +664,22 @@
     background: var(--bg-0);
   }
 
-  .cat-badge {
-    font-family: var(--font-head); font-size: var(--fs-min); font-weight: 600;
-    letter-spacing: 0.06em; text-transform: uppercase;
-    color: var(--text-3); background: var(--bg-3);
-    border: 1px solid var(--border-mid); padding: 2px 6px; border-radius: 2px; white-space: nowrap;
-  }
-
   .proto-text {
     font-family: var(--font-mono); font-size: 11px; color: var(--text-2);
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block;
   }
 
-  .setting-text { font-family: var(--font-mono); font-size: 12px; color: var(--text-1); }
+  .proto-text.proto-name { font-family: var(--font-body); font-size: 12px; color: var(--text-1); }
+
+  .setting-text {
+    font-family: var(--font-mono); font-size: 12px; color: var(--text-1);
+    display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
 
   .value-input {
     width: 90px; background: var(--bg-0);
     border: 1px solid var(--border-mid); color: var(--text-0);
-    font-family: var(--font-mono); font-size: 12px;
+    font-family: var(--font-body); font-size: 12px; font-variant-numeric: tabular-nums;
     padding: 3px 7px; border-radius: var(--radius-sm);
     outline: none; transition: border-color 0.12s;
   }
@@ -796,7 +706,7 @@
   }
   .add-input:focus { border-color: var(--accent-dim); }
 
-  .value-field { flex: 1; }
+  .value-field { flex: 1; font-family: var(--font-body); font-variant-numeric: tabular-nums; }
 
   /* ── Setting autocomplete ── */
   .setting-suggest-wrap { position: relative; flex: 3; display: flex; flex-direction: column; }
@@ -828,12 +738,20 @@
   .setting-opt-name { font-family: var(--font-mono); font-size: 12px; color: var(--text-0); }
   .setting-opt-cat {
     font-family: var(--font-head); font-size: var(--fs-min);
-    letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent);
+    letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-2);
   }
   .setting-opt-desc { font-size: 11px; color: var(--text-2); line-height: 1.4; }
 
   /* ── Footer ── */
-  .modal-footer { justify-content: space-between; }
+  .editor-footer {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 16px;
+    border-top: 1px solid var(--border);
+    background: var(--chrome-footer-bg);
+    flex-shrink: 0;
+  }
 
   .footer-left { display: flex; align-items: center; gap: 10px; min-width: 0; }
 

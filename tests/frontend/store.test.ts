@@ -22,6 +22,7 @@ import {
   appConfig,
   activeServerId,
   upsertServer,
+  setAdvancedData,
   type AppConfig,
   type Server,
 } from '../../src/lib/store'
@@ -116,6 +117,27 @@ describe('unsaved-changes guard', () => {
     expect(await first).toBe(false)
     answerNext(true)
     expect(await second).toBe(true)
+  })
+
+  it('switching Simple/Advanced with unsaved edits asks, and staying keeps the view', async () => {
+    invokeMock.mockReset().mockResolvedValue(undefined)
+    setUnsaved('tuning', 'Live Tuning')
+    const stay = setAdvancedData(false)
+    expect(answerNext(false)).toContain('Live Tuning')
+    await stay
+    expect(invokeMock).not.toHaveBeenCalled()
+
+    const leave = setAdvancedData(false)
+    answerNext(true)
+    await leave
+    expect(invokeMock).toHaveBeenCalledWith('set_advanced_data', { advanced: false })
+  })
+
+  it('switching Simple/Advanced with nothing unsaved never asks', async () => {
+    invokeMock.mockReset().mockResolvedValue(undefined)
+    await setAdvancedData(true)
+    expect(asked()).toBe(false)
+    expect(invokeMock).toHaveBeenCalledWith('set_advanced_data', { advanced: true })
   })
 
   it('goTab to the current tab never asks', async () => {

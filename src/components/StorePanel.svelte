@@ -3,7 +3,7 @@
   import { invoke } from '@tauri-apps/api/core'
   import { openPath } from '@tauri-apps/plugin-opener'
   import { appConfig, serverRunning } from '../lib/store'
-  import { reloadCatalog } from '../lib/catalogReload'
+  import { reloadCatalog } from '../lib/serverReload'
   import {
     typeNames,
     modifiersForType,

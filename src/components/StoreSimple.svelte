@@ -1,7 +1,7 @@
 <script lang="ts">
   import { invoke } from '@tauri-apps/api/core'
   import { openPath } from '@tauri-apps/plugin-opener'
-  import { reloadCatalog } from '../lib/catalogReload'
+  import { reloadCatalog } from '../lib/serverReload'
   import { appConfig, serverRunning } from '../lib/store'
   import { tip } from '../lib/tooltip'
   import PanelSidebar from './PanelSidebar.svelte'

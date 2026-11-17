@@ -56,10 +56,10 @@ export async function confirmLeave(): Promise<boolean> {
   const labels = Object.values(get(unsavedSources))
   if (labels.length === 0) return true
   const ok = await askConfirm({
-    title: 'Unsaved changes',
-    message: `You have unsaved changes in ${labels.join(', ')}. Leave and discard them?`,
+    title: 'Discard changes?',
+    message: `You have unsaved changes in ${labels.join(', ')}. Discard them?`,
     okLabel: 'Discard',
-    cancelLabel: 'Stay',
+    cancelLabel: 'Keep editing',
   })
   if (ok) unsavedSources.set({})
   return ok
@@ -518,14 +518,6 @@ export async function setShutdownConfig(shutdown: ShutdownConfig): Promise<void>
   await updateConfigOptimistic(c => ({ ...c, shutdown }), 'set_shutdown_config', { shutdown })
 }
 
-export async function setTuningTags(tags: Record<string, string>): Promise<void> {
-  await updateConfigOptimistic(c => ({ ...c, tuning_tags: tags }), 'set_tuning_tags', { tags })
-}
-
-export async function setTuningFavourites(favourites: string[]): Promise<void> {
-  await updateConfigOptimistic(c => ({ ...c, tuning_favourites: favourites }), 'set_tuning_favourites', { favourites })
-}
-
 export async function setBackupTargets(targets: string[]): Promise<void> {
   await updateConfigOptimistic(c => ({ ...c, backup_targets: targets }), 'set_backup_targets', { targets })
 }
@@ -539,6 +531,8 @@ export async function setConsolePresets(presets: string[]): Promise<void> {
 }
 
 export async function setAdvancedData(advanced: boolean): Promise<void> {
+  // Switching view unmounts the open editor, so it asks like a tab change.
+  if (!(await confirmLeave())) return
   await updateConfigOptimistic(c => ({ ...c, advanced_data: advanced }), 'set_advanced_data', { advanced })
 }
 

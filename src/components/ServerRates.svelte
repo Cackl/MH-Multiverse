@@ -1,15 +1,14 @@
 <script lang="ts">
-  import { onDestroy } from 'svelte'
   import { invoke } from '@tauri-apps/api/core'
-  import { listen, type UnlistenFn } from '@tauri-apps/api/event'
   import { openPath } from '@tauri-apps/plugin-opener'
   import { appConfig, serverRunning } from '../lib/store'
   import { tip } from '../lib/tooltip'
+  import { reloadLiveTuning } from '../lib/serverReload'
   import PanelSidebar from './PanelSidebar.svelte'
   import {
     SERVER_RATES_FILE, KNOWN_CORE, tuningDisplayName,
-    rateRows, resolveRate, formatRate, toShown, fromShown, planServerRatesWrite, reloadResult,
-    type GlobalTuning, type RateRow, type RateState, type RateGroup, type TuningEntry, type ReloadResult,
+    rateRows, resolveRate, formatRate, toShown, fromShown, planServerRatesWrite,
+    type GlobalTuning, type RateRow, type RateState, type RateGroup, type TuningEntry,
   } from '../lib/tuningMeta'
 
   const GROUPS: RateGroup[] = ['XP', 'Loot', 'Vendors', 'Rules']
@@ -91,7 +90,7 @@
         await invoke('create_tuning_file', { serverExe, relativePath: SERVER_RATES_FILE, entries })
       }
       edits = {}
-      stopWatching()
+      reloadRun++
       reloadError = ''
       saveMsg = 'Saved'
       await load(serverExe)
@@ -103,51 +102,16 @@
   }
 
   // ── Reload ────────────────────────────────────────────────────────────────
-  // send_command only proves the text reached the server console, so the result comes from
-  // the log lines that follow it. Only a failure shows a message.
+  // Only a failed reload shows a message. A newer reload or a save drops an older result.
 
   let reloadError = ''
-  let unlisten: UnlistenFn | null = null
-  let timer: ReturnType<typeof setTimeout> | null = null
-
-  function stopWatching() {
-    unlisten?.()
-    unlisten = null
-    if (timer) clearTimeout(timer)
-    timer = null
-  }
-
-  function finish(result: ReloadResult) {
-    stopWatching()
-    if (result.rejected > 0) showReloadError(`${result.rejected} ${result.rejected === 1 ? 'entry' : 'entries'} rejected. See the Server log.`)
-  }
-
-  function showReloadError(message: string) {
-    reloadError = message
-  }
-
+  let reloadRun = 0
   async function reload() {
-    stopWatching()
+    const run = ++reloadRun
     reloadError = ''
-    const lines: string[] = []
-    unlisten = await listen<{ msg: string }[]>('server-log', e => {
-      lines.push(...e.payload.map(l => l.msg))
-      const result = reloadResult(lines)
-      if (result) finish(result)
-    })
-    timer = setTimeout(() => {
-      stopWatching()
-      showReloadError('No reply from the server. See the Server log.')
-    }, 5000)
-    try {
-      await invoke('send_command', { cmd: '!server reloadlivetuning' })
-    } catch (e) {
-      stopWatching()
-      showReloadError(`Reload not sent: ${e}`)
-    }
+    const error = await reloadLiveTuning()
+    if (run === reloadRun) reloadError = error
   }
-
-  onDestroy(stopWatching)
 
   const pct = (row: RateRow, v: number) => Math.max(0, Math.min(100, (v - row.min) / (row.max - row.min) * 100))
   const jumpTo = (group: RateGroup) => document.getElementById(`rates-${group}`)?.scrollIntoView({ block: 'start' })

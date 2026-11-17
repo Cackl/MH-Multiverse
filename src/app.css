@@ -148,9 +148,6 @@
   --purple:       #a080d0;
   --purple-dim:   rgba(160, 128, 208, 0.12);
 
-  /* Favourite highlight */
-  --colour-favourite: var(--amber-bright);
-
   /* Off/disabled rows that still carry readable text (kept high enough for the contrast test) */
   --dimmed-opacity: 0.65;
 
@@ -669,9 +666,6 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
   --purple:       #6f58a8;
   --purple-dim:   rgba(111, 88, 168, 0.12);
 
-  /* Favourite highlight */
-  --colour-favourite: var(--amber-bright);
-
   /* Panel background gradient */
   --panel-grad-top: rgba(15, 111, 141, 0.05);
 
@@ -738,9 +732,6 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
   --purple:       #a080d0;
   --purple-dim:   rgba(160, 128, 208, 0.12);
 
-  /* Favourite highlight */
-  --colour-favourite: var(--amber-bright);
-
   /* Panel background gradient */
   --panel-grad-top: rgba(214, 106, 31, 0.07);
 
@@ -803,9 +794,6 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
   --purple:       #a080d0;
   --purple-dim:   rgba(160, 128, 208, 0.12);
 
-  /* Favourite highlight */
-  --colour-favourite: var(--amber-bright);
-
   /* Panel background gradient */
   --panel-grad-top: rgba(227, 70, 72, 0.07);
 
@@ -867,9 +855,6 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
   /* Purple */
   --purple:       #c586c0;
   --purple-dim:   rgba(197, 134, 192, 0.14);
-
-  /* Favourite highlight */
-  --colour-favourite: var(--amber-bright);
 
   /* Panel background gradient */
   --panel-grad-top: rgba(55, 148, 255, 0.08);
@@ -936,9 +921,6 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
   /* Purple */
   --purple:       #c586c0;
   --purple-dim:   rgba(197, 134, 192, 0.14);
-
-  /* Favourite */
-  --colour-favourite: var(--amber-bright);
 
   /* Z-index */
 
@@ -1236,10 +1218,11 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
   font-weight: 600;
   text-align: left;
 }
-button.side-item { cursor: pointer; transition: all 0.12s; }
-button.side-item:hover { color: var(--text-0); background: var(--bg-3); border-color: var(--border-mid); }
+/* role="button" rows hold their own controls (a switch), which a <button> can't contain. */
+button.side-item, .side-item[role="button"] { cursor: pointer; transition: all 0.12s; }
+button.side-item:hover, .side-item[role="button"]:hover { color: var(--text-0); background: var(--bg-3); border-color: var(--border-mid); }
 .side-item.active,
-button.side-item.active:hover { color: var(--accent-bright); background: var(--accent-glow); border-color: var(--accent-dim); }
+button.side-item.active:hover, .side-item[role="button"].active:hover { color: var(--accent-bright); background: var(--accent-glow); border-color: var(--accent-dim); }
 .side-mark {
   flex-shrink: 0;
   font-family: var(--font-body);

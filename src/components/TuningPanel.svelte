@@ -2,22 +2,12 @@
   import { onMount } from 'svelte'
   import { invoke } from '@tauri-apps/api/core'
   import { openPath } from '@tauri-apps/plugin-opener'
-  import { appConfig, serverRunning, setTuningTags, setTuningFavourites, tuningFocusFile } from '../lib/store'
-  import { KNOWN_CORE, KNOWN_EVENTS, tuningDisplayName, type TuningFileInfo, type EventDefinition, type EventsData } from '../lib/tuningMeta'
+  import { appConfig, serverRunning, tuningFocusFile, askConfirm } from '../lib/store'
+  import { KNOWN_EVENTS, TUNING_GROUPS, tuningDisplayName, tuningGroup, type TuningFileInfo, type EventDefinition, type EventsData } from '../lib/tuningMeta'
   import PanelSidebar from './PanelSidebar.svelte'
-  import TuningEditorModal from './TuningEditorModal.svelte'
+  import TuningFileEditor from './TuningFileEditor.svelte'
   import { tip } from '../lib/tooltip'
-
-  // ── Types ──────────────────────────────────────────────────────────────────
-
-  type Tag = 'core' | 'event' | 'custom' | ''
-
-  const TAG_LABELS: Record<string, string> = {
-    core:   'Core',
-    event:  'Event',
-    custom: 'Custom',
-    '':     'Untagged',
-  }
+  import { reloadLiveTuning } from '../lib/serverReload'
 
   // ── State ──────────────────────────────────────────────────────────────────
 
@@ -27,15 +17,11 @@
 
   let editingFile: TuningFileInfo | null = null
   let creatingNew = false
-  let tagFilter: Tag | '' = ''
-  let searchQuery = ''
-  let editingTag: string | null = null
+  let editorDirty = false
   let eventDefsById: Record<string, EventDefinition> = {}
 
   // ── Derived ────────────────────────────────────────────────────────────────
 
-  $: tags = $appConfig.tuning_tags ?? {}
-  $: favourites = $appConfig.tuning_favourites ?? []
   $: existingNames = files.map(f => f.canonical_name)
 
   // At runtime, treat files with event_id as the event set; fall back to static KNOWN_EVENTS
@@ -43,87 +29,16 @@
   $: runtimeEventFiles = new Set(files.filter(f => f.event_id !== null).map(f => f.canonical_name))
   $: effectiveEventSet = runtimeEventFiles.size > 0 ? runtimeEventFiles : KNOWN_EVENTS
 
-  $: searchLower = searchQuery.toLowerCase()
-
-  // Pinned grid: favourited files, search-filtered, tag-filter ignored
-  $: favouriteGrid = files.filter(f => {
-    if (!favourites.includes(f.canonical_name)) return false
-    if (!searchLower) return true
-    const name = displayName(f).toLowerCase()
-    return f.canonical_name.toLowerCase().includes(searchLower) || name.includes(searchLower)
-  })
-
-  // Main grid: non-favourited, tag+search filtered
-  $: mainGrid = files.filter(f => {
-    if (favourites.includes(f.canonical_name)) return false
-    const tag = effectiveTag(f.canonical_name)
-    if (tagFilter !== '' && tag !== tagFilter) return false
-    if (!searchLower) return true
-    const name = displayName(f).toLowerCase()
-    return f.canonical_name.toLowerCase().includes(searchLower) || name.includes(searchLower)
-  })
-
-  // Sidebar groupings
-  $: knownSidebarFiles = files
-    .filter(f => f.toggleable && !f.event_id)
-    .map(f => ({ ...f, starred: favourites.includes(f.canonical_name) }))
-
-  $: enabledSidebarFiles  = knownSidebarFiles.filter(f => f.enabled)
-  $: disabledSidebarFiles = knownSidebarFiles.filter(f => !f.enabled)
-
-  $: eventOwnedSidebarFiles = files
-    .filter(f => f.event_id !== null)
-    .map(f => ({ ...f, starred: favourites.includes(f.canonical_name) }))
-
-  $: unknownSidebarFiles = files
-    .filter(f => !f.toggleable && !f.event_id)
-    .map(f => ({ ...f, starred: favourites.includes(f.canonical_name) }))
-
-  $: aggregates = (() => {
-    const total = files.length
-    const active = files.filter(f => f.enabled).length
-    const eventFiles = files.filter(f => effectiveTag(f.canonical_name) === 'event')
-    return {
-      total,
-      active,
-      events: eventFiles.length,
-      activeEvents: eventFiles.filter(f => f.enabled).length,
-    }
-  })()
+  // Sidebar groups, each in scan order (root files in server load order).
+  $: groups = TUNING_GROUPS.map(label => ({
+    label,
+    files: files.filter(f => tuningGroup(f, effectiveEventSet) === label),
+  }))
 
   // ── Helpers ────────────────────────────────────────────────────────────────
 
   function displayName(file: TuningFileInfo): string {
     return tuningDisplayName(file.canonical_name)
-  }
-
-  function effectiveTag(canonical: string): Tag {
-    if (tags[canonical]) return tags[canonical] as Tag
-    if (KNOWN_CORE.has(canonical)) return 'core'
-    if (effectiveEventSet.has(canonical)) return 'event'
-    return ''
-  }
-
-  // ── Tag management ─────────────────────────────────────────────────────────
-
-  async function setTag(canonical: string, tag: Tag) {
-    const updated = { ...tags }
-    if (tag === '') {
-      delete updated[canonical]
-    } else {
-      updated[canonical] = tag
-    }
-    await setTuningTags(updated)
-    editingTag = null
-  }
-
-  // ── Favourites ─────────────────────────────────────────────────────────────
-
-  async function toggleFavourite(file: { canonical_name: string }) {
-    const updated = favourites.includes(file.canonical_name)
-      ? favourites.filter(f => f !== file.canonical_name)
-      : [...favourites, file.canonical_name]
-    await setTuningFavourites(updated)
   }
 
   // ── Scan ───────────────────────────────────────────────────────────────────
@@ -156,8 +71,22 @@
     }
   }
 
+  /** Shows a file in the editor, or a new one with `file` null. Unsaved edits are confirmed first. */
+  async function openFile(file: TuningFileInfo | null) {
+    const isNew = file === null
+    if (isNew === creatingNew && file?.relative_path === editingFile?.relative_path) return
+    if (editorDirty && !await askConfirm({
+      title: 'Discard changes?', message: 'This file has unsaved changes. Discard them?',
+      okLabel: 'Discard', cancelLabel: 'Keep editing',
+    })) return
+    editorDirty = false
+    editingFile = file
+    creatingNew = isNew
+  }
+
   async function handleCreated(relativePath: string) {
     creatingNew = false
+    editorDirty = false
     await scan()
     const created = files.find(f => f.relative_path === relativePath)
     if (created) editingFile = created
@@ -183,11 +112,15 @@
   }
 
   // ── Reload ─────────────────────────────────────────────────────────────────
+  // Only a failed reload shows a message. A newer reload drops an older result.
 
-  async function reloadLiveTuning() {
-    try {
-      await invoke('send_command', { cmd: '!server reloadlivetuning' })
-    } catch {}
+  let reloadError = ''
+  let reloadRun = 0
+  async function reload() {
+    const run = ++reloadRun
+    reloadError = ''
+    const error = await reloadLiveTuning()
+    if (run === reloadRun) reloadError = error
   }
 
   let openDirError = ''
@@ -203,21 +136,10 @@
     }
   }
 
-  // ── Click outside (tag picker) ─────────────────────────────────────────────
-
-  function handleClickOutside(e: MouseEvent) {
-    if (editingTag && !(e.target as Element).closest('.card-tag-picker, .card-tag-btn')) {
-      editingTag = null
-    }
-  }
-
   // When EventsPanel navigates here with a file to open, pre-select it once files are loaded.
   $: if ($tuningFocusFile && files.length > 0) {
     const target = files.find(f => f.relative_path === $tuningFocusFile)
-    if (target) {
-      editingFile = target
-      creatingNew = false
-    }
+    if (target) openFile(target)
     tuningFocusFile.set(null)
   }
 
@@ -226,7 +148,7 @@
   })
 </script>
 
-<div class="tuning-panel" role="presentation" on:click={handleClickOutside}>
+<div class="tuning-panel">
   <div class="panel-bg"></div>
   <div class="grid-overlay"></div>
   <div class="tuning-layout">
@@ -237,7 +159,7 @@
       <div class="section-title">Tuning Files</div>
       <button
         class="btn-icon"
-        on:click={() => { creatingNew = true; editingFile = null }}
+        on:click={() => openFile(null)}
         aria-label="Create new tuning file"
         use:tip={'Create new tuning file'}
         disabled={!$appConfig.server_exe}
@@ -273,21 +195,6 @@
       </button>
     </svelte:fragment>
 
-    <!-- Aggregate stats -->
-    {#if files.length > 0}
-      <div class="stats-row">
-        <div class="stat">
-          <span class="stat-value">{aggregates.active}</span>
-          <span class="stat-label">/ {aggregates.total} active</span>
-        </div>
-        <div class="stat-sep"></div>
-        <div class="stat">
-          <span class="stat-value">{aggregates.activeEvents}</span>
-          <span class="stat-label">/ {aggregates.events} events</span>
-        </div>
-      </div>
-    {/if}
-
     <!-- File list (unfiltered — full navigation list) -->
     <div class="file-list">
       {#if !$appConfig.server_exe}
@@ -301,209 +208,95 @@
       {:else if files.length === 0}
         <div class="file-notice">No LiveTuning files found.</div>
       {:else}
-        {#if enabledSidebarFiles.length > 0}
-          <div class="file-group-label" use:tip={'The server loads these top to bottom. For the same setting, the lower file wins.'}>Active · load order</div>
-          {#each enabledSidebarFiles as file (file.canonical_name)}
-            {@const tag = effectiveTag(file.canonical_name)}
-            <div
-              class="file-item"
-              class:editing={editingFile?.relative_path === file.relative_path}
-              role="button"
-              tabindex="0"
-              aria-label="Edit {file.canonical_name}"
-              on:click={() => editingFile = file}
-              on:keydown={e => e.key === 'Enter' && (editingFile = file)}
-            >
-              <button
-                class="star-btn"
-                class:starred={file.starred}
-                aria-label={file.starred ? 'Remove from favourites' : 'Add to favourites'}
-                use:tip={file.starred ? 'Remove from favourites' : 'Add to favourites'}
-                on:click|stopPropagation={() => toggleFavourite(file)}
+        {#each groups as group (group.label)}
+          {#if group.files.length > 0}
+            <div class="side-label">{group.label}</div>
+            {#each group.files as file (file.relative_path)}
+              <div
+                class="side-item"
+                class:off={!file.enabled}
+                class:active={editingFile?.relative_path === file.relative_path}
+                role="button"
+                tabindex="0"
+                aria-label="Edit {file.canonical_name}"
+                on:click={() => openFile(file)}
+                on:keydown={e => e.key === 'Enter' && openFile(file)}
               >
-                {#if file.starred}
-                  <svg viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="1.5">
-                    <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
-                  </svg>
-                {:else}
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-                    <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
-                  </svg>
-                {/if}
-              </button>
-              <div class="file-info">
-                <span class="file-name">{displayName(file)}</span>
-                {#if tag}
-                  <span class="file-tag tag-{tag}">{TAG_LABELS[tag]}</span>
+                <span class="file-text">
+                  <span class="side-name">{group.label === 'Other' ? file.relative_path : displayName(file)}</span>
+                  {#if file.event_id && eventDefsById[file.event_id]}
+                    <span class="file-sub">{eventDefsById[file.event_id].display_name}</span>
+                  {/if}
+                </span>
+                {#if file.toggleable}
+                  <div
+                    class="toggle-switch"
+                    class:on={file.enabled}
+                    role="switch"
+                    aria-checked={file.enabled}
+                    aria-label="{file.canonical_name} {file.enabled ? 'on' : 'off'}"
+                    tabindex="0"
+                    use:tip={file.enabled ? 'On. Switch off to stop the server loading this file.' : 'Off. Switch on to load this file again.'}
+                    on:click|stopPropagation={() => toggleFile(file)}
+                    on:keydown|stopPropagation={e => e.key === 'Enter' && toggleFile(file)}
+                  ></div>
                 {/if}
               </div>
-            </div>
-          {/each}
-        {/if}
-
-        {#if disabledSidebarFiles.length > 0}
-          <div class="file-group-label">Disabled</div>
-          {#each disabledSidebarFiles as file (file.canonical_name)}
-            {@const tag = effectiveTag(file.canonical_name)}
-            <div
-              class="file-item file-item-off"
-              class:editing={editingFile?.relative_path === file.relative_path}
-              role="button"
-              tabindex="0"
-              aria-label="Edit {file.canonical_name}"
-              on:click={() => editingFile = file}
-              on:keydown={e => e.key === 'Enter' && (editingFile = file)}
-            >
-              <button
-                class="star-btn"
-                class:starred={file.starred}
-                aria-label={file.starred ? 'Remove from favourites' : 'Add to favourites'}
-                on:click|stopPropagation={() => toggleFavourite(file)}
-              >
-                {#if file.starred}
-                  <svg viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="1.5">
-                    <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
-                  </svg>
-                {:else}
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-                    <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
-                  </svg>
-                {/if}
-              </button>
-              <div class="file-info">
-                <span class="file-name">{displayName(file)}</span>
-                {#if tag}
-                  <span class="file-tag tag-{tag}">{TAG_LABELS[tag]}</span>
-                {/if}
-              </div>
-            </div>
-          {/each}
-        {/if}
-
-        {#if eventOwnedSidebarFiles.length > 0}
-          <div class="file-group-label">Event managed</div>
-          {#each eventOwnedSidebarFiles as file (file.canonical_name)}
-            <div
-              class="file-item"
-              class:editing={editingFile?.relative_path === file.relative_path}
-              role="button"
-              tabindex="0"
-              aria-label="Edit {file.canonical_name}"
-              on:click={() => editingFile = file}
-              on:keydown={e => e.key === 'Enter' && (editingFile = file)}
-            >
-              <button
-                class="star-btn"
-                class:starred={file.starred}
-                aria-label={file.starred ? 'Remove from favourites' : 'Add to favourites'}
-                on:click|stopPropagation={() => toggleFavourite(file)}
-              >
-                {#if file.starred}
-                  <svg viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="1.5">
-                    <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
-                  </svg>
-                {:else}
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-                    <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
-                  </svg>
-                {/if}
-              </button>
-              <div class="file-info">
-                <span class="file-name">{displayName(file)}</span>
-                {#if file.event_id && eventDefsById[file.event_id]}
-                  <span class="file-tag tag-event">{eventDefsById[file.event_id].display_name}</span>
-                {/if}
-              </div>
-            </div>
-          {/each}
-        {/if}
-
-        {#if unknownSidebarFiles.length > 0}
-          <div class="file-group-label">Unknown prefix</div>
-          {#each unknownSidebarFiles as file (file.canonical_name)}
-            {@const tag = effectiveTag(file.canonical_name)}
-            <div
-              class="file-item"
-              class:editing={editingFile?.relative_path === file.relative_path}
-              role="button"
-              tabindex="0"
-              aria-label="Edit {file.canonical_name}"
-              on:click={() => editingFile = file}
-              on:keydown={e => e.key === 'Enter' && (editingFile = file)}
-            >
-              <button
-                class="star-btn"
-                class:starred={file.starred}
-                aria-label={file.starred ? 'Remove from favourites' : 'Add to favourites'}
-                on:click|stopPropagation={() => toggleFavourite(file)}
-              >
-                {#if file.starred}
-                  <svg viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="1.5">
-                    <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
-                  </svg>
-                {:else}
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-                    <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
-                  </svg>
-                {/if}
-              </button>
-              <div class="file-info">
-                <span class="file-name">{file.canonical_name}</span>
-                {#if tag}
-                  <span class="file-tag tag-{tag}">{TAG_LABELS[tag]}</span>
-                {/if}
-              </div>
-            </div>
-          {/each}
-        {/if}
+            {/each}
+          {/if}
+        {/each}
       {/if}
     </div>
   </PanelSidebar>
 
-  <!-- Right: grid -->
-  <div class="grid-pane">
+  <!-- Right: the selected file's editor -->
+  <section class="data-main">
 
-    <!-- Grid header: search + count + reload -->
-    <div class="grid-header">
-      <div class="search-wrap">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <circle cx="11" cy="11" r="8"/>
-          <line x1="21" y1="21" x2="16.65" y2="16.65"/>
-        </svg>
-        <input
-          type="text"
-          class="search-input"
-          placeholder="Filter files..."
-          bind:value={searchQuery}
+    <header class="page-head">
+      {#if creatingNew}
+        <h3 class="page-title">New Tuning File</h3>
+      {:else if editingFile}
+        <h3 class="page-title" use:tip={editingFile.relative_path}>{tuningDisplayName(editingFile.canonical_name)}</h3>
+      {:else}
+        <h3 class="page-title">Live Tuning</h3>
+      {/if}
+      <div class="page-acts">
+        {#if reloadError}<span class="reload-error">{reloadError}</span>{/if}
+        <button
+          class="btn btn-sm btn-outline"
+          on:click={reload}
+          disabled={!$serverRunning}
+          use:tip={$serverRunning ? 'Send !server reloadlivetuning' : 'Server not running'}
         >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:11px;height:11px;">
+            <polyline points="23 4 23 10 17 10"/>
+            <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+          </svg>
+          Reload Live Tuning
+        </button>
       </div>
-      <span class="file-count">
-        {favouriteGrid.length + mainGrid.length} file{favouriteGrid.length + mainGrid.length !== 1 ? 's' : ''}
-      </span>
-      <button
-        class="btn btn-sm btn-outline"
-        on:click={reloadLiveTuning}
-        disabled={!$serverRunning}
-        use:tip={$serverRunning ? 'Send !server reloadlivetuning' : 'Server not running'}
-      >
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:11px;height:11px;">
-          <polyline points="23 4 23 10 17 10"/>
-          <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
-        </svg>
-        Reload Live Tuning
-      </button>
-    </div>
+    </header>
 
-    <!-- Tag filter bar -->
-    {#if files.length > 0}
-      <div class="grid-filter-bar">
-        <button class="filter-chip"             class:active={tagFilter === ''}       on:click={() => tagFilter = ''}>All</button>
-        <button class="filter-chip chip-blue"   class:active={tagFilter === 'core'}   on:click={() => tagFilter = tagFilter === 'core'   ? '' : 'core'}>Core</button>
-        <button class="filter-chip chip-green"  class:active={tagFilter === 'event'}  on:click={() => tagFilter = tagFilter === 'event'  ? '' : 'event'}>Event</button>
-        <button class="filter-chip chip-purple" class:active={tagFilter === 'custom'} on:click={() => tagFilter = tagFilter === 'custom' ? '' : 'custom'}>Custom</button>
-      </div>
-    {/if}
-    <div class="grid-scroll">
+    {#if creatingNew}
+      <TuningFileEditor
+        file={null}
+        serverExe={$appConfig.server_exe}
+        {existingNames}
+        bind:dirty={editorDirty}
+        onCancel={() => { editorDirty = false; creatingNew = false }}
+        onCreated={handleCreated}
+      />
+    {:else if editingFile}
+      {#key editingFile.relative_path}
+        <TuningFileEditor
+          file={editingFile}
+          serverExe={$appConfig.server_exe}
+          {existingNames}
+          bind:dirty={editorDirty}
+        />
+      {/key}
+    {:else}
+    <div class="pane-empty">
       {#if !$appConfig.server_exe}
         <div class="empty-state">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:20px;height:20px;color:var(--text-2)">
@@ -532,201 +325,18 @@
           <span class="empty-state-sub">Check that the server exe is set and the LiveTuning directory exists.</span>
         </div>
       {:else}
-
-        <!-- Favourites section -->
-        {#if favouriteGrid.length > 0}
-          <div class="grid-section-label">
-            <svg viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="1" style="width:10px;height:10px;">
-              <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
-            </svg>
-            Favourites
-          </div>
-          <div class="card-grid">
-            {#each favouriteGrid as file (file.canonical_name)}
-              {@const tag = effectiveTag(file.canonical_name)}
-              <div class="tuning-card" class:enabled={file.enabled}>
-                <div class="card-body">
-                  <div class="card-top">
-                    <span class="card-name">{displayName(file)}</span>
-                    <button
-                      class="star-btn starred"
-                      aria-label="Remove from favourites"
-                      use:tip={'Remove from favourites'}
-                      on:click|stopPropagation={() => toggleFavourite(file)}
-                    >
-                      <svg viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="1.5">
-                        <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
-                      </svg>
-                    </button>
-                  </div>
-
-                  <!-- Tag badge / picker -->
-                  {#if editingTag === file.canonical_name}
-                    <div class="card-tag-picker">
-                      {#each (['core', 'event', 'custom', ''] as Tag[]) as t}
-                        <button
-                          class="tag-opt tag-{t || 'none'}"
-                          class:active={($appConfig.tuning_tags[file.canonical_name] || (KNOWN_CORE.has(file.canonical_name) ? 'core' : KNOWN_EVENTS.has(file.canonical_name) ? 'event' : '')) === t}
-                          on:click|stopPropagation={() => setTag(file.canonical_name, t)}
-                        >{TAG_LABELS[t]}</button>
-                      {/each}
-                    </div>
-                  {:else if tag}
-                    <button
-                      class="file-tag tag-{tag} card-tag-btn"
-                      use:tip={'Change tag'}
-                      on:click|stopPropagation={() => editingTag = file.canonical_name}
-                    >{TAG_LABELS[tag]}</button>
-                  {:else}
-                    <button
-                      class="card-tag-add card-tag-btn"
-                      on:click|stopPropagation={() => editingTag = file.canonical_name}
-                    >+ Tag</button>
-                  {/if}
-
-                  <span class="card-filename">{file.canonical_name}</span>
-                </div>
-                <div class="card-footer">
-                  {#if file.event_id}
-                    <span class="managed-by-label">
-                      Managed by {eventDefsById[file.event_id]?.display_name ?? file.event_id}
-                    </span>
-                  {:else}
-                    <div
-                      class="file-toggle"
-                      class:on={file.enabled}
-                      class:locked={!file.toggleable}
-                      role="switch"
-                      aria-checked={file.enabled}
-                      tabindex="0"
-                      use:tip={!file.toggleable ? 'Unknown prefix, cannot toggle' : ''}
-                      on:click={() => toggleFile(file)}
-                      on:keydown={e => e.key === 'Enter' && toggleFile(file)}
-                    ></div>
-                    <span class="toggle-label">{file.enabled ? 'Active' : 'Inactive'}</span>
-                  {/if}
-                  <button class="btn btn-sm btn-outline card-edit-btn" on:click={() => editingFile = file}>
-                    Edit
-                  </button>
-                </div>
-              </div>
-            {/each}
-          </div>
-        {/if}
-
-        <!-- Main grid -->
-        {#if mainGrid.length > 0}
-          {#if favouriteGrid.length > 0}
-            <div class="grid-section-label">All Files</div>
-          {/if}
-          <div class="card-grid">
-            {#each mainGrid as file (file.canonical_name)}
-              {@const tag = effectiveTag(file.canonical_name)}
-              <div class="tuning-card" class:enabled={file.enabled}>
-                <div class="card-body">
-                  <div class="card-top">
-                    <span class="card-name">{displayName(file)}</span>
-                    <button
-                      class="star-btn"
-                      aria-label="Add to favourites"
-                      use:tip={'Add to favourites'}
-                      on:click|stopPropagation={() => toggleFavourite(file)}
-                    >
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-                        <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
-                      </svg>
-                    </button>
-                  </div>
-
-                  <!-- Tag badge / picker -->
-                  {#if editingTag === file.canonical_name}
-                    <div class="card-tag-picker">
-                      {#each (['core', 'event', 'custom', ''] as Tag[]) as t}
-                        <button
-                          class="tag-opt tag-{t || 'none'}"
-                          class:active={($appConfig.tuning_tags[file.canonical_name] || (KNOWN_CORE.has(file.canonical_name) ? 'core' : KNOWN_EVENTS.has(file.canonical_name) ? 'event' : '')) === t}
-                          on:click|stopPropagation={() => setTag(file.canonical_name, t)}
-                        >{TAG_LABELS[t]}</button>
-                      {/each}
-                    </div>
-                  {:else if tag}
-                    <button
-                      class="file-tag tag-{tag} card-tag-btn"
-                      use:tip={'Change tag'}
-                      on:click|stopPropagation={() => editingTag = file.canonical_name}
-                    >{TAG_LABELS[tag]}</button>
-                  {:else}
-                    <button
-                      class="card-tag-add card-tag-btn"
-                      on:click|stopPropagation={() => editingTag = file.canonical_name}
-                    >+ Tag</button>
-                  {/if}
-
-                  <span class="card-filename">{file.canonical_name}</span>
-                </div>
-                <div class="card-footer">
-                  {#if file.event_id}
-                    <span class="managed-by-label">
-                      Managed by {eventDefsById[file.event_id]?.display_name ?? file.event_id}
-                    </span>
-                  {:else}
-                    <div
-                      class="file-toggle"
-                      class:on={file.enabled}
-                      class:locked={!file.toggleable}
-                      role="switch"
-                      aria-checked={file.enabled}
-                      tabindex="0"
-                      use:tip={!file.toggleable ? 'Unknown prefix, cannot toggle' : ''}
-                      on:click={() => toggleFile(file)}
-                      on:keydown={e => e.key === 'Enter' && toggleFile(file)}
-                    ></div>
-                    <span class="toggle-label">{file.enabled ? 'Active' : 'Inactive'}</span>
-                  {/if}
-                  <button class="btn btn-sm btn-outline card-edit-btn" on:click={() => editingFile = file}>
-                    Edit
-                  </button>
-                </div>
-              </div>
-            {/each}
-          </div>
-        {:else if favouriteGrid.length === 0}
-          <div class="empty-state">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-              <circle cx="11" cy="11" r="8"/>
-              <line x1="21" y1="21" x2="16.65" y2="16.65"/>
-            </svg>
-            <span class="empty-state-label">No results</span>
-            <span class="empty-state-sub">No files match the current filter.</span>
-          </div>
-        {/if}
-
+        <div class="empty-state">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+            <polyline points="14 2 14 8 20 8"/>
+          </svg>
+          <span class="empty-state-label">No file selected</span>
+          <span class="empty-state-sub">Select a Live Tuning file from the sidebar.</span>
+        </div>
       {/if}
     </div>
-  </div>
-
-  <!-- Editor modal (edit existing) -->
-  {#if editingFile}
-    <TuningEditorModal
-      file={editingFile}
-      serverExe={$appConfig.server_exe}
-      serverRunning={$serverRunning}
-      existingNames={existingNames}
-      onClose={() => editingFile = null}
-    />
-  {/if}
-
-  <!-- Create new file modal -->
-  {#if creatingNew}
-    <TuningEditorModal
-      file={null}
-      serverExe={$appConfig.server_exe}
-      serverRunning={$serverRunning}
-      existingNames={existingNames}
-      onClose={() => creatingNew = false}
-      onCreated={handleCreated}
-    />
-  {/if}
+    {/if}
+  </section>
 
   </div><!-- tuning-layout -->
 </div>
@@ -752,41 +362,6 @@
 
   /* ── Sidebar internals ── */
 
-  .stats-row {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 8px 14px;
-    border-bottom: 1px solid var(--border);
-    flex-shrink: 0;
-  }
-
-  .stat {
-    display: flex;
-    align-items: baseline;
-    gap: 3px;
-  }
-
-  .stat-value {
-    font-family: var(--font-mono);
-    font-size: 13px;
-    color: var(--accent-bright);
-  }
-
-  .stat-label {
-    font-family: var(--font-head);
-    font-size: var(--fs-min);
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    color: var(--text-3);
-  }
-
-  .stat-sep {
-    width: 1px;
-    height: 12px;
-    background: var(--border-mid);
-  }
-
   .file-list {
     flex: 1;
     overflow-y: auto;
@@ -807,125 +382,24 @@
     font-family: var(--font-body);
   }
 
-  .file-group-label {
-    font-family: var(--font-head);
-    font-size: var(--fs-min);
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
-    color: var(--text-3);
-    padding: 10px 14px 4px;
-    border-top: 1px solid var(--border);
-    margin-top: 4px;
-  }
-
-  .file-item {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    padding: 6px 8px;
-    min-height: 42px;
-    border: 1px solid transparent;
-    border-radius: var(--radius-sm);
-    cursor: pointer;
-    transition: all 0.1s;
-    margin-bottom: 2px;
-  }
-  .file-item:hover { background: var(--bg-3); border-color: var(--border-mid); }
-  .file-item.editing { background: var(--accent-glow); border-color: var(--accent-dim); }
-  .file-item-off { opacity: var(--dimmed-opacity); }
-
-  .file-info {
-    display: flex;
-    flex-direction: column;
-    gap: 3px;
-    min-width: 0;
-    flex: 1;
-  }
-
-  .file-name {
-    font-family: var(--font-head);
-    font-size: 11px;
-    font-weight: 600;
-    color: var(--text-1);
+  .file-list > .side-label:first-child { margin-top: 0; border-top: none; }
+  /* Advanced sidebar size, matching the Patches and Store file rows. */
+  .side-item { gap: 6px; padding: 7px 10px; min-height: 42px; font-size: 11px; }
+  .side-item.off { opacity: var(--dimmed-opacity); }
+  .file-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+  .file-sub {
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-  }
-  .file-item.editing .file-name { color: var(--accent-bright); }
-
-  .file-tag {
-    font-family: var(--font-head);
+    font-family: var(--font-body);
     font-size: var(--fs-min);
-    font-weight: 600;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    padding: 1px 5px;
-    border-radius: 2px;
-    border: 1px solid transparent;
-    background: none;
-    align-self: flex-start;
-    cursor: pointer;
-    transition: opacity 0.1s;
-  }
-
-  /* ── Star button ── */
-  .star-btn {
-    width: 22px;
-    height: 22px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: none;
-    border: none;
-    cursor: pointer;
+    font-weight: 400;
     color: var(--text-3);
-    border-radius: var(--radius-sm);
-    transition: color 0.12s;
-    flex-shrink: 0;
-    padding: 0;
   }
-  .star-btn:hover { color: var(--colour-favourite); }
-  .star-btn.starred { color: var(--colour-favourite); }
-  .star-btn svg { width: 13px; height: 13px; }
-
-  /* ── Tag colour classes ── */
-  .tag-core   { color: var(--blue);          border-color: rgba(46,134,193,0.3);   background: var(--blue-dim); }
-  .tag-event  { color: var(--green-bright);  border-color: color-mix(in srgb, var(--green) 40%, transparent);    background: var(--green-dim); }
-  .tag-custom { color: var(--purple);        border-color: rgba(130,100,180,0.35); background: var(--purple-dim); }
-  .tag-none   { color: var(--text-3);        border-color: var(--border); }
 
   /* ── Grid pane ── */
-  .grid-pane {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-    min-width: 0;
-    background: var(--bg-1);
-  }
-
-  .grid-header {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 10px 16px;
-    border-bottom: 1px solid var(--border);
-    flex-shrink: 0;
-    min-height: 53px;
-  }
-
-  .search-wrap { max-width: 280px; }
-
-  .file-count {
-    font-family: var(--font-head);
-    font-size: var(--fs-min);
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-    color: var(--text-3);
-    white-space: nowrap;
-  }
-
-  .grid-scroll {
+  .reload-error { font-size: 12px; color: var(--text-error); }
+  .pane-empty {
     flex: 1;
     overflow-y: auto;
     padding: 16px;
@@ -934,191 +408,4 @@
     gap: 4px;
   }
 
-  .grid-section-label {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    font-family: var(--font-head);
-    font-size: var(--fs-min);
-    font-weight: 600;
-    letter-spacing: 0.14em;
-    text-transform: uppercase;
-    color: var(--colour-favourite);
-    margin-bottom: 8px;
-    margin-top: 4px;
-  }
-  .grid-section-label:first-child { margin-top: 0; }
-
-  /* ── Grid filter bar (tag chips, below grid-header) ── */
-  .grid-filter-bar {
-    display: flex;
-    gap: 4px;
-    padding: 7px 16px;
-    border-bottom: 1px solid var(--border);
-    flex-shrink: 0;
-    background: var(--chrome-sunken-bg);
-  }
-
-  .card-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(196px, 1fr));
-    gap: 10px;
-    margin-bottom: 16px;
-  }
-
-  /* ── Cards ── */
-  .tuning-card {
-    display: flex;
-    flex-direction: column;
-    background: var(--bg-2);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-md);
-    transition: border-color 0.14s, background 0.14s;
-    overflow: hidden;
-  }
-  .tuning-card:hover { border-color: var(--border-lit); }
-  .tuning-card.enabled {
-    border-color: var(--accent-dim);
-    background: linear-gradient(160deg, var(--accent-glow) 0%, var(--bg-2) 55%);
-  }
-  .tuning-card.enabled:hover { border-color: var(--accent); }
-
-  .card-body {
-    padding: 12px 12px 10px;
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-  }
-
-  .card-top {
-    display: flex;
-    align-items: flex-start;
-    justify-content: space-between;
-    gap: 6px;
-  }
-
-  .card-name {
-    font-family: var(--font-head);
-    font-size: 12px;
-    font-weight: 600;
-    color: var(--text-0);
-    line-height: 1.3;
-    word-break: break-word;
-  }
-  .tuning-card.enabled .card-name { color: var(--accent-bright); }
-
-  .card-filename {
-    font-family: var(--font-mono);
-    font-size: var(--fs-min);
-    color: var(--text-3);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    margin-top: auto;
-    padding-top: 4px;
-  }
-
-  .card-footer {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 8px 12px;
-    border-top: 1px solid var(--border);
-    background: var(--chrome-sunken-bg);
-  }
-
-  .toggle-label {
-    font-family: var(--font-head);
-    font-size: var(--fs-min);
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-    color: var(--text-3);
-  }
-  .tuning-card.enabled .toggle-label { color: var(--accent); }
-
-  .managed-by-label {
-    font-family: var(--font-head);
-    font-size: var(--fs-min);
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-    color: var(--green-bright);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    flex: 1;
-  }
-
-  .card-edit-btn {
-    margin-left: auto;
-    padding: 3px 10px;
-  }
-
-  /* ── Toggle (shared with sidebar pattern, sized for cards) ── */
-  .file-toggle {
-    width: 28px;
-    height: 16px;
-    background: var(--bg-0);
-    border: 1px solid var(--border-lit);
-    border-radius: 8px;
-    position: relative;
-    cursor: pointer;
-    transition: all 0.18s;
-    flex-shrink: 0;
-  }
-  .file-toggle::after {
-    content: '';
-    width: 10px;
-    height: 10px;
-    background: var(--text-3);
-    border-radius: 50%;
-    position: absolute;
-    top: 2px;
-    left: 2px;
-    transition: all 0.18s;
-  }
-  .file-toggle.on { background: var(--accent-glow-strong); border-color: var(--accent-dim); }
-  .file-toggle.on::after { left: 14px; background: var(--accent-bright); }
-  .file-toggle.locked { opacity: 0.3; cursor: not-allowed; pointer-events: none; }
-
-  /* ── Card tag picker ── */
-  .card-tag-picker {
-    display: flex;
-    gap: 3px;
-    flex-wrap: wrap;
-  }
-
-  .card-tag-add {
-    font-family: var(--font-head);
-    font-size: var(--fs-min);
-    font-weight: 600;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    padding: 1px 5px;
-    border-radius: 2px;
-    border: 1px dashed var(--border-mid);
-    background: none;
-    color: var(--text-3);
-    cursor: pointer;
-    transition: all 0.12s;
-    align-self: flex-start;
-  }
-  .card-tag-add:hover { border-color: var(--accent-dim); color: var(--accent-bright); }
-
-  .tag-opt {
-    font-family: var(--font-head);
-    font-size: var(--fs-min);
-    font-weight: 600;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-    padding: 2px 6px;
-    border-radius: 2px;
-    border: 1px solid var(--border-mid);
-    background: var(--bg-3);
-    color: var(--text-2);
-    cursor: pointer;
-    transition: all 0.1s;
-  }
-  .tag-opt.active { color: var(--text-0); }
-  .tag-opt:hover { border-color: var(--border-lit); color: var(--text-0); }
 </style>
