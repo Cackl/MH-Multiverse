@@ -1218,10 +1218,11 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
   font-weight: 600;
   text-align: left;
 }
-button.side-item { cursor: pointer; transition: all 0.12s; }
-button.side-item:hover { color: var(--text-0); background: var(--bg-3); border-color: var(--border-mid); }
+/* role="button" rows hold their own controls (a switch), which a <button> can't contain. */
+button.side-item, .side-item[role="button"] { cursor: pointer; transition: all 0.12s; }
+button.side-item:hover, .side-item[role="button"]:hover { color: var(--text-0); background: var(--bg-3); border-color: var(--border-mid); }
 .side-item.active,
-button.side-item.active:hover { color: var(--accent-bright); background: var(--accent-glow); border-color: var(--accent-dim); }
+button.side-item.active:hover, .side-item[role="button"].active:hover { color: var(--accent-bright); background: var(--accent-glow); border-color: var(--accent-dim); }
 .side-mark {
   flex-shrink: 0;
   font-family: var(--font-body);

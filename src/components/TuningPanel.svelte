@@ -210,24 +210,24 @@
       {:else}
         {#each groups as group (group.label)}
           {#if group.files.length > 0}
-            <div class="file-group-label">{group.label}</div>
+            <div class="side-label">{group.label}</div>
             {#each group.files as file (file.relative_path)}
               <div
-                class="file-item"
-                class:file-item-off={!file.enabled}
-                class:editing={editingFile?.relative_path === file.relative_path}
+                class="side-item"
+                class:off={!file.enabled}
+                class:active={editingFile?.relative_path === file.relative_path}
                 role="button"
                 tabindex="0"
                 aria-label="Edit {file.canonical_name}"
                 on:click={() => openFile(file)}
                 on:keydown={e => e.key === 'Enter' && openFile(file)}
               >
-                <div class="file-info">
-                  <span class="file-name">{group.label === 'Other' ? file.relative_path : displayName(file)}</span>
+                <span class="file-text">
+                  <span class="side-name">{group.label === 'Other' ? file.relative_path : displayName(file)}</span>
                   {#if file.event_id && eventDefsById[file.event_id]}
-                    <span class="file-tag tag-event">{eventDefsById[file.event_id].display_name}</span>
+                    <span class="file-sub">{eventDefsById[file.event_id].display_name}</span>
                   {/if}
-                </div>
+                </span>
                 {#if file.toggleable}
                   <div
                     class="toggle-switch"
@@ -373,69 +373,20 @@
     font-family: var(--font-body);
   }
 
-  .file-group-label {
-    font-family: var(--font-head);
-    font-size: var(--fs-min);
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
-    color: var(--text-3);
-    padding: 10px 14px 4px;
-    border-top: 1px solid var(--border);
-    margin-top: 4px;
-  }
-
-  .file-item {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    padding: 6px 8px;
-    min-height: 42px;
-    border: 1px solid transparent;
-    border-radius: var(--radius-sm);
-    cursor: pointer;
-    transition: all 0.1s;
-    margin-bottom: 2px;
-  }
-  .file-item:hover { background: var(--bg-3); border-color: var(--border-mid); }
-  .file-item.editing { background: var(--accent-glow); border-color: var(--accent-dim); }
-  .file-item-off { opacity: var(--dimmed-opacity); }
-
-  .file-info {
-    display: flex;
-    flex-direction: column;
-    gap: 3px;
-    min-width: 0;
-    flex: 1;
-  }
-
-  .file-name {
-    font-family: var(--font-head);
-    font-size: 11px;
-    font-weight: 600;
-    color: var(--text-1);
+  .file-list > .side-label:first-child { margin-top: 0; border-top: none; }
+  /* Advanced sidebar size, matching the Patches and Store file rows. */
+  .side-item { gap: 6px; padding: 7px 10px; min-height: 42px; font-size: 11px; }
+  .side-item.off { opacity: var(--dimmed-opacity); }
+  .file-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+  .file-sub {
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-  }
-  .file-item.editing .file-name { color: var(--accent-bright); }
-
-  .file-tag {
-    font-family: var(--font-head);
+    font-family: var(--font-body);
     font-size: var(--fs-min);
-    font-weight: 600;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    padding: 1px 5px;
-    border-radius: 2px;
-    border: 1px solid transparent;
-    background: none;
-    align-self: flex-start;
-    cursor: pointer;
-    transition: opacity 0.1s;
+    font-weight: 400;
+    color: var(--text-3);
   }
-
-  /* ── Tag colour classes ── */
-  .tag-event  { color: var(--green-bright);  border-color: color-mix(in srgb, var(--green) 40%, transparent);    background: var(--green-dim); }
 
   /* ── Grid pane ── */
   .reload-error { font-size: 12px; color: var(--text-error); }
