@@ -185,6 +185,14 @@ fn candidate_dates_are_today_then_yesterday_in_utc() {
 }
 
 #[test]
+fn nightly_url_is_the_windows_1_52_build_for_that_date() {
+    assert_eq!(
+        build_download_url("20261117"),
+        "https://nightly.link/Crypto137/MHServerEmu/workflows/nightly-release-windows-v52/master/MHServerEmu-nightly-20261117-Release-windows-v52.zip"
+    );
+}
+
+#[test]
 fn build_date_comes_from_the_nightly_stamp() {
     let cases = [
         ("1.0.3+build20261027131155", Some("20261027")),

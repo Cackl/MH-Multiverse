@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte'
   import { invoke } from '@tauri-apps/api/core'
-  import { openPath } from '@tauri-apps/plugin-opener'
+  import { openPath, openUrl } from '@tauri-apps/plugin-opener'
   import { listen, type UnlistenFn } from '@tauri-apps/api/event'
   import { appConfig, serverRunning, setBackupTargets } from '../lib/store'
   import PanelSidebar from './PanelSidebar.svelte'
@@ -337,7 +337,7 @@
           <div class="info-row">
             <span class="info-label">Build Date</span>
             {#if updateInfo}
-              <span class="info-value mono">{updateInfo.build_date.replace(/(\d{4})(\d{2})(\d{2})/, '$1-$2-$3')}</span>
+              <span class="info-value num">{updateInfo.build_date.replace(/(\d{4})(\d{2})(\d{2})/, '$1-$2-$3')}</span>
             {:else if checking}
               <span class="info-value dim">Checking...</span>
             {:else}
@@ -347,7 +347,7 @@
           {#if updateInfo?.installed_build_date}
             <div class="info-row">
               <span class="info-label">Installed</span>
-              <span class="info-value mono">{updateInfo.installed_build_date.replace(/(\d{4})(\d{2})(\d{2})/, '$1-$2-$3')}</span>
+              <span class="info-value num">{updateInfo.installed_build_date.replace(/(\d{4})(\d{2})(\d{2})/, '$1-$2-$3')}</span>
             </div>
           {/if}
           <div class="info-row">
@@ -389,17 +389,20 @@
         {/if}
 
         <!-- Update button -->
-        <button
-          class="btn btn-accent btn-sm update-btn"
-          on:click={runUpdate}
-          disabled={updating || $serverRunning || !updateInfo?.available || updateInfo.up_to_date}
-        >
-          {#if updating}
-            Updating...
-          {:else}
-            Update Server
-          {/if}
-        </button>
+        <div class="update-actions">
+          <button
+            class="btn btn-accent btn-sm"
+            on:click={runUpdate}
+            disabled={updating || $serverRunning || !updateInfo?.available || updateInfo.up_to_date}
+          >
+            {#if updating}
+              Updating...
+            {:else}
+              Update Server
+            {/if}
+          </button>
+          <button class="btn btn-sm btn-outline" on:click={() => openUrl('https://github.com/Crypto137/MHServerEmu')}>MHServerEmu GitHub</button>
+        </div>
 
         <!-- Progress -->
         {#if updating && updateProgress && updateProgress.stage !== 'done'}
@@ -430,7 +433,8 @@
         {/if}
 
         <div class="restart-notice">
-          Before updating, a backup is automatically created with the Targets selected on the Backups page
+          <span>Before updating, a backup is automatically created with the Targets selected on the Backups page</span>
+          <span>Multiverse doesn't check the server's system requirements. If the server stops working after an update, see MHServerEmu's GitHub or Discord</span>
         </div>
 
       </div>
@@ -732,6 +736,7 @@
     color: var(--text-1);
   }
   .info-value.mono { font-family: var(--font-mono); }
+  .info-value.num  { font-variant-numeric: tabular-nums; }
   .info-value.dim  { color: var(--text-3); }
 
   .url-value {
@@ -774,7 +779,9 @@
   }
 
   /* ── Update button ── */
-  .update-btn {
+  .update-actions {
+    display: flex;
+    gap: 8px;
     align-self: flex-start;
   }
 
@@ -990,6 +997,7 @@
 
   .restart-notice {
     display: flex;
+    flex-direction: column;
     align-items: flex-start;
     gap: 6px;
     padding: 8px 12px 10px;
