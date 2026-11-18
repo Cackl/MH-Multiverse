@@ -609,6 +609,7 @@ read_config
   → parse ConfigOverride.ini (overrides, may not exist)
   → merge: defaults + overrides
   → return merged values + set of overridden keys + the Config.ini defaults
+    + key descriptions read from Config.ini's `; Key: text` comments
 
 write_config
   → parse Config.ini (defaults)

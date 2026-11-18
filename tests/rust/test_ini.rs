@@ -37,6 +37,34 @@ fn parse_ini_no_section() {
 }
 
 #[test]
+fn parse_descriptions_from_comments() {
+    let content = "\
+; Before any section: ignored
+[Frontend]
+;           BindIP: IP address to bind to.
+;                   Set to 0.0.0.0 to listen on all interfaces.
+; ReceiveTimeoutMS: Wait time in ms.
+BindIP=127.0.0.1
+
+[GameOptions]
+; NOTE: These options are sent to the client.
+;
+; TeamUpSystemEnabled: Enables team-ups.
+[PlayerManager]
+; UseJsonDBManager: Switches to JSON.
+;                   NOTE: JSON supports one account.
+[Empty]
+";
+    let d = parse_descriptions(content);
+    assert_eq!(d["Frontend"]["BindIP"], "IP address to bind to. Set to 0.0.0.0 to listen on all interfaces.");
+    assert_eq!(d["Frontend"]["ReceiveTimeoutMS"], "Wait time in ms.");
+    assert_eq!(d["GameOptions"]["TeamUpSystemEnabled"], "Enables team-ups.");
+    assert!(!d["GameOptions"].contains_key("NOTE"));
+    assert_eq!(d["PlayerManager"]["UseJsonDBManager"], "Switches to JSON. NOTE: JSON supports one account.");
+    assert_eq!(d.len(), 3);
+}
+
+#[test]
 fn serialize_ini_round_trip() {
     let content = "[A]\nX=1\nY=2\n\n[B]\nZ=3\n";
     let data = parse_ini(content);
