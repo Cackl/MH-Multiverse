@@ -100,6 +100,9 @@
   --accent-glow:        rgba(16, 195, 255, 0.14);
   --accent-glow-strong: rgba(98, 226, 255, 0.28);
 
+  /* Text on the Launch button's accent fill */
+  --on-accent:          #fff;
+
   /* Semantic */
   --red:           #c0392b;
   --red-dim:       rgba(192, 57, 43, 0.12);
@@ -939,6 +942,61 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
   --console-cmd-bg:   #1a2030;
   --console-text:     #d6deeb;
   --console-text-dim: #aab4c5;
+}
+
+/* High Contrast: every text token is at least 7:1 (WCAG AAA) */
+[data-theme="high-contrast"] {
+  /* Surface layers */
+  --bg-0: #000000;
+  --bg-1: #0a0a0a;
+  --bg-2: #141414;
+  --bg-3: #1f1f1f;
+  --bg-4: #2a2a2a;
+
+  /* Accent */
+  --accent:             #00e5ff;
+  --accent-bright:      #66efff;
+  --accent-dim:         #00b3c9;
+  --accent-glow:        rgba(0, 229, 255, 0.16);
+  --accent-glow-strong: rgba(102, 239, 255, 0.30);
+  --on-accent:          #000;
+
+  /* Semantic */
+  --red:           #ff5c5c;
+  --red-dim:       rgba(255, 92, 92, 0.16);
+  --green:         #3ddc84;
+  --green-bright:  #5cff9d;
+  --green-dim:     rgba(61, 220, 132, 0.16);
+  --blue:          #7cc4ff;
+  --blue-dim:      rgba(124, 196, 255, 0.16);
+
+  /* Borders */
+  --border:     #5c5c5c;
+  --border-mid: #8a8a8a;
+  --border-lit: #b3b3b3;
+
+  /* Text */
+  --text-0: #ffffff;
+  --text-1: #e6e6e6;
+  --text-2: #cccccc;
+  --text-3: #b3b3b3;
+
+  /* Semantic text */
+  --text-error:   #ff9a9a;
+  --text-success: var(--green-bright);
+  --text-warning: #ffb84d;
+
+  /* Amber */
+  --amber:        #ffb000;
+  --amber-bright: #ffc94d;
+  --amber-dim:    rgba(255, 176, 0, 0.16);
+
+  /* Purple */
+  --purple:       #d0b0ff;
+  --purple-dim:   rgba(208, 176, 255, 0.16);
+
+  /* No panel gradient */
+  --panel-grad-top: transparent;
 }
 
 /* ══════════════════════════════════════════════════════════════════════════════
