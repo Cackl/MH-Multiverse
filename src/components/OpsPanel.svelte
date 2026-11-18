@@ -337,7 +337,7 @@
           <div class="info-row">
             <span class="info-label">Build Date</span>
             {#if updateInfo}
-              <span class="info-value mono">{updateInfo.build_date.replace(/(\d{4})(\d{2})(\d{2})/, '$1-$2-$3')}</span>
+              <span class="info-value num">{updateInfo.build_date.replace(/(\d{4})(\d{2})(\d{2})/, '$1-$2-$3')}</span>
             {:else if checking}
               <span class="info-value dim">Checking...</span>
             {:else}
@@ -347,7 +347,7 @@
           {#if updateInfo?.installed_build_date}
             <div class="info-row">
               <span class="info-label">Installed</span>
-              <span class="info-value mono">{updateInfo.installed_build_date.replace(/(\d{4})(\d{2})(\d{2})/, '$1-$2-$3')}</span>
+              <span class="info-value num">{updateInfo.installed_build_date.replace(/(\d{4})(\d{2})(\d{2})/, '$1-$2-$3')}</span>
             </div>
           {/if}
           <div class="info-row">
@@ -736,6 +736,7 @@
     color: var(--text-1);
   }
   .info-value.mono { font-family: var(--font-mono); }
+  .info-value.num  { font-variant-numeric: tabular-nums; }
   .info-value.dim  { color: var(--text-3); }
 
   .url-value {
