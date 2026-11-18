@@ -62,7 +62,6 @@
     <div class="blade-header">
       <div class="blade-title-row">
         <span class="blade-title">Players</span>
-        <span class="blade-count">{playerCount}</span>
         <div class="blade-spacer"></div>
         <button class="close-btn" on:click={() => (open = false)} aria-label="Close" use:tip={'Close'}>
           <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5">
@@ -157,17 +156,6 @@
     letter-spacing: 0.12em;
     text-transform: uppercase;
     color: var(--text-1);
-  }
-
-  .blade-count {
-    font-family: var(--font-mono);
-    font-size: 11px;
-    color: var(--green-bright);
-    background: var(--green-dim);
-    border: 1px solid color-mix(in srgb, var(--green) 25%, transparent);
-    border-radius: 3px;
-    padding: 1px 5px;
-    line-height: 1.4;
   }
 
   .blade-spacer { flex: 1; }
@@ -306,8 +294,8 @@
   }
   .whitelisted-badge {
     color: var(--text-1);
-    border-color: rgba(219, 219, 219, 0.4);
-    background: rgba(182, 182, 182, 0.1);
+    border-color: color-mix(in srgb, var(--text-1) 40%, transparent);
+    background: color-mix(in srgb, var(--text-1) 10%, transparent);
   }
 
   /* -- Detail section -- */

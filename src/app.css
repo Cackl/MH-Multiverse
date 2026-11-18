@@ -420,9 +420,8 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
   flex-shrink: 0;
 }
 .badge-enc {
-  background: var(--blue-dim);
-  color: #5dade2;
-  border: 1px solid rgba(46, 134, 193, 0.25);
+  color: var(--text-2);
+  border: 1px solid var(--border-mid);
 }
 
 /* ── Info button ("?" with a tooltip) ── */
