@@ -274,6 +274,7 @@
       </header>
 
       <div class="patches-body">
+        <div class="content-col">
         {#if showTweaks}
           {#if view === 'all'}<div class="subsection-title patches-group">Multiverse</div>{/if}
           {#if !readOnly || draftPct !== null}
@@ -423,6 +424,7 @@
           {/each}
           {/each}
         {/if}
+        </div>
       </div>
 
       <footer class="panel-footer">

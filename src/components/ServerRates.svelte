@@ -176,6 +176,7 @@
       </header>
 
       <div class="rates-body">
+        <div class="content-col hang">
         {#if !serverExe}
           <p class="rates-msg">Set the server location first.</p>
         {:else if loadError}
@@ -255,7 +256,7 @@
                   {/if}
                 </div>
 
-                <span class="rate-revert">
+                <span class="row-hang">
                   {#if !locked && value !== state.below}
                     <button
                       class="btn-icon"
@@ -276,6 +277,7 @@
             {/each}
           {/each}
         {/if}
+        </div>
       </div>
 
       <footer class="panel-footer">
@@ -328,10 +330,11 @@
 
   .rates-group { margin: 14px 0 0; scroll-margin-top: 4px; }
 
-  /* Name over badge on the left, the control in the middle, revert on the right, notes below. */
+  /* Name over badge on the left, the control on the right, revert hanging outside, notes below. */
   .rate-row {
+    position: relative;
     display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr) 28px;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr);
     column-gap: 18px;
     row-gap: 3px;
     align-items: center;
@@ -371,14 +374,9 @@
     grid-row: 1 / span 2;
     display: flex;
     align-items: center;
+    justify-content: flex-end;
     gap: 12px;
     min-width: 0;
-  }
-  .rate-revert {
-    grid-column: 3;
-    grid-row: 1 / span 2;
-    display: flex;
-    justify-content: center;
   }
   .rate-note {
     grid-column: 1 / -1;
@@ -388,7 +386,7 @@
   }
   .rate-row.locked .rate-name,
   .rate-row.locked .rate-control { opacity: var(--dimmed-opacity); }
-  .rate-onoff { font-size: 12px; color: var(--text-1); }
+  .rate-onoff { order: -1; font-size: 12px; color: var(--text-1); }
 
   .rate-box {
     display: inline-flex;

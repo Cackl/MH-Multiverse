@@ -17,6 +17,8 @@ pub struct ConfigState {
     pub overridden: HashMap<String, Vec<String>>,
     /// Config.ini values alone, so the UI can reset a field to its default
     pub defaults: IniData,
+    /// Descriptions read from Config.ini's comments (section -> key -> text)
+    pub descriptions: IniData,
 }
 
 // ── INI parser ────────────────────────────────────────────────────────────────
@@ -40,6 +42,41 @@ fn parse_ini(content: &str) -> IniData {
                 data.entry(current_section.clone())
                     .or_default()
                     .insert(key, value);
+            }
+        }
+    }
+    data
+}
+
+/// Key descriptions from Config.ini's own comments. Each section is documented by
+/// `; Key: text` lines inside it, and an indented `;` line continues the one above.
+fn parse_descriptions(content: &str) -> IniData {
+    let mut data: IniData = HashMap::new();
+    let mut section = String::new();
+    let mut last_key: Option<String> = None;
+
+    for line in content.lines() {
+        let line = line.trim();
+        if line.starts_with('[') && line.ends_with(']') {
+            section = line[1..line.len() - 1].to_string();
+            last_key = None;
+            continue;
+        }
+        let Some(text) = line.strip_prefix(';').map(str::trim) else { continue };
+        if section.is_empty() || text.is_empty() {
+            continue;
+        }
+        let entry = data.entry(section.clone()).or_default();
+        match text.split_once(": ") {
+            Some((key, desc)) if key != "NOTE" && !key.is_empty() && key.chars().all(|c| c.is_ascii_alphanumeric()) => {
+                entry.insert(key.to_string(), desc.trim().to_string());
+                last_key = Some(key.to_string());
+            }
+            _ => {
+                if let Some(desc) = last_key.as_ref().and_then(|k| entry.get_mut(k)) {
+                    desc.push(' ');
+                    desc.push_str(text);
+                }
             }
         }
     }
@@ -129,6 +166,7 @@ pub fn read_config(server_exe: String) -> Result<ConfigState, String> {
     let config_content = std::fs::read_to_string(&config_path)
         .map_err(|e| format!("Could not read Config.ini: {e}"))?;
     let defaults = parse_ini(&config_content);
+    let descriptions = parse_descriptions(&config_content);
 
     // Read ConfigOverride.ini (may not exist yet)
     let overrides = if override_path.exists() {
@@ -157,7 +195,7 @@ pub fn read_config(server_exe: String) -> Result<ConfigState, String> {
         }
     }
 
-    Ok(ConfigState { values, overridden, defaults })
+    Ok(ConfigState { values, overridden, defaults, descriptions })
 }
 
 #[tauri::command]

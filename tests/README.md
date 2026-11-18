@@ -25,7 +25,7 @@ npm run test:all    # both
   directly (`use super::*;`) instead of only the `#[tauri::command]`-wrapped
   public API.
 - `frontend/*.test.ts` — one file per `src/lib/*.ts` module with actual logic
-  (files that are pure static data, like `configMeta.ts`/`serverCommands.ts`,
+  (files that are pure static data, like `serverCommands.ts`,
   have nothing to unit test and are skipped). They run in a plain `node`
   environment with no DOM, so UI behaviour worth testing (for example the
   unsaved-changes guard and confirm requests in `store.ts`) lives in `src/lib`

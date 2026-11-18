@@ -37,6 +37,34 @@ fn parse_ini_no_section() {
 }
 
 #[test]
+fn parse_descriptions_from_comments() {
+    let content = "\
+; Before any section: ignored
+[Frontend]
+;           BindIP: IP address to bind to.
+;                   Set to 0.0.0.0 to listen on all interfaces.
+; ReceiveTimeoutMS: Wait time in ms.
+BindIP=127.0.0.1
+
+[GameOptions]
+; NOTE: These options are sent to the client.
+;
+; TeamUpSystemEnabled: Enables team-ups.
+[PlayerManager]
+; UseJsonDBManager: Switches to JSON.
+;                   NOTE: JSON supports one account.
+[Empty]
+";
+    let d = parse_descriptions(content);
+    assert_eq!(d["Frontend"]["BindIP"], "IP address to bind to. Set to 0.0.0.0 to listen on all interfaces.");
+    assert_eq!(d["Frontend"]["ReceiveTimeoutMS"], "Wait time in ms.");
+    assert_eq!(d["GameOptions"]["TeamUpSystemEnabled"], "Enables team-ups.");
+    assert!(!d["GameOptions"].contains_key("NOTE"));
+    assert_eq!(d["PlayerManager"]["UseJsonDBManager"], "Switches to JSON. NOTE: JSON supports one account.");
+    assert_eq!(d.len(), 3);
+}
+
+#[test]
 fn serialize_ini_round_trip() {
     let content = "[A]\nX=1\nY=2\n\n[B]\nZ=3\n";
     let data = parse_ini(content);
@@ -115,6 +143,30 @@ fn write_config_adds_non_default() {
 
     let content = fs::read_to_string(dir.join("ConfigOverride.ini")).unwrap();
     assert!(content.contains("Port=9999"));
+}
+
+#[test]
+fn write_config_round_trips_each_value_kind() {
+    let (tmp, server_exe) = empty_server();
+    let defaults = [("Bool", "false"), ("Int", "10"), ("Float", "1.5"), ("Text", "abc"), ("Url", "http://a/")];
+    let saved = [("Bool", "true"), ("Int", "20"), ("Float", "1.0"), ("Text", ""), ("Url", "http://h/p?a=1&b=2")];
+    let ini: String = defaults.iter().map(|(k, v)| format!("{k}={v}\n")).collect();
+    fs::write(tmp.path().join("Config.ini"), format!("[S]\n{ini}")).unwrap();
+    let to_update = |pairs: &[(&str, &str)]| -> IniData {
+        HashMap::from([("S".to_string(), pairs.iter().map(|(k, v)| (k.to_string(), v.to_string())).collect())])
+    };
+
+    write_config(server_exe.clone(), to_update(&saved)).unwrap();
+    let written = fs::read_to_string(tmp.path().join("ConfigOverride.ini")).unwrap();
+    assert_eq!(written, "[S]\nBool=true\nFloat=1.0\nInt=20\nText=\nUrl=http://h/p?a=1&b=2\n\n");
+    let state = read_config(server_exe.clone()).unwrap();
+    for (k, v) in saved {
+        assert_eq!(state.values["S"][k], v, "{k} read back");
+    }
+
+    // Saving each default back removes its override
+    write_config(server_exe, to_update(&defaults)).unwrap();
+    assert_eq!(fs::read_to_string(tmp.path().join("ConfigOverride.ini")).unwrap(), "");
 }
 
 #[test]
