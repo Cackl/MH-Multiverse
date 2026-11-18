@@ -57,7 +57,7 @@ fn candidate_dates(now: DateTime<Utc>) -> [String; 2] {
 
 fn build_download_url(build_date: &str) -> String {
     format!(
-        "https://nightly.link/Crypto137/MHServerEmu/workflows/nightly-release-windows-x64/master/MHServerEmu-nightly-{build_date}-Release-windows-x64.zip"
+        "https://nightly.link/Crypto137/MHServerEmu/workflows/nightly-release-windows-v52/master/MHServerEmu-nightly-{build_date}-Release-windows-v52.zip"
     )
 }
 
