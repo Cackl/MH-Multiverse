@@ -145,7 +145,7 @@
           <div class="detail-head">
             <div class="section-title">Marvel Heroes Omega</div>
           </div>
-          <div class="detail-body">
+          <div class="detail-body content-col">
 
             <div class="path-group">
               <span class="field-label">Server Executable</span>

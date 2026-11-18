@@ -254,6 +254,7 @@
       </header>
 
       <div class="events-body">
+        <div class="content-col hang">
         {#if !serverExe}
           <p class="events-msg">Set the server location first.</p>
         {:else if loadError}
@@ -318,7 +319,7 @@
                     <span class="event-mode event-fixed" use:tip={'Not a stock event. Change it in Advanced.'}>{MODE_LABEL[row.mode]}</span>
                   {/if}
 
-                  <span class="event-revert">
+                  <span class="row-hang">
                     {#if row.custom}
                       <button
                         class="btn-icon"
@@ -351,6 +352,7 @@
             {/if}
           {/each}
         {/if}
+        </div>
       </div>
 
       <footer class="panel-footer">
@@ -425,10 +427,11 @@
 
   .events-group { margin: 14px 0 0; scroll-margin-top: 4px; }
 
-  /* Name over badge on the left, when it runs, the control, revert on the right. */
+  /* Name over badge on the left, when it runs, the control, revert or edit hanging outside. */
   .event-row {
+    position: relative;
     display: grid;
-    grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr) 124px 28px;
+    grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr) 124px;
     column-gap: 16px;
     row-gap: 3px;
     align-items: center;
@@ -492,10 +495,4 @@
   .event-row.off .event-title,
   .event-row.off .event-when { opacity: var(--dimmed-opacity); }
   .event-fixed { font-size: 12px; color: var(--text-2); padding-left: 11px; }
-  .event-revert {
-    grid-column: 4;
-    grid-row: 1 / span 2;
-    display: flex;
-    justify-content: center;
-  }
 </style>

@@ -1257,6 +1257,30 @@ button.side-item.active:hover, .side-item[role="button"].active:hover { color: v
   flex-shrink: 0;
 }
 
+/* ── Content column: free-floating lists stay readable on wide windows ── */
+.content-col {
+  width: 100%;
+  max-width: 880px;
+  margin: 0 auto;
+}
+/* Rows with a reset or remove button: the row keeps the 880px width and the
+   button hangs just outside it, in the column's side padding.
+   The row needs position: relative. */
+.content-col.hang {
+  max-width: calc(880px + 72px);
+  padding-inline: 36px;
+}
+.row-hang {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: calc(100% + 4px);
+  width: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
 /* ── Subsection title ── */
 .subsection-title {
   font-family: var(--font-head);

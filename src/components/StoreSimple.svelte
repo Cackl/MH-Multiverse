@@ -255,6 +255,7 @@
       </header>
 
       <div class="store-body">
+        <div class="content-col hang">
         {#if !serverExe}
           <p class="store-msg">Set the server location first.</p>
         {:else if loadError}
@@ -320,7 +321,7 @@
                 <span class="item-shown">{hidden ? 'Hidden' : 'Shown'}</span>
               </span>
 
-              <span class="item-revert">
+              <span class="row-hang">
                 {#if canRevert}
                   <button
                     class="btn-icon"
@@ -353,6 +354,7 @@
             </div>
           {/each}
         {/if}
+        </div>
       </div>
 
       <footer class="panel-footer">
@@ -416,10 +418,11 @@
     color: var(--text-1);
   }
 
-  /* Name over badge on the left, then section, price, shown, revert. */
+  /* Name over badge on the left, then section, price, shown, revert or remove hanging outside. */
   .item-row {
+    position: relative;
     display: grid;
-    grid-template-columns: minmax(0, 1fr) 92px 104px 96px 28px;
+    grid-template-columns: minmax(0, 1fr) 92px 104px 96px;
     column-gap: 16px;
     row-gap: 3px;
     align-items: center;
@@ -467,8 +470,7 @@
   .item-badge.changed { color: var(--amber-bright); }
   .item-section,
   .item-price,
-  .item-show,
-  .item-revert { grid-row: 1 / span 2; }
+  .item-show { grid-row: 1 / span 2; }
   .item-section { grid-column: 2; }
   .item-price {
     grid-column: 3;
@@ -500,14 +502,10 @@
     grid-column: 4;
     display: flex;
     align-items: center;
+    justify-content: flex-end;
     gap: 10px;
   }
-  .item-shown { font-size: 12px; color: var(--text-1); }
-  .item-revert {
-    grid-column: 5;
-    display: flex;
-    justify-content: center;
-  }
+  .item-shown { order: -1; font-size: 12px; color: var(--text-1); }
   .del-btn.armed { border-color: color-mix(in srgb, var(--red) 40%, transparent); color: var(--text-error); background: var(--red-dim); }
   .del-btn:disabled { opacity: 0.35; cursor: not-allowed; }
   .item-row.off .item-title,
