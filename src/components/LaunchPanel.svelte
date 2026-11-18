@@ -500,7 +500,7 @@
     text-transform: uppercase;
     background: linear-gradient(135deg, var(--accent-dim) 0%, var(--accent) 100%);
     border: 1px solid var(--accent);
-    color: #fff;
+    color: var(--on-accent);
     text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
     box-shadow: 0 0 20px color-mix(in srgb, var(--accent) 15%, transparent), 0 2px 8px rgba(0, 0, 0, 0.3);
     border-radius: var(--radius-sm);

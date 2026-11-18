@@ -78,6 +78,13 @@ add(['--text-error'], ['--red-dim@--bg-1', '--red-dim@--bg-2'], TEXT)
 add(['--border-lit'], ['--bg-1'], EDGE)
 add(['--border-mid'], ['--bg-0'], EDGE)
 
+// High Contrast promises AAA text everywhere, including the Launch button's text on its accent fills
+const AAA = 7
+const highContrastPairs: Pair[] = [
+  ...pairs.map((p) => (p.min === TEXT ? { ...p, min: AAA } : p)),
+  ...['--accent-dim', '--accent', '--accent-bright'].map((bg) => ({ fg: '--on-accent', bg, min: AAA })),
+]
+
 describe('contrast.test: sanity of the maths', () => {
   it('white on black is 21:1 and a colour on itself is 1:1', () => {
     const white = parseColour('#fff')
@@ -121,14 +128,14 @@ describe('dimmed rows (off / disabled / banned items that still show readable te
 describe('theme contrast', () => {
   it('finds every shipped theme block', () => {
     expect(Object.keys(themes).sort()).toEqual(
-      ['blue-grey', 'default', 'grey', 'light', 'mh-itembase', 'phoenix', 'tahiti'].sort(),
+      ['blue-grey', 'default', 'grey', 'high-contrast', 'light', 'mh-itembase', 'phoenix', 'tahiti'].sort(),
     )
   })
 
   for (const [id, tokens] of Object.entries(themes)) {
     it(`${id}: every pair meets its target`, () => {
       const failures: string[] = []
-      for (const { fg, bg, min } of pairs) {
+      for (const { fg, bg, min } of id === 'high-contrast' ? highContrastPairs : pairs) {
         if (!(fg in tokens)) {
           failures.push(`${fg} is not defined`)
           continue
