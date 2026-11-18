@@ -79,6 +79,7 @@ fn merge_override_wins() {
     assert_eq!(state.values["WebFrontend"]["Port"], "9090");
     assert_eq!(state.values["Frontend"]["Port"], "8888");
     assert_eq!(state.overridden["WebFrontend"], vec!["Port".to_string()]);
+    assert_eq!(state.defaults["WebFrontend"]["Port"], "8080");
 }
 
 #[test]
@@ -114,18 +115,6 @@ fn write_config_adds_non_default() {
 
     let content = fs::read_to_string(dir.join("ConfigOverride.ini")).unwrap();
     assert!(content.contains("Port=9999"));
-}
-
-#[test]
-fn reset_section_removes_from_override() {
-    let (_tmp, server_exe) = empty_server();
-    let dir = std::path::Path::new(&server_exe).parent().unwrap().to_path_buf();
-    copy_config_fixtures(&dir, true);
-
-    reset_config_section(server_exe, "WebFrontend".to_string()).unwrap();
-
-    let content = fs::read_to_string(dir.join("ConfigOverride.ini")).unwrap();
-    assert!(!content.contains("WebFrontend"));
 }
 
 #[test]

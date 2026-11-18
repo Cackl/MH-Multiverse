@@ -252,7 +252,7 @@ The stdout reader additionally calls `parse_player_log_event` on every line (reg
 - *Omega gear*: one toggle on the Overlay card (`overlay_set_omega_gear`, stored as `overlay.omega_gear`) controls `showOmega` in `%LOCALAPPDATA%\MarvelHeroesOmega.LootFilter\loot-filter-config.json`, the hook's loot panel layout (the Omega column and Omega Slot 1-5; hiding and pipe events don't depend on it). Toggling writes the value immediately, either way; either direction needs a trusted overlay. While it is on and the overlay is trusted, each injected launch re-applies it once before injecting and once after, since the hook reloads the file when its write time changes. With it off, or with the overlay changed or untrusted, launches never touch the file. The file is never created (the hook seeds it only when absent), an unchanged value is not rewritten, and an unparsable or non-object file is left alone and reported. It is user data outside the overlay folder, so it is not part of the trust hashes.
 - *Why no copy*: an earlier design copied the trusted files into an app-owned folder and loaded from there. It was dropped: a same-user process can write to both locations, so the copy only narrowed a timing race, and it broke the overlay's own settings handling. The check now happens right before injection instead.
 
-**`ini.rs`** - Reads `Config.ini` (defaults) and `ConfigOverride.ini` (overrides), merges them, and returns the merged values plus a set of which keys are overridden. Writes use diff-only logic: values matching the default are removed from the override file; only differing values are written. Also exposes `read_merged_value` (non-command pub fn) for reading a single merged key by section, used by `server.rs` for the port pre-check.
+**`ini.rs`** - Reads `Config.ini` (defaults) and `ConfigOverride.ini` (overrides), merges them, and returns the merged values plus a set of which keys are overridden and the Config.ini defaults. Writes use diff-only logic: values matching the default are removed from the override file; only differing values are written. Also exposes `read_merged_value` (non-command pub fn) for reading a single merged key by section, used by `server.rs` for the port pre-check.
 
 **`tuning.rs`** - File I/O for `LiveTuningData*.json` files in `Data/Game/LiveTuning`. The enable/disable toggle works by renaming files with an `OFF_` prefix. JSON is read/written using PascalCase field names (`Prototype`, `Setting`, `Value`) to match MHServerEmu's expected format. Handles UTF-8 BOM stripping.
 
@@ -336,7 +336,6 @@ The stdout reader additionally calls `parse_player_log_event` on every line (reg
 |---|---|---|---|
 | `read_config` | `server_exe: String` | `ConfigState` | Merge Config.ini + ConfigOverride.ini |
 | `write_config` | `server_exe: String, updates: IniData` | `()` | Diff-write overrides only |
-| `reset_config_section` | `server_exe: String, section: String` | `()` | Remove section from ConfigOverride.ini |
 | `get_config_dir` | `server_exe: String` | `String` | Return server directory path |
 | `uses_json_persistence` | `server_exe: String` | `bool` | Whether `[PlayerManager] UseJsonDBManager` is true (merged), i.e. the server stores its one account in a JSON file |
 
@@ -609,7 +608,7 @@ read_config
   → parse Config.ini (defaults)
   → parse ConfigOverride.ini (overrides, may not exist)
   → merge: defaults + overrides
-  → return merged values + set of overridden keys
+  → return merged values + set of overridden keys + the Config.ini defaults
 
 write_config
   → parse Config.ini (defaults)

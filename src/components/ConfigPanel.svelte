@@ -33,6 +33,7 @@
   let activeSection = CONFIG_SCHEMA[0].id
   let values: IniData = {}
   let savedValues: IniData = {}
+  let defaults: IniData = {}
   let overridden: Record<string, string[]> = {}
   let loaded = false
   let loadError = ''
@@ -60,11 +61,12 @@
   async function load() {
     loadError = ''
     try {
-      const state = await invoke<{ values: IniData; overridden: Record<string, string[]> }>(
+      const state = await invoke<{ values: IniData; overridden: Record<string, string[]>; defaults: IniData }>(
         'read_config', { serverExe: $appConfig.server_exe }
       )
       values = state.values
       savedValues = JSON.parse(JSON.stringify(state.values))
+      defaults = state.defaults
       overridden = state.overridden
       loaded = true
     } catch (e) {
@@ -93,22 +95,14 @@
     }
   }
 
-  async function resetSection() {
+  // Reset and Revert only edit this page's fields on screen. Save writes them.
+  function fillPage(src: IniData) {
     saveError = ''
-    const iniSections = [...new Set(allFields.map(f => f.section))]
-    try {
-      for (const section of iniSections) {
-        await invoke('reset_config_section', { serverExe: $appConfig.server_exe, section })
-      }
-      await load()
-    } catch (e) {
-      saveError = String(e)
-    }
+    for (const field of allFields) setValue(field, src[field.section]?.[field.key] ?? '')
   }
 
-  function getValue(field: Field): string {
-    return values[field.section]?.[field.key] ?? ''
-  }
+  // Reactive so the fields re-render when values change from code (Reset, Revert, Save)
+  $: getValue = (field: Field): string => values[field.section]?.[field.key] ?? ''
 
   function setValue(field: Field, val: string) {
     if (!values[field.section]) values[field.section] = {}
@@ -116,13 +110,10 @@
     values = { ...values }
   }
 
-  function isOverridden(field: Field): boolean {
-    return (overridden[field.section] ?? []).includes(field.key)
-  }
+  $: isOverridden = (field: Field): boolean => (overridden[field.section] ?? []).includes(field.key)
 
-  function isModified(field: Field): boolean {
-    return (values[field.section]?.[field.key] ?? '') !== (savedValues[field.section]?.[field.key] ?? '')
-  }
+  $: isModified = (field: Field): boolean =>
+    (values[field.section]?.[field.key] ?? '') !== (savedValues[field.section]?.[field.key] ?? '')
 
   // -- Console presets --
 
@@ -698,7 +689,8 @@
         {#if saveSuccess}
           <span class="feedback-ok">Saved</span>
         {/if}
-        <button class="btn btn-sm btn-outline" style="margin-left:auto;" on:click={resetSection} disabled={!loaded}>Reset to Defaults</button>
+        <button class="btn btn-sm btn-outline" style="margin-left:auto;" on:click={() => fillPage(defaults)} disabled={!loaded}>Reset to Defaults</button>
+        <button class="btn btn-sm btn-outline" on:click={() => fillPage(savedValues)} disabled={!dirty}>Revert</button>
         <button class="btn btn-sm btn-accent" class:btn-pulse={dirty} on:click={save} disabled={!loaded}>Save</button>
       </div>
 
