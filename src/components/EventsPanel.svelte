@@ -36,7 +36,6 @@
   let creatingRule        = false
   let editingDefinition:  EventDefinition | null = null
   let creatingDefinition  = false
-  let allEventsExpanded   = true
 
 
   // ── Derived ─────────────────────────────────────────────────────────────────
@@ -476,22 +475,8 @@
 
           <!-- All events -->
           <div class="dash-section">
-            <div class="dash-section-header">
-              <button
-                class="dash-expand-btn"
-                on:click={() => allEventsExpanded = !allEventsExpanded}
-              >
-                <svg
-                  viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                  class:rotated={allEventsExpanded}
-                >
-                  <polyline points="9 18 15 12 9 6"/>
-                </svg>
-                <span class="dash-section-title">All events</span>
-              </button>
-            </div>
+            <div class="subsection-title">All events</div>
 
-            {#if allEventsExpanded}
               {#if definitions.length === 0}
                 <div class="dash-empty">No event definitions found.</div>
               {:else}
@@ -501,11 +486,10 @@
                     <div class="def-row">
                       <span class="status-dot dot-{isActive ? 'active' : 'disabled'}"></span>
                       <div class="def-info">
-                        <span class="def-name">{def.display_name}</span>
-                        <span class="def-path">{def.file_path || 'No tuning file'}</span>
+                        <span class="def-name" use:tip={def.file_path || 'No tuning file'}>{def.display_name}</span>
                       </div>
                       {#if def.is_hidden}
-                        <span class="def-badge">Hidden</span>
+                        <span class="tag" use:tip={'Left out of the "Today\'s Events" message'}>Hidden</span>
                       {/if}
                       {#if def.file_path}
                         <button
@@ -522,7 +506,6 @@
                   {/each}
                 </div>
               {/if}
-            {/if}
           </div>
 
           <!-- Override files -->
@@ -649,48 +632,12 @@
   }
   .dash-section:last-child { border-bottom: none; }
 
-  .dash-section-header {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    margin-bottom: 12px;
-  }
-
-  .dash-section-title {
-    font-family: var(--font-head);
-    font-size: var(--fs-min);
-    font-weight: 700;
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
-    color: var(--text-2);
-  }
-
   .dash-empty {
     font-family: var(--font-body);
     font-size: 11px;
     color: var(--text-3);
     padding: 4px 0 8px;
   }
-
-  /* ── Expand button for All events ── */
-
-  .dash-expand-btn {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    background: none;
-    border: none;
-    cursor: pointer;
-    padding: 0;
-  }
-  .dash-expand-btn svg {
-    width: 14px;
-    height: 14px;
-    color: var(--text-3);
-    transition: transform 0.15s;
-    flex-shrink: 0;
-  }
-  .dash-expand-btn svg.rotated { transform: rotate(90deg); }
 
   /* ── Active event grid ── */
 
@@ -776,28 +723,6 @@
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-  }
-
-  .def-path {
-    font-family: var(--font-mono);
-    font-size: var(--fs-min);
-    color: var(--text-3);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-
-  .def-badge {
-    font-family: var(--font-head);
-    font-size: var(--fs-min);
-    font-weight: 600;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-    color: var(--text-3);
-    border: 1px solid var(--border-mid);
-    border-radius: 2px;
-    padding: 1px 5px;
-    flex-shrink: 0;
   }
 
   .def-edit-btn { flex-shrink: 0; }
