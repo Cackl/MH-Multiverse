@@ -7,6 +7,7 @@
 
 <script lang="ts">
   import PrototypePicker from './PrototypePicker.svelte'
+  import Dropdown from './Dropdown.svelte'
   import type { PrototypeMatch } from '../lib/prototypes'
   import {
     PLAYER_POWERS, COOLDOWN_MIN, COOLDOWN_MAX, COOLDOWN_STEP, COOLDOWN_DEFAULT, clampCooldown,
@@ -69,9 +70,8 @@
     <div class="modal-body">
       <div class="field-group field-group-center">
         <label class="field-label" for="tweak-kind">Type</label>
-        <select id="tweak-kind" class="field-select" bind:value={kind} on:change={changeKind}>
-          {#each KINDS as k}<option value={k.id}>{k.label}</option>{/each}
-        </select>
+        <Dropdown id="tweak-kind" label="Type" value={kind} options={KINDS.map(k => ({ value: k.id, label: k.label }))}
+          onChange={v => { kind = v as NewTweak['kind']; changeKind() }} --dd-width="200px" />
       </div>
 
       <div class="field-group">
@@ -153,5 +153,4 @@
   }
   .field-input:focus { border-color: var(--accent-dim); }
   .field-input.num { width: 110px; font-variant-numeric: tabular-nums; }
-  .field-select { width: 200px; }
 </style>

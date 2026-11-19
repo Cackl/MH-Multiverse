@@ -6,6 +6,7 @@
   import { activeLinked, setUnsaved } from '../lib/store'
   import type { PatchNames } from '../lib/patchesMeta'
   import PrototypePicker from './PrototypePicker.svelte'
+  import Dropdown from './Dropdown.svelte'
 
   // ── Props ──────────────────────────────────────────────────────────────────
 
@@ -309,19 +310,9 @@
         {#if copyFromOptions.length > 0}
           <div class="copy-from-wrap">
             <span class="copy-from-label">Copy from</span>
-            <select
-              class="field-select"
-              bind:value={copyFromName}
-              on:change={() => applyCopyFrom(copyFromName)}
-              disabled={copyFromLoading}
-            >
-              <option value="">Blank</option>
-              {#each copyFromOptions as name}
-                <option value={name}>
-                  {tuningDisplayName(name)}
-                </option>
-              {/each}
-            </select>
+            <Dropdown label="Copy from" value={copyFromName} disabled={copyFromLoading} --dd-min-width="0"
+              options={[{ value: '', label: 'Blank' }, ...copyFromOptions.map(n => ({ value: n, label: tuningDisplayName(n) }))]}
+              onChange={v => { copyFromName = v; applyCopyFrom(v) }} />
             {#if copyFromLoading}
               <span class="copy-loading">Loading...</span>
             {/if}
@@ -332,12 +323,8 @@
 
     <!-- ── Toolbar ── -->
     <div class="entry-toolbar">
-      <select class="field-select" bind:value={categoryFilter}>
-        <option value="">All categories</option>
-        {#each categories as cat}
-          <option value={cat}>{cat}</option>
-        {/each}
-      </select>
+      <Dropdown label="Category" value={categoryFilter} --dd-pad="5px 8px" --dd-min-width="0" onChange={v => categoryFilter = v}
+        options={[{ value: '', label: 'All categories' }, ...categories.map(c => ({ value: c, label: c }))]} />
       <div class="search-wrap">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <circle cx="11" cy="11" r="8"/>
@@ -605,7 +592,6 @@
   }
 
   /* Same height as the search box beside it. */
-  .entry-toolbar .field-select { padding: 5px 8px; }
 
   .entry-count {
     font-size: 12px; font-variant-numeric: tabular-nums;
