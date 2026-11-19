@@ -5,7 +5,6 @@
   import { fly } from 'svelte/transition'
   import PlayerCard from './PlayerCard.svelte'
   import { type PlayerSession, userLevelLabel, isBanned, isWhitelisted } from '../lib/playerMeta'
-  import { tip } from '../lib/tooltip'
 
   export let open = false
   export let playerCount = 0
@@ -63,7 +62,7 @@
       <div class="blade-title-row">
         <span class="blade-title">Players</span>
         <div class="blade-spacer"></div>
-        <button class="close-btn" on:click={() => (open = false)} aria-label="Close" use:tip={'Close'}>
+        <button class="close-btn" on:click={() => (open = false)} aria-label="Close">
           <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5">
             <line x1="2" y1="2" x2="12" y2="12"/>
             <line x1="12" y1="2" x2="2" y2="12"/>
@@ -159,21 +158,6 @@
   }
 
   .blade-spacer { flex: 1; }
-
-  .close-btn {
-    background: none;
-    border: none;
-    cursor: pointer;
-    color: var(--text-3);
-    padding: 2px;
-    border-radius: var(--radius-sm);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: color 0.1s;
-  }
-  .close-btn:hover { color: var(--text-1); }
-  .close-btn svg { width: 12px; height: 12px; }
 
   .blade-search {
     display: block;
