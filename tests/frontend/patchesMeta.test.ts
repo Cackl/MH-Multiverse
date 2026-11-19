@@ -82,6 +82,11 @@ describe('patchPack', () => {
     expect(patchPack('PatchDataMyTweaks.json')).toEqual({ name: 'MyTweaks', description: '' })
   })
 
+  it('without labels, stock files show like your own', () => {
+    expect(patchPack('PatchDataBugFixes.json', false)).toEqual({ name: 'BugFixes', description: '' })
+    expect(patchPack(TWEAKS_FILE, false).name).toBe('Multiverse tweaks')
+  })
+
   it('a name that strips to nothing keeps the file name', () => {
     expect(patchPack('PatchData.json').name).toBe('PatchData.json')
   })

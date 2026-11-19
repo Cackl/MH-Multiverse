@@ -2,7 +2,7 @@
   import { onDestroy } from 'svelte'
   import { invoke } from '@tauri-apps/api/core'
   import { openPath } from '@tauri-apps/plugin-opener'
-  import { appConfig, serverRunning, setUnsaved } from '../lib/store'
+  import { activeCaps, appConfig, serverRunning, setUnsaved } from '../lib/store'
   import { tip } from '../lib/tooltip'
   import PanelSidebar from './PanelSidebar.svelte'
   import type { PrototypeMatch } from '../lib/prototypes'
@@ -168,7 +168,7 @@
   // The tweaks file is shown as the Multiverse page's switch, not as a row.
   $: allRows = files
     .filter(f => f.file_name !== TWEAKS_FILE)
-    .map(f => ({ file: f, key: keyOf(f), pack: patchPack(f.file_name), group: (f.file_name in STOCK_PACKS ? 'stock' : 'yours') as Group }))
+    .map(f => ({ file: f, key: keyOf(f), pack: patchPack(f.file_name, $activeCaps.patchLabels), group: (f.file_name in STOCK_PACKS ? 'stock' : 'yours') as Group }))
     .sort((a, b) => a.pack.name.localeCompare(b.pack.name))
   $: groups = (['stock', 'yours'] as Group[]).filter(g => (view === 'all' || view === g) && allRows.some(r => r.group === g))
 
