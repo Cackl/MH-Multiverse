@@ -1,5 +1,18 @@
 import { describe, it, expect } from 'vitest'
-import { versionCaps } from '../../src/lib/versionCaps'
+import { versionCaps, versionMatch } from '../../src/lib/versionCaps'
+
+describe('versionMatch', () => {
+  it.each([
+    ['1.48', '1.48', 'match'],
+    ['1.52', '1.48', 'mismatch'],
+    ['1.53', '1.52', 'mismatch'],
+    [null, '1.52', 'unknown'],
+    ['1.52', null, 'unknown'],
+    [null, null, 'unknown'],
+  ] as const)('client %s server %s', (client, server, expected) => {
+    expect(versionMatch(client, server)).toBe(expected)
+  })
+})
 
 describe('versionCaps', () => {
   it.each([

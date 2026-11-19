@@ -50,7 +50,7 @@ mh-multiverse/
 │       ├── Rail.svelte            Left nav rail (MHO / Local / App groups)
 │       ├── PanelSidebar.svelte    Reusable sidebar layout wrapper
 │       ├── LaunchPanel.svelte     Server profiles, credentials, game launch (shows an "Overlay" indicator when inject-on-launch is on; clicking it opens the Overlay card in Settings)
-│       ├── GetStarted.svelte      Launch-page checklist shown with no servers (game/server exe, Server + Apache start, local account, launch options); reopened by the Servers header's ? button
+│       ├── GetStarted.svelte      Launch-page checklist shown with no servers (game/server exe, client and server version match, Server + Apache start, local account, launch options); reopened by the Servers header's ? button
 │       ├── ConfirmDialog.svelte   Themed confirm dialog driven by askConfirm() in store.ts
 │       ├── ServerPanel.svelte     Server start/stop, log viewer, command input, online players
 │       ├── PlayersBlade.svelte    Searchable list of players connected to the server

@@ -23,3 +23,11 @@ export function versionCaps(version: string, custom: boolean): VersionCaps {
     nightly: !custom && ['1.48', '1.52', '1.53'].includes(version),
   }
 }
+
+export type VersionMatch = 'match' | 'mismatch' | 'unknown'
+
+/** Whether a detected client and server version can play together. null is not detected. */
+export function versionMatch(client: string | null, server: string | null): VersionMatch {
+  if (!client || !server) return 'unknown'
+  return client === server ? 'match' : 'mismatch'
+}
