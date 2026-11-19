@@ -2,12 +2,12 @@
   import { onMount } from 'svelte'
   import { invoke } from '@tauri-apps/api/core'
   import { openPath } from '@tauri-apps/plugin-opener'
-  import { appConfig, serverRunning, tuningFocusFile, askConfirm } from '../lib/store'
-  import { KNOWN_EVENTS, TUNING_GROUPS, tuningDisplayName, tuningGroup, type TuningFileInfo, type EventDefinition, type EventsData } from '../lib/tuningMeta'
-  import PanelSidebar from './PanelSidebar.svelte'
+  import { appConfig, serverRunning, tuningFocusFile, askConfirm } from '../../../lib/store'
+  import { KNOWN_EVENTS, TUNING_GROUPS, tuningDisplayName, tuningGroup, type TuningFileInfo, type EventDefinition, type EventsData } from '../../../lib/tuningMeta'
+  import PanelSidebar from '../../PanelSidebar.svelte'
   import TuningFileEditor from './TuningFileEditor.svelte'
-  import { tip } from '../lib/tooltip'
-  import { reloadLiveTuning } from '../lib/serverReload'
+  import { tip } from '../../../lib/tooltip'
+  import { reloadLiveTuning } from '../../../lib/serverReload'
 
   // ── State ──────────────────────────────────────────────────────────────────
 

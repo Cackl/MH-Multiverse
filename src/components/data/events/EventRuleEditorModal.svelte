@@ -1,9 +1,9 @@
 <script lang="ts">
   import { onDestroy } from 'svelte'
-  import { setUnsaved } from '../lib/store'
-  import { ruleDateError, type EventDefinition, type ScheduleRule } from '../lib/tuningMeta'
-  import { tip } from '../lib/tooltip'
-  import Dropdown from './Dropdown.svelte'
+  import { setUnsaved } from '../../../lib/store'
+  import { ruleDateError, type EventDefinition, type ScheduleRule } from '../../../lib/tuningMeta'
+  import { tip } from '../../../lib/tooltip'
+  import Dropdown from '../../Dropdown.svelte'
 
   // ── Props ───────────────────────────────────────────────────────────────────
 

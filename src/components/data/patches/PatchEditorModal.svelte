@@ -1,15 +1,15 @@
 <script lang="ts">
-  import { askConfirm } from '../lib/store'
-  import type { PatchEntry } from '../lib/patchesMeta'
-  import type { PrototypeMatch } from '../lib/prototypes'
-  import { pickedValue } from '../lib/patchesMeta'
+  import { askConfirm } from '../../../lib/store'
+  import type { PatchEntry } from '../../../lib/patchesMeta'
+  import type { PrototypeMatch } from '../../../lib/prototypes'
+  import { pickedValue } from '../../../lib/patchesMeta'
   import {
     RECIPES, PARENTS, ID_FIELDS, CHOICE_FIELDS, CHOICE_NOTES, FIXED_FIELDS, LOAD_INT,
     parsePairs, pairsText, emptyKeys, withParent, pathHint, problems, entryJson, parseEntryJson,
     type Pair, type Recipe,
-  } from '../lib/patchEntryEdit'
-  import PrototypePicker from './PrototypePicker.svelte'
-  import Dropdown from './Dropdown.svelte'
+  } from '../../../lib/patchEntryEdit'
+  import PrototypePicker from '../../PrototypePicker.svelte'
+  import Dropdown from '../../Dropdown.svelte'
 
   // ── Props ──────────────────────────────────────────────────────────────────
 

@@ -2,8 +2,8 @@
   import { onMount } from 'svelte'
   import { invoke } from '@tauri-apps/api/core'
   import { openPath } from '@tauri-apps/plugin-opener'
-  import { appConfig, serverRunning } from '../lib/store'
-  import { reloadCatalog } from '../lib/serverReload'
+  import { appConfig, serverRunning } from '../../../lib/store'
+  import { reloadCatalog } from '../../../lib/serverReload'
   import {
     typeNames,
     modifiersForType,
@@ -13,12 +13,12 @@
     removeKind,
     stockVersion,
     type CatalogEntryWithMeta,
-  } from '../lib/catalogMeta'
-  import PanelSidebar from './PanelSidebar.svelte'
-  import Dropdown from './Dropdown.svelte'
+  } from '../../../lib/catalogMeta'
+  import PanelSidebar from '../../PanelSidebar.svelte'
+  import Dropdown from '../../Dropdown.svelte'
   import StoreEditorModal from './StoreEditorModal.svelte'
-  import NewFileModal from './NewFileModal.svelte'
-  import { tip } from '../lib/tooltip'
+  import NewFileModal from '../NewFileModal.svelte'
+  import { tip } from '../../../lib/tooltip'
 
   // ── State ──────────────────────────────────────────────────────────────────
 

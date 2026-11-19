@@ -1,15 +1,15 @@
 <script lang="ts">
   import { invoke } from '@tauri-apps/api/core'
   import { openPath } from '@tauri-apps/plugin-opener'
-  import { activeCaps, appConfig, serverRunning } from '../lib/store'
-  import { tip } from '../lib/tooltip'
-  import { reloadLiveTuning } from '../lib/serverReload'
-  import PanelSidebar from './PanelSidebar.svelte'
+  import { activeCaps, appConfig, serverRunning } from '../../../lib/store'
+  import { tip } from '../../../lib/tooltip'
+  import { reloadLiveTuning } from '../../../lib/serverReload'
+  import PanelSidebar from '../../PanelSidebar.svelte'
   import {
     SERVER_RATES_FILE, KNOWN_CORE, tuningDisplayName,
     rateRows, resolveRate, formatRate, toShown, fromShown, planServerRatesWrite,
     type GlobalTuning, type RateRow, type RateState, type RateGroup, type TuningEntry,
-  } from '../lib/tuningMeta'
+  } from '../../../lib/tuningMeta'
 
   const GROUPS: RateGroup[] = ['XP', 'Loot', 'Vendors', 'Rules']
 

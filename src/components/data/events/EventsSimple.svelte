@@ -1,17 +1,17 @@
 <script lang="ts">
   import { invoke } from '@tauri-apps/api/core'
   import { openPath } from '@tauri-apps/plugin-opener'
-  import { appConfig, serverRunning, eventTimezoneOffset } from '../lib/store'
-  import { tip } from '../lib/tooltip'
-  import PanelSidebar from './PanelSidebar.svelte'
-  import Dropdown from './Dropdown.svelte'
+  import { appConfig, serverRunning, eventTimezoneOffset } from '../../../lib/store'
+  import { tip } from '../../../lib/tooltip'
+  import PanelSidebar from '../../PanelSidebar.svelte'
+  import Dropdown from '../../Dropdown.svelte'
   import CustomEventModal from './CustomEventModal.svelte'
-  import type { EventDefinition, EventsData, ScheduleData, ScheduleRule } from '../lib/tuningMeta'
+  import type { EventDefinition, EventsData, ScheduleData, ScheduleRule } from '../../../lib/tuningMeta'
   import {
     serverNow, activeEventIds, ruleIsValid, nextInRotation, eventMode, setEventMode, scheduleText,
     CUSTOM_PREFIX, EVENT_SLIDERS, slugFor, putCustomEvent, readCustomEvent, deleteCustomEvent, setCustomEnabled,
     type EventMode, type CustomEvent, type EventEntry,
-  } from '../lib/eventSchedule'
+  } from '../../../lib/eventSchedule'
 
   type Group = 'Yours' | 'Weekly rotation' | 'Day of week' | 'Yearly' | 'Every day' | 'Not on the calendar' | 'Other'
   const GROUPS: Group[] = ['Yours', 'Weekly rotation', 'Day of week', 'Yearly', 'Every day', 'Not on the calendar', 'Other']

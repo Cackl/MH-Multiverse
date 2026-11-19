@@ -2,15 +2,15 @@
   import { onMount } from 'svelte'
   import { invoke } from '@tauri-apps/api/core'
   import { openPath } from '@tauri-apps/plugin-opener'
-  import { appConfig } from '../lib/store'
-  import { activeDataTab, tuningFocusFile, confirmLeave, askConfirm } from '../lib/store'
-  import { eventTimezoneOffset } from '../lib/store'
-  import { serverNow, ruleIsValid, ruleActiveIds, activeEventIds as eventsActiveAt } from '../lib/eventSchedule'
-  import type { TuningFileInfo, EventDefinition, EventsData, ScheduleRule, ScheduleData } from '../lib/tuningMeta'
-  import PanelSidebar from './PanelSidebar.svelte'
+  import { appConfig } from '../../../lib/store'
+  import { activeDataTab, tuningFocusFile, confirmLeave, askConfirm } from '../../../lib/store'
+  import { eventTimezoneOffset } from '../../../lib/store'
+  import { serverNow, ruleIsValid, ruleActiveIds, activeEventIds as eventsActiveAt } from '../../../lib/eventSchedule'
+  import type { TuningFileInfo, EventDefinition, EventsData, ScheduleRule, ScheduleData } from '../../../lib/tuningMeta'
+  import PanelSidebar from '../../PanelSidebar.svelte'
   import EventRuleEditorModal from './EventRuleEditorModal.svelte'
   import EventDefinitionEditorModal from './EventDefinitionEditorModal.svelte'
-  import { tip } from '../lib/tooltip'
+  import { tip } from '../../../lib/tooltip'
 
   // ── Types ───────────────────────────────────────────────────────────────────
 

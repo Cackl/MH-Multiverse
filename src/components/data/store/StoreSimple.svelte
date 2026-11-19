@@ -1,17 +1,17 @@
 <script lang="ts">
   import { invoke } from '@tauri-apps/api/core'
   import { openPath } from '@tauri-apps/plugin-opener'
-  import { reloadCatalog } from '../lib/serverReload'
-  import { appConfig, serverRunning } from '../lib/store'
-  import { tip } from '../lib/tooltip'
-  import PanelSidebar from './PanelSidebar.svelte'
+  import { reloadCatalog } from '../../../lib/serverReload'
+  import { appConfig, serverRunning } from '../../../lib/store'
+  import { tip } from '../../../lib/tooltip'
+  import PanelSidebar from '../../PanelSidebar.svelte'
   import SaleModal from './SaleModal.svelte'
   import AddItemModal from './AddItemModal.svelte'
-  import { entryTitle, entryPrice, type CatalogEntryWithMeta } from '../lib/catalogMeta'
+  import { entryTitle, entryPrice, type CatalogEntryWithMeta } from '../../../lib/catalogMeta'
   import {
     STORE_SECTIONS, MIN_PRICE, MAX_PRICE, isHidden, setHidden, setPrice, sameEntry, planWrites, reverted,
     displayTitle, startSale, newStoreItem, ADDED_ITEMS_FILE, type NewItem, endSale, type StoreState, type StoreWrites,
-  } from '../lib/storeSimple'
+  } from '../../../lib/storeSimple'
 
   type View = string // a section's Type name, 'all' or 'yours'
   const SECTION_TYPES: string[] = STORE_SECTIONS.map(s => s.type)

@@ -1,9 +1,9 @@
 <script lang="ts">
   import { onMount } from 'svelte'
   import { invoke } from '@tauri-apps/api/core'
-  import { tip } from '../lib/tooltip'
-  import Dropdown from './Dropdown.svelte'
-  import type { PrototypeMatch } from '../lib/prototypes'
+  import { tip } from '../../../lib/tooltip'
+  import Dropdown from '../../Dropdown.svelte'
+  import type { PrototypeMatch } from '../../../lib/prototypes'
   import {
     typeNames,
     modifiersForType,
@@ -21,7 +21,7 @@
     type CatalogEntryWithMeta,
     type GuidItem,
     type UrlEntry,
-  } from '../lib/catalogMeta'
+  } from '../../../lib/catalogMeta'
 
   type EditableStoreState = {
     title: string

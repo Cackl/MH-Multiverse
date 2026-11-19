@@ -1,10 +1,10 @@
 <script lang="ts">
   import { onDestroy } from 'svelte'
-  import Dropdown from './Dropdown.svelte'
+  import Dropdown from '../../Dropdown.svelte'
   import { invoke } from '@tauri-apps/api/core'
-  import { ITEM_CATEGORIES } from '../lib/catalogMeta'
-  import { STORE_SECTIONS, MIN_PRICE, MAX_PRICE, type NewItem } from '../lib/storeSimple'
-  import type { PrototypeMatch } from '../lib/prototypes'
+  import { ITEM_CATEGORIES } from '../../../lib/catalogMeta'
+  import { STORE_SECTIONS, MIN_PRICE, MAX_PRICE, type NewItem } from '../../../lib/storeSimple'
+  import type { PrototypeMatch } from '../../../lib/prototypes'
 
   export let serverExe: string
   /** Saves the item. Resolves with an error message, or '' once it's saved. */

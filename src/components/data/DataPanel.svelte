@@ -1,13 +1,13 @@
 <script lang="ts">
-  import { activeDataTab, goDataTab, appConfig, setAdvancedData, type DataTab } from '../lib/store'
-  import TuningPanel from './TuningPanel.svelte'
-  import ServerRates from './ServerRates.svelte'
-  import StorePanel  from './StorePanel.svelte'
-  import PatchesPanel from './PatchesPanel.svelte'
-  import EventsPanel from './EventsPanel.svelte';
-  import EventsSimple from './EventsSimple.svelte'
-  import StoreSimple from './StoreSimple.svelte'
-  import PatchesSimple from './PatchesSimple.svelte'
+  import { activeDataTab, goDataTab, appConfig, setAdvancedData, type DataTab } from '../../lib/store'
+  import TuningPanel from './tuning/TuningPanel.svelte'
+  import ServerRates from './tuning/ServerRates.svelte'
+  import StorePanel  from './store/StorePanel.svelte'
+  import PatchesPanel from './patches/PatchesPanel.svelte'
+  import EventsPanel from './events/EventsPanel.svelte';
+  import EventsSimple from './events/EventsSimple.svelte'
+  import StoreSimple from './store/StoreSimple.svelte'
+  import PatchesSimple from './patches/PatchesSimple.svelte'
 
   const TABS: { id: DataTab; label: string }[] = [
     { id: 'events',  label: 'Events'       },

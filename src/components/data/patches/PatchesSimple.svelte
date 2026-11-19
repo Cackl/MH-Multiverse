@@ -2,17 +2,17 @@
   import { onDestroy } from 'svelte'
   import { invoke } from '@tauri-apps/api/core'
   import { openPath } from '@tauri-apps/plugin-opener'
-  import { activeCaps, appConfig, serverRunning, setUnsaved } from '../lib/store'
-  import { tip } from '../lib/tooltip'
-  import PanelSidebar from './PanelSidebar.svelte'
-  import type { PrototypeMatch } from '../lib/prototypes'
-  import { patchPack, STOCK_PACKS, TWEAKS_FILE, type PatchFileInfo, type PatchEntry, type PatchNames } from '../lib/patchesMeta'
+  import { activeCaps, appConfig, serverRunning, setUnsaved } from '../../../lib/store'
+  import { tip } from '../../../lib/tooltip'
+  import PanelSidebar from '../../PanelSidebar.svelte'
+  import type { PrototypeMatch } from '../../../lib/prototypes'
+  import { patchPack, STOCK_PACKS, TWEAKS_FILE, type PatchFileInfo, type PatchEntry, type PatchNames } from '../../../lib/patchesMeta'
   import AddTweakModal, { type NewTweak } from './AddTweakModal.svelte'
   import {
     AVATAR_FOLDER, COOLDOWN_MIN, COOLDOWN_MAX, COOLDOWN_STEP, COOLDOWN_DEFAULT,
     clampCooldown, readCooldowns, withCooldowns, type PowerCooldown,
     SUMMON_MIN, SUMMON_MAX, clampSummon, readSummonCaps, withSummonCaps, type SummonCap,
-  } from '../lib/gameTweaks'
+  } from '../../../lib/gameTweaks'
 
   // Patches by where they come from: the launcher's own tweaks, the server's stock packs, your files.
   type View = 'all' | 'multiverse' | 'stock' | 'yours'

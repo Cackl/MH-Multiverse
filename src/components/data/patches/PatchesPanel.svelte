@@ -2,12 +2,12 @@
   import { onMount, onDestroy } from 'svelte'
   import { invoke } from '@tauri-apps/api/core'
   import { openPath } from '@tauri-apps/plugin-opener'
-  import { activeCaps, appConfig, setUnsaved, askConfirm } from '../lib/store'
-  import { patchPack, idsOf, namedValue, type PatchFileInfo, type PatchEntry, type PatchNames } from '../lib/patchesMeta'
-  import PanelSidebar from './PanelSidebar.svelte'
+  import { activeCaps, appConfig, setUnsaved, askConfirm } from '../../../lib/store'
+  import { patchPack, idsOf, namedValue, type PatchFileInfo, type PatchEntry, type PatchNames } from '../../../lib/patchesMeta'
+  import PanelSidebar from '../../PanelSidebar.svelte'
   import PatchEditorModal from './PatchEditorModal.svelte'
-  import NewFileModal from './NewFileModal.svelte'
-  import { tip } from '../lib/tooltip'
+  import NewFileModal from '../NewFileModal.svelte'
+  import { tip } from '../../../lib/tooltip'
 
   // ── State ──────────────────────────────────────────────────────────────────
 

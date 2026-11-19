@@ -1,18 +1,18 @@
 <script lang="ts" context="module">
-  import type { PowerCooldown, SummonCap } from '../lib/gameTweaks'
+  import type { PowerCooldown, SummonCap } from '../../../lib/gameTweaks'
   export type NewTweak =
     | { kind: 'cooldown'; power: PowerCooldown; name: string }
     | { kind: 'summon'; cap: SummonCap; name: string }
 </script>
 
 <script lang="ts">
-  import PrototypePicker from './PrototypePicker.svelte'
-  import Dropdown from './Dropdown.svelte'
-  import type { PrototypeMatch } from '../lib/prototypes'
+  import PrototypePicker from '../../PrototypePicker.svelte'
+  import Dropdown from '../../Dropdown.svelte'
+  import type { PrototypeMatch } from '../../../lib/prototypes'
   import {
     PLAYER_POWERS, COOLDOWN_MIN, COOLDOWN_MAX, COOLDOWN_STEP, COOLDOWN_DEFAULT, clampCooldown,
     SUMMON_MIN, SUMMON_MAX, SUMMON_DEFAULT, clampSummon,
-  } from '../lib/gameTweaks'
+  } from '../../../lib/gameTweaks'
 
   export let serverExe: string
   export let onAdd: (tweak: NewTweak) => void

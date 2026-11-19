@@ -1,12 +1,12 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte'
   import { invoke } from '@tauri-apps/api/core'
-  import { categoryForSetting, KNOWN_CORE, KNOWN_EVENTS, KNOWN_SETTINGS, NEW_TUNING_FILE_PREFIX, blueprintHintForSetting, knownSettingsFor, newTuningFileName, parseTuningValue, tuningDisplayName, settingTip, type KnownSetting } from '../lib/tuningMeta'
-  import { tip } from '../lib/tooltip'
-  import { activeLinked, setUnsaved } from '../lib/store'
-  import type { PatchNames } from '../lib/patchesMeta'
-  import PrototypePicker from './PrototypePicker.svelte'
-  import Dropdown from './Dropdown.svelte'
+  import { categoryForSetting, KNOWN_CORE, KNOWN_EVENTS, KNOWN_SETTINGS, NEW_TUNING_FILE_PREFIX, blueprintHintForSetting, knownSettingsFor, newTuningFileName, parseTuningValue, tuningDisplayName, settingTip, type KnownSetting } from '../../../lib/tuningMeta'
+  import { tip } from '../../../lib/tooltip'
+  import { activeLinked, setUnsaved } from '../../../lib/store'
+  import type { PatchNames } from '../../../lib/patchesMeta'
+  import PrototypePicker from '../../PrototypePicker.svelte'
+  import Dropdown from '../../Dropdown.svelte'
 
   // ── Props ──────────────────────────────────────────────────────────────────
 

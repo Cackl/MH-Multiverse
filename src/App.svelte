@@ -9,7 +9,7 @@
   import AppPanel from './components/AppPanel.svelte'
   import { activeTab, loadConfig, startGameRunningPoll, checkAppUpdate } from './lib/store'
   import { initServerEventBridge } from './lib/serverEvents'
-  import DataPanel from './components/DataPanel.svelte'
+  import DataPanel from './components/data/DataPanel.svelte'
   import ConfirmDialog from './components/ConfirmDialog.svelte'
 
   onMount(async () => {

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { STORE_SECTIONS, saleLabel } from '../lib/storeSimple'
+  import { STORE_SECTIONS, saleLabel } from '../../../lib/storeSimple'
 
   /** How many items a sale with these settings would reprice. */
   export let countFor: (percent: number, sections: string[]) => number

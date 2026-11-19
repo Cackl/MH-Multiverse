@@ -1,12 +1,12 @@
 <script lang="ts">
-  import { askConfirm } from '../lib/store'
-  import { tip } from '../lib/tooltip'
-  import { RATE_ROWS } from '../lib/tuningMeta'
+  import { askConfirm } from '../../../lib/store'
+  import { tip } from '../../../lib/tooltip'
+  import { RATE_ROWS } from '../../../lib/tuningMeta'
   import {
     EVENT_SLIDERS, WEEK, eventNameError, yearlyMaxDays, dateRange, type CustomEvent, type EventWhen,
-  } from '../lib/eventSchedule'
-  import PrototypePicker from './PrototypePicker.svelte'
-  import Dropdown from './Dropdown.svelte'
+  } from '../../../lib/eventSchedule'
+  import PrototypePicker from '../../PrototypePicker.svelte'
+  import Dropdown from '../../Dropdown.svelte'
 
   /** The event to edit, or null for a new one. */
   export let event: CustomEvent | null

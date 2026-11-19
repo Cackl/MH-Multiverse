@@ -1,9 +1,9 @@
 <script lang="ts">
-  import { askConfirm } from '../lib/store'
-  import type { TuningFileInfo, EventDefinition } from '../lib/tuningMeta'
-  import { tip } from '../lib/tooltip'
-  import PrototypePicker from './PrototypePicker.svelte'
-  import Dropdown from './Dropdown.svelte'
+  import { askConfirm } from '../../../lib/store'
+  import type { TuningFileInfo, EventDefinition } from '../../../lib/tuningMeta'
+  import { tip } from '../../../lib/tooltip'
+  import PrototypePicker from '../../PrototypePicker.svelte'
+  import Dropdown from '../../Dropdown.svelte'
 
   // ── Props ───────────────────────────────────────────────────────────────────
 
