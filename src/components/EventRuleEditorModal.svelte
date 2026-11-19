@@ -51,6 +51,7 @@
     events:        JSON.stringify(rule?.events ?? []),
   }
 
+  const isNew = rule === null
   let addEventId = ''
   let nameError  = ''
 
@@ -101,6 +102,19 @@
     const copy = [...events]
     ;[copy[i], copy[j]] = [copy[j], copy[i]]
     events = copy
+  }
+
+  function revert() {
+    name          = _orig.name
+    is_enabled    = _orig.is_enabled
+    rule_type     = _orig.rule_type
+    start_dow     = _orig.start_dow
+    start_month   = _orig.start_month
+    start_day     = _orig.start_day
+    duration_days = _orig.duration_days
+    events        = JSON.parse(_orig.events)
+    addEventId    = ''
+    nameError     = ''
   }
 
   function handleSave() {
@@ -327,17 +341,24 @@
 
   <!-- Footer -->
   <div class="editor-footer">
-    {#if isDirty}
-      <span class="dirty-badge">Unsaved changes</span>
-    {/if}
-    <button class="btn btn-sm btn-outline" disabled={saving} on:click={onDiscard}>
-      {isDirty ? 'Discard' : 'Close'}
-    </button>
-    {#if isDirty}
-      <button class="btn btn-sm btn-accent" class:btn-pulse={isDirty} disabled={saving || !!dateError} on:click={handleSave}>
-        {saving ? 'Saving…' : 'Save to override'}
+    <div class="footer-left">
+      {#if isDirty && !isNew}<span class="dirty-badge">Unsaved changes</span>{/if}
+    </div>
+    <div class="footer-actions">
+      {#if isNew}
+        <button class="btn btn-sm btn-outline" disabled={saving} on:click={onDiscard}>Cancel</button>
+      {:else}
+        <button class="btn btn-sm btn-outline" disabled={saving || !isDirty} on:click={revert}>Revert</button>
+      {/if}
+      <button
+        class="btn btn-sm btn-accent"
+        class:btn-pulse={isDirty}
+        disabled={saving || (!isNew && !isDirty) || !!dateError}
+        on:click={handleSave}
+      >
+        {saving ? 'Saving...' : isNew ? 'Create Rule' : 'Save'}
       </button>
-    {/if}
+    </div>
   </div>
 </div>
 
@@ -598,20 +619,12 @@
   .editor-footer {
     display: flex;
     align-items: center;
-    justify-content: flex-end;
-    gap: 8px;
+    gap: 10px;
     padding: 10px 16px;
     border-top: 1px solid var(--border);
+    background: var(--chrome-footer-bg);
     flex-shrink: 0;
-    background: var(--chrome-sunken-bg);
   }
-
-  .dirty-badge {
-    font-family: var(--font-head);
-    font-size: var(--fs-min);
-    font-weight: 600;
-    letter-spacing: 0.06em;
-    color: var(--accent-bright);
-    margin-right: auto;
-  }
+  .footer-left    { display: flex; align-items: center; gap: 10px; min-width: 0; }
+  .footer-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; margin-left: auto; }
 </style>
