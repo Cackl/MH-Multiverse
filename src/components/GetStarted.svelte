@@ -113,8 +113,8 @@
         <div class="gs-title">Game data</div>
         {#if copyError}
           <div class="gs-detail warn">{copyError}</div>
-        {:else if missingData.length}
-          <div class="gs-detail warn">Missing {missingData.join(' and ')}</div>
+        {:else}
+          <div class="gs-detail wraps" class:warn={missingData.length}>MHServerEmu needs Calligraphy.sip and mu_cdata.sip from the game in its Data\Game folder</div>
         {/if}
       </div>
       {#if missingData.length}
@@ -231,6 +231,7 @@
     text-overflow: ellipsis;
     white-space: nowrap;
   }
+  .gs-detail.wraps { white-space: normal; }
   .gs-detail.warn {
     color: var(--amber);
     white-space: normal;
