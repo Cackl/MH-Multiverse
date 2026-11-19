@@ -290,10 +290,7 @@ The stdout reader additionally calls `parse_player_log_event` on every line (reg
 | `set_theme` | `theme: String` | `()` | Set UI theme |
 | `set_launch_options` | `options: LaunchOptions` | `()` | Set game launch flags |
 | `set_shutdown_config` | `shutdown: ShutdownConfig` | `()` | Set shutdown delay and broadcast message |
-| `set_tuning_tags` | `tags: HashMap<String, String>` | `()` | Set tuning file tag assignments |
-| `set_tuning_favourites` | `favourites: Vec<String>` | `()` | Set pinned tuning filenames |
 | `set_backup_targets` | `targets: Vec<String>` | `()` | Set backup target paths |
-| `set_store_html_output_dir` | `dir: String` | `()` | Set bundle HTML output directory |
 | `set_console_presets` | `presets: Vec<String>` | `()` | Set command shortcut preset list |
 
 ### Launcher (`launcher.rs`)
