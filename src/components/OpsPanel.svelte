@@ -321,15 +321,17 @@
 
     {:else if section === 'update'}
       <!-- ── Update section ── -->
-      <div class="ops-section-head">
-        <div class="section-title">Nightly Update</div>
-        <button class="btn btn-sm btn-outline" on:click={checkForUpdate} disabled={checking || updating}>
-          {#if checking}
-            Checking...
-          {:else}
-            Check
-          {/if}
-        </button>
+      <div class="page-head">
+        <h3 class="page-title">Nightly Update</h3>
+        <div class="page-acts">
+          <button class="btn btn-sm btn-outline" on:click={checkForUpdate} disabled={checking || updating}>
+            {#if checking}
+              Checking...
+            {:else}
+              Check
+            {/if}
+          </button>
+        </div>
       </div>
       <div class="ops-body">
 
@@ -444,15 +446,17 @@
 
     {:else if section === 'backups'}
       <!-- ── Backups section ── -->
-      <div class="ops-section-head">
-        <div class="section-title">Backups</div>
-        <button
-          class="btn btn-sm btn-outline"
-          on:click={createBackup}
-          disabled={creatingBackup || selectedTargets.size === 0}
-        >
-          {creatingBackup ? 'Creating...' : 'Create Backup'}
-        </button>
+      <div class="page-head">
+        <h3 class="page-title">Backups</h3>
+        <div class="page-acts">
+          <button
+            class="btn btn-sm btn-outline"
+            on:click={createBackup}
+            disabled={creatingBackup || selectedTargets.size === 0}
+          >
+            {creatingBackup ? 'Creating...' : 'Create Backup'}
+          </button>
+        </div>
       </div>
       <div class="backups-columns">
 
@@ -646,18 +650,6 @@
     min-width: 0;
     background: var(--bg-1);
   }
-
-  .ops-section-head {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    padding: 10px 20px;
-    border-bottom: 1px solid var(--border);
-    flex-shrink: 0;
-    min-height: 53px;
-  }
-  /* .ops-section-head .section-title { font-size: 11px; } */
-  .ops-section-head .btn { margin-left: auto; }
 
   .ops-body {
     flex: 1;
