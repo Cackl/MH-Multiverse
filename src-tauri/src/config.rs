@@ -123,10 +123,34 @@ pub struct Server {
     pub password_nonce: String,
 }
 
+/// A client and server pair the user can switch to. The active one is copied into
+/// `AppConfig::game_exe`, `server_exe` and `launch_options.no_steam`, which everything else reads.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct LinkedInstall {
+    pub id: String,
+    pub name: String,
+    /// "1.48", "1.52" or "1.53". Detected, or picked by the user when detection fails.
+    #[serde(default)]
+    pub version: String,
+    #[serde(default)]
+    pub game_exe: String,
+    #[serde(default)]
+    pub server_exe: String,
+    /// The server is a local build of a fork: no nightly updates, shown as experimental.
+    #[serde(default)]
+    pub custom: bool,
+    #[serde(default = "default_true")]
+    pub no_steam: bool,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AppConfig {
     pub game_exe: String,
     pub server_exe: String,
+    #[serde(default)]
+    pub linked: Vec<LinkedInstall>,
+    #[serde(default)]
+    pub active_linked_id: String,
     pub active_server_id: String,
     pub servers: Vec<Server>,
     #[serde(default)]
@@ -154,6 +178,8 @@ impl Default for AppConfig {
         Self {
             game_exe: String::new(),
             server_exe: String::new(),
+            linked: Vec::new(),
+            active_linked_id: String::new(),
             active_server_id: String::new(),
             servers: Vec::new(),
             theme: String::new(),
@@ -251,7 +277,130 @@ pub fn load_config(app: &tauri::AppHandle) -> AppConfig {
         Ok(c) => c,
         Err(_) => return AppConfig::default(),
     };
-    serde_json::from_str(&contents).unwrap_or_default()
+    let mut config: AppConfig = serde_json::from_str(&contents).unwrap_or_default();
+    if migrate_linked(&mut config, detect_version) {
+        let _ = save_config(app, &config);
+    }
+    config
+}
+
+// ── Linked installs ───────────────────────────────────────────────────────────
+
+fn detect_version(game_exe: &str, server_exe: &str) -> String {
+    crate::versions::client_version(game_exe)
+        .or_else(|| crate::versions::server_version(server_exe))
+        .unwrap_or_default()
+        .to_string()
+}
+
+/// A config from before linked installs becomes one entry, so the user's setup is kept.
+/// Returns true when it changed the config.
+fn migrate_linked(config: &mut AppConfig, detect: impl Fn(&str, &str) -> String) -> bool {
+    if !config.linked.is_empty() || (config.game_exe.is_empty() && config.server_exe.is_empty()) {
+        return false;
+    }
+    let version = detect(&config.game_exe, &config.server_exe);
+    let install = LinkedInstall {
+        id: "default".into(),
+        name: if version.is_empty() { "Default".into() } else { version.clone() },
+        version,
+        game_exe: config.game_exe.clone(),
+        server_exe: config.server_exe.clone(),
+        custom: false,
+        no_steam: config.launch_options.no_steam,
+    };
+    config.active_linked_id = install.id.clone();
+    config.linked.push(install);
+    true
+}
+
+/// Copies the active entry's paths and Steam setting to where the rest of the app reads them.
+fn activate_linked_in(config: &mut AppConfig, id: &str) -> Result<(), String> {
+    let install = config.linked.iter().find(|l| l.id == id).ok_or("No such linked version")?.clone();
+    config.active_linked_id = install.id;
+    config.game_exe = install.game_exe;
+    config.server_exe = install.server_exe;
+    config.launch_options.no_steam = install.no_steam;
+    Ok(())
+}
+
+/// Settings edits the active copy, so the active entry follows it.
+fn sync_active_linked(config: &mut AppConfig) {
+    let (game_exe, server_exe, no_steam) =
+        (config.game_exe.clone(), config.server_exe.clone(), config.launch_options.no_steam);
+    if let Some(active) = config.linked.iter_mut().find(|l| l.id == config.active_linked_id) {
+        active.game_exe = game_exe;
+        active.server_exe = server_exe;
+        active.no_steam = no_steam;
+    }
+}
+
+/// Adds or replaces an entry. True when it is the active one and its exes changed,
+/// which is a switch and needs the server and the game stopped.
+fn upsert_linked_in(config: &mut AppConfig, install: LinkedInstall) -> bool {
+    let is_active = install.id == config.active_linked_id;
+    let switches = is_active && (install.game_exe != config.game_exe || install.server_exe != config.server_exe);
+    let id = install.id.clone();
+    match config.linked.iter_mut().find(|l| l.id == install.id) {
+        Some(existing) => *existing = install,
+        None => config.linked.push(install),
+    }
+    if is_active {
+        let _ = activate_linked_in(config, &id);
+    }
+    switches
+}
+
+fn delete_linked_in(config: &mut AppConfig, id: &str) -> Result<(), String> {
+    if id == config.active_linked_id {
+        return Err("Switch to another version before removing this one".into());
+    }
+    config.linked.retain(|l| l.id != id);
+    Ok(())
+}
+
+fn ensure_stopped(app: &tauri::AppHandle) -> Result<(), String> {
+    if server::server_process_is_running(&app.state::<server::ServerState>())
+        || crate::launcher::game_is_running(app.clone(), app.state())
+    {
+        return Err("Stop the server and the game first".into());
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub fn activate_linked(app: tauri::AppHandle, id: String) -> Result<AppConfig, String> {
+    let mut config = load_config(&app);
+    if id == config.active_linked_id {
+        return Ok(config);
+    }
+    ensure_stopped(&app)?;
+    activate_linked_in(&mut config, &id)?;
+    save_config(&app, &config)?;
+    app.state::<server::DbPath>().set_from_server_exe(&config.server_exe);
+    Ok(config)
+}
+
+#[tauri::command]
+pub fn upsert_linked(app: tauri::AppHandle, install: LinkedInstall) -> Result<AppConfig, String> {
+    let mut config = load_config(&app);
+    let switches = upsert_linked_in(&mut config, install);
+    if switches {
+        ensure_stopped(&app)?;
+    }
+    save_config(&app, &config)?;
+    if switches {
+        app.state::<server::DbPath>().set_from_server_exe(&config.server_exe);
+    }
+    Ok(config)
+}
+
+#[tauri::command]
+pub fn delete_linked(app: tauri::AppHandle, id: String) -> Result<AppConfig, String> {
+    let mut config = load_config(&app);
+    delete_linked_in(&mut config, &id)?;
+    save_config(&app, &config)?;
+    Ok(config)
 }
 
 pub fn save_config(app: &tauri::AppHandle, config: &AppConfig) -> Result<(), String> {
@@ -335,6 +484,7 @@ pub fn set_active_server(app: tauri::AppHandle, server_id: String) -> Result<(),
 pub fn set_game_exe(app: tauri::AppHandle, path: String) -> Result<(), String> {
     let mut config = load_config(&app);
     config.game_exe = path;
+    sync_active_linked(&mut config);
     save_config(&app, &config)
 }
 
@@ -342,6 +492,7 @@ pub fn set_game_exe(app: tauri::AppHandle, path: String) -> Result<(), String> {
 pub fn set_server_exe(app: tauri::AppHandle, path: String) -> Result<(), String> {
     let mut config = load_config(&app);
     config.server_exe = path.clone();
+    sync_active_linked(&mut config);
     save_config(&app, &config)?;
     app.state::<server::DbPath>().set_from_server_exe(&path);
     Ok(())
@@ -358,6 +509,7 @@ pub fn set_theme(app: tauri::AppHandle, theme: String) -> Result<(), String> {
 pub fn set_launch_options(app: tauri::AppHandle, options: LaunchOptions) -> Result<(), String> {
     let mut config = load_config(&app);
     config.launch_options = options;
+    sync_active_linked(&mut config);
     save_config(&app, &config)
 }
 

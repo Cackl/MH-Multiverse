@@ -369,6 +369,8 @@ export interface Server {
 export interface AppConfig {
   game_exe: string
   server_exe: string
+  linked: LinkedInstall[]
+  active_linked_id: string
   active_server_id: string
   servers: Server[]
   theme: string
@@ -379,6 +381,27 @@ export interface AppConfig {
   backup_targets: string[]
   /** Data tab view: true = Advanced, false = Simple (fresh installs start in Simple). */
   advanced_data: boolean
+}
+
+/** A client and server pair. The active one is copied into game_exe, server_exe and launch_options.no_steam. */
+export interface LinkedInstall {
+  id: string
+  name: string
+  /** '1.48', '1.52', '1.53', or '' when not detected and not picked. */
+  version: string
+  game_exe: string
+  server_exe: string
+  custom: boolean
+  no_steam: boolean
+}
+
+/** Settings edits the active copy, so the active entry follows it (as sync_active_linked does). */
+function syncActiveLinked(c: AppConfig): AppConfig {
+  return {
+    ...c,
+    linked: c.linked.map(l => l.id !== c.active_linked_id ? l
+      : { ...l, game_exe: c.game_exe, server_exe: c.server_exe, no_steam: c.launch_options.no_steam }),
+  }
 }
 
 const defaultLaunchOptions: LaunchOptions = {
@@ -404,6 +427,8 @@ const defaultShutdownConfig: ShutdownConfig = {
 export const appConfig = writable<AppConfig>({
   game_exe: '',
   server_exe: '',
+  linked: [],
+  active_linked_id: '',
   active_server_id: '',
   servers: [],
   theme: '',
@@ -482,11 +507,24 @@ async function updateConfigOptimistic(
 }
 
 export async function setGameExe(path: string): Promise<void> {
-  await updateConfigOptimistic(c => ({ ...c, game_exe: path }), 'set_game_exe', { path })
+  await updateConfigOptimistic(c => syncActiveLinked({ ...c, game_exe: path }), 'set_game_exe', { path })
 }
 
 export async function setServerExe(path: string): Promise<void> {
-  await updateConfigOptimistic(c => ({ ...c, server_exe: path }), 'set_server_exe', { path })
+  await updateConfigOptimistic(c => syncActiveLinked({ ...c, server_exe: path }), 'set_server_exe', { path })
+}
+
+/** Switching is refused while the server or the game runs. Throws the backend's message. */
+export async function activateLinked(id: string): Promise<void> {
+  appConfig.set(await invoke<AppConfig>('activate_linked', { id }))
+}
+
+export async function upsertLinked(install: LinkedInstall): Promise<void> {
+  appConfig.set(await invoke<AppConfig>('upsert_linked', { install }))
+}
+
+export async function deleteLinked(id: string): Promise<void> {
+  appConfig.set(await invoke<AppConfig>('delete_linked', { id }))
 }
 
 export async function setTheme(theme: string): Promise<void> {
@@ -505,7 +543,7 @@ export async function setTheme(theme: string): Promise<void> {
 }
 
 export async function setLaunchOptions(options: LaunchOptions): Promise<void> {
-  await updateConfigOptimistic(c => ({ ...c, launch_options: options }), 'set_launch_options', { options })
+  await updateConfigOptimistic(c => syncActiveLinked({ ...c, launch_options: options }), 'set_launch_options', { options })
 }
 
 export async function setShutdownConfig(shutdown: ShutdownConfig): Promise<void> {
