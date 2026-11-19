@@ -506,12 +506,14 @@ async function updateConfigOptimistic(
   const previous = get(appConfig)
   appConfig.update(updater)
   try {
-    await invoke(invokeName, invokeArgs)
+    const saved = await invoke<AppConfig | null>(invokeName, invokeArgs)
+    if (saved) appConfig.set(saved)
   } catch {
     appConfig.set(previous)
   }
 }
 
+// These return the saved config, since new exes detect the active entry's version again.
 export async function setGameExe(path: string): Promise<void> {
   await updateConfigOptimistic(c => syncActiveLinked({ ...c, game_exe: path }), 'set_game_exe', { path })
 }

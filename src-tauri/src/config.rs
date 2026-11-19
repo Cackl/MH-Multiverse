@@ -341,10 +341,18 @@ fn activate_linked_in(config: &mut AppConfig, id: &str) -> Result<(), String> {
 }
 
 /// Settings edits the active copy, so the active entry follows it.
-fn sync_active_linked(config: &mut AppConfig) {
+/// New exes get their version detected again. A name that was only the old version follows it.
+fn sync_active_linked(config: &mut AppConfig, detect: impl Fn(&str, &str) -> String) {
     let (game_exe, server_exe, no_steam) =
         (config.game_exe.clone(), config.server_exe.clone(), config.launch_options.no_steam);
     if let Some(active) = config.linked.iter_mut().find(|l| l.id == config.active_linked_id) {
+        if active.game_exe != game_exe || active.server_exe != server_exe {
+            let version = detect(&game_exe, &server_exe);
+            if !version.is_empty() && active.name == active.version {
+                active.name = version.clone();
+            }
+            active.version = version;
+        }
         active.game_exe = game_exe;
         active.server_exe = server_exe;
         active.no_steam = no_steam;
@@ -497,21 +505,22 @@ pub fn set_active_server(app: tauri::AppHandle, server_id: String) -> Result<(),
 }
 
 #[tauri::command]
-pub fn set_game_exe(app: tauri::AppHandle, path: String) -> Result<(), String> {
+pub fn set_game_exe(app: tauri::AppHandle, path: String) -> Result<AppConfig, String> {
     let mut config = load_config(&app);
     config.game_exe = path;
-    sync_active_linked(&mut config);
-    save_config(&app, &config)
+    sync_active_linked(&mut config, detect_version);
+    save_config(&app, &config)?;
+    Ok(config)
 }
 
 #[tauri::command]
-pub fn set_server_exe(app: tauri::AppHandle, path: String) -> Result<(), String> {
+pub fn set_server_exe(app: tauri::AppHandle, path: String) -> Result<AppConfig, String> {
     let mut config = load_config(&app);
     config.server_exe = path.clone();
-    sync_active_linked(&mut config);
+    sync_active_linked(&mut config, detect_version);
     save_config(&app, &config)?;
     app.state::<server::DbPath>().set_from_server_exe(&path);
-    Ok(())
+    Ok(config)
 }
 
 #[tauri::command]
@@ -525,7 +534,7 @@ pub fn set_theme(app: tauri::AppHandle, theme: String) -> Result<(), String> {
 pub fn set_launch_options(app: tauri::AppHandle, options: LaunchOptions) -> Result<(), String> {
     let mut config = load_config(&app);
     config.launch_options = options;
-    sync_active_linked(&mut config);
+    sync_active_linked(&mut config, detect_version);
     save_config(&app, &config)
 }
 

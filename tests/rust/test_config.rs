@@ -118,9 +118,32 @@ fn settings_edits_follow_into_the_active_entry_only() {
     activate_linked_in(&mut config, "a").unwrap();
     config.game_exe = "A2.exe".into();
     config.launch_options.no_steam = false;
-    sync_active_linked(&mut config);
+    sync_active_linked(&mut config, |_, _| "1.48".into());
     assert_eq!(config.linked[0], install("a", "A2.exe", "SA.exe", false));
     assert_eq!(config.linked[1], install("b", "B.exe", "SB.exe", true));
+}
+
+#[test]
+fn new_exes_in_settings_detect_the_version_again() {
+    let mut config = AppConfig::default();
+    config.linked = vec![LinkedInstall { name: "1.52".into(), version: "1.52".into(), ..install("a", "A.exe", "SA.exe", false) }];
+    activate_linked_in(&mut config, "a").unwrap();
+
+    // Launch options alone don't detect.
+    config.launch_options.no_steam = true;
+    sync_active_linked(&mut config, |_, _| panic!("detected without an exe change"));
+    assert_eq!(config.linked[0].version, "1.52");
+
+    // A 1.48 client: the version and the version-only name follow.
+    config.game_exe = "MarvelHeroes2016.exe".into();
+    sync_active_linked(&mut config, |game, _| if game == "MarvelHeroes2016.exe" { "1.48".into() } else { "1.52".into() });
+    assert_eq!((config.linked[0].name.as_str(), config.linked[0].version.as_str()), ("1.48", "1.48"));
+
+    // A name the user chose stays, and an undetected exe clears the version.
+    config.linked[0].name = "Mine".into();
+    config.server_exe = "Other.exe".into();
+    sync_active_linked(&mut config, |_, _| String::new());
+    assert_eq!((config.linked[0].name.as_str(), config.linked[0].version.as_str()), ("Mine", ""));
 }
 
 #[test]
