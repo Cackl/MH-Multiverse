@@ -490,3 +490,50 @@ fn open_db_missing_file_error_names_the_configured_file() {
     let err = open_db(&server_exe).unwrap_err();
     assert!(err.contains("Custom.db not found."), "unexpected error: {err}");
 }
+
+// The first bytes of a real 1.52 Player save (local build\v52 Account.db): size 69460, archive
+// version 10, game build 479899.
+const REAL_1_52_HEADER: [u8; 7] = [0x54, 0x0f, 0x01, 0x00, 0x0a, 0x9b, 0xa5];
+fn header(build_varint: &[u8]) -> Vec<u8> {
+    let mut b = vec![0x54, 0x0f, 0x01, 0x00, 0x0a];
+    b.extend_from_slice(build_varint);
+    b.extend_from_slice(&[0x01, 0x02]);
+    b
+}
+
+#[test]
+fn save_game_build_reads_the_archive_header() {
+    let mut real = REAL_1_52_HEADER.to_vec();
+    real.extend_from_slice(&[0x1d, 0x4c, 0x0f]);
+    for (bytes, want) in [
+        (real, Some(479899)),
+        (header(&[0x8a, 0xf3, 0x17]), Some(391562)),
+        (header(&[0xc8, 0x90, 0x1e]), Some(493640)),
+        // Cut off inside the build number, or no header at all.
+        (REAL_1_52_HEADER.to_vec(), None),
+        (vec![0, 1, 2, 3], None),
+        (vec![0, 1], None),
+    ] {
+        assert_eq!(save_game_build(&bytes), want, "{bytes:02x?}");
+    }
+}
+
+#[test]
+fn an_export_from_another_game_version_is_refused() {
+    let with_save = |bytes: Vec<u8>| {
+        let mut data = sample_data();
+        data.player.archive_data = BASE64.encode(bytes);
+        data
+    };
+    let from_148 = with_save(header(&[0x8a, 0xf3, 0x17]));
+    let from_152 = with_save(header(&[0x9b, 0xa5, 0x1d]));
+
+    assert!(check_export_build(&from_152, Some("1.52")).is_ok());
+    assert!(check_export_build(&from_148, Some("1.48")).is_ok());
+    let err = check_export_build(&from_148, Some("1.52")).unwrap_err();
+    assert!(err.contains("from 1.48") && err.contains("runs 1.52"), "{err}");
+    assert!(check_export_build(&from_152, Some("1.53")).is_err());
+    assert!(check_export_build(&with_save(vec![0, 1, 2, 3]), Some("1.52")).is_err());
+    // No detected server version: nothing to compare, as before.
+    assert!(check_export_build(&from_148, None).is_ok());
+}
