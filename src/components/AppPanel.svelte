@@ -4,7 +4,7 @@
   import { listen, type UnlistenFn } from '@tauri-apps/api/event'
   import { openUrl } from '@tauri-apps/plugin-opener'
   import {
-    appConfig, type SettingsSection, activeTheme, setTheme, setLaunchOptions, type LaunchOptions,
+    appConfig, type SettingsSection, activeTheme, setTheme, setTextSize, setLaunchOptions, type LaunchOptions,
     appUpdate, appUpdateError, appUpdateCheckedAt, checkAppUpdate, showUpdateBadge,
     updateRemindLater, dismissedUpdate, serverRunning, settingsSection, activeCaps,
   } from '../lib/store'
@@ -65,7 +65,7 @@
 
   const navItems: { id: Section; label: string }[] = [
     { id: 'client', label: 'Marvel Heroes Omega' },
-    { id: 'theme',  label: 'Theme' },
+    { id: 'display', label: 'Display' },
     { id: 'integrations', label: 'Integrations' },
     { id: 'about',  label: 'About' },
   ]
@@ -95,15 +95,17 @@
       desc: 'Enable if using Crypto137\'s port 8080 client patch. Changes the SiteConfig URL path for local servers' },
   ]
 
+  const textSizes = [0.9, 1, 1.1, 1.25]
+
   const themes = [
-    { id: '',              label: 'Blue',            accent: '#10c3ff' },
-    { id: 'mh-itembase',   label: 'Item Base',       accent: '#10c3ff' },
-    { id: 'light',         label: 'Light',           accent: '#0f6f8d' },
-    { id: 'phoenix',       label: 'Phoenix',         accent: '#d96a1d' },
-    { id: 'tahiti',        label: 'Tahiti',          accent: '#b31618' },
-    { id: 'grey',          label: 'Grey',            accent: '#8f8f8f' },
-    { id: 'blue-grey',     label: 'Slate',           accent: '#4a5a7a' },
-    { id: 'high-contrast', label: 'High Contrast',   accent: '#00e5ff' }
+    { id: '',              label: 'Blue' },
+    { id: 'mh-itembase',   label: 'Item Base' },
+    { id: 'light',         label: 'Light' },
+    { id: 'phoenix',       label: 'Phoenix' },
+    { id: 'tahiti',        label: 'Tahiti' },
+    { id: 'grey',          label: 'Grey' },
+    { id: 'blue-grey',     label: 'Slate' },
+    { id: 'high-contrast', label: 'High Contrast' },
   ]
 </script>
 
@@ -204,31 +206,49 @@
           </div>
         </div>
 
-      {:else if activeSection === 'theme'}
+      {:else if activeSection === 'display'}
         <div class="detail-section">
           <div class="detail-head">
-            <div class="section-title">Theme</div>
+            <div class="section-title">Display</div>
           </div>
-          <div class="detail-body">
-            <div class="theme-list">
+          <div class="detail-body content-col">
+            <div class="subsection-title">Text size</div>
+            <div class="size-row">
+              <div class="seg" role="radiogroup" aria-label="Text size">
+                {#each textSizes as s}
+                  <button
+                    role="radio"
+                    aria-checked={$appConfig.text_size === s}
+                    class:on={$appConfig.text_size === s}
+                    on:click={() => setTextSize(s)}
+                  >{Math.round(s * 100)}%</button>
+                {/each}
+              </div>
+              <span class="opt-desc">Scales text and layout together</span>
+            </div>
+
+            <div class="subsection-title">Theme</div>
+            <div class="theme-grid">
               {#each themes as theme}
-                <div
-                  class="theme-row"
-                  class:active={$activeTheme === theme.id}
-                  on:click={() => setTheme(theme.id)}
-                  role="button"
-                  tabindex="0"
-                  on:keydown={(e) => e.key === 'Enter' && setTheme(theme.id)}
-                >
-                  <span class="theme-dot" style="background: {theme.accent}"></span>
-                  <span class="theme-label">{theme.label}</span>
-                  {#if $activeTheme === theme.id}
-                    <span class="theme-active-dot"></span>
-                  {/if}
-                </div>
+                {@const active = $activeTheme === theme.id}
+                <button class="theme-card" class:active aria-pressed={active} on:click={() => setTheme(theme.id)}>
+                  <!-- Each preview resets to the default palette, then its own theme on top -->
+                  <div class="theme-preview" data-theme-preview data-theme={theme.id || undefined} aria-hidden="true">
+                    <span class="pv-side"><span class="pv-item"></span><span class="pv-item"></span><span class="pv-item"></span></span>
+                    <span class="pv-main">
+                      <span class="pv-line pv-title"></span>
+                      <span class="pv-line"></span>
+                      <span class="pv-line pv-short"></span>
+                      <span class="pv-btn"></span>
+                    </span>
+                  </div>
+                  <span class="theme-name">
+                    {theme.label}
+                    {#if active}<span class="theme-active">Active</span>{/if}
+                  </span>
+                </button>
               {/each}
             </div>
-            <div class="theme-hint"></div>
           </div>
         </div>
 
@@ -449,69 +469,110 @@
     padding-bottom: 8px;
     flex-shrink: 0;
   }
-  /* -- Theme -- */
-  .theme-list {
+  /* -- Display -- */
+  .size-row {
     display: flex;
-    flex-direction: column;
+    align-items: center;
+    gap: 14px;
+    margin-bottom: 22px;
+  }
+  .seg {
+    display: inline-flex;
     gap: 2px;
-    max-height: 600px;
-    overflow-y: auto;
+    padding: 2px;
     border: 1px solid var(--border-mid);
     border-radius: var(--radius-sm);
     background: var(--bg-2);
-    padding: 4px;
+  }
+  .seg button {
+    height: 28px;
+    min-width: 56px;
+    padding: 0 10px;
+    border: 1px solid transparent;
+    border-radius: 2px;
+    background: transparent;
+    color: var(--text-2);
+    font-family: var(--font-head);
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    font-variant-numeric: tabular-nums;
+    cursor: pointer;
+  }
+  .seg button:hover { color: var(--text-0); }
+  .seg button.on { color: var(--accent-bright); border-color: var(--accent-dim); background: var(--accent-glow); }
+
+  .theme-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 12px;
+  }
+  .theme-card {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 8px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    background: var(--bg-2);
+    cursor: pointer;
+    text-align: left;
+    transition: border-color 0.12s, background 0.12s;
+  }
+  .theme-card:hover { border-color: var(--border-lit); background: var(--bg-3); }
+  .theme-card.active { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+
+  /* A miniature window drawn in the card's own theme */
+  .theme-preview {
+    display: flex;
+    height: 72px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--bg-0);
+    overflow: hidden;
+  }
+  .pv-side {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    width: 30%;
+    padding: 8px 6px;
+    background: var(--bg-1);
+    border-right: 1px solid var(--border);
+  }
+  .pv-item { height: 5px; border-radius: 1px; background: var(--text-3); opacity: 0.6; }
+  .pv-item:first-child { background: var(--accent); opacity: 1; }
+  .pv-main { flex: 1; display: flex; flex-direction: column; gap: 5px; padding: 8px; }
+  .pv-line { height: 4px; width: 80%; border-radius: 1px; background: var(--text-2); }
+  .pv-title { width: 55%; height: 5px; background: var(--text-0); }
+  .pv-short { width: 45%; }
+  .pv-btn {
+    margin-top: auto;
+    align-self: flex-end;
+    width: 34px;
+    height: 12px;
+    border: 1px solid var(--accent);
+    border-radius: 2px;
+    background: var(--accent-glow);
   }
 
-  .theme-row {
+  .theme-name {
     display: flex;
     align-items: center;
-    gap: 10px;
-    padding: 8px 12px;
-    border: 1px solid transparent;
-    border-radius: var(--radius-sm);
-    cursor: pointer;
-    transition: all 0.12s;
-  }
-  .theme-row:hover {
-    background: var(--bg-3);
-    border-color: var(--border-mid);
-  }
-  .theme-row.active {
-    background: var(--accent-glow);
-    border-color: var(--accent-dim);
-  }
-
-  .theme-dot {
-    width: 10px;
-    height: 10px;
-    border-radius: 50%;
-    flex-shrink: 0;
-  }
-
-  .theme-label {
+    justify-content: space-between;
+    padding: 0 2px;
     font-family: var(--font-head);
     font-size: 12px;
     font-weight: 600;
     letter-spacing: 0.06em;
     color: var(--text-1);
-    flex: 1;
   }
-  .theme-row.active .theme-label {
-    color: var(--accent-bright);
-  }
-
-  .theme-active-dot {
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-    background: var(--accent);
-    flex-shrink: 0;
-  }
-
-  .theme-hint {
-    font-size: 11px;
-    color: var(--text-3);
-    font-style: italic;
+  .theme-card.active .theme-name { color: var(--accent-bright); }
+  .theme-active {
+    font-size: var(--fs-min);
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--accent);
   }
 
   /* -- About -- */
