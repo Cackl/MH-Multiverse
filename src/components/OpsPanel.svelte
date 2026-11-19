@@ -563,14 +563,14 @@
                   {#if confirmingRestore === backup.id}
                     <div class="confirm-row">
                       <span class="confirm-text">This will overwrite current files.</span>
-                      <button class="btn btn-sm btn-outline" on:click={cancelConfirm}>Cancel</button>
                       <button class="btn btn-sm btn-accent" on:click={() => restoreBackup(backup.id)}>Confirm Restore</button>
+                      <button class="btn btn-sm btn-outline" on:click={cancelConfirm}>Cancel</button>
                     </div>
                   {:else if confirmingDelete === backup.id}
                     <div class="confirm-row">
                       <span class="confirm-text">Delete this backup permanently?</span>
-                      <button class="btn btn-sm btn-outline" on:click={cancelConfirm}>Cancel</button>
                       <button class="btn btn-sm btn-red" on:click={() => deleteBackup(backup.id)}>Delete</button>
+                      <button class="btn btn-sm btn-outline" on:click={cancelConfirm}>Cancel</button>
                     </div>
                   {:else}
                     <div class="backup-row-actions">
