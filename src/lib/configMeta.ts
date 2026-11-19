@@ -320,6 +320,14 @@ const SCHEMA_KEYS = new Set(
 
 type IniData = Record<string, Record<string, string>>
 
+/** Keys a version without the Infinity system (1.48) doesn't read. */
+const NEEDS_INFINITY = new Set(['GameOptions.InfinitySystemEnabled', 'GameOptions.IsDifficultySliderEnabled'])
+
+/** The fields to show for the active version. */
+export function fieldsFor(fields: Field[], hasInfinity: boolean): Field[] {
+  return hasInfinity ? fields : fields.filter(f => !NEEDS_INFINITY.has(`${f.section}.${f.key}`))
+}
+
 /** The All settings page: every key the named pages don't show, grouped by INI section. */
 export function otherSettings(values: IniData, defaults: IniData, descriptions: IniData): SubSection[] {
   const sections = [...new Set([...Object.keys(defaults), ...Object.keys(values)])].sort()

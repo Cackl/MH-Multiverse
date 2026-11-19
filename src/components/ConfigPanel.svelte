@@ -7,9 +7,9 @@
   import { onMount, onDestroy, tick } from 'svelte'
   import { openPath } from '@tauri-apps/plugin-opener'
   import { invoke } from '@tauri-apps/api/core'
-  import { appConfig, setUnsaved, setConsolePresets, serverRunning, setShutdownConfig, logFilterThreshold, type ShutdownConfig } from '../lib/store'
+  import { activeCaps, appConfig, setUnsaved, setConsolePresets, serverRunning, setShutdownConfig, logFilterThreshold, type ShutdownConfig } from '../lib/store'
   import { FALLBACK_COMMANDS } from '../lib/serverCommands'
-  import { CONFIG_SCHEMA, otherSettings, type Field, type NavSection } from '../lib/configMeta'
+  import { CONFIG_SCHEMA, fieldsFor, otherSettings, type Field, type NavSection } from '../lib/configMeta'
   import { tip } from '../lib/tooltip'
   import PanelSidebar from './PanelSidebar.svelte'
 
@@ -55,8 +55,8 @@
     ?? activeSchema.subsections?.flatMap(s => s.fields)
     ?? []
   $: sections = activeSchema.subsections
-    ? activeSchema.subsections.map(s => ({ title: s.title, fields: s.fields }))
-    : [{ title: activeSchema.label, fields: activeSchema.fields ?? [] }]
+    ? activeSchema.subsections.map(s => ({ title: s.title, fields: fieldsFor(s.fields, $activeCaps.infinity) }))
+    : [{ title: activeSchema.label, fields: fieldsFor(activeSchema.fields ?? [], $activeCaps.infinity) }]
   $: dirty = loaded && allFields.some(f =>
     (values[f.section]?.[f.key] ?? '') !== (savedValues[f.section]?.[f.key] ?? '')
   )
