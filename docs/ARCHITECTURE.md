@@ -74,7 +74,7 @@ mh-multiverse/
 │       ├── ServerModal.svelte     Add/edit server dialog; tabs Remote / Local / From Backup. Local
 │       │                          profiles on an Account.db server sync the account on Save
 │       │                          (accountCommands.ts); From Backup imports or restores by storage mode
-│       ├── Dropdown.svelte        Dropdown whose option list follows the theme (a native select's list is drawn by Windows). Title bar and Linked versions use it so far
+│       ├── Dropdown.svelte        Dropdown whose option list follows the theme (a native select's list is drawn by Windows). Every dropdown in the app uses it
 │       ├── LinkedVersions.svelte  Settings list of linked versions: an IntegrationCard each, opened to edit Name, Client, Server, Version, Custom
 │       └── AppPanel.svelte        Settings: linked versions, launch options, themes, integrations
 │                                  (overlay link/trust/flags/loot log), about
