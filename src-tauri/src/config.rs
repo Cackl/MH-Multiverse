@@ -196,7 +196,11 @@ impl Default for AppConfig {
 impl AppConfig {
     /// The active linked version's game version, or "" when none is linked or it isn't known.
     pub fn active_version(&self) -> &str {
-        self.linked.iter().find(|l| l.id == self.active_linked_id).map_or("", |l| l.version.as_str())
+        self.active_linked().map_or("", |l| l.version.as_str())
+    }
+
+    pub fn active_linked(&self) -> Option<&LinkedInstall> {
+        self.linked.iter().find(|l| l.id == self.active_linked_id)
     }
 
     /// The active client is 1.48 or 1.53: no Steam mode and no overlay, which are built for 1.52.

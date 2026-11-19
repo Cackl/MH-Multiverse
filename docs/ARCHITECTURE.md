@@ -262,7 +262,7 @@ The stdout reader additionally calls `parse_player_log_event` on every line (reg
 
 **`calligraphy.rs`** - Reads MHServerEmu's `Calligraphy.sip` pak file (LZ4-compressed entries with a `KAPG` signature). Parses the `Blueprint.directory` and `Prototype.directory` files within the pak to build a `PrototypeCatalogue` with indices by runtime ID, path, and GUID. The catalogue is cached per sip file path and rebuilt automatically if the server executable changes. Prototype search supports multi-prefix category filtering and case-insensitive matching against both path and display name.
 
-**`updater.rs`** - Downloads nightly builds from `nightly.link/Crypto137/MHServerEmu/...`, extracts them, and overlays onto the server directory. The update flow: check availability (HTTP range probe) → backup selected targets → download with progress events → extract to staging dir → detect wrapper directory → copy to server dir → restore backed-up user files. Backups are stored in `{server_dir}/Backups/{timestamp}/` with a `manifest.json`. `Calligraphy.sip` and `mu_cdata.sip` are blacklisted from backups.
+**`updater.rs`** - Downloads nightly builds from `nightly.link/Crypto137/MHServerEmu/...` (the `windows-v48`, `-v52` or `-v53` workflow, matching the server's own game version), extracts them, and overlays onto the server directory. The update flow: check availability (HTTP range probe) → backup selected targets → download with progress events → extract to staging dir → detect wrapper directory → copy to server dir → restore backed-up user files. Backups are stored in `{server_dir}/Backups/{timestamp}/` with a `manifest.json`. `Calligraphy.sip` and `mu_cdata.sip` are blacklisted from backups.
 
 **`app_update.rs`** - Self-update for MH Multiverse itself. Checks `api.github.com/repos/Cackl/MH-Multiverse/releases`, picks the highest published `vX.Y.Z` (skipping drafts and prereleases), and returns notes for every newer release, flagging any whose body contains a `## Breaking Changes` heading. Installs re-fetch the release by tag and refuse to touch the running exe unless the download carries a valid minisign signature from the embedded `PUBKEY`, names the expected file in its trusted comment, and (exe) reports the expected version in its version resource. See [Releasing](#releasing-signed-updates).
 
@@ -704,6 +704,8 @@ Values of `"N/A"` or empty string are treated as absent at each level.
 
 ```
 check_update_available(server_exe)
+  → nightly flavour (v48 / v52 / v53) from the game version in the server's MHServerEmu.dll;
+    refused for a Custom server or an undetected version (run_update checks the same)
   → candidate build dates: today and yesterday (UTC)
   → HTTP range probe (bytes=0-0) of each nightly.link URL, newest first
   → read the installed build date from MHServerEmu.exe's ProductVersion

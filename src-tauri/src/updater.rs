@@ -55,9 +55,33 @@ fn candidate_dates(now: DateTime<Utc>) -> [String; 2] {
     [fmt(now), fmt(now - Duration::days(1))]
 }
 
-fn build_download_url(build_date: &str) -> String {
+/// Upstream builds one nightly per game version. The server's own dll says which one it is, so
+/// updating never swaps a 1.48 or 1.53 server for a 1.52 build. A fork reads as its base version,
+/// which is why Custom servers get no nightlies at all.
+fn nightly_flavour(server_version: Option<&str>, custom: bool) -> Result<&'static str, String> {
+    if custom {
+        return Err("Nightly updates are off for Custom servers.".into());
+    }
+    match server_version {
+        Some("1.48") => Ok("v48"),
+        Some("1.52") => Ok("v52"),
+        Some("1.53") => Ok("v53"),
+        _ => Err("Couldn't tell which game version this server is for, so no nightly is offered.".into()),
+    }
+}
+
+/// The flavour for this server, from its dll and the active linked version's Custom flag.
+fn server_flavour(app: &AppHandle, server_exe: &str) -> Result<&'static str, String> {
+    if server_exe.trim().is_empty() {
+        return Err("Set the MHServerEmu executable in Settings first.".into());
+    }
+    let custom = crate::config::load_config(app).active_linked().is_some_and(|l| l.custom);
+    nightly_flavour(crate::versions::server_version(server_exe), custom)
+}
+
+fn build_download_url(flavour: &str, build_date: &str) -> String {
     format!(
-        "https://nightly.link/Crypto137/MHServerEmu/workflows/nightly-release-windows-v52/master/MHServerEmu-nightly-{build_date}-Release-windows-v52.zip"
+        "https://nightly.link/Crypto137/MHServerEmu/workflows/nightly-release-windows-{flavour}/master/MHServerEmu-nightly-{build_date}-Release-windows-{flavour}.zip"
     )
 }
 
@@ -69,9 +93,9 @@ fn client() -> Result<reqwest::Client, String> {
 }
 
 /// The newest nightly that exists, as (build date, download url).
-async fn newest_build(client: &reqwest::Client) -> Option<(String, String)> {
+async fn newest_build(client: &reqwest::Client, flavour: &str) -> Option<(String, String)> {
     for build_date in candidate_dates(Utc::now()) {
-        let url = build_download_url(&build_date);
+        let url = build_download_url(flavour, &build_date);
         let exists = client
             .get(&url)
             .header("Range", "bytes=0-0")
@@ -441,7 +465,8 @@ async fn run_update_inner(
     }
 
     // Resolve the build before backing up, so a missing build leaves nothing behind
-    let (build_date, url) = newest_build(&client()?)
+    let flavour = server_flavour(app, server_exe)?;
+    let (build_date, url) = newest_build(&client()?, flavour)
         .await
         .ok_or("No nightly build is available yet. Try again later.")?;
     if is_up_to_date(installed_build_date(server_exe).as_deref(), &build_date) {
@@ -518,9 +543,10 @@ async fn run_update_inner(
 // ── Tauri commands ────────────────────────────────────────────────────────────
 
 #[tauri::command]
-pub async fn check_update_available(server_exe: Option<String>) -> Result<UpdateInfo, String> {
+pub async fn check_update_available(app: AppHandle, server_exe: Option<String>) -> Result<UpdateInfo, String> {
+    let flavour = server_flavour(&app, server_exe.as_deref().unwrap_or_default())?;
     let installed_build_date = server_exe.as_deref().and_then(installed_build_date);
-    Ok(match newest_build(&client()?).await {
+    Ok(match newest_build(&client()?, flavour).await {
         Some((build_date, download_url)) => UpdateInfo {
             up_to_date: is_up_to_date(installed_build_date.as_deref(), &build_date),
             installed_build_date,
@@ -531,7 +557,7 @@ pub async fn check_update_available(server_exe: Option<String>) -> Result<Update
         None => {
             let [build_date, _] = candidate_dates(Utc::now());
             UpdateInfo {
-                download_url: build_download_url(&build_date),
+                download_url: build_download_url(flavour, &build_date),
                 build_date,
                 available: false,
                 installed_build_date,
