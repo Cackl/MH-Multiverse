@@ -1,9 +1,9 @@
 <script lang="ts">
   import { invoke } from '@tauri-apps/api/core'
   import { open } from '@tauri-apps/plugin-dialog'
-  import { appConfig, activeTab as appTab, serverRunning, upsertServer, jsonPersistence, refreshPersistence, type Server } from '../lib/store'
-  import { syncAccount } from '../lib/accountCommands'
-  import { tip } from '../lib/tooltip'
+  import { appConfig, activeTab as appTab, serverRunning, upsertServer, jsonPersistence, refreshPersistence, type Server } from '../../lib/store'
+  import { syncAccount } from '../../lib/accountCommands'
+  import { tip } from '../../lib/tooltip'
 
   export let server: Server | null = null
   export let initialTab: 'remote' | 'local' | null = null

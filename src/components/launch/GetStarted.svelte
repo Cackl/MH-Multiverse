@@ -3,11 +3,11 @@
     appConfig, serverRunning, apacheRunning, startingServer, startingApache,
     startServer, startApache, activeTab, settingsSection, launchOptionsReviewed,
     jsonPersistence, refreshPersistence,
-  } from '../lib/store'
+  } from '../../lib/store'
   import { invoke } from '@tauri-apps/api/core'
-  import { browseGameExe, browseServerExe } from '../lib/browseExe'
-  import { versionMatch } from '../lib/versionCaps'
-  import { tip } from '../lib/tooltip'
+  import { browseGameExe, browseServerExe } from '../../lib/browseExe'
+  import { versionMatch } from '../../lib/versionCaps'
+  import { tip } from '../../lib/tooltip'
 
   export let onAddServer: (tab: 'remote' | 'local') => void
 

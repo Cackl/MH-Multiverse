@@ -2,7 +2,7 @@
   import { onMount } from 'svelte'
   import Titlebar from './components/TitleBar.svelte'
   import Rail from './components/Rail.svelte'
-  import LaunchPanel from './components/LaunchPanel.svelte'
+  import LaunchPanel from './components/launch/LaunchPanel.svelte'
   import ServerPanel from './components/ServerPanel.svelte'
   import ConfigPanel from './components/ConfigPanel.svelte'
   import OpsPanel from './components/OpsPanel.svelte'

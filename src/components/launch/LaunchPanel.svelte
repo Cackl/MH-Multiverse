@@ -7,11 +7,11 @@
     selectServer, deleteServer,
     gameRunning, overlayStatus, type OverlayStatus, activeTab, settingsSection,
     type Server
-  } from '../lib/store'
-  import { tip } from '../lib/tooltip'
+  } from '../../lib/store'
+  import { tip } from '../../lib/tooltip'
   import ServerModal from './ServerModal.svelte'
-  import { openCard } from './integrations/IntegrationCard.svelte'
-  import PanelSidebar from './PanelSidebar.svelte'
+  import { openCard } from '../integrations/IntegrationCard.svelte'
+  import PanelSidebar from '../PanelSidebar.svelte'
   import GetStarted from './GetStarted.svelte'
 
   $: activeServer = $appConfig.servers.find(s => s.id === $activeServerId) ?? null
