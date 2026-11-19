@@ -1224,7 +1224,8 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
   font-weight: 600;
   letter-spacing: 0.1em;
   text-transform: uppercase;
-  color: var(--text-0);
+  /* A step below --text-0, which glares at this size, but brighter than --text-1 */
+  color: color-mix(in srgb, var(--text-0) 70%, var(--text-1));
   white-space: nowrap;
 }
 .page-acts {

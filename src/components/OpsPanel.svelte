@@ -321,15 +321,17 @@
 
     {:else if section === 'update'}
       <!-- ── Update section ── -->
-      <div class="ops-section-head">
-        <div class="section-title">Nightly Update</div>
-        <button class="btn btn-sm btn-outline" on:click={checkForUpdate} disabled={checking || updating}>
-          {#if checking}
-            Checking...
-          {:else}
-            Check
-          {/if}
-        </button>
+      <div class="page-head">
+        <h3 class="page-title">Nightly Update</h3>
+        <div class="page-acts">
+          <button class="btn btn-sm btn-outline" on:click={checkForUpdate} disabled={checking || updating}>
+            {#if checking}
+              Checking...
+            {:else}
+              Check
+            {/if}
+          </button>
+        </div>
       </div>
       <div class="ops-body">
 
@@ -376,7 +378,7 @@
             </div>
           {/if}
           {#if checkError}
-            <div class="inline-error">{checkError}</div>
+            <div class="feedback-error">{checkError}</div>
           {/if}
         </div>
 
@@ -444,15 +446,17 @@
 
     {:else if section === 'backups'}
       <!-- ── Backups section ── -->
-      <div class="ops-section-head">
-        <div class="section-title">Backups</div>
-        <button
-          class="btn btn-sm btn-outline"
-          on:click={createBackup}
-          disabled={creatingBackup || selectedTargets.size === 0}
-        >
-          {creatingBackup ? 'Creating...' : 'Create Backup'}
-        </button>
+      <div class="page-head">
+        <h3 class="page-title">Backups</h3>
+        <div class="page-acts">
+          <button
+            class="btn btn-sm btn-outline"
+            on:click={createBackup}
+            disabled={creatingBackup || selectedTargets.size === 0}
+          >
+            {creatingBackup ? 'Creating...' : 'Create Backup'}
+          </button>
+        </div>
       </div>
       <div class="backups-columns">
 
@@ -516,13 +520,13 @@
           <div class="backups-right-head">
             <span class="subsection-title" style="margin:0; flex:1;">History</span>
             {#if backupSuccess}
-              <span class="feedback-ok" style="font-size:11px;">{backupSuccess}</span>
+              <span class="feedback-ok">{backupSuccess}</span>
             {/if}
             {#if backupError}
-              <span class="feedback-error" style="font-size:11px;">{backupError}</span>
+              <span class="feedback-error">{backupError}</span>
             {/if}
             {#if openDirError}
-              <span class="inline-error" style="font-size:var(--fs-min);">{openDirError}</span>
+              <span class="feedback-error">{openDirError}</span>
             {/if}
             <button
               class="btn-icon"
@@ -538,9 +542,9 @@
           </div>
 
           {#if loadingBackups}
-            <div class="backup-notice">Loading...</div>
+            <div class="empty-state"><span class="empty-state-label">Loading backups</span></div>
           {:else if backups.length === 0}
-            <div class="backup-notice">No backups yet.</div>
+            <div class="empty-state"><span class="empty-state-label">No backups yet</span></div>
           {:else}
             <div class="backup-list">
               {#each backups as backup (backup.id)}
@@ -559,14 +563,14 @@
                   {#if confirmingRestore === backup.id}
                     <div class="confirm-row">
                       <span class="confirm-text">This will overwrite current files.</span>
-                      <button class="btn btn-sm btn-outline" on:click={cancelConfirm}>Cancel</button>
                       <button class="btn btn-sm btn-accent" on:click={() => restoreBackup(backup.id)}>Confirm Restore</button>
+                      <button class="btn btn-sm btn-outline" on:click={cancelConfirm}>Cancel</button>
                     </div>
                   {:else if confirmingDelete === backup.id}
                     <div class="confirm-row">
                       <span class="confirm-text">Delete this backup permanently?</span>
-                      <button class="btn btn-sm btn-outline" on:click={cancelConfirm}>Cancel</button>
                       <button class="btn btn-sm btn-red" on:click={() => deleteBackup(backup.id)}>Delete</button>
+                      <button class="btn btn-sm btn-outline" on:click={cancelConfirm}>Cancel</button>
                     </div>
                   {:else}
                     <div class="backup-row-actions">
@@ -646,18 +650,6 @@
     min-width: 0;
     background: var(--bg-1);
   }
-
-  .ops-section-head {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    padding: 10px 20px;
-    border-bottom: 1px solid var(--border);
-    flex-shrink: 0;
-    min-height: 53px;
-  }
-  /* .ops-section-head .section-title { font-size: 11px; } */
-  .ops-section-head .btn { margin-left: auto; }
 
   .ops-body {
     flex: 1;
@@ -763,11 +755,6 @@
   .status-pill.unavailable { color: var(--text-3);       border-color: var(--border-mid);   background: var(--bg-3); }
   .status-pill.checking    { color: var(--text-2);       border-color: var(--border-mid);   background: var(--bg-3); }
 
-  .inline-error {
-    font-size: 11px;
-    color: var(--text-error);
-  }
-
   /* ── Warning notice ── */
   .warning-notice {
     display: flex;
@@ -824,8 +811,8 @@
   }
 
   .progress-pct {
-    font-family: var(--font-mono);
     font-size: 11px;
+    font-variant-numeric: tabular-nums;
     color: var(--accent-bright);
   }
 
@@ -893,25 +880,7 @@
     color: var(--text-3);
   }
 
-  /* .backup-actions {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 8px 0;
-    border-top: 1px solid var(--border);
-    margin-top: 4px;
-  } */
-
   /* ── Backup history ── */
-  .backup-notice {
-    font-family: var(--font-head);
-    font-size: var(--fs-min);
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    color: var(--text-3);
-    padding: 16px 0 8px;
-  }
-
   .backup-list {
     display: flex;
     flex-direction: column;
@@ -937,8 +906,8 @@
   }
 
   .backup-date {
-    font-family: var(--font-mono);
     font-size: 11px;
+    font-variant-numeric: tabular-nums;
     color: var(--text-1);
   }
 
@@ -961,8 +930,8 @@
   }
 
   .backup-size {
-    font-family: var(--font-mono);
     font-size: 11px;
+    font-variant-numeric: tabular-nums;
     color: var(--text-3);
     margin-left: auto;
   }
