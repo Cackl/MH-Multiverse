@@ -705,7 +705,8 @@ Values of `"N/A"` or empty string are treated as absent at each level.
 ```
 check_update_available(server_exe)
   → nightly flavour (v48 / v52 / v53) from the game version in the server's MHServerEmu.dll;
-    refused for a Custom server or an undetected version (run_update checks the same)
+    none for a Custom server or an undetected version: UpdateInfo.unavailable_reason says why
+    (run_update refuses with the same reason)
   → candidate build dates: today and yesterday (UTC)
   → HTTP range probe (bytes=0-0) of each nightly.link URL, newest first
   → read the installed build date from MHServerEmu.exe's ProductVersion

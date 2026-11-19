@@ -22,6 +22,10 @@ pub struct UpdateInfo {
     /// The installed build is at least as new as `build_date`, so updating would change nothing.
     #[serde(default)]
     pub up_to_date: bool,
+    /// Why no nightly is offered for this server (Custom, or its game version wasn't detected).
+    /// When set, `build_date` and `download_url` are empty.
+    #[serde(default)]
+    pub unavailable_reason: Option<String>,
 }
 
 
@@ -544,8 +548,20 @@ async fn run_update_inner(
 
 #[tauri::command]
 pub async fn check_update_available(app: AppHandle, server_exe: Option<String>) -> Result<UpdateInfo, String> {
-    let flavour = server_flavour(&app, server_exe.as_deref().unwrap_or_default())?;
     let installed_build_date = server_exe.as_deref().and_then(installed_build_date);
+    let flavour = match server_flavour(&app, server_exe.as_deref().unwrap_or_default()) {
+        Ok(flavour) => flavour,
+        Err(reason) => {
+            return Ok(UpdateInfo {
+                build_date: String::new(),
+                download_url: String::new(),
+                available: false,
+                installed_build_date,
+                up_to_date: false,
+                unavailable_reason: Some(reason),
+            })
+        }
+    };
     Ok(match newest_build(&client()?, flavour).await {
         Some((build_date, download_url)) => UpdateInfo {
             up_to_date: is_up_to_date(installed_build_date.as_deref(), &build_date),
@@ -553,6 +569,7 @@ pub async fn check_update_available(app: AppHandle, server_exe: Option<String>) 
             build_date,
             download_url,
             available: true,
+            unavailable_reason: None,
         },
         None => {
             let [build_date, _] = candidate_dates(Utc::now());
@@ -562,6 +579,7 @@ pub async fn check_update_available(app: AppHandle, server_exe: Option<String>) 
                 available: false,
                 installed_build_date,
                 up_to_date: false,
+                unavailable_reason: None,
             }
         }
     })

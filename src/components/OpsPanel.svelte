@@ -15,6 +15,7 @@
     available: boolean
     installed_build_date?: string | null
     up_to_date?: boolean
+    unavailable_reason?: string | null
   }
 
   interface UpdateProgress {
@@ -336,7 +337,7 @@
         <div class="info-block">
           <div class="info-row">
             <span class="info-label">Build Date</span>
-            {#if updateInfo}
+            {#if updateInfo?.build_date}
               <span class="info-value num">{updateInfo.build_date.replace(/(\d{4})(\d{2})(\d{2})/, '$1-$2-$3')}</span>
             {:else if checking}
               <span class="info-value dim">Checking...</span>
@@ -366,7 +367,9 @@
               <span class="info-value dim">Not checked</span>
             {/if}
           </div>
-          {#if updateInfo}
+          {#if updateInfo?.unavailable_reason}
+            <div class="info-value dim">{updateInfo.unavailable_reason}</div>
+          {:else if updateInfo}
             <div class="info-row url-row">
               <span class="info-label">URL</span>
               <span class="info-value mono url-value">{updateInfo.download_url}</span>
