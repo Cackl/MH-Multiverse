@@ -141,8 +141,8 @@
 
       {#if activeSection === 'client'}
         <div class="detail-section">
-          <div class="detail-head">
-            <div class="section-title">Marvel Heroes Omega</div>
+          <div class="page-head">
+            <h3 class="page-title">Marvel Heroes Omega</h3>
           </div>
           <div class="detail-body content-col">
 
@@ -208,8 +208,8 @@
 
       {:else if activeSection === 'display'}
         <div class="detail-section">
-          <div class="detail-head">
-            <div class="section-title">Display</div>
+          <div class="page-head">
+            <h3 class="page-title">Display</h3>
           </div>
           <div class="detail-body content-col">
             <div class="subsection-title">Text size</div>
@@ -254,8 +254,8 @@
 
       {:else if activeSection === 'integrations'}
         <div class="detail-section">
-          <div class="detail-head">
-            <div class="section-title">Integrations</div>
+          <div class="page-head">
+            <h3 class="page-title">Integrations</h3>
           </div>
           <div class="detail-body">
             <OverlayIntegration />
@@ -265,8 +265,8 @@
 
       {:else if activeSection === 'about'}
         <div class="detail-section">
-          <div class="detail-head">
-            <div class="section-title">About</div>
+          <div class="page-head">
+            <h3 class="page-title">About</h3>
           </div>
           <div class="detail-body">
             <div class="about-row">
@@ -428,15 +428,6 @@
   .detail-section {
     display: flex;
     flex-direction: column;
-  }
-
-  .detail-head {
-    display: flex;
-    align-items: center;
-    padding: 12px 20px;
-    border-bottom: 1px solid var(--border);
-    flex-shrink: 0;
-    min-height: 53px;
   }
 
   .detail-body {
