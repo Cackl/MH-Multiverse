@@ -101,7 +101,7 @@
     switch (rule.rule_type) {
       case 'AlwaysOn':         return 'Always on'
       case 'WeeklyRotation':   return 'Weekly rotation'
-      case 'DayOfWeek':        return `${rule.start_day_of_week ?? 'Day'} only`
+      case 'DayOfWeek':        return 'Day of week'
       case 'SpecialDate':      return 'Special date'
       case 'SpecialDateLunar': return 'Lunar date'
       default:                 return rule.rule_type
@@ -434,8 +434,26 @@
       </div>
     </PanelSidebar>
 
-    <!-- ── Content pane ── -->
     <section class="data-main">
+
+      <header class="page-head">
+        {#if selectedRule !== null || creatingRule}
+          <button class="btn-icon" aria-label="Back to all events" use:tip={'Back to all events'} on:click={discardEditor}>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="15 18 9 12 15 6"/>
+            </svg>
+          </button>
+          <h3 class="page-title">{creatingRule ? 'New Rule' : selectedRule?.name}</h3>
+          {#if !creatingRule && selectedRule}<span class="tag">{ruleTypeLabel(selectedRule)}</span>{/if}
+        {:else}
+          <h3 class="page-title">Events</h3>
+        {/if}
+        <div class="page-acts">
+          {#if $appConfig.server_exe && !loading && !loadError && selectedRule === null && !creatingRule}
+            <button class="btn btn-sm btn-outline" on:click={() => { creatingDefinition = true; editingDefinition = null }}>New event</button>
+          {/if}
+        </div>
+      </header>
 
       {#if !$appConfig.server_exe}
         <div class="empty-state">
@@ -460,22 +478,6 @@
 
       {:else if selectedRule !== null || creatingRule}
 
-        <!-- Rule editor view -->
-        <div class="editor-header">
-          <button class="back-btn" aria-label="Back to dashboard" use:tip={'Back to dashboard'} on:click={discardEditor}>
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <polyline points="15 18 9 12 15 6"/>
-            </svg>
-          </button>
-          <span class="editor-title">
-            {creatingRule ? 'New rule' : selectedRule?.name}
-          </span>
-          {#if !creatingRule && selectedRule}
-            {@const status = ruleStatus(selectedRule)}
-            <span class="status-dot dot-{status}" style="margin-left:4px;"></span>
-            <span class="editor-type-label">{ruleTypeLabel(selectedRule)}</span>
-          {/if}
-        </div>
         <div class="editor-wrap">
           {#key editorKey}
             <EventRuleEditorModal
@@ -498,15 +500,10 @@
 
           <!-- Active now -->
           <div class="dash-section">
-            <div class="dash-section-header">
-              <span class="dash-section-title">Active now</span>
-              <span class="dash-count">{activeItems.length}</span>
-            </div>
+            <div class="subsection-title">Running now</div>
 
             {#if activeItems.length === 0}
-              <div class="dash-empty">
-                No events are currently active.
-              </div>
+              <div class="dash-empty">Nothing is running now.</div>
             {:else}
               <div class="active-grid">
                 {#each activeItems as item}
@@ -579,18 +576,6 @@
                   <polyline points="9 18 15 12 9 6"/>
                 </svg>
                 <span class="dash-section-title">All events</span>
-                <span class="dash-count">{definitions.length}</span>
-              </button>
-              <button
-                class="btn btn-sm btn-outline"
-                style="margin-left:auto;"
-                on:click={() => { creatingDefinition = true; editingDefinition = null }}
-              >
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:11px;height:11px;">
-                  <line x1="12" y1="5" x2="12" y2="19"/>
-                  <line x1="5" y1="12" x2="19" y2="12"/>
-                </svg>
-                New definition
               </button>
             </div>
 
@@ -826,51 +811,6 @@
     color: var(--text-1);
   }
 
-  /* ── Rule editor header ── */
-
-  .editor-header {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 12px 16px;
-    border-bottom: 1px solid var(--border);
-    min-height: 53px;
-    flex-shrink: 0;
-  }
-
-  .back-btn {
-    width: 28px;
-    height: 28px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: none;
-    border: 1px solid var(--border-mid);
-    border-radius: var(--radius-sm);
-    color: var(--text-2);
-    cursor: pointer;
-    transition: all 0.1s;
-    flex-shrink: 0;
-    padding: 0;
-  }
-  .back-btn:hover   { color: var(--text-0); border-color: var(--border-lit); }
-  .back-btn svg     { width: 16px; height: 16px; }
-
-  .editor-title {
-    font-family: var(--font-head);
-    font-size: 12px;
-    font-weight: 700;
-    color: var(--text-0);
-  }
-
-  .editor-type-label {
-    font-family: var(--font-head);
-    font-size: var(--fs-min);
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    color: var(--text-3);
-  }
-
   .editor-wrap {
     flex: 1;
     display: flex;
@@ -908,16 +848,6 @@
     letter-spacing: 0.12em;
     text-transform: uppercase;
     color: var(--text-2);
-  }
-
-  .dash-count {
-    font-family: var(--font-mono);
-    font-size: var(--fs-min);
-    color: var(--text-3);
-    background: var(--bg-3);
-    border: 1px solid var(--border-mid);
-    border-radius: 2px;
-    padding: 1px 5px;
   }
 
   .dash-empty {
