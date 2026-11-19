@@ -1,6 +1,7 @@
 <script lang="ts">
   import { invoke } from '@tauri-apps/api/core'
   import { tip } from '../lib/tooltip'
+  import Dropdown from './Dropdown.svelte'
   import {
     type PlayerSession,
     USER_LEVEL_OPTIONS,
@@ -197,16 +198,10 @@
 
       <div class="level-row">
         <span class="field-label">User Level</span>
-        <select
-          class="level-select"
-          bind:value={setLevelValue}
-          on:change={() => (setLevelPending = true)}
-          disabled={commandRunning}
-        >
-          {#each USER_LEVEL_OPTIONS as opt}
-            <option value={opt.value}>{opt.label}</option>
-          {/each}
-        </select>
+        <Dropdown label="User level" value={String(setLevelValue)} disabled={commandRunning}
+          options={USER_LEVEL_OPTIONS.map(o => ({ value: String(o.value), label: o.label }))}
+          onChange={v => { setLevelValue = Number(v); setLevelPending = true }}
+          --dd-bg="var(--bg-1)" --dd-color="var(--text-1)" --dd-pad="4px 8px" --dd-min-width="0" />
         {#if setLevelPending}
           <button class="btn btn-accent" disabled={commandRunning} on:click={executeSetLevel}>Apply</button>
           <button class="btn btn-ghost" on:click={() => { setLevelPending = false; setLevelValue = player.user_level ?? 0 }}>Cancel</button>
@@ -484,21 +479,6 @@
   .btn-accent:not(:disabled):hover { background: var(--accent-glow-strong); }
   .btn-ghost:not(:disabled):hover  { background: var(--bg-2); color: var(--text-1); }
 
-  /* ── Level select ── */
-  .level-select {
-    background: var(--bg-1);
-    border: 1px solid var(--border-mid);
-    color: var(--text-1);
-    font-family: var(--font-body);
-    font-size: 12px;
-    padding: 4px 8px;
-    border-radius: var(--radius-sm);
-    outline: none;
-    cursor: pointer;
-    transition: border-color 0.12s;
-  }
-  .level-select:focus { border-color: var(--accent-dim); }
-  .level-select option { background: var(--bg-2); }
 
   /* ── Confirm box ── */
   .confirm-box {
