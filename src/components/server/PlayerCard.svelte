@@ -1,7 +1,7 @@
 <script lang="ts">
   import { invoke } from '@tauri-apps/api/core'
-  import { tip } from '../lib/tooltip'
-  import Dropdown from './Dropdown.svelte'
+  import { tip } from '../../lib/tooltip'
+  import Dropdown from '../Dropdown.svelte'
   import {
     type PlayerSession,
     USER_LEVEL_OPTIONS,
@@ -9,7 +9,7 @@
     isBanned,
     isWhitelisted,
     formatLastSeen,
-  } from '../lib/playerMeta'
+  } from '../../lib/playerMeta'
 
   export let player: PlayerSession
   export let compact = false

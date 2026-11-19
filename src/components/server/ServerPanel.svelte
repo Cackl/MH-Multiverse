@@ -2,7 +2,7 @@
   import { tick, onMount } from 'svelte'
   import { invoke } from '@tauri-apps/api/core'
   import { openUrl } from '@tauri-apps/plugin-opener'
-  import { tip } from '../lib/tooltip'
+  import { tip } from '../../lib/tooltip'
   import {
     serverRunning,
     appConfig,
@@ -25,8 +25,8 @@
     startingApache,
     startServer,
     startApache,
-  } from '../lib/store'
-  import { FALLBACK_COMMANDS, maskSecrets } from '../lib/serverCommands'
+  } from '../../lib/store'
+  import { FALLBACK_COMMANDS, maskSecrets } from '../../lib/serverCommands'
   import PlayersBlade from './PlayersBlade.svelte'
 
   const DASHBOARD_PORT_DEFAULT = 8080

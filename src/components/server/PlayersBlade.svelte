@@ -4,7 +4,7 @@
   import { listen } from '@tauri-apps/api/event'
   import { fly } from 'svelte/transition'
   import PlayerCard from './PlayerCard.svelte'
-  import { type PlayerSession, userLevelLabel, isBanned, isWhitelisted } from '../lib/playerMeta'
+  import { type PlayerSession, userLevelLabel, isBanned, isWhitelisted } from '../../lib/playerMeta'
 
   export let open = false
   export let playerCount = 0

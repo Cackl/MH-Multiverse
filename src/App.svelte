@@ -3,7 +3,7 @@
   import Titlebar from './components/TitleBar.svelte'
   import Rail from './components/Rail.svelte'
   import LaunchPanel from './components/launch/LaunchPanel.svelte'
-  import ServerPanel from './components/ServerPanel.svelte'
+  import ServerPanel from './components/server/ServerPanel.svelte'
   import ConfigPanel from './components/ConfigPanel.svelte'
   import OpsPanel from './components/OpsPanel.svelte'
   import AppPanel from './components/AppPanel.svelte'
