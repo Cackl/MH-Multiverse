@@ -3,7 +3,7 @@
   import { invoke } from '@tauri-apps/api/core'
   import { openPath } from '@tauri-apps/plugin-opener'
   import { appConfig } from '../lib/store'
-  import { activeDataTab, tuningFocusFile, confirmLeave } from '../lib/store'
+  import { activeDataTab, tuningFocusFile, confirmLeave, askConfirm } from '../lib/store'
   import { eventTimezoneOffset } from '../lib/store'
   import { serverNow, ruleIsValid, ruleActiveIds, activeEventIds as eventsActiveAt } from '../lib/eventSchedule'
   import type { TuningFileInfo, EventDefinition, EventsData, ScheduleRule, ScheduleData } from '../lib/tuningMeta'
@@ -38,8 +38,6 @@
   let creatingDefinition  = false
   let allEventsExpanded   = true
 
-  type PendingAction = 'resetEvents' | 'mergeEvents' | 'resetSchedule' | 'mergeSchedule'
-  let pendingAction: PendingAction | null = null
 
   // ── Derived ─────────────────────────────────────────────────────────────────
 
@@ -160,7 +158,7 @@
       scheduleData = { rules: newRules, using_override: true }
       selectedRule = updated
       creatingRule = false
-      opSuccess    = 'Schedule saved.'
+      opSuccess    = 'Saved'
       setTimeout(() => opSuccess = '', 3000)
     } catch (e) {
       opError = String(e)
@@ -201,7 +199,7 @@
       eventsData        = { definitions: newDefs, using_override: true }
       editingDefinition = null
       creatingDefinition = false
-      opSuccess = 'Events saved.'
+      opSuccess = 'Saved'
       setTimeout(() => opSuccess = '', 3000)
     } catch (e) {
       opError = String(e)
@@ -244,6 +242,29 @@
       discardEditor()  // selection is by object reference; these are new objects
     } catch (e) { opError = String(e) }
     finally { saving = false }
+  }
+
+  // Override files, shown at the bottom of the dashboard
+  $: overrideRows = [
+    { label: 'Events',   file: 'EventsOverride.json',        what: 'events', using: eventsUsingOverride,   reset: resetEvents,   merge: mergeEvents },
+    { label: 'Schedule', file: 'EventScheduleOverride.json', what: 'rules',  using: scheduleUsingOverride, reset: resetSchedule, merge: mergeSchedule },
+  ]
+  type OverrideRow = typeof overrideRows[number]
+
+  async function confirmReset(row: OverrideRow) {
+    if (await askConfirm({
+      title: `Reset ${row.label}?`,
+      message: `${row.file} goes back to the default ${row.what}. Your changes to them are lost.`,
+      okLabel: 'Reset', cancelLabel: 'Cancel',
+    })) await row.reset()
+  }
+
+  async function confirmMerge(row: OverrideRow) {
+    if (await askConfirm({
+      title: `Merge default ${row.what}?`,
+      message: `Adds the default ${row.what} that ${row.file} is missing. Your changes stay.`,
+      okLabel: 'Merge', cancelLabel: 'Cancel',
+    })) await row.merge()
   }
 
   onMount(() => { if ($appConfig.server_exe) loadData() })
@@ -337,102 +358,6 @@
           </div>
         {/if}
 
-        <!-- Override status -->
-        {#if $appConfig.server_exe && !loading}
-          <div class="override-section">
-            <div class="override-title">Override status</div>
-
-            {#if pendingAction}
-            <div class="confirm-prompt">
-                {pendingAction === 'resetEvents'   ? 'Reset Events to default?' :
-                pendingAction === 'mergeEvents'   ? 'Merge defaults into Events?' :
-                pendingAction === 'resetSchedule' ? 'Reset Schedule to default?' :
-                                                    'Merge defaults into Schedule?'}
-            </div>
-            {/if}
-
-            <div class="override-row">
-            <span class="override-label">Events</span>
-            <span class="override-badge" class:is-override={eventsUsingOverride}>
-                {eventsUsingOverride ? 'Override' : 'Default'}
-            </span>
-            {#if pendingAction === 'resetEvents' || pendingAction === 'mergeEvents'}
-                <button
-                class="btn btn-sm btn-accent override-btn"
-                disabled={saving}
-                on:click={async () => {
-                    const action = pendingAction
-                    pendingAction = null
-                    if (action === 'resetEvents') await resetEvents()
-                    else await mergeEvents()
-                }}
-                >Yes</button>
-                <button
-                class="btn btn-sm btn-outline override-btn"
-                disabled={saving}
-                on:click={() => pendingAction = null}
-                >Cancel</button>
-            {:else}
-                <button
-                class="btn btn-sm btn-outline override-btn"
-                disabled={saving || !!pendingAction}
-                use:tip={'Overwrite EventsOverride.json with default Events.json'}
-                on:click={() => pendingAction = 'resetEvents'}
-                >Reset</button>
-                <button
-                class="btn btn-sm btn-outline override-btn"
-                disabled={saving || !!pendingAction}
-                use:tip={'Add any missing default events to the override'}
-                on:click={() => pendingAction = 'mergeEvents'}
-                >Merge</button>
-            {/if}
-            </div>
-
-            <div class="override-row">
-            <span class="override-label">Schedule</span>
-            <span class="override-badge" class:is-override={scheduleUsingOverride}>
-                {scheduleUsingOverride ? 'Override' : 'Default'}
-            </span>
-            {#if pendingAction === 'resetSchedule' || pendingAction === 'mergeSchedule'}
-                <button
-                class="btn btn-sm btn-accent override-btn"
-                disabled={saving}
-                on:click={async () => {
-                    const action = pendingAction
-                    pendingAction = null
-                    if (action === 'resetSchedule') await resetSchedule()
-                    else await mergeSchedule()
-                }}
-                >Yes</button>
-                <button
-                class="btn btn-sm btn-outline override-btn"
-                disabled={saving}
-                on:click={() => pendingAction = null}
-                >Cancel</button>
-            {:else}
-                <button
-                class="btn btn-sm btn-outline override-btn"
-                disabled={saving || !!pendingAction}
-                use:tip={'Overwrite EventScheduleOverride.json with default'}
-                on:click={() => pendingAction = 'resetSchedule'}
-                >Reset</button>
-                <button
-                class="btn btn-sm btn-outline override-btn"
-                disabled={saving || !!pendingAction}
-                use:tip={'Add any missing default rules to the override'}
-                on:click={() => pendingAction = 'mergeSchedule'}
-                >Merge</button>
-            {/if}
-            </div>
-
-            {#if opError}
-              <div class="override-error">{opError}</div>
-            {/if}
-            {#if opSuccess}
-              <div class="override-ok">{opSuccess}</div>
-            {/if}
-          </div>
-        {/if}
       </div>
     </PanelSidebar>
 
@@ -451,6 +376,8 @@
           <h3 class="page-title">Events</h3>
         {/if}
         <div class="page-acts">
+          {#if opError}<span class="feedback-error">{opError}</span>{/if}
+          {#if opSuccess}<span class="feedback-ok">{opSuccess}</span>{/if}
           {#if $appConfig.server_exe && !loading && !loadError && selectedRule === null && !creatingRule}
             <button class="btn btn-sm btn-outline" on:click={() => { creatingDefinition = true; editingDefinition = null }}>New event</button>
           {/if}
@@ -615,6 +542,21 @@
             {/if}
           </div>
 
+          <!-- Override files -->
+          <div class="dash-section">
+            <div class="subsection-title">Override files</div>
+            <div class="def-list">
+              {#each overrideRows as row (row.label)}
+                <div class="def-row">
+                  <div class="def-info"><span class="def-name">{row.label}</span></div>
+                  <span class="tag" use:tip={row.file}>{row.using ? 'Override' : 'Default'}</span>
+                  <button class="btn btn-sm btn-outline" disabled={saving} use:tip={`Replace ${row.file} with the default ${row.what}`} on:click={() => confirmReset(row)}>Reset</button>
+                  <button class="btn btn-sm btn-outline" disabled={saving} use:tip={`Add the default ${row.what} that ${row.file} is missing`} on:click={() => confirmMerge(row)}>Merge</button>
+                </div>
+              {/each}
+            </div>
+          </div>
+
         </div><!-- dashboard-scroll -->
       {/if}
 
@@ -700,83 +642,6 @@
   }
   .dot-active    { border-color: var(--accent-bright); background: var(--accent-bright); box-shadow: 0 0 0 3px var(--accent-glow); }
   .dot-scheduled { border-color: var(--accent); }
-
-  /* ── Override section ── */
-
-  .override-section {
-    border-top: 1px solid var(--border);
-    padding: 10px 10px 12px;
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-    flex-shrink: 0;
-  }
-
-  .override-title {
-    font-family: var(--font-head);
-    font-size: var(--fs-min);
-    font-weight: 600;
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
-    color: var(--text-3);
-    padding-bottom: 4px;
-  }
-
-  .override-row {
-    display: flex;
-    align-items: center;
-    gap: 5px;
-  }
-
-  .override-label {
-    font-family: var(--font-head);
-    font-size: var(--fs-min);
-    color: var(--text-2);
-    min-width: 52px;
-  }
-
-  .override-badge {
-    font-family: var(--font-head);
-    font-size: var(--fs-min);
-    font-weight: 600;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-    padding: 1px 5px;
-    border-radius: 2px;
-    border: 1px solid var(--border-mid);
-    color: var(--text-3);
-    background: none;
-    flex-shrink: 0;
-  }
-  .override-badge.is-override {
-    color: var(--accent-bright);
-    border-color: var(--accent-dim);
-    background: var(--accent-glow);
-  }
-
-  .override-btn { padding: 2px 7px; font-size: var(--fs-min); margin-left: auto; }
-  .override-btn + .override-btn { margin-left: 0; }
-
-  .override-error {
-    font-family: var(--font-body);
-    font-size: var(--fs-min);
-    color: var(--text-error);
-    padding-top: 2px;
-  }
-
-  .override-ok {
-    font-family: var(--font-body);
-    font-size: var(--fs-min);
-    color: var(--green-bright);
-    padding-top: 2px;
-  }
-
-  .confirm-prompt {
-    font-family: var(--font-head);
-    font-size: var(--fs-min);
-    letter-spacing: 0.04em;
-    color: var(--text-1);
-  }
 
   .editor-wrap {
     flex: 1;
