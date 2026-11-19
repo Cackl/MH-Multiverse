@@ -378,7 +378,7 @@
             </div>
           {/if}
           {#if checkError}
-            <div class="inline-error">{checkError}</div>
+            <div class="feedback-error">{checkError}</div>
           {/if}
         </div>
 
@@ -520,13 +520,13 @@
           <div class="backups-right-head">
             <span class="subsection-title" style="margin:0; flex:1;">History</span>
             {#if backupSuccess}
-              <span class="feedback-ok" style="font-size:11px;">{backupSuccess}</span>
+              <span class="feedback-ok">{backupSuccess}</span>
             {/if}
             {#if backupError}
-              <span class="feedback-error" style="font-size:11px;">{backupError}</span>
+              <span class="feedback-error">{backupError}</span>
             {/if}
             {#if openDirError}
-              <span class="inline-error" style="font-size:var(--fs-min);">{openDirError}</span>
+              <span class="feedback-error">{openDirError}</span>
             {/if}
             <button
               class="btn-icon"
@@ -542,9 +542,9 @@
           </div>
 
           {#if loadingBackups}
-            <div class="backup-notice">Loading...</div>
+            <div class="empty-state"><span class="empty-state-label">Loading backups</span></div>
           {:else if backups.length === 0}
-            <div class="backup-notice">No backups yet.</div>
+            <div class="empty-state"><span class="empty-state-label">No backups yet</span></div>
           {:else}
             <div class="backup-list">
               {#each backups as backup (backup.id)}
@@ -755,11 +755,6 @@
   .status-pill.unavailable { color: var(--text-3);       border-color: var(--border-mid);   background: var(--bg-3); }
   .status-pill.checking    { color: var(--text-2);       border-color: var(--border-mid);   background: var(--bg-3); }
 
-  .inline-error {
-    font-size: 11px;
-    color: var(--text-error);
-  }
-
   /* ── Warning notice ── */
   .warning-notice {
     display: flex;
@@ -885,25 +880,7 @@
     color: var(--text-3);
   }
 
-  /* .backup-actions {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 8px 0;
-    border-top: 1px solid var(--border);
-    margin-top: 4px;
-  } */
-
   /* ── Backup history ── */
-  .backup-notice {
-    font-family: var(--font-head);
-    font-size: var(--fs-min);
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    color: var(--text-3);
-    padding: 16px 0 8px;
-  }
-
   .backup-list {
     display: flex;
     flex-direction: column;
