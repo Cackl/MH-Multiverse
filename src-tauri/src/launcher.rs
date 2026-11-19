@@ -115,6 +115,12 @@ fn resolve_exe(exe: &str, force_32bit: bool) -> String {
     exe.to_string()
 }
 
+/// 1.48 and 1.53 clients always launch with -robocopy -nosteam. Steam's app 226320 is the 1.52
+/// build, and Steam mode on the older and test clients is untested. Provisional.
+fn use_steam(config: &crate::config::AppConfig) -> bool {
+    !config.launch_options.no_steam && !matches!(config.active_version(), "1.48" | "1.53")
+}
+
 #[tauri::command]
 pub fn launch_game(app: tauri::AppHandle, server_id: String) -> Result<(), String> {
     let config = load_config(&app);
@@ -134,6 +140,7 @@ pub fn launch_game(app: tauri::AppHandle, server_id: String) -> Result<(), Strin
         .ok_or_else(|| format!("Server not found: {server_id}"))?;
 
     let opts = &config.launch_options;
+    let steam = use_steam(&config);
 
     let siteconfig_url = if server.is_local {
         if config.launch_options.patched_client {
@@ -153,12 +160,12 @@ pub fn launch_game(app: tauri::AppHandle, server_id: String) -> Result<(), Strin
 
     // Always exactly one mode: -robocopy, -steam and -solidstate are mutually
     // exclusive and the client exits if the set is wrong.
-    if opts.no_steam {
-        args.push("-robocopy".into());
-        args.push("-nosteam".into());
-    } else {
+    if steam {
         args.push("-steam".into());
         args.push("-nosolidstate".into());
+    } else {
+        args.push("-robocopy".into());
+        args.push("-nosteam".into());
     }
     if opts.skip_startup_movies  { args.push("-nostartupmovies".into()); }
     if opts.skip_motion_comics   { args.push("-skipmotioncomics".into()); }
@@ -184,7 +191,7 @@ pub fn launch_game(app: tauri::AppHandle, server_id: String) -> Result<(), Strin
     cmd.args(&args);
     // Without these the Steam build asks Steam to restart it using Steam's own
     // launch entry, which discards our arguments.
-    if !opts.no_steam {
+    if steam {
         cmd.env("SteamAppId", "226320").env("SteamGameId", "226320");
     }
     let child = cmd

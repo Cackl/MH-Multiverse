@@ -6,7 +6,7 @@
   import {
     appConfig, type SettingsSection, activeTheme, setTheme, setLaunchOptions, type LaunchOptions,
     appUpdate, appUpdateError, appUpdateCheckedAt, checkAppUpdate, showUpdateBadge,
-    updateRemindLater, dismissedUpdate, serverRunning, settingsSection,
+    updateRemindLater, dismissedUpdate, serverRunning, settingsSection, activeCaps,
   } from '../lib/store'
   import { parseReleaseNotes } from '../lib/releaseNotes'
   import { tip } from '../lib/tooltip'
@@ -165,7 +165,7 @@
 
             <div class="section-divider"><span>Launch Options</span></div>
 
-            {#each launchToggles as t (t.key)}
+            {#each launchToggles.filter(t => t.key !== 'no_steam' || $activeCaps.steamMode) as t (t.key)}
               {@const on = t.invert ? !$appConfig.launch_options[t.key] : $appConfig.launch_options[t.key]}
               <div class="opt-row">
                 <div class="opt-label">

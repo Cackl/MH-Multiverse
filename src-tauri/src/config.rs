@@ -193,6 +193,13 @@ impl Default for AppConfig {
     }
 }
 
+impl AppConfig {
+    /// The active linked version's game version, or "" when none is linked or it isn't known.
+    pub fn active_version(&self) -> &str {
+        self.linked.iter().find(|l| l.id == self.active_linked_id).map_or("", |l| l.version.as_str())
+    }
+}
+
 // ── Encryption key management ─────────────────────────────────────────────────
 
 /// Retrieve the encryption key from the OS keychain, creating it if absent.
