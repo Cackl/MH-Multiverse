@@ -180,3 +180,24 @@ fn the_active_entry_cannot_be_removed() {
     delete_linked_in(&mut config, "b").unwrap();
     assert_eq!(config.linked.len(), 1);
 }
+
+#[test]
+fn a_new_app_version_or_an_unreadable_file_backs_the_config_up_first() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("multiverse.json");
+    let bak = dir.path().join("multiverse.json.bak");
+    let old: AppConfig = serde_json::from_str(CONFIG_1_6_1).unwrap();
+
+    // Same version: no backup.
+    let current = AppConfig { app_version: "1.7.0".into(), ..old.clone() };
+    assert!(!backup_on_upgrade(&path, "same", Some(&current), "1.7.0"));
+    assert!(!bak.exists());
+
+    // A file from before the stamp existed, or from another version.
+    assert!(backup_on_upgrade(&path, CONFIG_1_6_1, Some(&old), "1.7.0"));
+    assert_eq!(std::fs::read_to_string(&bak).unwrap(), CONFIG_1_6_1);
+
+    // A file that can't be read.
+    assert!(backup_on_upgrade(&path, "{ broken", None, "1.7.0"));
+    assert_eq!(std::fs::read_to_string(&bak).unwrap(), "{ broken");
+}

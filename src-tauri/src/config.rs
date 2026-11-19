@@ -171,6 +171,9 @@ pub struct AppConfig {
     /// (`AppConfig::default()`) starts in Simple.
     #[serde(default = "default_true")]
     pub advanced_data: bool,
+    /// The app version that last loaded this file. A different one makes a .bak first.
+    #[serde(default)]
+    pub app_version: String,
 }
 
 impl Default for AppConfig {
@@ -189,6 +192,7 @@ impl Default for AppConfig {
             backup_targets: default_backup_targets(),
             overlay: OverlayConfig::default(),
             advanced_data: false,
+            app_version: String::new(),
         }
     }
 }
@@ -293,11 +297,30 @@ pub fn load_config(app: &tauri::AppHandle) -> AppConfig {
         Ok(c) => c,
         Err(_) => return AppConfig::default(),
     };
-    let mut config: AppConfig = serde_json::from_str(&contents).unwrap_or_default();
-    if migrate_linked(&mut config, detect_version) {
+    let parsed: Option<AppConfig> = serde_json::from_str(&contents).ok();
+    backup_on_upgrade(&path, &contents, parsed.as_ref(), APP_VERSION);
+    let Some(mut config) = parsed else {
+        // Left as it is on disk, so the .bak and the original both hold what couldn't be read.
+        return AppConfig::default();
+    };
+    let migrated = migrate_linked(&mut config, detect_version);
+    let stamped = config.app_version != APP_VERSION;
+    config.app_version = APP_VERSION.into();
+    if migrated || stamped {
         let _ = save_config(app, &config);
     }
     config
+}
+
+const APP_VERSION: &str = env!("CARGO_PKG_VERSION");
+
+/// Copies the config file to multiverse.json.bak when another app version last loaded it, which is
+/// before this one changes its shape, or when it can't be read. Returns true when it made one.
+fn backup_on_upgrade(path: &std::path::Path, contents: &str, parsed: Option<&AppConfig>, current: &str) -> bool {
+    if parsed.is_some_and(|c| c.app_version == current) {
+        return false;
+    }
+    std::fs::write(path.with_extension("json.bak"), contents).is_ok()
 }
 
 // ── Linked installs ───────────────────────────────────────────────────────────
