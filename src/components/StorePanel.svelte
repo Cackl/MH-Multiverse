@@ -15,6 +15,7 @@
     type CatalogEntryWithMeta,
   } from '../lib/catalogMeta'
   import PanelSidebar from './PanelSidebar.svelte'
+  import Dropdown from './Dropdown.svelte'
   import StoreEditorModal from './StoreEditorModal.svelte'
   import NewFileModal from './NewFileModal.svelte'
   import { tip } from '../lib/tooltip'
@@ -589,12 +590,9 @@
 
         <div class="toolbar-sep"></div>
 
-        <select class="toolbar-select" bind:value={typeFilter}>
-          <option value="">All types</option>
-          {#each activeTypes as t}
-            <option value={t}>{t}</option>
-          {/each}
-        </select>
+        <Dropdown label="Type filter" value={typeFilter} onChange={v => typeFilter = v}
+          options={[{ value: '', label: 'All types' }, ...activeTypes.map(t => ({ value: t, label: t }))]}
+          --dd-color="var(--text-1)" --dd-pad="5px 8px" --dd-min-width="0" />
 
         <div class="toolbar-sep"></div>
 
@@ -822,15 +820,9 @@
             <span class="batch-action-label">
               {batchMode === 'add-mod' ? 'Add modifier:' : 'Remove modifier:'}
             </span>
-            <select class="batch-inline-select" bind:value={batchModifier} disabled={batchRunning}>
-              {#if batchModifiers.length === 0}
-                <option value="">No modifiers available</option>
-              {:else}
-                {#each batchModifiers as m}
-                  <option value={m}>{m}</option>
-                {/each}
-              {/if}
-            </select>
+            <Dropdown label="Modifier" value={batchModifier} disabled={batchRunning} onChange={v => batchModifier = v}
+              options={batchModifiers.length ? batchModifiers.map(m => ({ value: m, label: m })) : [{ value: '', label: 'No modifiers available' }]}
+              --dd-color="var(--text-1)" --dd-pad="4px 8px" --dd-min-width="0" />
             <button
               class="btn btn-sm btn-accent"
               on:click={() => applyBatchModifier(batchMode === 'add-mod' ? 'add' : 'remove')}
@@ -1054,24 +1046,6 @@
     margin: 0 2px;
   }
 
-  /* Type filter dropdown */
-  .toolbar-select {
-    background: var(--bg-0);
-    border: 1px solid var(--border-mid);
-    color: var(--text-1);
-    font-family: var(--font-body);
-    font-size: 12px;
-    padding: 5px 8px;
-    border-radius: var(--radius-sm);
-    outline: none;
-    cursor: pointer;
-    transition: border-color 0.12s;
-    flex-shrink: 0;
-    /* Override global input width */
-    width: auto;
-  }
-  .toolbar-select:focus { border-color: var(--accent-dim); }
-  .toolbar-select option { background: var(--bg-2); }
 
   /* Price range */
   .price-range {
@@ -1199,23 +1173,6 @@
   }
   .batch-inline-input::placeholder { font-size: 11px; }
 
-  .batch-inline-select {
-    background: var(--bg-0);
-    border: 1px solid var(--border-mid);
-    color: var(--text-1);
-    font-family: var(--font-body);
-    font-size: 12px;
-    padding: 4px 8px;
-    border-radius: var(--radius-sm);
-    outline: none;
-    cursor: pointer;
-    transition: border-color 0.12s;
-    flex-shrink: 0;
-    width: auto;
-  }
-  .batch-inline-select:focus { border-color: var(--accent-dim); }
-  .batch-inline-select option { background: var(--bg-2); }
-  .batch-inline-select:disabled { opacity: 0.5; cursor: not-allowed; }
 
   .batch-feedback {
     font-size: 11px;
