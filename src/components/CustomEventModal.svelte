@@ -6,6 +6,7 @@
     EVENT_SLIDERS, WEEK, eventNameError, yearlyMaxDays, dateRange, type CustomEvent, type EventWhen,
   } from '../lib/eventSchedule'
   import PrototypePicker from './PrototypePicker.svelte'
+  import Dropdown from './Dropdown.svelte'
 
   /** The event to edit, or null for a new one. */
   export let event: CustomEvent | null
@@ -108,11 +109,8 @@
       <div class="field-group">
         <label class="field-label" for="ce-when">When</label>
         <div class="field-control">
-          <select id="ce-when" class="field-select" bind:value={kind}>
-            <option value="daily">Every day</option>
-            <option value="weekly">Weekly</option>
-            <option value="yearly">Every year</option>
-          </select>
+          <Dropdown id="ce-when" label="When" value={kind} onChange={v => kind = v as EventWhen['kind']}
+            options={[{ value: 'daily', label: 'Every day' }, { value: 'weekly', label: 'Weekly' }, { value: 'yearly', label: 'Every year' }]} />
           {#if kind === 'weekly'}
             <div class="day-row" role="group" aria-label="Days">
               {#each WEEK as d}
@@ -123,12 +121,10 @@
             {#if tried && daysError}<span class="field-error">{daysError}</span>{/if}
           {:else if kind === 'yearly'}
             <div class="date-row">
-              <select class="field-select" aria-label="Month" bind:value={month}>
-                {#each MONTHS as m, i}<option value={i + 1}>{m}</option>{/each}
-              </select>
-              <select class="field-select date-day" aria-label="Day" bind:value={day}>
-                {#each Array.from({ length: monthDays }, (_, i) => i + 1) as d}<option value={d}>{d}</option>{/each}
-              </select>
+              <Dropdown label="Month" value={String(month)} --dd-min-width="0" onChange={v => month = Number(v)}
+                options={MONTHS.map((m, i) => ({ value: String(i + 1), label: m }))} />
+              <Dropdown label="Day" value={String(day)} --dd-min-width="0" onChange={v => day = Number(v)}
+                options={Array.from({ length: monthDays }, (_, i) => ({ value: String(i + 1), label: String(i + 1) }))} />
               <span class="field-text">for</span>
               <input class="field-input date-len" type="number" aria-label="Number of days" min="1" max={maxLength} bind:value={length}
                 on:change={() => length = Math.min(maxLength, Math.max(1, Math.round(length || 1)))} />
@@ -258,7 +254,6 @@
     cursor: pointer;
   }
   .day-btn.on { border-color: var(--accent); background: var(--accent-glow-strong); color: var(--accent); }
-  .date-row .field-select { width: auto; }
   .date-len { width: 64px; font-variant-numeric: tabular-nums; }
 
   .slider-row {

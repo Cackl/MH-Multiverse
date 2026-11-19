@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onDestroy } from 'svelte'
+  import Dropdown from './Dropdown.svelte'
   import { invoke } from '@tauri-apps/api/core'
   import { ITEM_CATEGORIES } from '../lib/catalogMeta'
   import { STORE_SECTIONS, MIN_PRICE, MAX_PRICE, type NewItem } from '../lib/storeSimple'
@@ -131,9 +132,8 @@
 
       <div class="field-group field-group-center">
         <label class="field-label" for="add-section">Section</label>
-        <select id="add-section" class="field-select" bind:value={section}>
-          {#each SECTIONS as s}<option value={s.type}>{s.label}</option>{/each}
-        </select>
+        <Dropdown id="add-section" label="Section" value={section} options={SECTIONS.map(s => ({ value: s.type, label: s.label }))}
+          onChange={v => section = v} />
       </div>
 
       <div class="field-group field-group-center">

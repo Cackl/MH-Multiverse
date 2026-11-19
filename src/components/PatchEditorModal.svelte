@@ -9,6 +9,7 @@
     type Pair, type Recipe,
   } from '../lib/patchEntryEdit'
   import PrototypePicker from './PrototypePicker.svelte'
+  import Dropdown from './Dropdown.svelte'
 
   // ── Props ──────────────────────────────────────────────────────────────────
 
@@ -344,18 +345,17 @@
           <div class="fs-b">
             <div class="fld">
               <label class="fl" for="pe-vtype">Value type</label>
-              <select id="pe-vtype" class="field-select" bind:value={draft.ValueType} on:change={onValueTypeChange}>
-                {#each VALUE_TYPES as vt}<option value={vt}>{vt}</option>{/each}
-              </select>
+              <Dropdown id="pe-vtype" label="Value type" value={draft.ValueType} --dd-width="100%"
+                options={VALUE_TYPES.map(vt => ({ value: vt, label: vt }))}
+                onChange={v => { draft.ValueType = v; onValueTypeChange() }} />
             </div>
 
             {#if draft.ValueType === 'Prototype' && pairs}
               <div class="fld">
                 <label class="fl" for="pe-parent">Based on</label>
-                <select id="pe-parent" class="field-select" value={parent} on:change={e => pairs && setPairs(withParent(pairs, e.currentTarget.value))}>
-                  {#each PARENTS as p}<option value={p.id}>{p.label}</option>{/each}
-                  {#if !knownParent}<option value={parent}>Other ({parent || 'none'})</option>{/if}
-                </select>
+                <Dropdown id="pe-parent" label="Based on" value={parent} --dd-width="100%"
+                  options={[...PARENTS.map(p => ({ value: p.id, label: p.label })), ...(knownParent ? [] : [{ value: parent, label: `Other (${parent || 'none'})` }])]}
+                  onChange={v => pairs && setPairs(withParent(pairs, v))} />
               </div>
               <div class="fld w">
                 <span class="fl">Fields</span>
@@ -377,10 +377,8 @@
                         </div>
                       {:else if CHOICE_FIELDS[p.key]}
                         <div class="kv-pick">
-                          <select class="field-select" aria-label={p.key} value={p.text} on:change={e => setPair(i, { text: e.currentTarget.value })}>
-                            {#each CHOICE_FIELDS[p.key] as c}<option value={c}>{c}</option>{/each}
-                            {#if !CHOICE_FIELDS[p.key].includes(p.text)}<option value={p.text}>Other ({p.text || 'none'})</option>{/if}
-                          </select>
+                          <Dropdown label={p.key} value={p.text} --dd-width="100%" onChange={v => setPair(i, { text: v })}
+                            options={[...CHOICE_FIELDS[p.key].map(c => ({ value: c, label: c })), ...(CHOICE_FIELDS[p.key].includes(p.text) ? [] : [{ value: p.text, label: `Other (${p.text || 'none'})` }])]} />
                           {#if CHOICE_NOTES[p.text]}<span class="fh">{CHOICE_NOTES[p.text]}</span>{/if}
                         </div>
                       {:else}
@@ -424,10 +422,8 @@
               <div class="fld w">
                 <label class="fl" for="pe-value">Value</label>
                 {#if draft.ValueType === 'Boolean'}
-                  <select id="pe-value" class="field-select" bind:value={valueStr}>
-                    <option value="true">true</option>
-                    <option value="false">false</option>
-                  </select>
+                  <Dropdown id="pe-value" label="Value" value={valueStr} --dd-width="100%" onChange={v => valueStr = v}
+                    options={[{ value: 'true', label: 'true' }, { value: 'false', label: 'false' }]} />
                 {:else if needsComplex}
                   <textarea id="pe-value" class="field-textarea" class:input-error={!!parseError} rows="5" bind:value={valueStr} spellcheck="false"></textarea>
                 {:else}
@@ -560,7 +556,6 @@
   .field-input.num { font-variant-numeric: tabular-nums; }
   .field-input[readonly] { background: var(--chrome-sunken-bg); color: var(--text-2); border-style: dashed; }
   .field-input.input-error, .field-textarea.input-error { border-color: var(--red); }
-  .field-select { width: 100%; }
 
   .field-textarea {
     background: var(--bg-0);

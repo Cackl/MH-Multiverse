@@ -12,6 +12,7 @@
   import { CONFIG_SCHEMA, fieldsFor, otherSettings, type Field, type NavSection } from '../lib/configMeta'
   import { tip } from '../lib/tooltip'
   import PanelSidebar from './PanelSidebar.svelte'
+  import Dropdown from './Dropdown.svelte'
 
   export let embedded = false
   export let onBack: (() => void) | null = null
@@ -650,10 +651,8 @@
                     ></div>
                     <span class="cfg-onoff">{isOn(value) ? 'On' : 'Off'}</span>
                   {:else if field.type === 'select'}
-                    <select class="field-select" aria-label={field.label} value={value} on:change={(e) => setValue(field, e.currentTarget.value)}>
-                      {#if !field.options?.some(o => o.value === value)}<option value={value}>{value}</option>{/if}
-                      {#each field.options ?? [] as opt}<option value={opt.value}>{opt.label}</option>{/each}
-                    </select>
+                    <Dropdown label={field.label} {value} --dd-min-width="160px" onChange={v => setValue(field, v)}
+                      options={[...(field.options?.some(o => o.value === value) ? [] : [{ value, label: value }]), ...(field.options ?? [])]} />
                   {:else if field.type === 'textarea'}
                     <textarea class="config-input" aria-label={field.label} rows="3" value={value} on:change={(e) => setValue(field, e.currentTarget.value)}></textarea>
                   {:else if field.type === 'number'}
@@ -848,7 +847,6 @@
     min-width: 0;
   }
   .cfg-onoff { order: -1; font-size: 12px; color: var(--text-1); }
-  .cfg-control .field-select { min-width: 160px; }
 
   .config-tooltip {
     font-size: 11px;

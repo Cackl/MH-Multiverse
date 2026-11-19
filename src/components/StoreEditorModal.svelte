@@ -2,6 +2,7 @@
   import { onMount } from 'svelte'
   import { invoke } from '@tauri-apps/api/core'
   import { tip } from '../lib/tooltip'
+  import Dropdown from './Dropdown.svelte'
   import type { PrototypeMatch } from '../lib/prototypes'
   import {
     typeNames,
@@ -786,11 +787,9 @@
               <div class="field">
                 <label class="field-label" for="f-type">Type</label>
                 {#if offerType === 'single'}
-                  <select id="f-type" class="field-select" bind:value={formTypeName}>
-                    {#each typeNames().filter(t => t !== 'Bundle') as t}
-                      <option value={t}>{t}</option>
-                    {/each}
-                  </select>
+                  <Dropdown id="f-type" label="Type" value={formTypeName} onChange={v => formTypeName = v}
+                    options={typeNames().filter(t => t !== 'Bundle').map(t => ({ value: t, label: t }))}
+                    --dd-width="100%" --dd-color="var(--text-1)" --dd-pad="6px 8px" />
                 {:else}
                   <input class="field-input readonly" value="Bundle" readonly tabindex="-1">
                 {/if}
@@ -963,11 +962,9 @@
           <div class="form-section">
             <div class="section-label">Save To</div>
             {#if catalogFiles.length}
-              <select class="field-select" bind:value={targetFile}>
-                {#each catalogFiles as f}
-                  <option value={f}>{f}</option>
-                {/each}
-              </select>
+              <Dropdown label="Save to" value={targetFile} onChange={v => targetFile = v}
+                options={catalogFiles.map(f => ({ value: f, label: f }))}
+                --dd-width="100%" --dd-color="var(--text-1)" --dd-pad="6px 8px" />
             {:else}
               <span class="empty-note">No catalog files found in MTXStore directory.</span>
             {/if}
@@ -1735,20 +1732,6 @@
   .field-input:focus { border-color: var(--accent-dim); }
   .field-input.readonly { color: var(--text-3); cursor: default; }
 
-  .field-select {
-    background: var(--bg-0);
-    border: 1px solid var(--border-mid);
-    color: var(--text-1);
-    font-family: var(--font-body);
-    font-size: 12px;
-    padding: 6px 8px;
-    border-radius: var(--radius-sm);
-    outline: none;
-    cursor: pointer;
-    transition: border-color 0.12s;
-    width: 100%;
-  }
-  .field-select:focus { border-color: var(--accent-dim); }
 
   /* ── Type modifiers ── */
   .modifier-row {

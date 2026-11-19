@@ -3,6 +3,7 @@
   import { invoke } from '@tauri-apps/api/core'
   import { loadConfig } from '../../lib/store'
   import IntegrationCard from './IntegrationCard.svelte'
+  import Dropdown from '../Dropdown.svelte'
 
   interface Candidate {
     name: string
@@ -119,15 +120,16 @@
         <span class="opt-name">Match existing profiles by</span>
         <span class="opt-desc">Matches are skipped. Click a server below to override.</span>
       </div>
-      <select class="field-select" bind:value={matchBy} on:change={refresh}>
-        <option value="host_email">Host + email</option>
-        <option value="host_name">Host + name</option>
-        <option value="host">Host only</option>
-        <option value="nothing">Don't match</option>
-      </select>
+      <Dropdown label="Match existing profiles by" value={matchBy} --dd-min-width="0" onChange={v => { matchBy = v; refresh() }}
+        options={[
+          { value: 'host_email', label: 'Host + email' },
+          { value: 'host_name', label: 'Host + name' },
+          { value: 'host', label: 'Host only' },
+          { value: 'nothing', label: "Don't match" },
+        ]} />
     </div>
     {#if withLogin}
-      <label class="opt-row">
+      <label class="opt-row check-row">
         <div class="opt-label">
           <span class="opt-name">Import saved logins ({withLogin})</span>
           <span class="opt-desc">Stored encrypted. They are plaintext in the source files.</span>
@@ -142,7 +144,7 @@
         <span class="count">{count} of {preview.profiles.length} selected</span>
       </div>
       {#each preview.profiles as p, i}
-        <label class="srv" class:off={!chosen[i]}>
+        <label class="srv check-row" class:off={!chosen[i]}>
           <input type="checkbox" checked={chosen[i]} on:change={e => toggle(i, e.currentTarget.checked)} />
           <div class="srv-main">
             <span class="srv-name">{p.name}</span>
