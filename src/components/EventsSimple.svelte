@@ -450,18 +450,6 @@
     letter-spacing: 0.02em;
     color: var(--text-1);
   }
-  .event-dot {
-    flex-shrink: 0;
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    border: 1px solid var(--border-mid);
-  }
-  .event-dot.active {
-    border-color: var(--accent-bright);
-    background: var(--accent-bright);
-    box-shadow: 0 0 0 3px var(--accent-glow);
-  }
   .event-badge {
     grid-column: 1;
     padding-left: 15px;

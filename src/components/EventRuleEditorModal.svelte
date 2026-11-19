@@ -51,6 +51,7 @@
     events:        JSON.stringify(rule?.events ?? []),
   }
 
+  const isNew = rule === null
   let addEventId = ''
   let nameError  = ''
 
@@ -103,6 +104,19 @@
     events = copy
   }
 
+  function revert() {
+    name          = _orig.name
+    is_enabled    = _orig.is_enabled
+    rule_type     = _orig.rule_type
+    start_dow     = _orig.start_dow
+    start_month   = _orig.start_month
+    start_day     = _orig.start_day
+    duration_days = _orig.duration_days
+    events        = JSON.parse(_orig.events)
+    addEventId    = ''
+    nameError     = ''
+  }
+
   function handleSave() {
     nameError = ''
     if (!name.trim()) {
@@ -114,10 +128,12 @@
       name:             name.trim(),
       is_enabled,
       rule_type,
-      start_day_of_week: needsDow  ? start_dow    : null,
-      start_month:       needsDate ? start_month  : null,
-      start_day:         needsDate ? start_day    : null,
-      duration_days:     needsDate ? duration_days : null,
+      // A type that doesn't use these keeps the saved values (the server ignores them), so
+      // switching the type back brings the old day or date back.
+      start_day_of_week: needsDow  ? start_dow     : rule?.start_day_of_week ?? null,
+      start_month:       needsDate ? start_month   : rule?.start_month       ?? null,
+      start_day:         needsDate ? start_day     : rule?.start_day         ?? null,
+      duration_days:     needsDate ? duration_days : rule?.duration_days     ?? null,
       events,
     })
     // Advance the snapshot so isDirty resets immediately
@@ -174,7 +190,7 @@
           disabled={saving}
           on:click={() => is_enabled = !is_enabled}
         ></button>
-        <span class="toggle-hint">{is_enabled ? 'Active' : 'Disabled'}</span>
+        <span class="toggle-hint">{is_enabled ? 'On' : 'Off'}</span>
       </div>
     </div>
 
@@ -233,11 +249,8 @@
     <div class="events-section">
       <div class="events-header">
         <span class="field-label">Events</span>
-        {#if events.length > 0}
-          <span class="events-count">{events.length}</span>
-        {/if}
         {#if isRotation}
-          <span class="events-hint">Order determines rotation sequence</span>
+          <span class="events-hint">Runs in this order</span>
         {/if}
       </div>
 
@@ -247,10 +260,9 @@
         <div class="events-list">
           {#each events as eventId, i (i)}
             <div class="event-row">
-              <span class="status-dot" class:dot-active={eventIsActive(eventId)} class:dot-disabled={!eventIsActive(eventId)}></span>
+              <span class="event-dot" class:active={eventIsActive(eventId)}></span>
               <div class="event-info">
-                <span class="event-name">{eventLabel(eventId) || '(empty slot)'}</span>
-                <span class="event-id">{eventId}</span>
+                <span class="event-name" use:tip={eventId}>{eventLabel(eventId) || '(empty slot)'}</span>
               </div>
               <div class="event-actions">
                 {#if onOpenTuning}
@@ -290,15 +302,15 @@
                     >↓</button>
                 {/if}
                 <button
-                    class="remove-btn"
-                    aria-label="Remove"
+                    class="del-btn"
+                    aria-label="Remove {eventLabel(eventId)}"
                     use:tip={'Remove'}
                     disabled={saving}
                     on:click={() => events = events.filter((_, idx) => idx !== i)}
                 >
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <line x1="18" y1="6" x2="6" y2="18"/>
-                    <line x1="6" y1="6" x2="18" y2="18"/>
+                    <svg viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.5">
+                      <line x1="2" y1="2" x2="8" y2="8"/>
+                      <line x1="8" y1="2" x2="2" y2="8"/>
                     </svg>
                 </button>
                 </div>
@@ -327,17 +339,24 @@
 
   <!-- Footer -->
   <div class="editor-footer">
-    {#if isDirty}
-      <span class="dirty-badge">Unsaved changes</span>
-    {/if}
-    <button class="btn btn-sm btn-outline" disabled={saving} on:click={onDiscard}>
-      {isDirty ? 'Discard' : 'Close'}
-    </button>
-    {#if isDirty}
-      <button class="btn btn-sm btn-accent" class:btn-pulse={isDirty} disabled={saving || !!dateError} on:click={handleSave}>
-        {saving ? 'Saving…' : 'Save to override'}
+    <div class="footer-left">
+      {#if isDirty && !isNew}<span class="dirty-badge">Unsaved changes</span>{/if}
+    </div>
+    <div class="footer-actions">
+      {#if isNew}
+        <button class="btn btn-sm btn-outline" disabled={saving} on:click={onDiscard}>Cancel</button>
+      {:else}
+        <button class="btn btn-sm btn-outline" disabled={saving || !isDirty} on:click={revert}>Revert</button>
+      {/if}
+      <button
+        class="btn btn-sm btn-accent"
+        class:btn-pulse={isDirty}
+        disabled={saving || (!isNew && !isDirty) || !!dateError}
+        on:click={handleSave}
+      >
+        {saving ? 'Saving...' : isNew ? 'Create Rule' : 'Save'}
       </button>
-    {/if}
+    </div>
   </div>
 </div>
 
@@ -446,9 +465,7 @@
   .editor-toggle:disabled          { opacity: 0.4; cursor: not-allowed; }
 
   .toggle-hint {
-    font-family: var(--font-head);
-    font-size: var(--fs-min);
-    letter-spacing: 0.06em;
+    font-size: 11px;
     color: var(--text-3);
   }
 
@@ -467,20 +484,8 @@
     gap: 8px;
   }
 
-  .events-count {
-    font-family: var(--font-mono);
-    font-size: var(--fs-min);
-    color: var(--accent-bright);
-    background: var(--accent-glow);
-    border: 1px solid var(--accent-dim);
-    border-radius: 2px;
-    padding: 1px 5px;
-  }
-
   .events-hint {
-    font-family: var(--font-head);
-    font-size: var(--fs-min);
-    letter-spacing: 0.06em;
+    font-size: 11px;
     color: var(--text-3);
     margin-left: auto;
   }
@@ -526,27 +531,12 @@
     text-overflow: ellipsis;
   }
 
-  .event-id {
-    font-family: var(--font-mono);
-    font-size: var(--fs-min);
-    color: var(--text-3);
-  }
-
   .event-actions {
     display: flex;
     align-items: center;
     gap: 4px;
     flex-shrink: 0;
   }
-
-  .status-dot {
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    border: 1px solid var(--border-mid);
-    flex-shrink: 0;
-  }
-  .dot-active    { border-color: var(--accent-bright); background: var(--accent-bright); box-shadow: 0 0 0 3px var(--accent-glow); }
 
   .move-btn {
     width: 22px;
@@ -567,24 +557,8 @@
   .move-btn:hover:not(:disabled) { color: var(--text-1); border-color: var(--border-lit); }
   .move-btn:disabled             { opacity: 0.25; cursor: not-allowed; }
 
-  .remove-btn {
-    width: 22px;
-    height: 22px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: none;
-    border: 1px solid transparent;
-    border-radius: var(--radius-sm);
-    color: var(--text-3);
-    cursor: pointer;
-    transition: all 0.1s;
-    flex-shrink: 0;
-    padding: 0;
-  }
-  .remove-btn:hover:not(:disabled) { color: var(--text-error); border-color: rgba(220,60,60,0.3); }
-  .remove-btn:disabled             { opacity: 0.25; cursor: not-allowed; }
-  .remove-btn svg                  { width: 13px; height: 13px; }
+  .del-btn          { flex-shrink: 0; padding: 0; }
+  .del-btn:disabled { opacity: 0.25; cursor: not-allowed; }
 
   .add-event-row {
     display: flex;
@@ -598,20 +572,12 @@
   .editor-footer {
     display: flex;
     align-items: center;
-    justify-content: flex-end;
-    gap: 8px;
+    gap: 10px;
     padding: 10px 16px;
     border-top: 1px solid var(--border);
+    background: var(--chrome-footer-bg);
     flex-shrink: 0;
-    background: var(--chrome-sunken-bg);
   }
-
-  .dirty-badge {
-    font-family: var(--font-head);
-    font-size: var(--fs-min);
-    font-weight: 600;
-    letter-spacing: 0.06em;
-    color: var(--accent-bright);
-    margin-right: auto;
-  }
+  .footer-left    { display: flex; align-items: center; gap: 10px; min-width: 0; }
+  .footer-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; margin-left: auto; }
 </style>

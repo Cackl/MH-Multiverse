@@ -1303,6 +1303,16 @@ button.side-item.active:hover, .side-item[role="button"].active:hover { color: v
   flex-shrink: 0;
 }
 
+/* Event state dot: hollow, filled with a glow while running. */
+.event-dot {
+  flex-shrink: 0;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  border: 1px solid var(--border-mid);
+}
+.event-dot.active { border-color: var(--accent-bright); background: var(--accent-bright); box-shadow: 0 0 0 3px var(--accent-glow); }
+
 /* ── Content column: free-floating lists stay readable on wide windows ── */
 .content-col {
   width: 100%;

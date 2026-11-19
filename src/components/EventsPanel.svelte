@@ -3,7 +3,7 @@
   import { invoke } from '@tauri-apps/api/core'
   import { openPath } from '@tauri-apps/plugin-opener'
   import { appConfig } from '../lib/store'
-  import { activeDataTab, tuningFocusFile, confirmLeave } from '../lib/store'
+  import { activeDataTab, tuningFocusFile, confirmLeave, askConfirm } from '../lib/store'
   import { eventTimezoneOffset } from '../lib/store'
   import { serverNow, ruleIsValid, ruleActiveIds, activeEventIds as eventsActiveAt } from '../lib/eventSchedule'
   import type { TuningFileInfo, EventDefinition, EventsData, ScheduleRule, ScheduleData } from '../lib/tuningMeta'
@@ -36,10 +36,7 @@
   let creatingRule        = false
   let editingDefinition:  EventDefinition | null = null
   let creatingDefinition  = false
-  let allEventsExpanded   = true
 
-  type PendingAction = 'resetEvents' | 'mergeEvents' | 'resetSchedule' | 'mergeSchedule'
-  let pendingAction: PendingAction | null = null
 
   // ── Derived ─────────────────────────────────────────────────────────────────
 
@@ -101,7 +98,7 @@
     switch (rule.rule_type) {
       case 'AlwaysOn':         return 'Always on'
       case 'WeeklyRotation':   return 'Weekly rotation'
-      case 'DayOfWeek':        return `${rule.start_day_of_week ?? 'Day'} only`
+      case 'DayOfWeek':        return 'Day of week'
       case 'SpecialDate':      return 'Special date'
       case 'SpecialDateLunar': return 'Lunar date'
       default:                 return rule.rule_type
@@ -160,7 +157,7 @@
       scheduleData = { rules: newRules, using_override: true }
       selectedRule = updated
       creatingRule = false
-      opSuccess    = 'Schedule saved.'
+      opSuccess    = 'Saved'
       setTimeout(() => opSuccess = '', 3000)
     } catch (e) {
       opError = String(e)
@@ -169,14 +166,21 @@
     }
   }
 
-  function startNewRule() {
+  // Opening another rule or leaving the editor asks first when the open rule has unsaved edits.
+  async function startNewRule() {
+    if (creatingRule || !(await confirmLeave())) return
     selectedRule = null
     creatingRule = true
   }
 
-  function selectRule(rule: ScheduleRule) {
+  async function selectRule(rule: ScheduleRule) {
+    if ((selectedRule === rule && !creatingRule) || !(await confirmLeave())) return
     selectedRule = rule
     creatingRule = false
+  }
+
+  async function closeRule() {
+    if (await confirmLeave()) discardEditor()
   }
 
   function discardEditor() {
@@ -201,7 +205,7 @@
       eventsData        = { definitions: newDefs, using_override: true }
       editingDefinition = null
       creatingDefinition = false
-      opSuccess = 'Events saved.'
+      opSuccess = 'Saved'
       setTimeout(() => opSuccess = '', 3000)
     } catch (e) {
       opError = String(e)
@@ -244,6 +248,29 @@
       discardEditor()  // selection is by object reference; these are new objects
     } catch (e) { opError = String(e) }
     finally { saving = false }
+  }
+
+  // Override files, shown at the bottom of the dashboard
+  $: overrideRows = [
+    { label: 'Events',   file: 'EventsOverride.json',        what: 'events', using: eventsUsingOverride,   reset: resetEvents,   merge: mergeEvents },
+    { label: 'Schedule', file: 'EventScheduleOverride.json', what: 'rules',  using: scheduleUsingOverride, reset: resetSchedule, merge: mergeSchedule },
+  ]
+  type OverrideRow = typeof overrideRows[number]
+
+  async function confirmReset(row: OverrideRow) {
+    if (await askConfirm({
+      title: `Reset ${row.label}?`,
+      message: `${row.file} goes back to the default ${row.what}. Your changes to them are lost.`,
+      okLabel: 'Reset', cancelLabel: 'Cancel',
+    })) await row.reset()
+  }
+
+  async function confirmMerge(row: OverrideRow) {
+    if (await askConfirm({
+      title: `Merge default ${row.what}?`,
+      message: `Adds the default ${row.what} that ${row.file} is missing. Your changes stay.`,
+      okLabel: 'Merge', cancelLabel: 'Cancel',
+    })) await row.merge()
   }
 
   onMount(() => { if ($appConfig.server_exe) loadData() })
@@ -305,137 +332,63 @@
       <!-- Rule list -->
       <div class="sidebar-body">
         {#if !$appConfig.server_exe}
-          <div class="sidebar-notice">Set server exe in Settings.</div>
+          <div class="file-notice">Set server exe in Settings to load events.</div>
         {:else if loading}
-          <div class="sidebar-notice">Loading…</div>
+          <div class="file-notice">Loading...</div>
         {:else if loadError}
-          <div class="sidebar-notice error">{loadError}</div>
+          <div class="file-notice error">{loadError}</div>
+        {:else if openDirError}
+          <div class="file-notice error">{openDirError}</div>
         {:else if rules.length === 0}
-          <div class="sidebar-notice">No rules found. Check Events.json exists.</div>
+          <div class="file-notice">No schedule rules found.</div>
         {:else}
           <div class="rule-list">
             {#each ruleGroups as group (group.key)}
-              <div class="rule-group-label">{group.label}</div>
+              <div class="side-label">{group.label}</div>
               {#each group.rules as rule (rule)}
                 {@const status = ruleStatus(rule)}
                 <div
-                  class="rule-item"
+                  class="side-item"
                   class:active={selectedRule === rule && !creatingRule}
-                  class:rule-disabled={!rule.is_enabled}
+                  class:off={!rule.is_enabled}
                   role="button"
                   tabindex="0"
                   on:click={() => selectRule(rule)}
                   on:keydown={e => e.key === 'Enter' && selectRule(rule)}
                 >
-                  <span class="status-dot dot-{status}"></span>
-                  <span class="rule-name">{rule.name}</span>
+                  <span class="event-dot" class:active={status === 'active'}></span>
+                  <span class="side-name">{rule.name}</span>
                 </div>
               {/each}
             {/each}
           </div>
         {/if}
 
-        <!-- Override status -->
-        {#if $appConfig.server_exe && !loading}
-          <div class="override-section">
-            <div class="override-title">Override status</div>
-
-            {#if pendingAction}
-            <div class="confirm-prompt">
-                {pendingAction === 'resetEvents'   ? 'Reset Events to default?' :
-                pendingAction === 'mergeEvents'   ? 'Merge defaults into Events?' :
-                pendingAction === 'resetSchedule' ? 'Reset Schedule to default?' :
-                                                    'Merge defaults into Schedule?'}
-            </div>
-            {/if}
-
-            <div class="override-row">
-            <span class="override-label">Events</span>
-            <span class="override-badge" class:is-override={eventsUsingOverride}>
-                {eventsUsingOverride ? 'Override' : 'Default'}
-            </span>
-            {#if pendingAction === 'resetEvents' || pendingAction === 'mergeEvents'}
-                <button
-                class="btn btn-sm btn-accent override-btn"
-                disabled={saving}
-                on:click={async () => {
-                    const action = pendingAction
-                    pendingAction = null
-                    if (action === 'resetEvents') await resetEvents()
-                    else await mergeEvents()
-                }}
-                >Yes</button>
-                <button
-                class="btn btn-sm btn-outline override-btn"
-                disabled={saving}
-                on:click={() => pendingAction = null}
-                >Cancel</button>
-            {:else}
-                <button
-                class="btn btn-sm btn-outline override-btn"
-                disabled={saving || !!pendingAction}
-                use:tip={'Overwrite EventsOverride.json with default Events.json'}
-                on:click={() => pendingAction = 'resetEvents'}
-                >Reset</button>
-                <button
-                class="btn btn-sm btn-outline override-btn"
-                disabled={saving || !!pendingAction}
-                use:tip={'Add any missing default events to the override'}
-                on:click={() => pendingAction = 'mergeEvents'}
-                >Merge</button>
-            {/if}
-            </div>
-
-            <div class="override-row">
-            <span class="override-label">Schedule</span>
-            <span class="override-badge" class:is-override={scheduleUsingOverride}>
-                {scheduleUsingOverride ? 'Override' : 'Default'}
-            </span>
-            {#if pendingAction === 'resetSchedule' || pendingAction === 'mergeSchedule'}
-                <button
-                class="btn btn-sm btn-accent override-btn"
-                disabled={saving}
-                on:click={async () => {
-                    const action = pendingAction
-                    pendingAction = null
-                    if (action === 'resetSchedule') await resetSchedule()
-                    else await mergeSchedule()
-                }}
-                >Yes</button>
-                <button
-                class="btn btn-sm btn-outline override-btn"
-                disabled={saving}
-                on:click={() => pendingAction = null}
-                >Cancel</button>
-            {:else}
-                <button
-                class="btn btn-sm btn-outline override-btn"
-                disabled={saving || !!pendingAction}
-                use:tip={'Overwrite EventScheduleOverride.json with default'}
-                on:click={() => pendingAction = 'resetSchedule'}
-                >Reset</button>
-                <button
-                class="btn btn-sm btn-outline override-btn"
-                disabled={saving || !!pendingAction}
-                use:tip={'Add any missing default rules to the override'}
-                on:click={() => pendingAction = 'mergeSchedule'}
-                >Merge</button>
-            {/if}
-            </div>
-
-            {#if opError}
-              <div class="override-error">{opError}</div>
-            {/if}
-            {#if opSuccess}
-              <div class="override-ok">{opSuccess}</div>
-            {/if}
-          </div>
-        {/if}
       </div>
     </PanelSidebar>
 
-    <!-- ── Content pane ── -->
-    <div class="content-pane">
+    <section class="data-main">
+
+      <header class="page-head">
+        {#if selectedRule !== null || creatingRule}
+          <button class="btn-icon" aria-label="Back to all events" use:tip={'Back to all events'} on:click={closeRule}>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="15 18 9 12 15 6"/>
+            </svg>
+          </button>
+          <h3 class="page-title">{creatingRule ? 'New Rule' : selectedRule?.name}</h3>
+          {#if !creatingRule && selectedRule}<span class="tag">{ruleTypeLabel(selectedRule)}</span>{/if}
+        {:else}
+          <h3 class="page-title">Events</h3>
+        {/if}
+        <div class="page-acts">
+          {#if opError}<span class="feedback-error">{opError}</span>{/if}
+          {#if opSuccess}<span class="feedback-ok">{opSuccess}</span>{/if}
+          {#if $appConfig.server_exe && !loading && !loadError && selectedRule === null && !creatingRule}
+            <button class="btn btn-sm btn-outline" on:click={() => { creatingDefinition = true; editingDefinition = null }}>New event</button>
+          {/if}
+        </div>
+      </header>
 
       {#if !$appConfig.server_exe}
         <div class="empty-state">
@@ -460,22 +413,6 @@
 
       {:else if selectedRule !== null || creatingRule}
 
-        <!-- Rule editor view -->
-        <div class="editor-header">
-          <button class="back-btn" aria-label="Back to dashboard" use:tip={'Back to dashboard'} on:click={discardEditor}>
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <polyline points="15 18 9 12 15 6"/>
-            </svg>
-          </button>
-          <span class="editor-title">
-            {creatingRule ? 'New rule' : selectedRule?.name}
-          </span>
-          {#if !creatingRule && selectedRule}
-            {@const status = ruleStatus(selectedRule)}
-            <span class="status-dot dot-{status}" style="margin-left:4px;"></span>
-            <span class="editor-type-label">{ruleTypeLabel(selectedRule)}</span>
-          {/if}
-        </div>
         <div class="editor-wrap">
           {#key editorKey}
             <EventRuleEditorModal
@@ -483,7 +420,7 @@
                 allEvents={definitions}
                 activeEventIds={activeEventIds}
                 onSave={saveRule}
-                onDiscard={discardEditor}
+                onDiscard={closeRule}
                 onEditDefinition={(def) => { editingDefinition = def; creatingDefinition = false }}
                 onOpenTuning={openInTuning}
                 {saving}
@@ -498,65 +435,43 @@
 
           <!-- Active now -->
           <div class="dash-section">
-            <div class="dash-section-header">
-              <span class="dash-section-title">Active now</span>
-              <span class="dash-count">{activeItems.length}</span>
-            </div>
+            <div class="subsection-title">Running now</div>
 
             {#if activeItems.length === 0}
-              <div class="dash-empty">
-                No events are currently active.
-              </div>
+              <div class="dash-empty">Nothing is running now.</div>
             {:else}
               <div class="active-grid">
                 {#each activeItems as item}
                   {#if item.kind === 'rotation'}
                     {@const rotationActiveId = ruleActiveIds(item.rule, now)[0]}
                     {@const rotationActiveName = rotationActiveId ? (definitionById[rotationActiveId]?.display_name ?? rotationActiveId) : null}
-                    <div class="active-card rotation-card event-card"
+                    <div class="active-card event-card"
                         role="button"
                         tabindex="0"
-                        use:tip={'Edit schedule rule'}
+                        use:tip={'Edit this rule'}
                         on:click={() => selectRule(item.rule)}
                         on:keydown={e => e.key === 'Enter' && selectRule(item.rule)}>
                       <div class="active-card-top">
-                        <span class="status-dot dot-active"></span>
+                        <span class="event-dot active"></span>
                         <span class="active-card-name">{item.rule.name}</span>
                       </div>
-                      <div class="active-card-meta">
-                        {#if rotationActiveName}
-                          <span class="active-card-type">Now: {rotationActiveName}</span>
-                        {/if}
-                        <span class="active-card-sub">{item.rule.events.length} events in rotation</span>
-                      </div>
+                      {#if rotationActiveName}
+                        <span class="active-card-now">Now: {rotationActiveName}</span>
+                      {/if}
                     </div>
                   {:else}
                     <div
                       class="active-card event-card"
                       role="button"
                       tabindex="0"
-                      use:tip={'Edit definition'}
+                      use:tip={`Edit this event. Runs from the ${item.rule.name} rule.`}
                       on:click={() => { editingDefinition = item.definition; creatingDefinition = false }}
                       on:keydown={e => e.key === 'Enter' && (editingDefinition = item.definition)}
                     >
                       <div class="active-card-top">
-                        <span class="status-dot dot-active"></span>
+                        <span class="event-dot active"></span>
                         <span class="active-card-name">{item.definition.display_name}</span>
-                      </div>
-                      <div class="active-card-meta">
-                        {#if item.definition.daily_gift}
-                          <span class="active-card-gift">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                              <polyline points="20 12 20 22 4 22 4 12"/>
-                              <rect x="2" y="7" width="20" height="5"/>
-                              <line x1="12" y1="22" x2="12" y2="7"/>
-                              <path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"/>
-                              <path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"/>
-                            </svg>
-                            Daily gift
-                          </span>
-                        {/if}
-                        <span class="active-card-rule">{item.rule.name}</span>
+                        {#if item.definition.daily_gift}<span class="tag" use:tip={'Players get a gift once a day while it runs'}>Gift</span>{/if}
                       </div>
                     </div>
                   {/if}
@@ -567,34 +482,8 @@
 
           <!-- All events -->
           <div class="dash-section">
-            <div class="dash-section-header">
-              <button
-                class="dash-expand-btn"
-                on:click={() => allEventsExpanded = !allEventsExpanded}
-              >
-                <svg
-                  viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                  class:rotated={allEventsExpanded}
-                >
-                  <polyline points="9 18 15 12 9 6"/>
-                </svg>
-                <span class="dash-section-title">All events</span>
-                <span class="dash-count">{definitions.length}</span>
-              </button>
-              <button
-                class="btn btn-sm btn-outline"
-                style="margin-left:auto;"
-                on:click={() => { creatingDefinition = true; editingDefinition = null }}
-              >
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:11px;height:11px;">
-                  <line x1="12" y1="5" x2="12" y2="19"/>
-                  <line x1="5" y1="12" x2="19" y2="12"/>
-                </svg>
-                New definition
-              </button>
-            </div>
+            <div class="subsection-title">All events</div>
 
-            {#if allEventsExpanded}
               {#if definitions.length === 0}
                 <div class="dash-empty">No event definitions found.</div>
               {:else}
@@ -602,13 +491,12 @@
                   {#each definitions as def (def.id)}
                     {@const isActive = activeIds.has(def.id)}
                     <div class="def-row">
-                      <span class="status-dot dot-{isActive ? 'active' : 'disabled'}"></span>
+                      <span class="event-dot" class:active={isActive}></span>
                       <div class="def-info">
-                        <span class="def-name">{def.display_name}</span>
-                        <span class="def-path">{def.file_path || 'No tuning file'}</span>
+                        <span class="def-name" use:tip={def.file_path || 'No tuning file'}>{def.display_name}</span>
                       </div>
                       {#if def.is_hidden}
-                        <span class="def-badge">Hidden</span>
+                        <span class="tag" use:tip={'Left out of the "Today\'s Events" message'}>Hidden</span>
                       {/if}
                       {#if def.file_path}
                         <button
@@ -625,13 +513,27 @@
                   {/each}
                 </div>
               {/if}
-            {/if}
+          </div>
+
+          <!-- Override files -->
+          <div class="dash-section">
+            <div class="subsection-title">Override files</div>
+            <div class="def-list">
+              {#each overrideRows as row (row.label)}
+                <div class="def-row">
+                  <div class="def-info"><span class="def-name">{row.label}</span></div>
+                  <span class="tag" use:tip={row.file}>{row.using ? 'Override' : 'Default'}</span>
+                  <button class="btn btn-sm btn-outline" disabled={saving} use:tip={`Replace ${row.file} with the default ${row.what}`} on:click={() => confirmReset(row)}>Reset</button>
+                  <button class="btn btn-sm btn-outline" disabled={saving} use:tip={`Add the default ${row.what} that ${row.file} is missing`} on:click={() => confirmMerge(row)}>Merge</button>
+                </div>
+              {/each}
+            </div>
           </div>
 
         </div><!-- dashboard-scroll -->
       {/if}
 
-    </div><!-- content-pane -->
+    </section>
 
   </div><!-- events-layout -->
 </div>
@@ -659,24 +561,6 @@
     min-height: 0;
   }
 
-  .panel-bg {
-    position: absolute;
-    inset: 0;
-    background: linear-gradient(180deg, var(--panel-grad-top) 0%, transparent var(--panel-grad-mid));
-    pointer-events: none;
-  }
-
-  .grid-overlay {
-    position: absolute;
-    inset: 0;
-    background-image:
-      linear-gradient(var(--border) 1px, transparent 1px),
-      linear-gradient(90deg, var(--border) 1px, transparent 1px);
-    background-size: 32px 32px;
-    opacity: 0.18;
-    pointer-events: none;
-  }
-
   .events-layout {
     position: relative;
     z-index: 1;
@@ -694,7 +578,7 @@
     height: 100%;
   }
 
-  .sidebar-notice {
+  .file-notice {
     padding: 16px 14px;
     font-family: var(--font-head);
     font-size: var(--fs-min);
@@ -702,7 +586,7 @@
     text-transform: uppercase;
     color: var(--text-2);
   }
-  .sidebar-notice.error {
+  .file-notice.error {
     color: var(--text-error);
     text-transform: none;
     font-family: var(--font-body);
@@ -714,207 +598,11 @@
     overflow-y: auto;
     padding: 6px;
   }
+  .rule-list > .side-label:first-child { margin-top: 0; border-top: none; }
+  /* Advanced sidebar size, matching the Patches and Store file rows. */
+  .side-item { gap: 8px; padding: 7px 10px; min-height: 42px; font-size: 11px; }
+  .side-item.off { opacity: var(--dimmed-opacity); }
 
-  .rule-group-label {
-    font-family: var(--font-head);
-    font-size: var(--fs-min);
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
-    color: var(--text-2);
-    padding: 10px 14px 4px;
-    border-top: 1px solid var(--border);
-    margin-top: 4px;
-  }
-  .rule-group-label:first-child { border-top: none; margin-top: 0; }
-
-  .rule-item {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 7px 10px;
-    min-height: 38px;
-    border: 1px solid transparent;
-    border-radius: var(--radius-sm);
-    cursor: pointer;
-    transition: all 0.1s;
-    margin-bottom: 2px;
-  }
-  .rule-item:hover         { background: var(--bg-3); border-color: var(--border-mid); }
-  .rule-item.active        { background: var(--accent-glow); border-color: var(--accent-dim); }
-  .rule-item.active .rule-name { color: var(--accent-bright); }
-  .rule-item.rule-disabled { opacity: var(--dimmed-opacity); }
-
-  .rule-name {
-    font-family: var(--font-head);
-    font-size: 11px;
-    font-weight: 600;
-    color: var(--text-1);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    flex: 1;
-  }
-
-  /* ── Status dots ── */
-
-  .status-dot {
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    border: 1px solid var(--border-mid);
-    flex-shrink: 0;
-  }
-  .dot-active    { border-color: var(--accent-bright); background: var(--accent-bright); box-shadow: 0 0 0 3px var(--accent-glow); }
-  .dot-scheduled { border-color: var(--accent); }
-
-  /* ── Override section ── */
-
-  .override-section {
-    border-top: 1px solid var(--border);
-    padding: 10px 10px 12px;
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-    flex-shrink: 0;
-  }
-
-  .override-title {
-    font-family: var(--font-head);
-    font-size: var(--fs-min);
-    font-weight: 600;
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
-    color: var(--text-3);
-    padding-bottom: 4px;
-  }
-
-  .override-row {
-    display: flex;
-    align-items: center;
-    gap: 5px;
-  }
-
-  .override-label {
-    font-family: var(--font-head);
-    font-size: var(--fs-min);
-    color: var(--text-2);
-    min-width: 52px;
-  }
-
-  .override-badge {
-    font-family: var(--font-head);
-    font-size: var(--fs-min);
-    font-weight: 600;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-    padding: 1px 5px;
-    border-radius: 2px;
-    border: 1px solid var(--border-mid);
-    color: var(--text-3);
-    background: none;
-    flex-shrink: 0;
-  }
-  .override-badge.is-override {
-    color: var(--accent-bright);
-    border-color: var(--accent-dim);
-    background: var(--accent-glow);
-  }
-
-  .override-btn { padding: 2px 7px; font-size: var(--fs-min); margin-left: auto; }
-  .override-btn + .override-btn { margin-left: 0; }
-
-  .override-error {
-    font-family: var(--font-body);
-    font-size: var(--fs-min);
-    color: var(--text-error);
-    padding-top: 2px;
-  }
-
-  .override-ok {
-    font-family: var(--font-body);
-    font-size: var(--fs-min);
-    color: var(--green-bright);
-    padding-top: 2px;
-  }
-
-  .confirm-prompt {
-    font-family: var(--font-head);
-    font-size: var(--fs-min);
-    letter-spacing: 0.04em;
-    color: var(--text-1);
-  }
-
-  /* ── Content pane ── */
-
-  .content-pane {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-    min-width: 0;
-    background: var(--bg-1);
-  }
-
-  /* ── Empty state ── */
-
-  .empty-state {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 8px;
-    padding: 32px;
-    color: var(--text-2);
-  }
-  .empty-state svg          { width: 24px; height: 24px; color: var(--text-3); }
-  .empty-state-label        { font-family: var(--font-head); font-size: 13px; font-weight: 600; color: var(--text-1); }
-  .empty-state-sub          { font-family: var(--font-body); font-size: 11px; color: var(--text-3); text-align: center; }
-
-  /* ── Rule editor header ── */
-
-  .editor-header {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 12px 16px;
-    border-bottom: 1px solid var(--border);
-    min-height: 53px;
-    flex-shrink: 0;
-  }
-
-  .back-btn {
-    width: 28px;
-    height: 28px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: none;
-    border: 1px solid var(--border-mid);
-    border-radius: var(--radius-sm);
-    color: var(--text-2);
-    cursor: pointer;
-    transition: all 0.1s;
-    flex-shrink: 0;
-    padding: 0;
-  }
-  .back-btn:hover   { color: var(--text-0); border-color: var(--border-lit); }
-  .back-btn svg     { width: 16px; height: 16px; }
-
-  .editor-title {
-    font-family: var(--font-head);
-    font-size: 12px;
-    font-weight: 700;
-    color: var(--text-0);
-  }
-
-  .editor-type-label {
-    font-family: var(--font-head);
-    font-size: var(--fs-min);
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    color: var(--text-3);
-  }
 
   .editor-wrap {
     flex: 1;
@@ -939,58 +627,12 @@
   }
   .dash-section:last-child { border-bottom: none; }
 
-  .dash-section-header {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    margin-bottom: 12px;
-  }
-
-  .dash-section-title {
-    font-family: var(--font-head);
-    font-size: var(--fs-min);
-    font-weight: 700;
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
-    color: var(--text-2);
-  }
-
-  .dash-count {
-    font-family: var(--font-mono);
-    font-size: var(--fs-min);
-    color: var(--text-3);
-    background: var(--bg-3);
-    border: 1px solid var(--border-mid);
-    border-radius: 2px;
-    padding: 1px 5px;
-  }
-
   .dash-empty {
     font-family: var(--font-body);
     font-size: 11px;
     color: var(--text-3);
     padding: 4px 0 8px;
   }
-
-  /* ── Expand button for All events ── */
-
-  .dash-expand-btn {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    background: none;
-    border: none;
-    cursor: pointer;
-    padding: 0;
-  }
-  .dash-expand-btn svg {
-    width: 14px;
-    height: 14px;
-    color: var(--text-3);
-    transition: transform 0.15s;
-    flex-shrink: 0;
-  }
-  .dash-expand-btn svg.rotated { transform: rotate(90deg); }
 
   /* ── Active event grid ── */
 
@@ -1015,13 +657,6 @@
     cursor: pointer;
   }
   .event-card:hover { border-color: var(--border-lit); }
-  .rotation-card.event-card:hover { border-color: var(--accent-bright); }
-
-  .rotation-card {
-    border-color: var(--accent-dim);
-    background: linear-gradient(140deg, var(--accent-glow) 0%, var(--bg-2) 60%);
-  }
-
   .active-card-top {
     display: flex;
     align-items: center;
@@ -1029,6 +664,8 @@
   }
 
   .active-card-name {
+    flex: 1;
+    min-width: 0;
     font-family: var(--font-head);
     font-size: 12px;
     font-weight: 700;
@@ -1038,48 +675,11 @@
     text-overflow: ellipsis;
   }
 
-  .active-card-meta {
-    display: flex;
-    flex-direction: column;
-    gap: 3px;
-  }
-
-  .active-card-type {
-    font-family: var(--font-head);
-    font-size: var(--fs-min);
-    letter-spacing: 0.06em;
+  .active-card-now {
+    font-size: 11px;
     color: var(--accent-bright);
   }
 
-  .active-card-sub {
-    font-family: var(--font-body);
-    font-size: var(--fs-min);
-    color: var(--text-3);
-  }
-
-  .active-card-sub-event {
-    font-family: var(--font-body);
-    font-size: var(--fs-min);
-    color: var(--text-2);
-  }
-
-  .active-card-gift {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    font-family: var(--font-head);
-    font-size: var(--fs-min);
-    letter-spacing: 0.06em;
-    color: var(--text-2);
-  }
-  .active-card-gift svg { width: 10px; height: 10px; flex-shrink: 0; }
-
-  .active-card-rule {
-    font-family: var(--font-head);
-    font-size: var(--fs-min);
-    letter-spacing: 0.06em;
-    color: var(--text-1);
-  }
 
   /* ── All events list ── */
 
@@ -1118,28 +718,6 @@
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-  }
-
-  .def-path {
-    font-family: var(--font-mono);
-    font-size: var(--fs-min);
-    color: var(--text-3);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-
-  .def-badge {
-    font-family: var(--font-head);
-    font-size: var(--fs-min);
-    font-weight: 600;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-    color: var(--text-3);
-    border: 1px solid var(--border-mid);
-    border-radius: 2px;
-    padding: 1px 5px;
-    flex-shrink: 0;
   }
 
   .def-edit-btn { flex-shrink: 0; }
