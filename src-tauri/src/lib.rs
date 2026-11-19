@@ -1,6 +1,7 @@
 mod calligraphy;
 mod config;
 mod events;
+mod game_data;
 mod ini;
 mod launcher;
 mod server;
@@ -97,6 +98,8 @@ pub fn run() {
             config::delete_linked,
             versions::detect_server_version,
             versions::detect_client_version,
+            game_data::missing_game_data,
+            game_data::copy_game_data,
             config::set_console_presets,
             config::set_advanced_data,
             launcher::launch_game,

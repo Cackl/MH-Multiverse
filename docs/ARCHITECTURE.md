@@ -50,7 +50,7 @@ mh-multiverse/
 │       ├── Rail.svelte            Left nav rail (MHO / Local / App groups)
 │       ├── PanelSidebar.svelte    Reusable sidebar layout wrapper
 │       ├── LaunchPanel.svelte     Server profiles, credentials, game launch (shows an "Overlay" indicator when inject-on-launch is on; clicking it opens the Overlay card in Settings)
-│       ├── GetStarted.svelte      Launch-page checklist shown with no servers (game/server exe, client and server version match, Server + Apache start, local account, launch options); reopened by the Servers header's ? button
+│       ├── GetStarted.svelte      Launch-page checklist shown with no servers (game/server exe, game data with Copy from client, client and server version match, Server + Apache start, local account, launch options); reopened by the Servers header's ? button
 │       ├── ConfirmDialog.svelte   Themed confirm dialog driven by askConfirm() in store.ts
 │       ├── ServerPanel.svelte     Server start/stop, log viewer, command input, online players
 │       ├── PlayersBlade.svelte    Searchable list of players connected to the server
@@ -93,6 +93,7 @@ mh-multiverse/
 │   │   ├── events.rs             Events.json / EventSchedule.json read/write; override file
 │   │   │                         management (load, save, reset, merge) for both definitions
 │   │   │                         and schedule rules
+│   │   ├── game_data.rs          Copies Calligraphy.sip and mu_cdata.sip from the client to the server when missing
 │   │   ├── launcher.rs           launch_game (spawn with args), LaunchedGame (last launched game), game_is_running (sysinfo poll)
 │   │   ├── ini.rs                Config.ini / ConfigOverride.ini read/write with diff-only saving
 │   │   ├── tuning.rs             LiveTuningData*.json scan/read/write/create/toggle
@@ -294,6 +295,8 @@ The stdout reader additionally calls `parse_player_log_event` on every line (reg
 | `delete_linked` | `id: String` | `AppConfig` | Remove a linked version other than the active one |
 | `detect_client_version` | `game_exe: String` | `Option<String>` | `1.48` / `1.52` / `1.53` from the exe's file version (`versions.rs`) |
 | `detect_server_version` | `server_exe: String` | `Option<String>` | Same, from the version string in `MHServerEmu.dll` |
+| `missing_game_data` | `server_exe: String` | `Vec<String>` | Which of `Calligraphy.sip` and `mu_cdata.sip` the server's `Data/Game` lacks (`game_data.rs`) |
+| `copy_game_data` | `game_exe, server_exe` | `Vec<String>` | Copies the missing ones from the client's `Data/Game` (searched up from the game exe) through a `.part` file, never replacing one that is there. Returns the files copied |
 | `set_shutdown_config` | `shutdown: ShutdownConfig` | `()` | Set shutdown delay and broadcast message |
 | `set_backup_targets` | `targets: Vec<String>` | `()` | Set backup target paths |
 | `set_console_presets` | `presets: Vec<String>` | `()` | Set command shortcut preset list |

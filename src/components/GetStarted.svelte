@@ -33,6 +33,27 @@
   $: detectServer($appConfig.server_exe)
   $: match = versionMatch(clientVersion, serverVersion)
 
+  let missingData: string[] = []
+  let copying = false
+  let copyError = ''
+  async function checkGameData(serverExe: string) {
+    const missing = serverExe ? await invoke<string[]>('missing_game_data', { serverExe }).catch(() => []) : []
+    if (serverExe === $appConfig.server_exe) missingData = missing
+  }
+  $: checkGameData($appConfig.server_exe)
+
+  async function copyGameData() {
+    copying = true
+    copyError = ''
+    try {
+      await invoke('copy_game_data', { gameExe: $appConfig.game_exe, serverExe: $appConfig.server_exe })
+    } catch (e) {
+      copyError = String(e)
+    }
+    copying = false
+    await checkGameData($appConfig.server_exe)
+  }
+
   function openLaunchOptions() {
     launchOptionsReviewed.set(true)
     settingsSection.set('client')
@@ -84,6 +105,25 @@
     </div>
     <button class="btn btn-sm btn-outline" on:click={browseServerExe}>Browse</button>
   </div>
+
+  {#if hasServerExe}
+    <div class="gs-row">
+      <span class="mark" class:done={!missingData.length}></span>
+      <div class="gs-text">
+        <div class="gs-title">Game data</div>
+        {#if copyError}
+          <div class="gs-detail warn">{copyError}</div>
+        {:else if missingData.length}
+          <div class="gs-detail warn">Missing {missingData.join(' and ')}</div>
+        {/if}
+      </div>
+      {#if missingData.length}
+        <button class="btn btn-sm btn-outline" on:click={copyGameData} disabled={!$appConfig.game_exe || copying}>
+          {copying ? 'Copying...' : 'Copy from client'}
+        </button>
+      {/if}
+    </div>
+  {/if}
 
   {#if $appConfig.game_exe && hasServerExe}
     <div class="gs-row">
