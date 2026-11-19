@@ -166,14 +166,21 @@
     }
   }
 
-  function startNewRule() {
+  // Opening another rule or leaving the editor asks first when the open rule has unsaved edits.
+  async function startNewRule() {
+    if (creatingRule || !(await confirmLeave())) return
     selectedRule = null
     creatingRule = true
   }
 
-  function selectRule(rule: ScheduleRule) {
+  async function selectRule(rule: ScheduleRule) {
+    if ((selectedRule === rule && !creatingRule) || !(await confirmLeave())) return
     selectedRule = rule
     creatingRule = false
+  }
+
+  async function closeRule() {
+    if (await confirmLeave()) discardEditor()
   }
 
   function discardEditor() {
@@ -364,7 +371,7 @@
 
       <header class="page-head">
         {#if selectedRule !== null || creatingRule}
-          <button class="btn-icon" aria-label="Back to all events" use:tip={'Back to all events'} on:click={discardEditor}>
+          <button class="btn-icon" aria-label="Back to all events" use:tip={'Back to all events'} on:click={closeRule}>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <polyline points="15 18 9 12 15 6"/>
             </svg>
@@ -413,7 +420,7 @@
                 allEvents={definitions}
                 activeEventIds={activeEventIds}
                 onSave={saveRule}
-                onDiscard={discardEditor}
+                onDiscard={closeRule}
                 onEditDefinition={(def) => { editingDefinition = def; creatingDefinition = false }}
                 onOpenTuning={openInTuning}
                 {saving}
