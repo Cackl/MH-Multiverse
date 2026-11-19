@@ -435,7 +435,7 @@
     </PanelSidebar>
 
     <!-- ── Content pane ── -->
-    <div class="content-pane">
+    <section class="data-main">
 
       {#if !$appConfig.server_exe}
         <div class="empty-state">
@@ -631,7 +631,7 @@
         </div><!-- dashboard-scroll -->
       {/if}
 
-    </div><!-- content-pane -->
+    </section>
 
   </div><!-- events-layout -->
 </div>
@@ -657,24 +657,6 @@
     position: relative;
     overflow: hidden;
     min-height: 0;
-  }
-
-  .panel-bg {
-    position: absolute;
-    inset: 0;
-    background: linear-gradient(180deg, var(--panel-grad-top) 0%, transparent var(--panel-grad-mid));
-    pointer-events: none;
-  }
-
-  .grid-overlay {
-    position: absolute;
-    inset: 0;
-    background-image:
-      linear-gradient(var(--border) 1px, transparent 1px),
-      linear-gradient(90deg, var(--border) 1px, transparent 1px);
-    background-size: 32px 32px;
-    opacity: 0.18;
-    pointer-events: none;
   }
 
   .events-layout {
@@ -843,33 +825,6 @@
     letter-spacing: 0.04em;
     color: var(--text-1);
   }
-
-  /* ── Content pane ── */
-
-  .content-pane {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-    min-width: 0;
-    background: var(--bg-1);
-  }
-
-  /* ── Empty state ── */
-
-  .empty-state {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 8px;
-    padding: 32px;
-    color: var(--text-2);
-  }
-  .empty-state svg          { width: 24px; height: 24px; color: var(--text-3); }
-  .empty-state-label        { font-family: var(--font-head); font-size: 13px; font-weight: 600; color: var(--text-1); }
-  .empty-state-sub          { font-family: var(--font-body); font-size: 11px; color: var(--text-3); text-align: center; }
 
   /* ── Rule editor header ── */
 
