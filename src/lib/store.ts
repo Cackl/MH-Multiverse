@@ -8,7 +8,7 @@ export type Tab = 'launch' | 'server' | 'config' | 'data' | 'ops' | 'settings'
 export type LogLevel = 'all' | 'trace' | 'debug' | 'info' | 'ok' | 'warn' | 'err' | 'fatal'
 
 export const activeTab = writable<Tab>('launch')
-export type SettingsSection = 'client' | 'theme' | 'integrations' | 'about'
+export type SettingsSection = 'client' | 'display' | 'integrations' | 'about'
 export const settingsSection = writable<SettingsSection>('client')
 export const activeDataTab = writable<DataTab>('events')
 

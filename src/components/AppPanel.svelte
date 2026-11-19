@@ -65,7 +65,7 @@
 
   const navItems: { id: Section; label: string }[] = [
     { id: 'client', label: 'Marvel Heroes Omega' },
-    { id: 'theme',  label: 'Theme' },
+    { id: 'display', label: 'Display' },
     { id: 'integrations', label: 'Integrations' },
     { id: 'about',  label: 'About' },
   ]
@@ -204,10 +204,10 @@
           </div>
         </div>
 
-      {:else if activeSection === 'theme'}
+      {:else if activeSection === 'display'}
         <div class="detail-section">
           <div class="detail-head">
-            <div class="section-title">Theme</div>
+            <div class="section-title">Display</div>
           </div>
           <div class="detail-body">
             <div class="theme-list">
