@@ -1,5 +1,6 @@
 import { writable, derived, get } from 'svelte/store'
 import { invoke } from '@tauri-apps/api/core'
+import { versionCaps } from './versionCaps'
 
 export type DataTab = 'events' | 'tuning' | 'store' | 'patches'
 export type Tab = 'launch' | 'server' | 'config' | 'data' | 'ops' | 'settings'
@@ -439,6 +440,11 @@ export const appConfig = writable<AppConfig>({
   // Until the real config loads, show the existing editors rather than flash Simple.
   advanced_data: true,
 })
+
+export const activeLinked = derived(appConfig, c => c.linked.find(l => l.id === c.active_linked_id))
+
+/** What the active linked version supports. With none linked, today's 1.52 behaviour. */
+export const activeCaps = derived(activeLinked, l => versionCaps(l?.version ?? '', l?.custom ?? false))
 
 export const activeTheme = writable<string>('')
 
