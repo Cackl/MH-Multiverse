@@ -82,7 +82,10 @@
   padding: 0;
 }
 
-:root {
+/* [data-theme-preview] resets an element to the default palette, so a Display card can preview
+   a theme other than the active one (the theme blocks below then apply on top). */
+:root,
+[data-theme-preview] {
   /* Native controls (unchecked checkboxes, scrollbars, select popups) follow the theme. */
   color-scheme: dark;
 

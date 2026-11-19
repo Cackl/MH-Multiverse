@@ -16,8 +16,8 @@ function parseBlock(body: string): Record<string, string> {
 
 let rootTokens: Record<string, string> = {}
 const themeOverrides: Record<string, Record<string, string>> = {}
-for (const m of css.matchAll(/^(:root|\[data-theme="([^"]+)"\])\s*\{([\s\S]*?)^\}/gm)) {
-  if (m[1] === ':root') rootTokens = parseBlock(m[3])
+for (const m of css.matchAll(/^(:root(?:,\s*\[data-theme-preview\])?|\[data-theme="([^"]+)"\])\s*\{([\s\S]*?)^\}/gm)) {
+  if (m[1].startsWith(':root')) rootTokens = parseBlock(m[3])
   else themeOverrides[m[2]] = parseBlock(m[3])
 }
 const themes: Record<string, Record<string, string>> = { default: rootTokens }
