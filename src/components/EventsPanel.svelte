@@ -315,20 +315,20 @@
         {:else}
           <div class="rule-list">
             {#each ruleGroups as group (group.key)}
-              <div class="rule-group-label">{group.label}</div>
+              <div class="side-label">{group.label}</div>
               {#each group.rules as rule (rule)}
                 {@const status = ruleStatus(rule)}
                 <div
-                  class="rule-item"
+                  class="side-item"
                   class:active={selectedRule === rule && !creatingRule}
-                  class:rule-disabled={!rule.is_enabled}
+                  class:off={!rule.is_enabled}
                   role="button"
                   tabindex="0"
                   on:click={() => selectRule(rule)}
                   on:keydown={e => e.key === 'Enter' && selectRule(rule)}
                 >
                   <span class="status-dot dot-{status}"></span>
-                  <span class="rule-name">{rule.name}</span>
+                  <span class="side-name">{rule.name}</span>
                 </div>
               {/each}
             {/each}
@@ -681,46 +681,11 @@
     overflow-y: auto;
     padding: 6px;
   }
+  .rule-list > .side-label:first-child { margin-top: 0; border-top: none; }
+  /* Advanced sidebar size, matching the Patches and Store file rows. */
+  .side-item { gap: 8px; padding: 7px 10px; min-height: 42px; font-size: 11px; }
+  .side-item.off { opacity: var(--dimmed-opacity); }
 
-  .rule-group-label {
-    font-family: var(--font-head);
-    font-size: var(--fs-min);
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
-    color: var(--text-2);
-    padding: 10px 14px 4px;
-    border-top: 1px solid var(--border);
-    margin-top: 4px;
-  }
-  .rule-group-label:first-child { border-top: none; margin-top: 0; }
-
-  .rule-item {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 7px 10px;
-    min-height: 38px;
-    border: 1px solid transparent;
-    border-radius: var(--radius-sm);
-    cursor: pointer;
-    transition: all 0.1s;
-    margin-bottom: 2px;
-  }
-  .rule-item:hover         { background: var(--bg-3); border-color: var(--border-mid); }
-  .rule-item.active        { background: var(--accent-glow); border-color: var(--accent-dim); }
-  .rule-item.active .rule-name { color: var(--accent-bright); }
-  .rule-item.rule-disabled { opacity: var(--dimmed-opacity); }
-
-  .rule-name {
-    font-family: var(--font-head);
-    font-size: 11px;
-    font-weight: 600;
-    color: var(--text-1);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    flex: 1;
-  }
 
   /* ── Status dots ── */
 
