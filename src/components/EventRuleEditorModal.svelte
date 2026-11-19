@@ -188,7 +188,7 @@
           disabled={saving}
           on:click={() => is_enabled = !is_enabled}
         ></button>
-        <span class="toggle-hint">{is_enabled ? 'Active' : 'Disabled'}</span>
+        <span class="toggle-hint">{is_enabled ? 'On' : 'Off'}</span>
       </div>
     </div>
 
@@ -247,11 +247,8 @@
     <div class="events-section">
       <div class="events-header">
         <span class="field-label">Events</span>
-        {#if events.length > 0}
-          <span class="events-count">{events.length}</span>
-        {/if}
         {#if isRotation}
-          <span class="events-hint">Order determines rotation sequence</span>
+          <span class="events-hint">Runs in this order</span>
         {/if}
       </div>
 
@@ -261,10 +258,9 @@
         <div class="events-list">
           {#each events as eventId, i (i)}
             <div class="event-row">
-              <span class="status-dot" class:dot-active={eventIsActive(eventId)} class:dot-disabled={!eventIsActive(eventId)}></span>
+              <span class="event-dot" class:active={eventIsActive(eventId)}></span>
               <div class="event-info">
-                <span class="event-name">{eventLabel(eventId) || '(empty slot)'}</span>
-                <span class="event-id">{eventId}</span>
+                <span class="event-name" use:tip={eventId}>{eventLabel(eventId) || '(empty slot)'}</span>
               </div>
               <div class="event-actions">
                 {#if onOpenTuning}
@@ -467,9 +463,7 @@
   .editor-toggle:disabled          { opacity: 0.4; cursor: not-allowed; }
 
   .toggle-hint {
-    font-family: var(--font-head);
-    font-size: var(--fs-min);
-    letter-spacing: 0.06em;
+    font-size: 11px;
     color: var(--text-3);
   }
 
@@ -488,20 +482,8 @@
     gap: 8px;
   }
 
-  .events-count {
-    font-family: var(--font-mono);
-    font-size: var(--fs-min);
-    color: var(--accent-bright);
-    background: var(--accent-glow);
-    border: 1px solid var(--accent-dim);
-    border-radius: 2px;
-    padding: 1px 5px;
-  }
-
   .events-hint {
-    font-family: var(--font-head);
-    font-size: var(--fs-min);
-    letter-spacing: 0.06em;
+    font-size: 11px;
     color: var(--text-3);
     margin-left: auto;
   }
@@ -547,27 +529,12 @@
     text-overflow: ellipsis;
   }
 
-  .event-id {
-    font-family: var(--font-mono);
-    font-size: var(--fs-min);
-    color: var(--text-3);
-  }
-
   .event-actions {
     display: flex;
     align-items: center;
     gap: 4px;
     flex-shrink: 0;
   }
-
-  .status-dot {
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    border: 1px solid var(--border-mid);
-    flex-shrink: 0;
-  }
-  .dot-active    { border-color: var(--accent-bright); background: var(--accent-bright); box-shadow: 0 0 0 3px var(--accent-glow); }
 
   .move-btn {
     width: 22px;

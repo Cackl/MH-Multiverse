@@ -356,7 +356,7 @@
                   on:click={() => selectRule(rule)}
                   on:keydown={e => e.key === 'Enter' && selectRule(rule)}
                 >
-                  <span class="status-dot dot-{status}"></span>
+                  <span class="event-dot" class:active={status === 'active'}></span>
                   <span class="side-name">{rule.name}</span>
                 </div>
               {/each}
@@ -452,7 +452,7 @@
                         on:click={() => selectRule(item.rule)}
                         on:keydown={e => e.key === 'Enter' && selectRule(item.rule)}>
                       <div class="active-card-top">
-                        <span class="status-dot dot-active"></span>
+                        <span class="event-dot active"></span>
                         <span class="active-card-name">{item.rule.name}</span>
                       </div>
                       {#if rotationActiveName}
@@ -469,7 +469,7 @@
                       on:keydown={e => e.key === 'Enter' && (editingDefinition = item.definition)}
                     >
                       <div class="active-card-top">
-                        <span class="status-dot dot-active"></span>
+                        <span class="event-dot active"></span>
                         <span class="active-card-name">{item.definition.display_name}</span>
                         {#if item.definition.daily_gift}<span class="tag" use:tip={'Players get a gift once a day while it runs'}>Gift</span>{/if}
                       </div>
@@ -491,7 +491,7 @@
                   {#each definitions as def (def.id)}
                     {@const isActive = activeIds.has(def.id)}
                     <div class="def-row">
-                      <span class="status-dot dot-{isActive ? 'active' : 'disabled'}"></span>
+                      <span class="event-dot" class:active={isActive}></span>
                       <div class="def-info">
                         <span class="def-name" use:tip={def.file_path || 'No tuning file'}>{def.display_name}</span>
                       </div>
@@ -603,18 +603,6 @@
   .side-item { gap: 8px; padding: 7px 10px; min-height: 42px; font-size: 11px; }
   .side-item.off { opacity: var(--dimmed-opacity); }
 
-
-  /* ── Status dots ── */
-
-  .status-dot {
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    border: 1px solid var(--border-mid);
-    flex-shrink: 0;
-  }
-  .dot-active    { border-color: var(--accent-bright); background: var(--accent-bright); box-shadow: 0 0 0 3px var(--accent-glow); }
-  .dot-scheduled { border-color: var(--accent); }
 
   .editor-wrap {
     flex: 1;
