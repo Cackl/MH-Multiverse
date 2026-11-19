@@ -88,7 +88,7 @@ async fn newest_build(client: &reqwest::Client) -> Option<(String, String)> {
 
 /// The exe's ProductVersion string, e.g. "1.0.3+build20261027131155". The numeric file version
 /// drops the "+build" stamp that identifies a nightly.
-fn product_version(path: &Path) -> Option<String> {
+pub(crate) fn product_version(path: &Path) -> Option<String> {
     use windows::core::{w, HSTRING};
     use windows::Win32::Storage::FileSystem::{GetFileVersionInfoSizeW, GetFileVersionInfoW, VerQueryValueW};
     let p = HSTRING::from(path.as_os_str());
