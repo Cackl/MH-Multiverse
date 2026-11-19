@@ -1,0 +1,555 @@
+<script lang="ts">
+  import { onDestroy } from 'svelte'
+  import { invoke } from '@tauri-apps/api/core'
+  import { openUrl } from '@tauri-apps/plugin-opener'
+  import {
+    appConfig, activeServerId,
+    selectServer, deleteServer,
+    gameRunning, overlayStatus, type OverlayStatus, activeTab, settingsSection,
+    type Server
+  } from '../../lib/store'
+  import { tip } from '../../lib/tooltip'
+  import ServerModal from './ServerModal.svelte'
+  import { openCard } from '../settings/integrations/IntegrationCard.svelte'
+  import PanelSidebar from '../PanelSidebar.svelte'
+  import GetStarted from './GetStarted.svelte'
+
+  $: activeServer = $appConfig.servers.find(s => s.id === $activeServerId) ?? null
+
+  // The guide shows on its own with no servers; the sidebar button brings it back afterwards.
+  let guideRequested = false
+  $: showGuide = $appConfig.servers.length === 0 || guideRequested
+
+  let showModal = false
+  let editingServer: Server | null = null
+  let addTab: 'remote' | 'local' | null = null
+  let launchError = ''
+  let launching = false
+
+  let dashboardPort = 8080
+  let dashboardPath = `/Dashboard/`
+
+  // -- Inline delete confirmation --
+
+  let pendingDeleteId: string | null = null
+  let deleteTimer: ReturnType<typeof setTimeout> | null = null
+
+  $: if ($activeServerId) cancelDelete()
+
+  function requestDelete(server: Server) {
+    cancelDelete()
+    pendingDeleteId = server.id
+    deleteTimer = setTimeout(cancelDelete, 3000)
+  }
+
+  function cancelDelete() {
+    if (deleteTimer) { clearTimeout(deleteTimer); deleteTimer = null }
+    pendingDeleteId = null
+  }
+
+  async function executeDelete(server: Server) {
+    cancelDelete()
+    await deleteServer(server.id)
+  }
+
+  // Only check the overlay folder when injection is on (the indicator is the only consumer).
+  // Reactive, not onMount: this panel mounts before loadConfig() resolves, so the config
+  // is still the empty default at mount time.
+  $: if ($appConfig.overlay?.auto_inject && !$overlayStatus) {
+    invoke<OverlayStatus>('overlay_status').then(s => overlayStatus.set(s)).catch(() => {})
+  }
+
+  // Read WebFrontend port for the localhost dashboard URL. Reactive for the same reason as above.
+  async function readDashboardConfig(serverExe: string) {
+    try {
+      const state = await invoke<{ values: Record<string, Record<string, string>> }>('read_config', { serverExe })
+      const raw = state.values['WebFrontend']?.['Port']
+      const parsed = raw ? parseInt(raw, 10) : NaN
+      if (!isNaN(parsed) && parsed > 0) dashboardPort = parsed
+      const rawPath = state.values['WebFrontend']?.['DashboardUrlPath']
+      if (rawPath?.trim()) dashboardPath = rawPath.trim()
+    } catch {}
+  }
+  $: if ($appConfig.server_exe) readDashboardConfig($appConfig.server_exe)
+
+  onDestroy(() => {
+    cancelDelete()
+  })
+
+  function openAdd(tab: 'remote' | 'local' | null = null) {
+    editingServer = null
+    addTab = tab
+    showModal = true
+  }
+
+  function openEdit(server: Server) {
+    editingServer = server
+    showModal = true
+  }
+
+  function closeModal() {
+    showModal = false
+    editingServer = null
+  }
+
+  async function launch() {
+    if (!activeServer) return
+    launching = true
+    launchError = ''
+    try {
+      await invoke('launch_game', { serverId: activeServer.id })
+    } catch (e) {
+      launchError = String(e)
+    } finally {
+      launching = false
+    }
+  }
+
+  function isLocalhost(host: string): boolean {
+    const h = host.split(':')[0]
+    return h === 'localhost' || h === '127.0.0.1'
+  }
+
+  async function openDashboard() {
+    if (!activeServer) return
+    let url: string
+    if (activeServer.is_local || isLocalhost(activeServer.host)) {
+      // isLocalhost kept as legacy fallback for pre-migration records
+      url = `http://localhost:${dashboardPort}${dashboardPath}`
+    } else {
+      const scheme = activeServer.use_https ? 'https' : 'http'
+      const host   = await invoke<string>('normalize_host', { raw: activeServer.host })
+      url = `${scheme}://${host}/Dashboard/`
+    }
+    await openUrl(url)
+  }
+
+  async function openHome() {
+    if (!activeServer) return
+    const scheme = activeServer.use_https ? 'https' : 'http'
+    const host = await invoke<string>('normalize_host', { raw: activeServer.host })
+    await openUrl(`${scheme}://${host}/`)
+  }
+
+
+  function openOverlaySettings() {
+    openCard('overlay')
+    settingsSection.set('integrations')
+    activeTab.set('settings')
+  }
+</script>
+
+{#if showModal}
+  <ServerModal server={editingServer} initialTab={addTab} onClose={closeModal} />
+{/if}
+
+<div class="launch-panel">
+  <div class="panel-bg"></div>
+  <div class="grid-overlay"></div>
+
+  <div class="launch-content">
+    <!-- Server sidebar -->
+    <PanelSidebar width="var(--sidebar-wide)">
+      <svelte:fragment slot="header">
+        <div class="section-title">Servers</div>
+        <button class="btn-icon" aria-label="Get started guide" use:tip={'Get started guide'} on:click={() => guideRequested = !guideRequested} style="margin-left:auto;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"/>
+            <path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3"/>
+            <line x1="12" y1="17" x2="12.01" y2="17"/>
+          </svg>
+        </button>
+        <button class="btn-icon" aria-label="Add server" use:tip={'Add server'} on:click={() => openAdd()}>
+          <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5">
+            <line x1="7" y1="3" x2="7" y2="11"/>
+            <line x1="3" y1="7" x2="11" y2="7"/>
+          </svg>
+        </button>
+      </svelte:fragment>
+
+      <div class="server-list">
+        {#each $appConfig.servers as server (server.id)}
+          <div
+            class="server-card"
+            class:selected={server.id === $activeServerId}
+            on:click={() => { guideRequested = false; selectServer(server.id) }}
+            role="button"
+            tabindex="0"
+            on:keydown={(e) => e.key === 'Enter' && (guideRequested = false, selectServer(server.id))}
+          >
+            <div class="server-card-name">{server.name}</div>
+            <div class="server-card-url">
+              {server.is_local ? 'Local Server' : server.host}
+            </div>
+          </div>
+        {/each}
+
+        {#if $appConfig.servers.length === 0}
+          <div class="empty-list">No servers</div>
+        {/if}
+      </div>
+    </PanelSidebar>
+
+    <!-- Detail area -->
+    {#if showGuide}
+      <GetStarted onAddServer={openAdd} />
+    {:else if activeServer}
+      <div class="launch-detail">
+        <!-- Hero -->
+        <div class="detail-hero">
+          <div class="detail-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="2" y="3" width="20" height="18" rx="2"/>
+              <line x1="2" y1="9" x2="22" y2="9"/>
+              <circle cx="7" cy="6" r="1" fill="currentColor" stroke="none"/>
+              <circle cx="11" cy="6" r="1" fill="currentColor" stroke="none"/>
+            </svg>
+          </div>
+          <div class="detail-hero-text">
+            <h2>{activeServer.name}</h2>
+            <p>{activeServer.is_local ? 'Local Server' : activeServer.host}</p>
+          </div>
+          <div class="detail-hero-actions">
+            <button class="btn btn-sm btn-outline" on:click={() => openEdit(activeServer)}>Edit</button>
+            {#if pendingDeleteId === activeServer.id}
+              <button class="btn btn-sm btn-red confirm-delete" on:click={() => executeDelete(activeServer)}>Confirm?</button>
+              <button class="btn btn-sm btn-outline" on:click={cancelDelete}>Cancel</button>
+            {:else}
+              <button class="btn btn-sm btn-red" on:click={() => requestDelete(activeServer)}>Remove</button>
+            {/if}
+          </div>
+        </div>
+
+        <!-- Credential fields -->
+        <div class="detail-fields">
+          <div class="field-group">
+            <span class="field-label">Username</span>
+            <div class="field-value">
+              {#if activeServer.email}
+                {activeServer.email}
+              {:else}
+                <span class="field-empty">Not set</span>
+              {/if}
+            </div>
+          </div>
+          <div class="field-group">
+            <span class="field-label">Password</span>
+            <div class="field-value">
+              <span class="masked">************</span>
+              <span class="badge badge-enc">AES-256</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Launch bar -->
+      <div class="launch-bar">
+        {#if launchError}
+          <div class="launch-error">{launchError}</div>
+        {/if}
+        {#if !activeServer.is_local && !isLocalhost(activeServer.host)}
+          <button class="btn btn-secondary" on:click={openHome}>Home</button>
+        {/if}
+        <button class="btn btn-secondary" on:click={openDashboard}>Dashboard</button>
+        {#if $overlayStatus?.auto_inject}
+          <button
+            class="overlay-note"
+            class:warn={$overlayStatus.state !== 'trusted'}
+            on:click={openOverlaySettings}
+            use:tip={$overlayStatus.state === 'trusted'
+              ? 'The overlay will be injected when the game launches.'
+              : 'Overlay injection is on, but the overlay files changed or are missing, so it will not be injected. Re-trust it in Settings → Integrations.'}
+          ><span class="overlay-dot"></span>Overlay</button>
+        {/if}
+        <button
+          class="btn btn-launch"
+          use:tip={!$appConfig.game_exe ? 'Set the game executable in Settings' : ''}
+          disabled={!$appConfig.game_exe || !activeServer || launching || $gameRunning}
+          on:click={launch}
+        >
+          {$gameRunning ? 'Game Running' : launching ? 'Launching...' : 'Launch Game'}
+        </button>
+      </div>
+
+    {:else}
+      <div class="empty-state">
+        <div class="empty-state-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width:40px;height:40px;color:var(--text-3)">
+            <rect x="2" y="3" width="20" height="18" rx="2"/>
+            <line x1="2" y1="9" x2="22" y2="9"/>
+          </svg>
+        </div>
+        <div class="empty-state-text">Select a server</div>
+      </div>
+    {/if}
+  </div>
+</div>
+
+<style>
+  .launch-panel {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    overflow: hidden;
+  }
+
+
+
+  .launch-content {
+    position: relative;
+    z-index: 1;
+    flex: 1;
+    display: grid;
+    grid-template-columns: var(--sidebar-wide) 1fr;
+    grid-template-rows: 1fr auto;
+    overflow: hidden;
+  }
+
+  /* -- Server sidebar -- */
+  :global(.launch-content > .panel-sidebar) {
+    grid-row: 1 / -1;
+  }
+
+  .server-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 6px;
+  }
+
+  .server-card {
+    padding: 10px 12px;
+    border: 1px solid transparent;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: all 0.12s;
+    margin-bottom: 2px;
+  }
+  .server-card:hover {
+    background: var(--bg-3);
+    border-color: var(--border-mid);
+  }
+  .server-card.selected {
+    background: var(--accent-glow);
+    border-color: var(--accent-dim);
+  }
+
+  .server-card-name {
+    font-family: var(--font-head);
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-0);
+    margin-bottom: 3px;
+  }
+  .server-card.selected .server-card-name {
+    color: var(--accent-bright);
+  }
+
+  .server-card-url {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--text-2);
+  }
+
+  .empty-list {
+    padding: 20px 12px;
+    font-family: var(--font-head);
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text-3);
+    text-align: center;
+  }
+
+  /* -- Detail area -- */
+  .launch-detail {
+    display: flex;
+    flex-direction: column;
+    padding: 20px 24px;
+    gap: 20px;
+    overflow-y: auto;
+  }
+
+  .detail-hero {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+
+  .detail-icon {
+    width: 48px;
+    height: 48px;
+    background: var(--accent-glow);
+    border: 1px solid var(--accent-dim);
+    border-radius: var(--radius-md);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--accent-dim);
+    flex-shrink: 0;
+  }
+  .detail-icon svg { width: 24px; height: 24px; }
+
+  .detail-hero-text {
+    flex: 1;
+    min-width: 0;
+  }
+  .detail-hero-text h2 {
+    font-family: var(--font-head);
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--text-0);
+    line-height: 1.1;
+  }
+  .detail-hero-text p {
+    font-size: 12px;
+    color: var(--text-2);
+    margin-top: 2px;
+  }
+
+  .detail-hero-actions {
+    display: flex;
+    gap: 6px;
+    flex-shrink: 0;
+  }
+
+  .detail-fields {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+  }
+
+  .field-group {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+  }
+
+  /* The AES-256 badge makes the Password box taller than Username; a shared minimum keeps them level. */
+  .detail-fields .field-value { min-height: 36px; }
+
+  .field-empty {
+    color: var(--text-3);
+    font-style: italic;
+  }
+
+  .masked {
+    letter-spacing: 0.15em;
+    color: var(--text-3);
+  }
+
+  /* -- Launch bar -- */
+  .launch-bar {
+    grid-column: 2;
+    border-top: 1px solid var(--border);
+    padding: 16px 24px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .btn-secondary {
+    padding: 10px 20px;
+    border-color: var(--border-lit);
+    color: var(--text-1);
+    font-family: var(--font-head);
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    background: transparent;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: all 0.14s;
+  }
+  .btn-secondary:hover {
+    border-color: var(--text-2);
+    color: var(--text-0);
+    background: var(--bg-3);
+  }
+
+  .overlay-note {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-family: var(--font-head);
+    font-size: var(--fs-min);
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--text-3);
+    cursor: pointer;
+    background: none;
+    border: 0;
+    padding: 0;
+  }
+  .overlay-note:hover { color: var(--text-1); }
+  .overlay-note.warn:hover { color: var(--amber); }
+  .overlay-note + .btn-launch { margin-left: 0; }
+  .overlay-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
+  .overlay-note.warn { color: var(--amber); }
+  .overlay-note.warn .overlay-dot { background: var(--amber); }
+  .btn-launch {
+    margin-left: auto;
+    padding: 10px 32px;
+    font-family: var(--font-head);
+    font-size: 14px;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    background: linear-gradient(135deg, var(--accent-dim) 0%, var(--accent) 100%);
+    border: 1px solid var(--accent);
+    color: var(--on-accent);
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+    box-shadow: 0 0 20px color-mix(in srgb, var(--accent) 15%, transparent), 0 2px 8px rgba(0, 0, 0, 0.3);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: all 0.14s;
+  }
+  .btn-launch:hover:not(:disabled) {
+    background: linear-gradient(135deg, var(--accent) 0%, var(--accent-bright) 100%);
+    box-shadow: 0 0 30px color-mix(in srgb, var(--accent-bright) 25%, transparent), 0 2px 12px rgba(0, 0, 0, 0.4);
+  }
+  .btn-launch:disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+  }
+
+  .launch-error {
+    font-size: 12px;
+    color: var(--text-error);
+    padding: 6px 10px;
+    border: 1px solid color-mix(in srgb, var(--red) 40%, transparent);
+    background: var(--red-dim);
+    border-radius: var(--radius-sm);
+  }
+
+  .confirm-delete {
+    animation: confirm-pulse 0.4s ease-out;
+  }
+
+  @keyframes confirm-pulse {
+    0%   { opacity: 0.5; transform: scale(0.95); }
+    100% { opacity: 1;   transform: scale(1); }
+  }
+
+  /* -- Empty state -- */
+  .empty-state {
+    grid-column: 2;
+    grid-row: 1 / -1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+  }
+
+  .empty-state-text {
+    font-family: var(--font-head);
+    font-size: 13px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--text-3);
+  }
+</style>

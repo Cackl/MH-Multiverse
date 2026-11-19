@@ -2,14 +2,14 @@
   import { onMount } from 'svelte'
   import Titlebar from './components/TitleBar.svelte'
   import Rail from './components/Rail.svelte'
-  import LaunchPanel from './components/LaunchPanel.svelte'
-  import ServerPanel from './components/ServerPanel.svelte'
+  import LaunchPanel from './components/launch/LaunchPanel.svelte'
+  import ServerPanel from './components/server/ServerPanel.svelte'
   import ConfigPanel from './components/ConfigPanel.svelte'
   import OpsPanel from './components/OpsPanel.svelte'
-  import AppPanel from './components/AppPanel.svelte'
+  import AppPanel from './components/settings/AppPanel.svelte'
   import { activeTab, loadConfig, startGameRunningPoll, checkAppUpdate } from './lib/store'
   import { initServerEventBridge } from './lib/serverEvents'
-  import DataPanel from './components/DataPanel.svelte'
+  import DataPanel from './components/data/DataPanel.svelte'
   import ConfirmDialog from './components/ConfirmDialog.svelte'
 
   onMount(async () => {
