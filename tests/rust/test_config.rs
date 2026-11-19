@@ -147,6 +147,14 @@ fn new_exes_in_settings_detect_the_version_again() {
 }
 
 #[test]
+fn the_first_entry_becomes_the_active_one() {
+    let mut config = AppConfig::default();
+    upsert_linked_in(&mut config, install("a", "A.exe", "SA.exe", false));
+    upsert_linked_in(&mut config, install("b", "B.exe", "SB.exe", false));
+    assert_eq!((config.active_linked_id.as_str(), config.game_exe.as_str()), ("a", "A.exe"));
+}
+
+#[test]
 fn upsert_reports_a_switch_only_when_the_active_exes_change() {
     let mut config = AppConfig::default();
     config.linked = vec![install("a", "A.exe", "SA.exe", true)];

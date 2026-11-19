@@ -360,9 +360,9 @@ fn sync_active_linked(config: &mut AppConfig, detect: impl Fn(&str, &str) -> Str
 }
 
 /// Adds or replaces an entry. True when it is the active one and its exes changed,
-/// which is a switch and needs the server and the game stopped.
+/// which is a switch and needs the server and the game stopped. With none active, it becomes the active one.
 fn upsert_linked_in(config: &mut AppConfig, install: LinkedInstall) -> bool {
-    let is_active = install.id == config.active_linked_id;
+    let is_active = install.id == config.active_linked_id || config.active_linked_id.is_empty();
     let switches = is_active && (install.game_exe != config.game_exe || install.server_exe != config.server_exe);
     let id = install.id.clone();
     match config.linked.iter_mut().find(|l| l.id == install.id) {

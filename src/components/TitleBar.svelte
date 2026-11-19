@@ -1,11 +1,26 @@
 <script lang="ts">
   import { getCurrentWindow } from '@tauri-apps/api/window'
+  import { appConfig, activateLinked } from '../lib/store'
+  import Dropdown from './Dropdown.svelte'
 
   const appWindow = getCurrentWindow()
 
   function minimize() { appWindow.minimize() }
   function toggleMaximize() { appWindow.toggleMaximize() }
   function close() { appWindow.close() }
+
+  let switchError = ''
+  let errorTimer: ReturnType<typeof setTimeout> | undefined
+  async function switchTo(id: string) {
+    clearTimeout(errorTimer)
+    switchError = ''
+    try {
+      await activateLinked(id)
+    } catch (e) {
+      switchError = String(e)
+      errorTimer = setTimeout(() => switchError = '', 6000)
+    }
+  }
 </script>
 
 <header class="titlebar" data-tauri-drag-region>
@@ -19,6 +34,14 @@
     <div class="titlebar-name">MH <span>Multiverse</span></div>
   </div>
 
+  {#if $appConfig.linked.length}
+    <div class="titlebar-version">
+      {#if switchError}<span class="titlebar-error">{switchError}</span>{/if}
+      <Dropdown subtle label="Active version" value={$appConfig.active_linked_id}
+        options={$appConfig.linked.map(l => ({ value: l.id, label: l.name || 'Unnamed' }))}
+        onChange={switchTo} />
+    </div>
+  {/if}
   <div class="titlebar-controls">
     <button class="titlebar-btn" on:click={minimize} aria-label="Minimize">
       <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5">
@@ -80,6 +103,18 @@
     color: var(--accent);
   }
 
+  .titlebar-version {
+    margin-left: auto;
+    margin-right: 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .titlebar-error {
+    font-size: 12px;
+    color: var(--text-error);
+  }
+  .titlebar-version + .titlebar-controls { margin-left: 0; }
   .titlebar-controls {
     margin-left: auto;
     display: flex;

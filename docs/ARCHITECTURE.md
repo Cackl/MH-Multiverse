@@ -46,7 +46,7 @@ mh-multiverse/
 │   │   ├── configMeta.ts         ConfigPanel schema (Field/SubSection/NavSection types + data)
 │   │   └── patchesMeta.ts        Patches payload type interfaces (PatchFileInfo, PatchEntry)
 │   └── components/
-│       ├── TitleBar.svelte        Custom window chrome (drag region, min/max/close)
+│       ├── TitleBar.svelte        Custom window chrome (drag region, active version select, min/max/close)
 │       ├── Rail.svelte            Left nav rail (MHO / Local / App groups)
 │       ├── PanelSidebar.svelte    Reusable sidebar layout wrapper
 │       ├── LaunchPanel.svelte     Server profiles, credentials, game launch (shows an "Overlay" indicator when inject-on-launch is on; clicking it opens the Overlay card in Settings)
@@ -68,13 +68,15 @@ mh-multiverse/
 │       ├── PatchEditorModal.svelte   Per-file patch entry editor
 │       ├── OpsPanel.svelte        Server update, backup create/restore/delete
 │       ├── integrations/          Integrations page building blocks
-│       │   ├── IntegrationCard.svelte     Collapsible card shell (title, subtitle); one per integration; openCard(id) pre-opens one for deep links
+│       │   ├── IntegrationCard.svelte     Collapsible card shell (title, subtitle, optional head actions); one per integration and per linked version; openCard(id) pre-opens one for deep links
 │       │   ├── OverlayIntegration.svelte  MarvelHeroesOmega Overlay card: folder/trust, inject toggle and Inject now, flags, loot log
 │       │   └── ProfileImport.svelte       Import Server Profiles card (Bifrost, overlay launcher): detect/browse, preview, import
 │       ├── ServerModal.svelte     Add/edit server dialog; tabs Remote / Local / From Backup. Local
 │       │                          profiles on an Account.db server sync the account on Save
 │       │                          (accountCommands.ts); From Backup imports or restores by storage mode
-│       └── AppPanel.svelte        Settings: exe paths, launch options, themes, integrations
+│       ├── Dropdown.svelte        Dropdown whose option list follows the theme (a native select's list is drawn by Windows). Title bar and Linked versions use it so far
+│       ├── LinkedVersions.svelte  Settings list of linked versions: an IntegrationCard each, opened to edit Name, Client, Server, Version, Custom
+│       └── AppPanel.svelte        Settings: linked versions, launch options, themes, integrations
 │                                  (overlay link/trust/flags/loot log), about
 │
 ├── src-tauri/
@@ -154,7 +156,7 @@ There is no URL-based routing. Tab state is in-memory only and resets to `launch
 
 ### Window Chrome
 
-`decorations: false` in `tauri.conf.json` disables native window decorations. `TitleBar.svelte` provides a custom title bar with `data-tauri-drag-region` for window dragging and manual minimize/maximize/close buttons that call Tauri's window API.
+`decorations: false` in `tauri.conf.json` disables native window decorations. `TitleBar.svelte` provides a custom title bar with `data-tauri-drag-region` for window dragging and manual minimize/maximize/close buttons that call Tauri's window API. With any linked versions it also shows a `Dropdown` of them that calls `activate_linked`, and shows the refusal next to it for a few seconds when the server or the game is running.
 
 Window size and position are persisted via `tauri-plugin-window-state`, filtered to `SIZE | POSITION` flags only to avoid conflicts with the custom titlebar.
 
@@ -291,7 +293,7 @@ The stdout reader additionally calls `parse_player_log_event` on every line (reg
 | `set_theme` | `theme: String` | `()` | Set UI theme |
 | `set_launch_options` | `options: LaunchOptions` | `()` | Set game launch flags |
 | `activate_linked` | `id: String` | `AppConfig` | Switch linked version: copies its exes and Steam setting to the active ones, updates DbPath. Refused while the server or the game runs |
-| `upsert_linked` | `install: LinkedInstall` | `AppConfig` | Add/update a linked version. New exes on the active one count as a switch |
+| `upsert_linked` | `install: LinkedInstall` | `AppConfig` | Add/update a linked version. New exes on the active one count as a switch. With none active, the entry becomes the active one. The frontend sets `version` from detection (`linkedVersions.ts`), or from the user's pick when detection fails |
 | `delete_linked` | `id: String` | `AppConfig` | Remove a linked version other than the active one |
 | `detect_client_version` | `game_exe: String` | `Option<String>` | `1.48` / `1.52` / `1.53` from the exe's file version (`versions.rs`) |
 | `detect_server_version` | `server_exe: String` | `Option<String>` | Same, from the version string in `MHServerEmu.dll` |

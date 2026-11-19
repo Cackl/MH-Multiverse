@@ -10,8 +10,8 @@
   } from '../lib/store'
   import { parseReleaseNotes } from '../lib/releaseNotes'
   import { tip } from '../lib/tooltip'
-  import { browseGameExe, browseServerExe } from '../lib/browseExe'
   import PanelSidebar from './PanelSidebar.svelte'
+  import LinkedVersions from './LinkedVersions.svelte'
   import OverlayIntegration from './integrations/OverlayIntegration.svelte'
   import ProfileImport from './integrations/ProfileImport.svelte'
 
@@ -144,24 +144,7 @@
           </div>
           <div class="detail-body content-col">
 
-            <div class="path-group">
-              <span class="field-label">Server Executable</span>
-              <div class="path-row">
-                <div class="field-value path-value" use:tip={$appConfig.server_exe}>
-                  {$appConfig.server_exe || 'Not set'}
-                </div>
-                <button class="btn btn-sm btn-outline" on:click={browseServerExe}>Browse</button>
-              </div>
-            </div>
-            <div class="path-group">
-              <span class="field-label">Game Executable</span>
-              <div class="path-row">
-                <div class="field-value path-value" use:tip={$appConfig.game_exe}>
-                  {$appConfig.game_exe || 'Not set'}
-                </div>
-                <button class="btn btn-sm btn-outline" on:click={browseGameExe}>Browse</button>
-              </div>
-            </div>
+            <LinkedVersions />
 
             <div class="section-divider"><span>Launch Options</span></div>
 

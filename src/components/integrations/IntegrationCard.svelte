@@ -8,8 +8,8 @@
 </script>
 
 <script lang="ts">
-  // Shell for one integration on the Integrations page: a collapsible card with a
-  // title and a one-line subtitle.
+  // Shell for one integration on the Integrations page, and for each linked version in Settings:
+  // a collapsible card with a title, a one-line subtitle and optional head actions.
   // A new integration is a new component wrapped in this card.
   export let id: string
   export let title: string
@@ -40,6 +40,11 @@
       <div class="name">{title}</div>
       {#if subtitle}<div class="sub">{subtitle}</div>{/if}
     </div>
+    {#if $$slots.actions}
+      <!-- Clicks on the actions don't open or close the card. -->
+      <!-- svelte-ignore a11y-click-events-have-key-events a11y-no-static-element-interactions -->
+      <div class="actions" on:click|stopPropagation on:keydown|stopPropagation><slot name="actions" /></div>
+    {/if}
   </div>
   {#if open}
     <div class="card-body"><slot /></div>
@@ -64,6 +69,7 @@
   .chev { color: var(--text-3); transition: transform 0.15s; flex-shrink: 0; }
   .chev.open { transform: rotate(90deg); }
   .titles { flex: 1; min-width: 0; }
+  .actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
   .name {
     font-family: var(--font-head);
     font-size: 13px;
