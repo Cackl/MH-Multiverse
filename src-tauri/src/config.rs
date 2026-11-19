@@ -5,7 +5,6 @@ use aes_gcm::{
 use base64::{engine::general_purpose::STANDARD as B64, Engine};
 use keyring::Entry;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 use std::path::PathBuf;
 use tauri::Manager;
 
@@ -136,19 +135,9 @@ pub struct AppConfig {
     pub launch_options: LaunchOptions,
     #[serde(default)]
     pub shutdown: ShutdownConfig,
-    /// Tag assignments keyed by canonical filename, e.g. "LiveTuningData_CosmicChaos.json" -> "event"
-    #[serde(default)]
-    pub tuning_tags: HashMap<String, String>,
-    /// Canonical filenames pinned to the top of the Tuning Files grid
-    #[serde(default)]
-    pub tuning_favourites: Vec<String>,
     /// Backup target paths selected in the Ops panel
     #[serde(default = "default_backup_targets")]
     pub backup_targets: Vec<String>,
-    /// Output directory for generated bundle HTML and CSS files.
-    /// Empty string means the frontend uses its computed default ({server_dir}/Data/Web/Bundles).
-    #[serde(default)]
-    pub store_html_output_dir: String,
     #[serde(default = "default_console_presets")]
     pub console_presets: Vec<String>,
     #[serde(default)]
@@ -171,10 +160,7 @@ impl Default for AppConfig {
             launch_options: LaunchOptions::default(),
             shutdown: ShutdownConfig::default(),
             console_presets: default_console_presets(),
-            tuning_tags: HashMap::new(),
-            tuning_favourites: Vec::new(),
             backup_targets: default_backup_targets(),
-            store_html_output_dir: String::new(),
             overlay: OverlayConfig::default(),
             advanced_data: false,
         }
@@ -383,31 +369,9 @@ pub fn set_shutdown_config(app: tauri::AppHandle, shutdown: ShutdownConfig) -> R
 }
 
 #[tauri::command]
-pub fn set_tuning_tags(app: tauri::AppHandle, tags: HashMap<String, String>) -> Result<(), String> {
-    let mut config = load_config(&app);
-    config.tuning_tags = tags;
-    save_config(&app, &config)
-}
-
-#[tauri::command]
-pub fn set_tuning_favourites(app: tauri::AppHandle, favourites: Vec<String>) -> Result<(), String> {
-    let mut config = load_config(&app);
-    config.tuning_favourites = favourites;
-    save_config(&app, &config)
-}
-
-#[tauri::command]
 pub fn set_backup_targets(app: tauri::AppHandle, targets: Vec<String>) -> Result<(), String> {
     let mut config = load_config(&app);
     config.backup_targets = targets;
-    save_config(&app, &config)
-}
-
-
-#[tauri::command]
-pub fn set_store_html_output_dir(app: tauri::AppHandle, dir: String) -> Result<(), String> {
-    let mut config = load_config(&app);
-    config.store_html_output_dir = dir;
     save_config(&app, &config)
 }
 

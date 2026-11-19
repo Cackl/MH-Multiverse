@@ -376,10 +376,7 @@ export interface AppConfig {
   shutdown: ShutdownConfig
   console_presets: string[]
   overlay?: { dir: string; auto_inject?: boolean }
-  tuning_tags: Record<string, string>
-  tuning_favourites: string[]
   backup_targets: string[]
-  store_html_output_dir: string
   /** Data tab view: true = Advanced, false = Simple (fresh installs start in Simple). */
   advanced_data: boolean
 }
@@ -413,10 +410,7 @@ export const appConfig = writable<AppConfig>({
   launch_options: defaultLaunchOptions,
   shutdown: defaultShutdownConfig,
   console_presets: ["!commands","!account userlevel","!server status","!server broadcast","!server shutdown","!server reloadcatalog","!server reloadlivetuning"],
-  tuning_tags: {},
-  tuning_favourites: [],
   backup_targets: ['Config.ini', 'ConfigOverride.ini', 'Data/Game/LiveTuning', 'Data/Account.db'],
-  store_html_output_dir: '',
   // Until the real config loads, show the existing editors rather than flash Simple.
   advanced_data: true,
 })
@@ -520,10 +514,6 @@ export async function setShutdownConfig(shutdown: ShutdownConfig): Promise<void>
 
 export async function setBackupTargets(targets: string[]): Promise<void> {
   await updateConfigOptimistic(c => ({ ...c, backup_targets: targets }), 'set_backup_targets', { targets })
-}
-
-export async function setStoreHtmlOutputDir(dir: string): Promise<void> {
-  await updateConfigOptimistic(c => ({ ...c, store_html_output_dir: dir }), 'set_store_html_output_dir', { dir })
 }
 
 export async function setConsolePresets(presets: string[]): Promise<void> {
