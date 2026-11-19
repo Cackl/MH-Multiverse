@@ -1,12 +1,12 @@
 <script lang="ts">
   import { invoke } from '@tauri-apps/api/core'
-  import { appConfig, upsertLinked, deleteLinked, activateLinked, askConfirm, type LinkedInstall } from '../lib/store'
-  import { pickExe } from '../lib/browseExe'
-  import { versionMatch } from '../lib/versionCaps'
-  import { serverFolder, withExes } from '../lib/linkedVersions'
-  import { tip } from '../lib/tooltip'
+  import { appConfig, upsertLinked, deleteLinked, activateLinked, askConfirm, type LinkedInstall } from '../../lib/store'
+  import { pickExe } from '../../lib/browseExe'
+  import { versionMatch } from '../../lib/versionCaps'
+  import { serverFolder, withExes } from '../../lib/linkedVersions'
+  import { tip } from '../../lib/tooltip'
   import IntegrationCard, { openCard } from './integrations/IntegrationCard.svelte'
-  import Dropdown from './Dropdown.svelte'
+  import Dropdown from '../Dropdown.svelte'
 
   const VERSIONS = ['1.48', '1.52', '1.53']
 

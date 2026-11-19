@@ -1,9 +1,9 @@
 <script lang="ts">
   import { open } from '@tauri-apps/plugin-dialog'
   import { invoke } from '@tauri-apps/api/core'
-  import { loadConfig } from '../../lib/store'
+  import { loadConfig } from '../../../lib/store'
   import IntegrationCard from './IntegrationCard.svelte'
-  import Dropdown from '../Dropdown.svelte'
+  import Dropdown from '../../Dropdown.svelte'
 
   interface Candidate {
     name: string

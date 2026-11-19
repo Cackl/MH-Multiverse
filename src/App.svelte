@@ -6,7 +6,7 @@
   import ServerPanel from './components/server/ServerPanel.svelte'
   import ConfigPanel from './components/ConfigPanel.svelte'
   import OpsPanel from './components/OpsPanel.svelte'
-  import AppPanel from './components/AppPanel.svelte'
+  import AppPanel from './components/settings/AppPanel.svelte'
   import { activeTab, loadConfig, startGameRunningPoll, checkAppUpdate } from './lib/store'
   import { initServerEventBridge } from './lib/serverEvents'
   import DataPanel from './components/data/DataPanel.svelte'

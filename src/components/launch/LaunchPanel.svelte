@@ -10,7 +10,7 @@
   } from '../../lib/store'
   import { tip } from '../../lib/tooltip'
   import ServerModal from './ServerModal.svelte'
-  import { openCard } from '../integrations/IntegrationCard.svelte'
+  import { openCard } from '../settings/integrations/IntegrationCard.svelte'
   import PanelSidebar from '../PanelSidebar.svelte'
   import GetStarted from './GetStarted.svelte'
 

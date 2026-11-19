@@ -2,9 +2,9 @@
   import { onMount, tick } from 'svelte'
   import { open } from '@tauri-apps/plugin-dialog'
   import { invoke } from '@tauri-apps/api/core'
-  import { activeCaps, activeLinked, gameRunning, overlayInject, overlayLog, overlayStatus, type OverlayStatus } from '../../lib/store'
+  import { activeCaps, activeLinked, gameRunning, overlayInject, overlayLog, overlayStatus, type OverlayStatus } from '../../../lib/store'
   import { openPath, openUrl } from '@tauri-apps/plugin-opener'
-  import { tip } from '../../lib/tooltip'
+  import { tip } from '../../../lib/tooltip'
   import IntegrationCard from './IntegrationCard.svelte'
 
   let overlay: OverlayStatus | null = null

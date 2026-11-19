@@ -7,10 +7,10 @@
     appConfig, type SettingsSection, activeTheme, setTheme, setTextSize, setLaunchOptions, type LaunchOptions,
     appUpdate, appUpdateError, appUpdateCheckedAt, checkAppUpdate, showUpdateBadge,
     updateRemindLater, dismissedUpdate, serverRunning, settingsSection, activeCaps,
-  } from '../lib/store'
-  import { parseReleaseNotes } from '../lib/releaseNotes'
-  import { tip } from '../lib/tooltip'
-  import PanelSidebar from './PanelSidebar.svelte'
+  } from '../../lib/store'
+  import { parseReleaseNotes } from '../../lib/releaseNotes'
+  import { tip } from '../../lib/tooltip'
+  import PanelSidebar from '../PanelSidebar.svelte'
   import LinkedVersions from './LinkedVersions.svelte'
   import OverlayIntegration from './integrations/OverlayIntegration.svelte'
   import ProfileImport from './integrations/ProfileImport.svelte'
