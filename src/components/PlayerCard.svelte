@@ -151,38 +151,38 @@
             </p>
           {/if}
           <div class="btn-group">
-            <button class="btn btn-danger" on:click={confirmAction === 'kick' ? executeKick : executeBan}>
+            <button class="btn btn-sm btn-red" on:click={confirmAction === 'kick' ? executeKick : executeBan}>
               {confirmAction === 'kick' ? 'Kick' : 'Ban'}
             </button>
-            <button class="btn btn-ghost" on:click={() => (confirmAction = null)}>Cancel</button>
+            <button class="btn btn-sm btn-outline" on:click={() => (confirmAction = null)}>Cancel</button>
           </div>
         </div>
       {:else}
         <div class="action-row">
           <div class="btn-group">
-            <button class="btn btn-warn" disabled={commandRunning} on:click={() => (confirmAction = 'kick')}>
+            <button class="btn btn-sm btn-outline" disabled={commandRunning} on:click={() => (confirmAction = 'kick')}>
               Kick
             </button>
             {#if !isBanned(player.flags)}
-              <button class="btn btn-danger" disabled={commandRunning} on:click={() => (confirmAction = 'ban')}>
+              <button class="btn btn-sm btn-red" disabled={commandRunning} on:click={() => (confirmAction = 'ban')}>
                 Ban
               </button>
             {:else}
-              <button class="btn btn-ok" disabled={commandRunning} on:click={executeUnban}>
+              <button class="btn btn-sm btn-green" disabled={commandRunning} on:click={executeUnban}>
                 Unban
               </button>
             {/if}
             <div class="btn-group">
               {#if !isWhitelisted(player.flags)}
-                <button class="btn btn-ghost" disabled={commandRunning} on:click={executeWhitelist}
+                <button class="btn btn-sm btn-outline" disabled={commandRunning} on:click={executeWhitelist}
                   use:tip={'!account whitelist [email]'}>Whitelist</button>
               {:else}
-                <button class="btn btn-ghost" disabled={commandRunning} on:click={executeUnwhitelist}
+                <button class="btn btn-sm btn-outline" disabled={commandRunning} on:click={executeUnwhitelist}
                   use:tip={'!account unwhitelist [email]'}>Unwhitelist</button>
               {/if}
             </div>
             <button
-            class="btn btn-ghost"
+            class="btn btn-sm btn-outline"
             disabled={commandRunning}
             on:click={executeClientInfo}
             use:tip={'Client Info (output goes to server console)'}
@@ -203,8 +203,8 @@
           onChange={v => { setLevelValue = Number(v); setLevelPending = true }}
           --dd-bg="var(--bg-1)" --dd-color="var(--text-1)" --dd-pad="4px 8px" --dd-min-width="0" />
         {#if setLevelPending}
-          <button class="btn btn-accent" disabled={commandRunning} on:click={executeSetLevel}>Apply</button>
-          <button class="btn btn-ghost" on:click={() => { setLevelPending = false; setLevelValue = player.user_level ?? 0 }}>Cancel</button>
+          <button class="btn btn-sm btn-accent" disabled={commandRunning} on:click={executeSetLevel}>Apply</button>
+          <button class="btn btn-sm btn-outline" on:click={() => { setLevelPending = false; setLevelValue = player.user_level ?? 0 }}>Cancel</button>
         {/if}
       </div>
     </div>
@@ -275,8 +275,8 @@
   }
 
   .avatar.avatar-banned {
-    background: rgba(200, 50, 50, 0.1);
-    border-color: rgba(200, 50, 50, 0.4);
+    background: var(--red-dim);
+    border-color: color-mix(in srgb, var(--red) 30%, transparent);
   }
 
   .avatar-initial {
@@ -337,7 +337,7 @@
 
   .level-1 { color: var(--accent); border-color: var(--accent-dim); background: var(--accent-glow); }
   .level-2 { color: var(--accent-bright); border-color: var(--accent-dim); background: var(--accent-glow); }
-  .banned-badge { color: var(--text-error); border-color: rgba(200, 50, 50, 0.4); background: rgba(200, 50, 50, 0.1); }
+  .banned-badge { color: var(--text-error); border-color: color-mix(in srgb, var(--red) 30%, transparent); background: var(--red-dim); }
 
   /* ── Body ── */
   .card-body {
@@ -412,8 +412,8 @@
 
   .feedback-err {
     color: var(--text-error);
-    background: rgba(200, 50, 50, 0.08);
-    border-color: rgba(200, 50, 50, 0.25);
+    background: var(--red-dim);
+    border-color: color-mix(in srgb, var(--red) 20%, transparent);
   }
 
   /* ── Info section ── */
@@ -448,37 +448,6 @@
     word-break: break-all;
     align-self: center;
   }
-
-  /* ── Buttons ── */
-  .btn {
-    font-family: var(--font-head);
-    font-size: var(--fs-min);
-    font-weight: 700;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-    padding: 5px 12px;
-    border-radius: var(--radius-sm);
-    border: 1px solid transparent;
-    cursor: pointer;
-    transition: opacity 0.1s, background 0.1s;
-    white-space: nowrap;
-    line-height: 1.4;
-  }
-
-  .btn:disabled { opacity: 0.4; cursor: not-allowed; }
-
-  .btn-warn   { color: var(--amber-bright); background: var(--amber-dim); border-color: color-mix(in srgb, var(--amber) 35%, transparent); }
-  .btn-danger { color: var(--text-error); background: rgba(200, 50, 50, 0.1); border-color: rgba(200, 50, 50, 0.4); }
-  .btn-ok     { color: var(--green-bright); background: var(--green-dim); border-color: color-mix(in srgb, var(--green) 30%, transparent); }
-  .btn-accent { color: var(--accent-bright); background: var(--accent-glow); border-color: var(--accent-dim); }
-  .btn-ghost  { color: var(--text-2); background: transparent; border-color: var(--border-mid); }
-
-  .btn-warn:not(:disabled):hover   { opacity: 0.8; }
-  .btn-danger:not(:disabled):hover { background: rgba(200, 50, 50, 0.18); }
-  .btn-ok:not(:disabled):hover     { opacity: 0.8; }
-  .btn-accent:not(:disabled):hover { background: var(--accent-glow-strong); }
-  .btn-ghost:not(:disabled):hover  { background: var(--bg-2); color: var(--text-1); }
-
 
   /* ── Confirm box ── */
   .confirm-box {
