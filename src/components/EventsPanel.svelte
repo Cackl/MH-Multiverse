@@ -305,13 +305,15 @@
       <!-- Rule list -->
       <div class="sidebar-body">
         {#if !$appConfig.server_exe}
-          <div class="sidebar-notice">Set server exe in Settings.</div>
+          <div class="file-notice">Set server exe in Settings to load events.</div>
         {:else if loading}
-          <div class="sidebar-notice">Loading…</div>
+          <div class="file-notice">Loading...</div>
         {:else if loadError}
-          <div class="sidebar-notice error">{loadError}</div>
+          <div class="file-notice error">{loadError}</div>
+        {:else if openDirError}
+          <div class="file-notice error">{openDirError}</div>
         {:else if rules.length === 0}
-          <div class="sidebar-notice">No rules found. Check Events.json exists.</div>
+          <div class="file-notice">No schedule rules found.</div>
         {:else}
           <div class="rule-list">
             {#each ruleGroups as group (group.key)}
@@ -661,7 +663,7 @@
     height: 100%;
   }
 
-  .sidebar-notice {
+  .file-notice {
     padding: 16px 14px;
     font-family: var(--font-head);
     font-size: var(--fs-min);
@@ -669,7 +671,7 @@
     text-transform: uppercase;
     color: var(--text-2);
   }
-  .sidebar-notice.error {
+  .file-notice.error {
     color: var(--text-error);
     text-transform: none;
     font-family: var(--font-body);
