@@ -1,5 +1,21 @@
 import { describe, it, expect } from 'vitest'
-import { otherSettings } from '../../src/lib/configMeta'
+import { CONFIG_SCHEMA, fieldsFor, otherSettings } from '../../src/lib/configMeta'
+
+describe('fieldsFor', () => {
+  const progression = CONFIG_SCHEMA.find(p => p.id === 'gameplay')!.subsections!.flatMap(s => s.fields)
+  const keys = (hasInfinity: boolean) => fieldsFor(progression, hasInfinity).map(f => f.key)
+
+  it('hides Infinity and Difficulty choice without the Infinity system', () => {
+    expect(keys(false)).not.toContain('InfinitySystemEnabled')
+    expect(keys(false)).not.toContain('IsDifficultySliderEnabled')
+    expect(keys(false)).toContain('TeamUpSystemEnabled')
+    expect(keys(false)).toHaveLength(progression.length - 2)
+  })
+
+  it('shows every field with it', () => {
+    expect(keys(true)).toEqual(progression.map(f => f.key))
+  })
+})
 
 describe('otherSettings', () => {
   it('lists keys no page shows, sorted and grouped by section, with switches for true/false', () => {

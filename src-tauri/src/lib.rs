@@ -1,12 +1,14 @@
 mod calligraphy;
 mod config;
 mod events;
+mod game_data;
 mod ini;
 mod launcher;
 mod server;
 mod store;
 mod tuning;
 mod updater;
+mod versions;
 mod patches;
 mod accounts;
 mod paths;
@@ -90,10 +92,14 @@ pub fn run() {
             config::set_theme,
             config::set_launch_options,
             config::set_shutdown_config,
-            config::set_tuning_tags,
-            config::set_tuning_favourites,
             config::set_backup_targets,
-            config::set_store_html_output_dir,
+            config::activate_linked,
+            config::upsert_linked,
+            config::delete_linked,
+            versions::detect_server_version,
+            versions::detect_client_version,
+            game_data::missing_game_data,
+            game_data::copy_game_data,
             config::set_console_presets,
             config::set_advanced_data,
             launcher::launch_game,

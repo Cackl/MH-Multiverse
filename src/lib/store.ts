@@ -1,5 +1,6 @@
 import { writable, derived, get } from 'svelte/store'
 import { invoke } from '@tauri-apps/api/core'
+import { versionCaps } from './versionCaps'
 
 export type DataTab = 'events' | 'tuning' | 'store' | 'patches'
 export type Tab = 'launch' | 'server' | 'config' | 'data' | 'ops' | 'settings'
@@ -369,6 +370,8 @@ export interface Server {
 export interface AppConfig {
   game_exe: string
   server_exe: string
+  linked: LinkedInstall[]
+  active_linked_id: string
   active_server_id: string
   servers: Server[]
   theme: string
@@ -376,12 +379,30 @@ export interface AppConfig {
   shutdown: ShutdownConfig
   console_presets: string[]
   overlay?: { dir: string; auto_inject?: boolean }
-  tuning_tags: Record<string, string>
-  tuning_favourites: string[]
   backup_targets: string[]
-  store_html_output_dir: string
   /** Data tab view: true = Advanced, false = Simple (fresh installs start in Simple). */
   advanced_data: boolean
+}
+
+/** A client and server pair. The active one is copied into game_exe, server_exe and launch_options.no_steam. */
+export interface LinkedInstall {
+  id: string
+  name: string
+  /** '1.48', '1.52', '1.53', or '' when not detected and not picked. */
+  version: string
+  game_exe: string
+  server_exe: string
+  custom: boolean
+  no_steam: boolean
+}
+
+/** Settings edits the active copy, so the active entry follows it (as sync_active_linked does). */
+function syncActiveLinked(c: AppConfig): AppConfig {
+  return {
+    ...c,
+    linked: c.linked.map(l => l.id !== c.active_linked_id ? l
+      : { ...l, game_exe: c.game_exe, server_exe: c.server_exe, no_steam: c.launch_options.no_steam }),
+  }
 }
 
 const defaultLaunchOptions: LaunchOptions = {
@@ -407,19 +428,23 @@ const defaultShutdownConfig: ShutdownConfig = {
 export const appConfig = writable<AppConfig>({
   game_exe: '',
   server_exe: '',
+  linked: [],
+  active_linked_id: '',
   active_server_id: '',
   servers: [],
   theme: '',
   launch_options: defaultLaunchOptions,
   shutdown: defaultShutdownConfig,
   console_presets: ["!commands","!account userlevel","!server status","!server broadcast","!server shutdown","!server reloadcatalog","!server reloadlivetuning"],
-  tuning_tags: {},
-  tuning_favourites: [],
   backup_targets: ['Config.ini', 'ConfigOverride.ini', 'Data/Game/LiveTuning', 'Data/Account.db'],
-  store_html_output_dir: '',
   // Until the real config loads, show the existing editors rather than flash Simple.
   advanced_data: true,
 })
+
+export const activeLinked = derived(appConfig, c => c.linked.find(l => l.id === c.active_linked_id))
+
+/** What the active linked version supports. With none linked, today's 1.52 behaviour. */
+export const activeCaps = derived(activeLinked, l => versionCaps(l?.version ?? '', l?.custom ?? false))
 
 export const activeTheme = writable<string>('')
 
@@ -481,18 +506,33 @@ async function updateConfigOptimistic(
   const previous = get(appConfig)
   appConfig.update(updater)
   try {
-    await invoke(invokeName, invokeArgs)
+    const saved = await invoke<AppConfig | null>(invokeName, invokeArgs)
+    if (saved) appConfig.set(saved)
   } catch {
     appConfig.set(previous)
   }
 }
 
+// These return the saved config, since new exes detect the active entry's version again.
 export async function setGameExe(path: string): Promise<void> {
-  await updateConfigOptimistic(c => ({ ...c, game_exe: path }), 'set_game_exe', { path })
+  await updateConfigOptimistic(c => syncActiveLinked({ ...c, game_exe: path }), 'set_game_exe', { path })
 }
 
 export async function setServerExe(path: string): Promise<void> {
-  await updateConfigOptimistic(c => ({ ...c, server_exe: path }), 'set_server_exe', { path })
+  await updateConfigOptimistic(c => syncActiveLinked({ ...c, server_exe: path }), 'set_server_exe', { path })
+}
+
+/** Switching is refused while the server or the game runs. Throws the backend's message. */
+export async function activateLinked(id: string): Promise<void> {
+  appConfig.set(await invoke<AppConfig>('activate_linked', { id }))
+}
+
+export async function upsertLinked(install: LinkedInstall): Promise<void> {
+  appConfig.set(await invoke<AppConfig>('upsert_linked', { install }))
+}
+
+export async function deleteLinked(id: string): Promise<void> {
+  appConfig.set(await invoke<AppConfig>('delete_linked', { id }))
 }
 
 export async function setTheme(theme: string): Promise<void> {
@@ -511,7 +551,7 @@ export async function setTheme(theme: string): Promise<void> {
 }
 
 export async function setLaunchOptions(options: LaunchOptions): Promise<void> {
-  await updateConfigOptimistic(c => ({ ...c, launch_options: options }), 'set_launch_options', { options })
+  await updateConfigOptimistic(c => syncActiveLinked({ ...c, launch_options: options }), 'set_launch_options', { options })
 }
 
 export async function setShutdownConfig(shutdown: ShutdownConfig): Promise<void> {
@@ -520,10 +560,6 @@ export async function setShutdownConfig(shutdown: ShutdownConfig): Promise<void>
 
 export async function setBackupTargets(targets: string[]): Promise<void> {
   await updateConfigOptimistic(c => ({ ...c, backup_targets: targets }), 'set_backup_targets', { targets })
-}
-
-export async function setStoreHtmlOutputDir(dir: string): Promise<void> {
-  await updateConfigOptimistic(c => ({ ...c, store_html_output_dir: dir }), 'set_store_html_output_dir', { dir })
 }
 
 export async function setConsolePresets(presets: string[]): Promise<void> {

@@ -4,7 +4,9 @@
     startServer, startApache, activeTab, settingsSection, launchOptionsReviewed,
     jsonPersistence, refreshPersistence,
   } from '../lib/store'
+  import { invoke } from '@tauri-apps/api/core'
   import { browseGameExe, browseServerExe } from '../lib/browseExe'
+  import { versionMatch } from '../lib/versionCaps'
   import { tip } from '../lib/tooltip'
 
   export let onAddServer: (tab: 'remote' | 'local') => void
@@ -15,6 +17,42 @@
   $: refreshPersistence($appConfig.server_exe)
   $: hasLocalProfile = $appConfig.servers.some(s => s.is_local)
   $: launchOptionsDone = $launchOptionsReviewed || !$appConfig.launch_options.auto_login
+
+  let clientVersion: string | null = null
+  let serverVersion: string | null = null
+  // A result for a path that has since changed is dropped.
+  async function detectClient(gameExe: string) {
+    const v = gameExe ? await invoke<string | null>('detect_client_version', { gameExe }).catch(() => null) : null
+    if (gameExe === $appConfig.game_exe) clientVersion = v
+  }
+  async function detectServer(serverExe: string) {
+    const v = serverExe ? await invoke<string | null>('detect_server_version', { serverExe }).catch(() => null) : null
+    if (serverExe === $appConfig.server_exe) serverVersion = v
+  }
+  $: detectClient($appConfig.game_exe)
+  $: detectServer($appConfig.server_exe)
+  $: match = versionMatch(clientVersion, serverVersion)
+
+  let missingData: string[] = []
+  let copying = false
+  let copyError = ''
+  async function checkGameData(serverExe: string) {
+    const missing = serverExe ? await invoke<string[]>('missing_game_data', { serverExe }).catch(() => []) : []
+    if (serverExe === $appConfig.server_exe) missingData = missing
+  }
+  $: checkGameData($appConfig.server_exe)
+
+  async function copyGameData() {
+    copying = true
+    copyError = ''
+    try {
+      await invoke('copy_game_data', { gameExe: $appConfig.game_exe, serverExe: $appConfig.server_exe })
+    } catch (e) {
+      copyError = String(e)
+    }
+    copying = false
+    await checkGameData($appConfig.server_exe)
+  }
 
   function openLaunchOptions() {
     launchOptionsReviewed.set(true)
@@ -67,6 +105,35 @@
     </div>
     <button class="btn btn-sm btn-outline" on:click={browseServerExe}>Browse</button>
   </div>
+
+  {#if hasServerExe}
+    <div class="gs-row">
+      <span class="mark" class:done={!missingData.length}></span>
+      <div class="gs-text">
+        <div class="gs-title">Game data</div>
+        {#if copyError}
+          <div class="gs-detail warn">{copyError}</div>
+        {:else}
+          <div class="gs-detail wraps" class:warn={missingData.length}>MHServerEmu needs Calligraphy.sip and mu_cdata.sip from the game in its Data\Game folder</div>
+        {/if}
+      </div>
+      {#if missingData.length}
+        <button class="btn btn-sm btn-outline" on:click={copyGameData} disabled={!$appConfig.game_exe || copying}>
+          {copying ? 'Copying...' : 'Copy from client'}
+        </button>
+      {/if}
+    </div>
+  {/if}
+
+  {#if $appConfig.game_exe && hasServerExe}
+    <div class="gs-row">
+      <span class="mark" class:done={match === 'match'}></span>
+      <div class="gs-text">
+        <div class="gs-title">Client matches server</div>
+        <div class="gs-detail" class:warn={match === 'mismatch'}>Client {clientVersion ?? 'unknown'}, server {serverVersion ?? 'unknown'}</div>
+      </div>
+    </div>
+  {/if}
 
   <div class="gs-row">
     <div class="gs-half">
@@ -164,6 +231,7 @@
     text-overflow: ellipsis;
     white-space: nowrap;
   }
+  .gs-detail.wraps { white-space: normal; }
   .gs-detail.warn {
     color: var(--amber);
     white-space: normal;

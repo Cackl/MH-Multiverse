@@ -6,12 +6,12 @@
   import {
     appConfig, type SettingsSection, activeTheme, setTheme, setLaunchOptions, type LaunchOptions,
     appUpdate, appUpdateError, appUpdateCheckedAt, checkAppUpdate, showUpdateBadge,
-    updateRemindLater, dismissedUpdate, serverRunning, settingsSection,
+    updateRemindLater, dismissedUpdate, serverRunning, settingsSection, activeCaps,
   } from '../lib/store'
   import { parseReleaseNotes } from '../lib/releaseNotes'
   import { tip } from '../lib/tooltip'
-  import { browseGameExe, browseServerExe } from '../lib/browseExe'
   import PanelSidebar from './PanelSidebar.svelte'
+  import LinkedVersions from './LinkedVersions.svelte'
   import OverlayIntegration from './integrations/OverlayIntegration.svelte'
   import ProfileImport from './integrations/ProfileImport.svelte'
 
@@ -71,10 +71,6 @@
   ]
 
   const version = __APP_VERSION__
-
-  // The Game indicator matches the process by this exact name (launcher.rs), so a renamed exe launches but is never seen running.
-  const GAME_EXE_NAME = 'MarvelHeroesOmega.exe'
-  $: gameExeRenamed = !!$appConfig.game_exe && $appConfig.game_exe.split(/[\\/]/).pop()!.toLowerCase() !== GAME_EXE_NAME.toLowerCase()
 
   async function updateOpt<K extends keyof LaunchOptions>(key: K, value: LaunchOptions[K]) {
     const updated = { ...$appConfig.launch_options, [key]: value }
@@ -148,39 +144,11 @@
           </div>
           <div class="detail-body content-col">
 
-            <div class="path-group">
-              <span class="field-label">Server Executable</span>
-              <div class="path-row">
-                <div class="field-value path-value" use:tip={$appConfig.server_exe}>
-                  {$appConfig.server_exe || 'Not set'}
-                </div>
-                <button class="btn btn-sm btn-outline" on:click={browseServerExe}>Browse</button>
-              </div>
-            </div>
-            <div class="path-group">
-              <span class="field-label label-with-icon">
-                Game Executable
-                {#if gameExeRenamed}
-                  <button type="button" class="label-warn" aria-label="Warning"
-                    use:tip={`Not named ${GAME_EXE_NAME}, so Multiverse won't detect it running`}>
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                      <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
-                      <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
-                    </svg>
-                  </button>
-                {/if}
-              </span>
-              <div class="path-row">
-                <div class="field-value path-value" use:tip={$appConfig.game_exe}>
-                  {$appConfig.game_exe || 'Not set'}
-                </div>
-                <button class="btn btn-sm btn-outline" on:click={browseGameExe}>Browse</button>
-              </div>
-            </div>
+            <LinkedVersions />
 
             <div class="section-divider"><span>Launch Options</span></div>
 
-            {#each launchToggles as t (t.key)}
+            {#each launchToggles.filter(t => t.key !== 'no_steam' || $activeCaps.steamMode) as t (t.key)}
               {@const on = t.invert ? !$appConfig.launch_options[t.key] : $appConfig.launch_options[t.key]}
               <div class="opt-row">
                 <div class="opt-label">
@@ -640,9 +608,6 @@
   }
   .breaking-box strong { color: var(--amber); }
 
-  .label-with-icon { display: inline-flex; align-items: center; gap: 6px; }
-  .label-warn { display: inline-flex; padding: 0; background: none; border: 0; color: var(--amber); cursor: help; }
-  .label-warn svg { width: 13px; height: 13px; }
 
   .progress-wrap { display: flex; flex-direction: column; gap: 6px; }
   .progress-bar { height: 4px; background: var(--bg-3); border-radius: 2px; overflow: hidden; }

@@ -1,7 +1,7 @@
 <script lang="ts">
   import { invoke } from '@tauri-apps/api/core'
   import { openPath } from '@tauri-apps/plugin-opener'
-  import { appConfig, serverRunning } from '../lib/store'
+  import { activeCaps, appConfig, serverRunning } from '../lib/store'
   import { tip } from '../lib/tooltip'
   import { reloadLiveTuning } from '../lib/serverReload'
   import PanelSidebar from './PanelSidebar.svelte'
@@ -33,7 +33,7 @@
     }
   }
 
-  $: rows = tuning ? rateRows(tuning.infinity_system) : []
+  $: rows = tuning ? rateRows(tuning.infinity_system, $activeCaps.infinity) : []
   $: states = Object.fromEntries(rows.map(r => [r.setting, resolveRate(tuning!, r)])) as Record<string, RateState>
   $: ownedError = tuning?.files.find(f => f.file === SERVER_RATES_FILE)?.error ?? null
   $: current = (setting: string): number => edits[setting] ?? states[setting]?.value ?? 1

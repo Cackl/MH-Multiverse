@@ -31,10 +31,11 @@ export const STOCK_PACKS: Record<string, PatchPack> = {
 export const TWEAKS_FILE = 'PatchDataZMultiverseTweaks.json'
 const TWEAKS_PACK: PatchPack = { name: 'Multiverse tweaks', description: 'The tweaks you set above' }
 
-/** Curated name and description, or the file name without PatchData and .json. */
-export function patchPack(fileName: string): PatchPack {
+/** Curated name and description, or the file name without PatchData and .json. The curated
+ *  ones describe 1.52's stock files, so other versions pass labels false. */
+export function patchPack(fileName: string, labels = true): PatchPack {
   if (fileName === TWEAKS_FILE) return TWEAKS_PACK
-  return STOCK_PACKS[fileName]
+  return (labels ? STOCK_PACKS[fileName] : undefined)
     ?? { name: fileName.replace(/^PatchData/, '').replace(/\.json$/, '') || fileName, description: '' }
 }
 

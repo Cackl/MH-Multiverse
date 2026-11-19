@@ -1,7 +1,7 @@
 import { open } from '@tauri-apps/plugin-dialog'
 import { setGameExe, setServerExe } from './store'
 
-async function pickExe(): Promise<string | null> {
+export async function pickExe(): Promise<string | null> {
   const selected = await open({
     filters: [{ name: 'Executable', extensions: ['exe'] }],
     multiple: false,

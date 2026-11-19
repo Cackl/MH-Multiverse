@@ -2,7 +2,7 @@
   import { onMount, tick } from 'svelte'
   import { open } from '@tauri-apps/plugin-dialog'
   import { invoke } from '@tauri-apps/api/core'
-  import { gameRunning, overlayInject, overlayLog, overlayStatus, type OverlayStatus } from '../../lib/store'
+  import { activeCaps, activeLinked, gameRunning, overlayInject, overlayLog, overlayStatus, type OverlayStatus } from '../../lib/store'
   import { openPath, openUrl } from '@tauri-apps/plugin-opener'
   import { tip } from '../../lib/tooltip'
   import IntegrationCard from './IntegrationCard.svelte'
@@ -14,6 +14,7 @@
   $: if (overlay) overlayStatus.set(overlay)
   $: state = overlay?.state ?? 'not_linked'
   $: canTrust = state === 'untrusted' || state === 'changed'
+  $: canInject = state === 'trusted' && $activeCaps.overlay
   $: trustLabel = state === 'trusted' ? 'Untrust' : state === 'changed' ? 'Re-trust' : 'Trust'
 
   const HOW_TRUST_WORKS =
@@ -133,8 +134,12 @@
     {/if}
   </div>
 
+  {#if !$activeCaps.overlay}
+    <span class="opt-desc">Not available for the {$activeLinked?.version} client. The overlay is built for 1.52.</span>
+  {/if}
+
   {#if overlay}
-    <div class="opt-row" class:dim={state !== 'trusted'}>
+    <div class="opt-row" class:dim={!canInject}>
       <div class="opt-label">
         <span class="opt-name">Inject on Launch</span>
         <span class="opt-desc">Loads the overlay into the game after Launch. Requires a trusted overlay</span>
@@ -142,7 +147,7 @@
       <div class="log-actions">
         <button
           class="btn btn-sm btn-outline"
-          disabled={state !== 'trusted' || !$gameRunning}
+          disabled={!canInject || !$gameRunning}
           use:tip={'Starts the overlay now. Game must be launched by MH Multiverse.'}
           on:click={injectNow}
         >Inject now</button>

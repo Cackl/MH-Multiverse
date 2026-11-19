@@ -309,6 +309,19 @@ export const KNOWN_SETTINGS: KnownSetting[] = [
   mf('eMFTV_SampleRate',                   'No effect.'),
 ]
 
+/** Known settings that 1.48's tuning enums don't have (upstream Gazillion/1.48.0.1712/CommonMessages.cs). */
+const MISSING_IN_1_48 = new Set([
+  'eGTV_InfinityXPPct', 'eGTV_RespectLevelForInfinityXP',
+  'eGTV_SuperVerboseMetricsEnabled', 'eGTV_HighVolumeMetricsEnabled',
+  'eGTV_MediumVolumeMetricsEnabled', 'eGTV_LowVolumeMetricsEnabled',
+  'eMFTV_SampleRate', 'eRT_BonusItemFindMultiplier',
+])
+
+/** The settings to offer for a game version. */
+export function knownSettingsFor(version: string): KnownSetting[] {
+  return version === '1.48' ? KNOWN_SETTINGS.filter(s => !MISSING_IN_1_48.has(s.setting)) : KNOWN_SETTINGS
+}
+
 const KNOWN_BY_ID = new Map(KNOWN_SETTINGS.map(s => [s.setting, s]))
 
 /** Hover text for a setting: its description, or nothing when it isn't known. */
@@ -379,9 +392,11 @@ export const RATE_ROWS: RateRow[] = [
   { setting: 'eGTV_BoostTimersRunning',      label: 'Boost timers run',       group: 'Rules',   format: 'toggle', min: 0,    max: 1,  step: 1,    limit: 1, tip: 'Off pauses all boost timers everywhere.' },
 ]
 
-/** The rows to show: all but the dead one of Infinity XP and Omega XP. */
-export function rateRows(infinitySystem: boolean): RateRow[] {
-  return RATE_ROWS.filter(r => r.infinity === undefined || r.infinity === infinitySystem)
+/** The rows to show: all but the dead one of Infinity XP and Omega XP. A version without the
+ *  Infinity system (1.48) ignores the switch, so Omega XP is the live one there. */
+export function rateRows(infinitySystem: boolean, hasInfinity = true): RateRow[] {
+  const infinity = infinitySystem && hasInfinity
+  return RATE_ROWS.filter(r => r.infinity === undefined || r.infinity === infinity)
 }
 
 const trim = (n: number) => String(+n.toFixed(2))

@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { categoryForSetting, blueprintHintForSetting, parseTuningValue, ruleDateError, newTuningFileName, tuningDisplayName, CATEGORY_PREFIXES,
   RATE_ROWS, SERVER_RATES_FILE, rateRows, formatRate, toShown, fromShown, resolveRate, planServerRatesWrite, reloadResult,
-  KNOWN_SETTINGS, settingTip, tuningGroup, type GlobalTuning, type RateRow, type TuningEntry } from '../../src/lib/tuningMeta'
+  KNOWN_SETTINGS, knownSettingsFor, settingTip, tuningGroup, type GlobalTuning, type RateRow, type TuningEntry } from '../../src/lib/tuningMeta'
 
 describe('tuningGroup', () => {
   const file = (canonical_name: string, toggleable = true, event_id: string | null = null) =>
@@ -159,13 +159,34 @@ const XP = row('eGTV_XPGain')
 
 describe('rateRows', () => {
   it.each([
-    [true,  'eGTV_InfinityXPPct', 'eGTV_OmegaXPPct'],
-    [false, 'eGTV_OmegaXPPct',    'eGTV_InfinityXPPct'],
-  ])('InfinitySystemEnabled=%s shows %s and hides %s', (infinity, shown, hidden) => {
-    const settings = rateRows(infinity).map(r => r.setting)
+    [true,  true,  'eGTV_InfinityXPPct', 'eGTV_OmegaXPPct'],
+    [false, true,  'eGTV_OmegaXPPct',    'eGTV_InfinityXPPct'],
+    // 1.48 has no Infinity system: the switch defaults on there but Omega XP is the live one.
+    [true,  false, 'eGTV_OmegaXPPct',    'eGTV_InfinityXPPct'],
+    [false, false, 'eGTV_OmegaXPPct',    'eGTV_InfinityXPPct'],
+  ])('InfinitySystemEnabled=%s, version has Infinity=%s shows %s and hides %s', (infinity, hasInfinity, shown, hidden) => {
+    const settings = rateRows(infinity, hasInfinity).map(r => r.setting)
     expect(settings).toContain(shown)
     expect(settings).not.toContain(hidden)
     expect(settings).toHaveLength(14)
+  })
+})
+
+describe('knownSettingsFor', () => {
+  const missingIn148 = [
+    'eGTV_InfinityXPPct', 'eGTV_RespectLevelForInfinityXP', 'eGTV_SuperVerboseMetricsEnabled',
+    'eGTV_HighVolumeMetricsEnabled', 'eGTV_MediumVolumeMetricsEnabled', 'eGTV_LowVolumeMetricsEnabled',
+    'eMFTV_SampleRate', 'eRT_BonusItemFindMultiplier',
+  ]
+
+  it('drops the eight settings 1.48 lacks and keeps the rest', () => {
+    const names = knownSettingsFor('1.48').map(s => s.setting)
+    for (const m of missingIn148) expect(names).not.toContain(m)
+    expect(names).toHaveLength(KNOWN_SETTINGS.length - 8)
+  })
+
+  it.each(['1.52', '1.53', ''])('keeps every setting for %j', version => {
+    expect(knownSettingsFor(version)).toEqual(KNOWN_SETTINGS)
   })
 })
 

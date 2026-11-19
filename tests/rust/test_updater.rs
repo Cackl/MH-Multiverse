@@ -185,11 +185,25 @@ fn candidate_dates_are_today_then_yesterday_in_utc() {
 }
 
 #[test]
-fn nightly_url_is_the_windows_1_52_build_for_that_date() {
+fn nightly_url_is_the_windows_build_for_that_flavour_and_date() {
     assert_eq!(
-        build_download_url("20261117"),
-        "https://nightly.link/Crypto137/MHServerEmu/workflows/nightly-release-windows-v52/master/MHServerEmu-nightly-20261117-Release-windows-v52.zip"
+        build_download_url("v48", "20261117"),
+        "https://nightly.link/Crypto137/MHServerEmu/workflows/nightly-release-windows-v48/master/MHServerEmu-nightly-20261117-Release-windows-v48.zip"
     );
+}
+
+#[test]
+fn nightly_flavour_follows_the_server_version_and_is_off_for_custom_and_unknown() {
+    for (version, custom, want) in [
+        (Some("1.48"), false, Some("v48")),
+        (Some("1.52"), false, Some("v52")),
+        (Some("1.53"), false, Some("v53")),
+        (Some("1.52"), true, None),
+        (Some("1.48"), true, None),
+        (None, false, None),
+    ] {
+        assert_eq!(nightly_flavour(version, custom).ok(), want, "{version:?} custom={custom}");
+    }
 }
 
 #[test]

@@ -46,11 +46,11 @@ mh-multiverse/
 │   │   ├── configMeta.ts         ConfigPanel schema (Field/SubSection/NavSection types + data)
 │   │   └── patchesMeta.ts        Patches payload type interfaces (PatchFileInfo, PatchEntry)
 │   └── components/
-│       ├── TitleBar.svelte        Custom window chrome (drag region, min/max/close)
+│       ├── TitleBar.svelte        Custom window chrome (drag region, active version select, min/max/close)
 │       ├── Rail.svelte            Left nav rail (MHO / Local / App groups)
 │       ├── PanelSidebar.svelte    Reusable sidebar layout wrapper
 │       ├── LaunchPanel.svelte     Server profiles, credentials, game launch (shows an "Overlay" indicator when inject-on-launch is on; clicking it opens the Overlay card in Settings)
-│       ├── GetStarted.svelte      Launch-page checklist shown with no servers (game/server exe, Server + Apache start, local account, launch options); reopened by the Servers header's ? button
+│       ├── GetStarted.svelte      Launch-page checklist shown with no servers (game/server exe, game data with Copy from client, client and server version match, Server + Apache start, local account, launch options); reopened by the Servers header's ? button
 │       ├── ConfirmDialog.svelte   Themed confirm dialog driven by askConfirm() in store.ts
 │       ├── ServerPanel.svelte     Server start/stop, log viewer, command input, online players
 │       ├── PlayersBlade.svelte    Searchable list of players connected to the server
@@ -68,13 +68,15 @@ mh-multiverse/
 │       ├── PatchEditorModal.svelte   Per-file patch entry editor
 │       ├── OpsPanel.svelte        Server update, backup create/restore/delete
 │       ├── integrations/          Integrations page building blocks
-│       │   ├── IntegrationCard.svelte     Collapsible card shell (title, subtitle); one per integration; openCard(id) pre-opens one for deep links
+│       │   ├── IntegrationCard.svelte     Collapsible card shell (title, subtitle, optional head actions); one per integration and per linked version; openCard(id) pre-opens one for deep links
 │       │   ├── OverlayIntegration.svelte  MarvelHeroesOmega Overlay card: folder/trust, inject toggle and Inject now, flags, loot log
 │       │   └── ProfileImport.svelte       Import Server Profiles card (Bifrost, overlay launcher): detect/browse, preview, import
 │       ├── ServerModal.svelte     Add/edit server dialog; tabs Remote / Local / From Backup. Local
 │       │                          profiles on an Account.db server sync the account on Save
 │       │                          (accountCommands.ts); From Backup imports or restores by storage mode
-│       └── AppPanel.svelte        Settings: exe paths, launch options, themes, integrations
+│       ├── Dropdown.svelte        Dropdown whose option list follows the theme (a native select's list is drawn by Windows). Title bar and Linked versions use it so far
+│       ├── LinkedVersions.svelte  Settings list of linked versions: an IntegrationCard each, opened to edit Name, Client, Server, Version, Custom
+│       └── AppPanel.svelte        Settings: linked versions, launch options, themes, integrations
 │                                  (overlay link/trust/flags/loot log), about
 │
 ├── src-tauri/
@@ -93,6 +95,7 @@ mh-multiverse/
 │   │   ├── events.rs             Events.json / EventSchedule.json read/write; override file
 │   │   │                         management (load, save, reset, merge) for both definitions
 │   │   │                         and schedule rules
+│   │   ├── game_data.rs          Copies Calligraphy.sip and mu_cdata.sip from the client to the server when missing
 │   │   ├── launcher.rs           launch_game (spawn with args), LaunchedGame (last launched game), game_is_running (sysinfo poll)
 │   │   ├── ini.rs                Config.ini / ConfigOverride.ini read/write with diff-only saving
 │   │   ├── tuning.rs             LiveTuningData*.json scan/read/write/create/toggle
@@ -153,7 +156,7 @@ There is no URL-based routing. Tab state is in-memory only and resets to `launch
 
 ### Window Chrome
 
-`decorations: false` in `tauri.conf.json` disables native window decorations. `TitleBar.svelte` provides a custom title bar with `data-tauri-drag-region` for window dragging and manual minimize/maximize/close buttons that call Tauri's window API.
+`decorations: false` in `tauri.conf.json` disables native window decorations. `TitleBar.svelte` provides a custom title bar with `data-tauri-drag-region` for window dragging and manual minimize/maximize/close buttons that call Tauri's window API. With any linked versions it also shows a `Dropdown` of them that calls `activate_linked`, and shows the refusal next to it for a few seconds when the server or the game is running.
 
 Window size and position are persisted via `tauri-plugin-window-state`, filtered to `SIZE | POSITION` flags only to avoid conflicts with the custom titlebar.
 
@@ -232,7 +235,7 @@ Seven state objects are registered via `.manage()` in `lib.rs`:
 
 ### Rust Modules
 
-**`config.rs`** - `AppConfig` is the root persisted configuration. Stored as `multiverse.json` in the OS app data directory (`%APPDATA%\com.mhmultiverse.app\`). Passwords are encrypted with AES-256-GCM; the 256-bit key is stored in and retrieved from the OS keychain via `keyring`. Each config-mutating command loads the full config from disk, modifies the relevant field, and writes back - there is no in-process config cache on the Rust side. `AppConfig` includes an `overlay` field (`OverlayConfig`, defined in `overlay/mod.rs`, `#[serde(default)]` so older files load unchanged). It also includes a `console_presets` field (`Vec<String>`) for persisted command shortcut strings shown in the server panel. Server struct includes is_local (bool) and use_https (bool) fields; is_local suppresses host storage and triggers Config.ini-derived URL building at launch time.
+**`config.rs`** - `AppConfig` is the root persisted configuration. Stored as `multiverse.json` in the OS app data directory (`%APPDATA%\com.mhmultiverse.app\`). Passwords are encrypted with AES-256-GCM; the 256-bit key is stored in and retrieved from the OS keychain via `keyring`. Each config-mutating command loads the full config from disk, modifies the relevant field, and writes back - there is no in-process config cache on the Rust side. `AppConfig` includes an `overlay` field (`OverlayConfig`, defined in `overlay/mod.rs`, `#[serde(default)]` so older files load unchanged). It also includes a `console_presets` field (`Vec<String>`) for persisted command shortcut strings shown in the server panel. Server struct includes is_local (bool) and use_https (bool) fields; is_local suppresses host storage and triggers Config.ini-derived URL building at launch time. `linked` (`Vec<LinkedInstall>`) holds client and server pairs per game version, and `active_linked_id` names the one in use. The active entry is copied into `game_exe`, `server_exe` and `launch_options.no_steam`, so nothing else reads `linked`. The Settings setters write back into the active entry, and new exes there detect its version again (a name that was only the old version follows it). A config from before linked installs becomes one entry named after its detected version the first time it loads. `app_version` records the app version that last loaded the file. When it differs from the running one, or the file can't be parsed, `load_config` first copies the file to `multiverse.json.bak` (one copy, replaced at each upgrade), so a migration can be undone by hand. An unparseable file is left on disk as it is.
 
 **`server.rs`** - Server lifecycle management and player session tracking. `start_server` spawns MHServerEmu with piped stdin/stdout/stderr and assigns it to a Windows Job Object (`JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`). Four named background threads are spawned per server start (`mhserver-stdout-reader`, `mhserver-stderr-reader`, `mhserver-log-batcher`, `mhserver-watcher`): stdout/stderr readers, a batcher that collects log lines and emits them to the frontend in batches (up to 50 lines per 50ms flush interval), and a watcher thread that polls `try_wait()` every 150ms to detect process exit, clearing `proc.child` and emitting `server-stopped` when it does. The watcher is the sole source of truth for exit state - `server_is_running` just reads `proc.child.is_some()` rather than also calling `try_wait()` itself. `start_server` performs a pre-flight TcpStream::connect check against the configured WebFrontend Port before spawning, returning a clear error if the port is already in use.
 
@@ -240,7 +243,7 @@ The stdout reader additionally calls `parse_player_log_event` on every line (reg
 
 **`events.rs`** - File I/O for `Events.json` / `EventsOverride.json` and `EventSchedule.json` / `EventScheduleOverride.json` in `Data/Game/LiveTuning/`. Both file pairs follow the same override pattern: the override file takes precedence if it exists, otherwise the default file is read. `Events.json` is a JSON object keyed by event ID; `EventSchedule.json` is a JSON array. Read functions deserialise into `EventDefinition` and `ScheduleRule` structs respectively. Write functions always target the override file. `reset_*_override` copies the default file over the override; `merge_*_override` adds any entries present in the default but missing from the override (by ID for events, by name for rules), without overwriting existing override entries.
 
-**`launcher.rs`** - Spawns the game client as a detached process with command-line arguments derived from the active server profile and launch options. Credentials are decrypted from the config at launch time. For local servers, the siteconfigurl host is derived at launch time from WebFrontend.Port in Config.ini via ini::read_merged_value. For remote servers, normalize_host strips any scheme and path from the stored host before building the URL; use_https determines the scheme. game_is_running uses sysinfo to check for a MarvelHeroesOmega.exe process. After a successful spawn, `launch_game` stores the game as a `Game` (PID plus the `Child`) in `LaunchedGame`, then hands it and a copy of the overlay config to `overlay::on_game_spawned`, which returns immediately unless overlay injection is enabled and trusted. `game_is_running` finds the game by name and so also sees clients started elsewhere; `LaunchedGame` knows only our own launch.
+**`launcher.rs`** - Spawns the game client as a detached process with command-line arguments derived from the active server profile and launch options. Credentials are decrypted from the config at launch time. For local servers, the siteconfigurl host is derived at launch time from WebFrontend.Port in Config.ini via ini::read_merged_value. For remote servers, normalize_host strips any scheme and path from the stored host before building the URL; use_https determines the scheme. game_is_running uses sysinfo to check for a process with the linked game exe's file name (MarvelHeroesOmega.exe on 1.52, MarvelHeroes2016.exe on 1.48). After a successful spawn, `launch_game` stores the game as a `Game` (PID plus the `Child`) in `LaunchedGame`, then hands it and a copy of the overlay config to `overlay::on_game_spawned`, which returns immediately unless overlay injection is enabled and trusted. `game_is_running` finds the game by name and so also sees clients started elsewhere; `LaunchedGame` knows only our own launch.
 
 **`overlay/`** - Integrates the third-party MarvelHeroesOmega Overlay (closed source, not part of this project; none of its files are bundled or redistributed). Multiverse never runs any overlay executable: the overlay is a native DLL (`MhClientHook.dll`) that runs inside the game process, so it lives and dies with the game.
 - *Trust (TOFU)*: the user links the overlay folder (`overlay_set_dir`, canonicalised, must contain `MhClientHook.dll`) and presses Trust. `scan_set` hashes (SHA-256) a fixed allowlist: the DLL, `terminals.bin`, `enum-names.bin`, the loot-filter default JSON, and the portraits/icons/fonts/textures folders. Flags, panel layout JSON, legacy exes and the overlay's updater are never hashed. The per-file hashes and a combined set hash are stored in `multiverse.json`. A symlink or subfolder inside an asset folder cannot be hashed: Trust refuses it, and one appearing later shows as `added`. Status is derived live: `not_linked`, `missing`, `untrusted`, `trusted`, or `changed` (with `changed:`/`missing:`/`added:` lines). There is no known-hash list in the repo. Changing folder or untrusting also switches injection off.
@@ -262,11 +265,11 @@ The stdout reader additionally calls `parse_player_log_event` on every line (reg
 
 **`calligraphy.rs`** - Reads MHServerEmu's `Calligraphy.sip` pak file (LZ4-compressed entries with a `KAPG` signature). Parses the `Blueprint.directory` and `Prototype.directory` files within the pak to build a `PrototypeCatalogue` with indices by runtime ID, path, and GUID. The catalogue is cached per sip file path and rebuilt automatically if the server executable changes. Prototype search supports multi-prefix category filtering and case-insensitive matching against both path and display name.
 
-**`updater.rs`** - Downloads nightly builds from `nightly.link/Crypto137/MHServerEmu/...`, extracts them, and overlays onto the server directory. The update flow: check availability (HTTP range probe) → backup selected targets → download with progress events → extract to staging dir → detect wrapper directory → copy to server dir → restore backed-up user files. Backups are stored in `{server_dir}/Backups/{timestamp}/` with a `manifest.json`. `Calligraphy.sip` and `mu_cdata.sip` are blacklisted from backups.
+**`updater.rs`** - Downloads nightly builds from `nightly.link/Crypto137/MHServerEmu/...` (the `windows-v48`, `-v52` or `-v53` workflow, matching the server's own game version), extracts them, and overlays onto the server directory. The update flow: check availability (HTTP range probe) → backup selected targets → download with progress events → extract to staging dir → detect wrapper directory → copy to server dir → restore backed-up user files. Backups are stored in `{server_dir}/Backups/{timestamp}/` with a `manifest.json`. `Calligraphy.sip` and `mu_cdata.sip` are blacklisted from backups.
 
 **`app_update.rs`** - Self-update for MH Multiverse itself. Checks `api.github.com/repos/Cackl/MH-Multiverse/releases`, picks the highest published `vX.Y.Z` (skipping drafts and prereleases), and returns notes for every newer release, flagging any whose body contains a `## Breaking Changes` heading. Installs re-fetch the release by tag and refuse to touch the running exe unless the download carries a valid minisign signature from the embedded `PUBKEY`, names the expected file in its trusted comment, and (exe) reports the expected version in its version resource. See [Releasing](#releasing-signed-updates).
 
-**`accounts.rs`** - Parses `!account download` JSON exports and writes them into `Account.db` in one of two modes. Add creates a new account: uniqueness-checked against existing Email/PlayerName, with optional overrides for both plus the password (falling back to the export's own PasswordHash/Salt if no new password is given). Replace overwrites only the game-data of an existing account identified by `target_id` — Email, PlayerName, Password, UserLevel, and Flags on the Account row are never touched, so the caller (`ServerModal`'s Restore tab) is responsible for verifying the file actually belongs to the target before invoking it. Both modes route through `insert_player_data`, which assigns every entity (Player, Avatar, TeamUp, Item, ControlledEntity) a fresh DbGuid and rewrites ContainerDbGuid references through an in-memory remap table — this remapping is entirely self-contained per file, so it has no dependency on the file's original account ID matching anything. `scan_download_backups` lists candidate files from `<game_exe_dir>/Download/` by filename pattern (`0x{IdHex}_{PlayerName}_{yyyy-MM-dd_HH.mm.ss}.json`) without parsing them, so the frontend can offer a quick-select list before committing to a full parse. All writes run inside a transaction and are guarded by `server_process_is_running` to avoid DB lock contention with a live MHServerEmu process.
+**`accounts.rs`** - Parses `!account download` JSON exports and writes them into `Account.db` in one of two modes. Both modes, and the JSON-save restore, first compare the game build in the export's Player save header (u32 size, varint archive version, varint build) with the server's detected version, and refuse a save from another game version. Add creates a new account: uniqueness-checked against existing Email/PlayerName, with optional overrides for both plus the password (falling back to the export's own PasswordHash/Salt if no new password is given). Replace overwrites only the game-data of an existing account identified by `target_id` — Email, PlayerName, Password, UserLevel, and Flags on the Account row are never touched, so the caller (`ServerModal`'s Restore tab) is responsible for verifying the file actually belongs to the target before invoking it. Both modes route through `insert_player_data`, which assigns every entity (Player, Avatar, TeamUp, Item, ControlledEntity) a fresh DbGuid and rewrites ContainerDbGuid references through an in-memory remap table — this remapping is entirely self-contained per file, so it has no dependency on the file's original account ID matching anything. `scan_download_backups` lists candidate files from `<game_exe_dir>/Download/` by filename pattern (`0x{IdHex}_{PlayerName}_{yyyy-MM-dd_HH.mm.ss}.json`) without parsing them, so the frontend can offer a quick-select list before committing to a full parse. All writes run inside a transaction and are guarded by `server_process_is_running` to avoid DB lock contention with a live MHServerEmu process.
 
 ### Window Close Hook
 
@@ -285,15 +288,19 @@ The stdout reader additionally calls `parse_player_log_event` on every line (reg
 | `upsert_server` | `server: Server, password: String` | `AppConfig` | Add/update server, encrypts password |
 | `delete_server` | `server_id: String` | `AppConfig` | Remove server by ID |
 | `set_active_server` | `server_id: String` | `()` | Update active server selection |
-| `set_game_exe` | `path: String` | `()` | Set game executable path |
-| `set_server_exe` | `path: String` | `()` | Set server executable path, updates DbPath |
+| `set_game_exe` | `path: String` | `AppConfig` | Set game executable path, detects the active entry's version again |
+| `set_server_exe` | `path: String` | `AppConfig` | Set server executable path, updates DbPath, detects the active entry's version again |
 | `set_theme` | `theme: String` | `()` | Set UI theme |
 | `set_launch_options` | `options: LaunchOptions` | `()` | Set game launch flags |
+| `activate_linked` | `id: String` | `AppConfig` | Switch linked version: copies its exes and Steam setting to the active ones, updates DbPath. Refused while the server or the game runs |
+| `upsert_linked` | `install: LinkedInstall` | `AppConfig` | Add/update a linked version. New exes on the active one count as a switch. With none active, the entry becomes the active one. The frontend sets `version` from detection (`linkedVersions.ts`), or from the user's pick when detection fails |
+| `delete_linked` | `id: String` | `AppConfig` | Remove a linked version other than the active one |
+| `detect_client_version` | `game_exe: String` | `Option<String>` | `1.48` / `1.52` / `1.53` from the exe's file version (`versions.rs`) |
+| `detect_server_version` | `server_exe: String` | `Option<String>` | Same, from the version string in `MHServerEmu.dll` |
+| `missing_game_data` | `server_exe: String` | `Vec<String>` | Which of `Calligraphy.sip` and `mu_cdata.sip` the server's `Data/Game` lacks (`game_data.rs`) |
+| `copy_game_data` | `game_exe, server_exe` | `Vec<String>` | Copies the missing ones from the client's `Data/Game` (searched up from the game exe) through a `.part` file, never replacing one that is there. Returns the files copied |
 | `set_shutdown_config` | `shutdown: ShutdownConfig` | `()` | Set shutdown delay and broadcast message |
-| `set_tuning_tags` | `tags: HashMap<String, String>` | `()` | Set tuning file tag assignments |
-| `set_tuning_favourites` | `favourites: Vec<String>` | `()` | Set pinned tuning filenames |
 | `set_backup_targets` | `targets: Vec<String>` | `()` | Set backup target paths |
-| `set_store_html_output_dir` | `dir: String` | `()` | Set bundle HTML output directory |
 | `set_console_presets` | `presets: Vec<String>` | `()` | Set command shortcut preset list |
 
 ### Launcher (`launcher.rs`)
@@ -301,7 +308,7 @@ The stdout reader additionally calls `parse_player_log_event` on every line (reg
 | Command | Parameters | Returns | Description |
 |---|---|---|---|
 | `launch_game` | `server_id: String` | `()` | Spawn game client with server args and launch options. siteconfigurl uses /Dashboard/SiteConfig.xml for patched local clients, /SiteConfig.xml for unpatched, normalize_host + use_https for remote |
-| `game_is_running` | - | `bool` | Poll a reused `sysinfo::System` (managed state) for `MarvelHeroesOmega.exe` |
+| `game_is_running` | - | `bool` | Poll a reused `sysinfo::System` (managed state) for a process named like `game_exe` |
 | `normalize_host` | `raw: String` | `String` | Strip scheme/path from a host string; also used internally by `launch_game`. Exposed so the frontend derives dashboard/home URLs from the same logic instead of a separate TS copy |
 
 ### Server (`server.rs`)
@@ -458,7 +465,7 @@ Imports server profiles from uploaded JSON files, detected by shape: Bifrost `Bi
 | `launchOptionsReviewed` | `writable<boolean>` | Session only: Get Started ticks "Launch options" once they have been opened |
 | `unsavedSources` | `writable<Record<string, string>>` | Editors holding unsaved edits, keyed by source; checked by `confirmLeave` |
 | `confirmRequest` | `writable<ConfirmRequest \| null>` | The open `askConfirm` question, rendered by `ConfirmDialog` |
-| `gameRunning` | `writable<boolean>` | MarvelHeroesOmega.exe process state |
+| `gameRunning` | `writable<boolean>` | Game process state (matched by `game_exe`'s file name) |
 | `apacheRunning` | `writable<boolean>` | Apache process state |
 | `uptimeSec` | `writable<number>` | Server uptime counter (seconds) |
 | `serverError` | `writable<string>` | Current error message (empty = no error) |
@@ -702,6 +709,9 @@ Values of `"N/A"` or empty string are treated as absent at each level.
 
 ```
 check_update_available(server_exe)
+  → nightly flavour (v48 / v52 / v53) from the game version in the server's MHServerEmu.dll;
+    none for a Custom server or an undetected version: UpdateInfo.unavailable_reason says why
+    (run_update refuses with the same reason)
   → candidate build dates: today and yesterday (UTC)
   → HTTP range probe (bytes=0-0) of each nightly.link URL, newest first
   → read the installed build date from MHServerEmu.exe's ProductVersion

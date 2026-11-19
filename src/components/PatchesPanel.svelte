@@ -2,7 +2,7 @@
   import { onMount, onDestroy } from 'svelte'
   import { invoke } from '@tauri-apps/api/core'
   import { openPath } from '@tauri-apps/plugin-opener'
-  import { appConfig, setUnsaved, askConfirm } from '../lib/store'
+  import { activeCaps, appConfig, setUnsaved, askConfirm } from '../lib/store'
   import { patchPack, idsOf, namedValue, type PatchFileInfo, type PatchEntry, type PatchNames } from '../lib/patchesMeta'
   import PanelSidebar from './PanelSidebar.svelte'
   import PatchEditorModal from './PatchEditorModal.svelte'
@@ -102,7 +102,7 @@
 
   // ── Helpers ────────────────────────────────────────────────────────────────
 
-  const displayName = (f: PatchFileInfo) => patchPack(f.file_name).name
+  $: displayName = (f: PatchFileInfo) => patchPack(f.file_name, $activeCaps.patchLabels).name
 
   function formatValue(v: unknown): string {
     if (v === null || v === undefined) return 'null'

@@ -143,6 +143,48 @@ fn open_db(server_exe: &str) -> Result<Connection, String> {
     Ok(conn)
 }
 
+fn read_varint(bytes: &[u8], pos: &mut usize) -> Option<u32> {
+    let mut value: u64 = 0;
+    for shift in (0..35).step_by(7) {
+        let byte = *bytes.get(*pos)?;
+        *pos += 1;
+        value |= u64::from(byte & 0x7f) << shift;
+        if byte & 0x80 == 0 {
+            return u32::try_from(value).ok();
+        }
+    }
+    None
+}
+
+/// The game build number in a persistent archive's header: u32 size, varint archive version,
+/// varint game build (MHServerEmu.Core/Serialization/Archive.cs WriteHeader).
+fn save_game_build(archive: &[u8]) -> Option<u32> {
+    let mut pos = 4;
+    read_varint(archive, &mut pos)?;
+    read_varint(archive, &mut pos)
+}
+
+/// A server reads saves in its own build's format and only warns on a mismatch, so a save from
+/// another game version is refused before anything is written. With no detected server version
+/// there is nothing to compare against, and the import goes ahead as before.
+fn check_export_build(data: &ImportJson, server_version: Option<&str>) -> Result<(), String> {
+    let Some(server_build) = server_version.and_then(crate::versions::game_build) else {
+        return Ok(());
+    };
+    let player = BASE64
+        .decode(&data.player.archive_data)
+        .map_err(|e| format!("Invalid Player.ArchiveData: {e}"))?;
+    match save_game_build(&player) {
+        Some(build) if build == server_build => Ok(()),
+        Some(build) => Err(format!(
+            "This export is from {} and this server runs {}. Saves can't move between game versions.",
+            crate::versions::build_label(build),
+            crate::versions::build_label(server_build)
+        )),
+        None => Err("This export's save data has no readable game version.".into()),
+    }
+}
+
 fn read_and_parse(json_path: &str) -> Result<ImportJson, String> {
     let raw = fs::read_to_string(json_path)
         .map_err(|e| format!("Failed to read file: {e}"))?;
@@ -375,6 +417,7 @@ pub fn import_account(
     }
 
     let data = read_and_parse(&json_path)?;
+    check_export_build(&data, crate::versions::server_version(&server_exe))?;
 
     let mut conn = open_db(&server_exe)?;
     let tx = conn.transaction().map_err(|e| e.to_string())?;
@@ -438,6 +481,7 @@ fn json_save_path(server_exe: &str) -> Result<PathBuf, String> {
 
 fn restore_json_save(server_exe: &str, json_path: &str) -> Result<Option<String>, String> {
     let data = read_and_parse(json_path)?;
+    check_export_build(&data, crate::versions::server_version(server_exe))?;
     if data.player_name.chars().any(char::is_control) {
         return Err("The backup's player name contains control characters.".into());
     }
