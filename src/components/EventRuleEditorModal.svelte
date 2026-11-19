@@ -300,15 +300,15 @@
                     >↓</button>
                 {/if}
                 <button
-                    class="remove-btn"
-                    aria-label="Remove"
+                    class="del-btn"
+                    aria-label="Remove {eventLabel(eventId)}"
                     use:tip={'Remove'}
                     disabled={saving}
                     on:click={() => events = events.filter((_, idx) => idx !== i)}
                 >
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <line x1="18" y1="6" x2="6" y2="18"/>
-                    <line x1="6" y1="6" x2="18" y2="18"/>
+                    <svg viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.5">
+                      <line x1="2" y1="2" x2="8" y2="8"/>
+                      <line x1="8" y1="2" x2="2" y2="8"/>
                     </svg>
                 </button>
                 </div>
@@ -555,24 +555,8 @@
   .move-btn:hover:not(:disabled) { color: var(--text-1); border-color: var(--border-lit); }
   .move-btn:disabled             { opacity: 0.25; cursor: not-allowed; }
 
-  .remove-btn {
-    width: 22px;
-    height: 22px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: none;
-    border: 1px solid transparent;
-    border-radius: var(--radius-sm);
-    color: var(--text-3);
-    cursor: pointer;
-    transition: all 0.1s;
-    flex-shrink: 0;
-    padding: 0;
-  }
-  .remove-btn:hover:not(:disabled) { color: var(--text-error); border-color: rgba(220,60,60,0.3); }
-  .remove-btn:disabled             { opacity: 0.25; cursor: not-allowed; }
-  .remove-btn svg                  { width: 13px; height: 13px; }
+  .del-btn          { flex-shrink: 0; padding: 0; }
+  .del-btn:disabled { opacity: 0.25; cursor: not-allowed; }
 
   .add-event-row {
     display: flex;

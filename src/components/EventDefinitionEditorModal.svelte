@@ -204,10 +204,10 @@
               {#each missions as m}
                 <div class="mission-row">
                   <span class="mission-path">{m}</span>
-                  <button class="remove-btn" aria-label="Remove" use:tip={'Remove'} on:click={() => removeMission(m)}>
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                      <line x1="18" y1="6" x2="6" y2="18"/>
-                      <line x1="6" y1="6" x2="18" y2="18"/>
+                  <button class="del-btn" aria-label="Remove {m}" use:tip={'Remove'} on:click={() => removeMission(m)}>
+                    <svg viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.5">
+                      <line x1="2" y1="2" x2="8" y2="8"/>
+                      <line x1="8" y1="2" x2="2" y2="8"/>
                     </svg>
                   </button>
                 </div>
@@ -253,7 +253,7 @@
     <div class="modal-footer">
       <button class="btn btn-sm btn-outline" on:click={tryClose}>Cancel</button>
       <button class="btn btn-sm btn-accent" on:click={handleSave}>
-        {isNew ? 'Create' : 'Save'}
+        {isNew ? 'Create Event' : 'Save'}
       </button>
     </div>
 
@@ -438,22 +438,6 @@
     align-items: center;
   }
 
-  .remove-btn {
-    width: 20px;
-    height: 20px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: none;
-    border: 1px solid transparent;
-    border-radius: var(--radius-sm);
-    color: var(--text-3);
-    cursor: pointer;
-    transition: all 0.1s;
-    flex-shrink: 0;
-    padding: 0;
-  }
-  .remove-btn:hover { color: var(--text-error); border-color: rgba(220,60,60,0.3); }
-  .remove-btn svg   { width: 12px; height: 12px; }
+  .del-btn { flex-shrink: 0; padding: 0; }
 
 </style>
