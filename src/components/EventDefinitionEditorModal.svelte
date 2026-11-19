@@ -171,18 +171,8 @@
         <div class="field-control">
           <Dropdown id="def-filepath" label="Tuning file" value={file_path} --dd-width="100%" onChange={v => file_path = v}
             options={[{ value: '', label: 'None' }, ...fileOptions.map(f => ({ value: f.relative_path, label: f.canonical_name }))]} />
-          {#if file_path}
-            <span class="field-path">{file_path}</span>
-          {/if}
           {#if autoEnabledFile}
-            <div class="auto-enabled-notice">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <circle cx="12" cy="12" r="10"/>
-                <line x1="12" y1="8" x2="12" y2="12"/>
-                <line x1="12" y1="16" x2="12.01" y2="16"/>
-              </svg>
-              {autoEnabledFile.canonical_name} was off and is now enabled
-            </div>
+            <span class="field-hint">{autoEnabledFile.canonical_name} was switched off. It is on again now.</span>
           {/if}
         </div>
       </div>
@@ -335,14 +325,7 @@
   }
 
   .field-hint {
-    font-family: var(--font-body);
-    font-size: var(--fs-min);
-    color: var(--text-3);
-  }
-
-  .field-path {
-    font-family: var(--font-mono);
-    font-size: var(--fs-min);
+    font-size: 11px;
     color: var(--text-3);
   }
 
@@ -351,23 +334,6 @@
     font-size: 11px;
     color: var(--text-error);
   }
-
-  /* ── Auto-enabled notice ── */
-
-  .auto-enabled-notice {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    font-family: var(--font-body);
-    font-size: var(--fs-min);
-    color: var(--accent-bright);
-    background: var(--accent-glow);
-    border: 1px solid var(--accent-dim);
-    border-radius: var(--radius-sm);
-    padding: 4px 8px;
-    margin-top: 2px;
-  }
-  .auto-enabled-notice svg { width: 12px; height: 12px; flex-shrink: 0; }
 
   /* ── Toggle ── */
 
@@ -398,9 +364,7 @@
   .editor-toggle.on::after  { left: 16px; background: var(--accent-bright); }
 
   .toggle-hint {
-    font-family: var(--font-head);
-    font-size: var(--fs-min);
-    letter-spacing: 0.06em;
+    font-size: 11px;
     color: var(--text-3);
   }
 
