@@ -816,8 +816,8 @@
   }
 
   .progress-pct {
-    font-family: var(--font-mono);
     font-size: 11px;
+    font-variant-numeric: tabular-nums;
     color: var(--accent-bright);
   }
 
@@ -929,8 +929,8 @@
   }
 
   .backup-date {
-    font-family: var(--font-mono);
     font-size: 11px;
+    font-variant-numeric: tabular-nums;
     color: var(--text-1);
   }
 
@@ -953,8 +953,8 @@
   }
 
   .backup-size {
-    font-family: var(--font-mono);
     font-size: 11px;
+    font-variant-numeric: tabular-nums;
     color: var(--text-3);
     margin-left: auto;
   }
