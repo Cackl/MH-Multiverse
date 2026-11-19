@@ -439,50 +439,33 @@
                   {#if item.kind === 'rotation'}
                     {@const rotationActiveId = ruleActiveIds(item.rule, now)[0]}
                     {@const rotationActiveName = rotationActiveId ? (definitionById[rotationActiveId]?.display_name ?? rotationActiveId) : null}
-                    <div class="active-card rotation-card event-card"
+                    <div class="active-card event-card"
                         role="button"
                         tabindex="0"
-                        use:tip={'Edit schedule rule'}
+                        use:tip={'Edit this rule'}
                         on:click={() => selectRule(item.rule)}
                         on:keydown={e => e.key === 'Enter' && selectRule(item.rule)}>
                       <div class="active-card-top">
                         <span class="status-dot dot-active"></span>
                         <span class="active-card-name">{item.rule.name}</span>
                       </div>
-                      <div class="active-card-meta">
-                        {#if rotationActiveName}
-                          <span class="active-card-type">Now: {rotationActiveName}</span>
-                        {/if}
-                        <span class="active-card-sub">{item.rule.events.length} events in rotation</span>
-                      </div>
+                      {#if rotationActiveName}
+                        <span class="active-card-now">Now: {rotationActiveName}</span>
+                      {/if}
                     </div>
                   {:else}
                     <div
                       class="active-card event-card"
                       role="button"
                       tabindex="0"
-                      use:tip={'Edit definition'}
+                      use:tip={`Edit this event. Runs from the ${item.rule.name} rule.`}
                       on:click={() => { editingDefinition = item.definition; creatingDefinition = false }}
                       on:keydown={e => e.key === 'Enter' && (editingDefinition = item.definition)}
                     >
                       <div class="active-card-top">
                         <span class="status-dot dot-active"></span>
                         <span class="active-card-name">{item.definition.display_name}</span>
-                      </div>
-                      <div class="active-card-meta">
-                        {#if item.definition.daily_gift}
-                          <span class="active-card-gift">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                              <polyline points="20 12 20 22 4 22 4 12"/>
-                              <rect x="2" y="7" width="20" height="5"/>
-                              <line x1="12" y1="22" x2="12" y2="7"/>
-                              <path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"/>
-                              <path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"/>
-                            </svg>
-                            Daily gift
-                          </span>
-                        {/if}
-                        <span class="active-card-rule">{item.rule.name}</span>
+                        {#if item.definition.daily_gift}<span class="tag" use:tip={'Players get a gift once a day while it runs'}>Gift</span>{/if}
                       </div>
                     </div>
                   {/if}
@@ -732,13 +715,6 @@
     cursor: pointer;
   }
   .event-card:hover { border-color: var(--border-lit); }
-  .rotation-card.event-card:hover { border-color: var(--accent-bright); }
-
-  .rotation-card {
-    border-color: var(--accent-dim);
-    background: linear-gradient(140deg, var(--accent-glow) 0%, var(--bg-2) 60%);
-  }
-
   .active-card-top {
     display: flex;
     align-items: center;
@@ -746,6 +722,8 @@
   }
 
   .active-card-name {
+    flex: 1;
+    min-width: 0;
     font-family: var(--font-head);
     font-size: 12px;
     font-weight: 700;
@@ -755,48 +733,11 @@
     text-overflow: ellipsis;
   }
 
-  .active-card-meta {
-    display: flex;
-    flex-direction: column;
-    gap: 3px;
-  }
-
-  .active-card-type {
-    font-family: var(--font-head);
-    font-size: var(--fs-min);
-    letter-spacing: 0.06em;
+  .active-card-now {
+    font-size: 11px;
     color: var(--accent-bright);
   }
 
-  .active-card-sub {
-    font-family: var(--font-body);
-    font-size: var(--fs-min);
-    color: var(--text-3);
-  }
-
-  .active-card-sub-event {
-    font-family: var(--font-body);
-    font-size: var(--fs-min);
-    color: var(--text-2);
-  }
-
-  .active-card-gift {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    font-family: var(--font-head);
-    font-size: var(--fs-min);
-    letter-spacing: 0.06em;
-    color: var(--text-2);
-  }
-  .active-card-gift svg { width: 10px; height: 10px; flex-shrink: 0; }
-
-  .active-card-rule {
-    font-family: var(--font-head);
-    font-size: var(--fs-min);
-    letter-spacing: 0.06em;
-    color: var(--text-1);
-  }
 
   /* ── All events list ── */
 
