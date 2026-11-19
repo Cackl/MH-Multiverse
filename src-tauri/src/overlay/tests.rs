@@ -257,3 +257,24 @@ fn show_omega_leaves_invalid_files_alone() {
         assert_eq!(std::fs::read_to_string(&p).unwrap(), content);
     }
 }
+
+#[test]
+fn overlay_is_only_loaded_into_a_1_52_or_unknown_client() {
+    use crate::config::{AppConfig, LinkedInstall};
+    for (version, custom, want) in [
+        ("1.52", false, true),
+        ("1.52", true, true),
+        ("", false, true),
+        ("1.48", false, false),
+        ("1.53", false, false),
+        ("1.53", true, false),
+    ] {
+        let mut config = AppConfig::default();
+        config.linked = vec![LinkedInstall {
+            id: "a".into(), name: "a".into(), version: version.into(),
+            game_exe: String::new(), server_exe: String::new(), custom, no_steam: true,
+        }];
+        config.active_linked_id = "a".into();
+        assert_eq!(supported(&config), want, "{version} custom={custom}");
+    }
+}

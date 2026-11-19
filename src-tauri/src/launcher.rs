@@ -118,7 +118,7 @@ fn resolve_exe(exe: &str, force_32bit: bool) -> String {
 /// 1.48 and 1.53 clients always launch with -robocopy -nosteam. Steam's app 226320 is the 1.52
 /// build, and Steam mode on the older and test clients is untested. Provisional.
 fn use_steam(config: &crate::config::AppConfig) -> bool {
-    !config.launch_options.no_steam && !matches!(config.active_version(), "1.48" | "1.53")
+    !config.launch_options.no_steam && !config.client_is_1_48_or_1_53()
 }
 
 #[tauri::command]
@@ -199,9 +199,11 @@ pub fn launch_game(app: tauri::AppHandle, server_id: String) -> Result<(), Strin
         .spawn()
         .map_err(|e| format!("Failed to launch game: {e}"))?;
 
-    let sips = crate::overlay::sip_candidates(&config.game_exe, &config.server_exe);
     let game = app.state::<LaunchedGame>().set(child);
-    crate::overlay::on_game_spawned(&app, config.overlay.clone(), sips, game);
+    if crate::overlay::supported(&config) {
+        let sips = crate::overlay::sip_candidates(&config.game_exe, &config.server_exe);
+        crate::overlay::on_game_spawned(&app, config.overlay.clone(), sips, game);
+    }
 
     Ok(())
 }

@@ -198,6 +198,11 @@ impl AppConfig {
     pub fn active_version(&self) -> &str {
         self.linked.iter().find(|l| l.id == self.active_linked_id).map_or("", |l| l.version.as_str())
     }
+
+    /// The active client is 1.48 or 1.53: no Steam mode and no overlay, which are built for 1.52.
+    pub fn client_is_1_48_or_1_53(&self) -> bool {
+        matches!(self.active_version(), "1.48" | "1.53")
+    }
 }
 
 // ── Encryption key management ─────────────────────────────────────────────────

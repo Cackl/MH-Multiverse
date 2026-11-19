@@ -263,15 +263,24 @@ pub(crate) fn on_game_spawned(app: &tauri::AppHandle, cfg: OverlayConfig, sips: 
     }
 }
 
+/// The hook is built for the 1.52 client: its codes and indices come from 1.52 data, so it is
+/// never loaded into a 1.48 or 1.53 client.
+pub(crate) fn supported(config: &crate::config::AppConfig) -> bool {
+    !config.client_is_1_48_or_1_53()
+}
+
 /// Injects into the game this app launched, for when "Inject on Launch" is off. Same trust
 /// checks as a launch; the outcome arrives as `overlay-inject`.
 #[tauri::command]
 pub fn overlay_inject_now(app: tauri::AppHandle) -> Result<(), String> {
+    let config = load_config(&app);
+    if !supported(&config) {
+        return Err(format!("The overlay isn't available for the {} client.", config.active_version()));
+    }
     let game = app.state::<LaunchedGame>().get().ok_or("Launch the game from MH Multiverse first.")?;
     if !game.is_running() {
         return Err("The game is not running.".into());
     }
-    let config = load_config(&app);
     let sips = sip_candidates(&config.game_exe, &config.server_exe);
     run_inject(&app, config.overlay.clone(), sips, game, false);
     Ok(())
