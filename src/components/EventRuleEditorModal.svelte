@@ -128,10 +128,12 @@
       name:             name.trim(),
       is_enabled,
       rule_type,
-      start_day_of_week: needsDow  ? start_dow    : null,
-      start_month:       needsDate ? start_month  : null,
-      start_day:         needsDate ? start_day    : null,
-      duration_days:     needsDate ? duration_days : null,
+      // A type that doesn't use these keeps the saved values (the server ignores them), so
+      // switching the type back brings the old day or date back.
+      start_day_of_week: needsDow  ? start_dow     : rule?.start_day_of_week ?? null,
+      start_month:       needsDate ? start_month   : rule?.start_month       ?? null,
+      start_day:         needsDate ? start_day     : rule?.start_day         ?? null,
+      duration_days:     needsDate ? duration_days : rule?.duration_days     ?? null,
       events,
     })
     // Advance the snapshot so isDirty resets immediately
