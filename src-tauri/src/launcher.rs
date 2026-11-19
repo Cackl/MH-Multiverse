@@ -47,21 +47,27 @@ impl LaunchedGame {
     }
 }
 
+/// A process is the game when it has the linked exe's file name, whatever that is
+/// (`MarvelHeroesOmega.exe` for 1.52, `MarvelHeroes2016.exe` for 1.48, or a renamed copy).
+fn is_game_process(process_name: &std::ffi::OsStr, game_exe: &str) -> bool {
+    std::path::Path::new(game_exe)
+        .file_name()
+        .is_some_and(|name| name.eq_ignore_ascii_case(process_name))
+}
+
 #[tauri::command]
-pub fn game_is_running(state: tauri::State<GameProcessState>) -> bool {
+pub fn game_is_running(app: tauri::AppHandle, state: tauri::State<GameProcessState>) -> bool {
+    let game_exe = load_config(&app).game_exe;
     let mut sys = match state.0.lock() {
         Ok(g) => g,
         Err(_) => return false,
     };
     // remove_dead_processes must be true: this System is reused across polls
     // (see GameProcessState), so a process that has exited needs to be
-    // pruned from its internal list each refresh, or processes_by_exact_name
+    // pruned from its internal list each refresh, or the search
     // below keeps finding the stale entry forever.
     sys.refresh_processes(sysinfo::ProcessesToUpdate::All, true);
-    let running = sys
-        .processes_by_exact_name("MarvelHeroesOmega.exe".as_ref())
-        .next()
-        .is_some();
+    let running = sys.processes().values().any(|p| is_game_process(p.name(), &game_exe));
     running
 }
 
