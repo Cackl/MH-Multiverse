@@ -3,6 +3,7 @@
   import { setUnsaved } from '../lib/store'
   import { ruleDateError, type EventDefinition, type ScheduleRule } from '../lib/tuningMeta'
   import { tip } from '../lib/tooltip'
+  import Dropdown from './Dropdown.svelte'
 
   // ── Props ───────────────────────────────────────────────────────────────────
 
@@ -156,11 +157,8 @@
     <!-- Type -->
     <div class="field-group">
       <label class="field-label" for="rule-type">Type</label>
-      <select id="rule-type" class="field-select" bind:value={rule_type} disabled={saving}>
-        {#each RULE_TYPES as rt}
-          <option value={rt.value}>{rt.label}</option>
-        {/each}
-      </select>
+      <Dropdown id="rule-type" label="Type" value={rule_type} options={RULE_TYPES} disabled={saving}
+        --dd-width="100%" --dd-max-width="280px" onChange={v => rule_type = v} />
     </div>
 
     <!-- Enabled -->
@@ -186,11 +184,9 @@
         <label class="field-label" for="start-dow">
           {isRotation ? 'Rotation starts' : 'Active on'}
         </label>
-        <select id="start-dow" class="field-select" bind:value={start_dow} disabled={saving}>
-          {#each DAYS_OF_WEEK as day}
-            <option value={day}>{day}</option>
-          {/each}
-        </select>
+        <Dropdown id="start-dow" label={isRotation ? 'Rotation starts' : 'Active on'} value={start_dow}
+          options={DAYS_OF_WEEK.map(d => ({ value: d, label: d }))} disabled={saving}
+          --dd-width="100%" --dd-max-width="280px" onChange={v => start_dow = v} />
       </div>
     {/if}
 
@@ -314,16 +310,8 @@
       <!-- Add event row -->
       {#if availableToAdd.length > 0}
         <div class="add-event-row">
-          <select
-            class="field-select"
-            bind:value={addEventId}
-            disabled={saving}
-          >
-            <option value="">Select an event</option>
-            {#each availableToAdd as def}
-              <option value={def.id}>{def.display_name}</option>
-            {/each}
-          </select>
+          <Dropdown label="Event to add" value={addEventId} disabled={saving} --dd-width="100%" onChange={v => addEventId = v}
+            options={[{ value: '', label: 'Select an event' }, ...availableToAdd.map(d => ({ value: d.id, label: d.display_name }))]} />
           <button
             class="btn btn-sm btn-accent"
             disabled={saving || !addEventId}
@@ -421,21 +409,6 @@
   .field-input:disabled    { opacity: 0.5; cursor: not-allowed; }
   .field-input-narrow      { max-width: 100px; }
 
-  .field-select {
-    background: var(--bg-0);
-    border: 1px solid var(--border-mid);
-    border-radius: var(--radius-sm);
-    color: var(--text-0);
-    font-family: var(--font-body);
-    font-size: 12px;
-    padding: 6px 10px;
-    outline: none;
-    cursor: pointer;
-    width: 100%;
-    max-width: 280px;
-  }
-  .field-select:focus    { border-color: var(--accent-dim); }
-  .field-select:disabled { opacity: 0.5; cursor: not-allowed; }
 
   .field-error {
     font-family: var(--font-body);
@@ -619,7 +592,6 @@
     gap: 8px;
     margin-top: 4px;
   }
-  .add-event-row .field-select { flex: 1; max-width: none; }
 
   /* ── Footer ── */
 

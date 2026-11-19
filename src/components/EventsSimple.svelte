@@ -4,6 +4,7 @@
   import { appConfig, serverRunning, eventTimezoneOffset } from '../lib/store'
   import { tip } from '../lib/tooltip'
   import PanelSidebar from './PanelSidebar.svelte'
+  import Dropdown from './Dropdown.svelte'
   import CustomEventModal from './CustomEventModal.svelte'
   import type { EventDefinition, EventsData, ScheduleData, ScheduleRule } from '../lib/tuningMeta'
   import {
@@ -297,24 +298,17 @@
                   <span class="event-when">{row.text}</span>
 
                   {#if row.custom}
-                    <select
-                      class="field-select event-mode"
-                      aria-label="{row.def.display_name} schedule"
-                      value={row.mode === 'off' ? 'off' : 'schedule'}
-                      on:change={(e) => rules = setCustomEnabled(rules, row.def.id, e.currentTarget.value !== 'off')}
-                    >
-                      <option value="schedule">On schedule</option>
-                      <option value="off">Off</option>
-                    </select>
+                    <div class="event-mode">
+                      <Dropdown label="{row.def.display_name} schedule" value={row.mode === 'off' ? 'off' : 'schedule'} --dd-width="100%"
+                        options={[{ value: 'schedule', label: 'On schedule' }, { value: 'off', label: 'Off' }]}
+                        onChange={v => rules = setCustomEnabled(rules, row.def.id, v !== 'off')} />
+                    </div>
                   {:else if row.stockable}
-                    <select
-                      class="field-select event-mode"
-                      aria-label="{row.def.display_name} schedule"
-                      value={row.mode}
-                      on:change={(e) => setMode(row.def.id, e.currentTarget.value as EventMode)}
-                    >
-                      {#each modesFor(row.def) as mode}<option value={mode}>{MODE_LABEL[mode]}</option>{/each}
-                    </select>
+                    <div class="event-mode">
+                      <Dropdown label="{row.def.display_name} schedule" value={row.mode} --dd-width="100%"
+                        options={modesFor(row.def).map(m => ({ value: m, label: MODE_LABEL[m] }))}
+                        onChange={v => setMode(row.def.id, v as EventMode)} />
+                    </div>
                   {:else}
                     <span class="event-mode event-fixed" use:tip={'Not a stock event. Change it in Advanced.'}>{MODE_LABEL[row.mode]}</span>
                   {/if}

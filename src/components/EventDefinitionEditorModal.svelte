@@ -3,6 +3,7 @@
   import type { TuningFileInfo, EventDefinition } from '../lib/tuningMeta'
   import { tip } from '../lib/tooltip'
   import PrototypePicker from './PrototypePicker.svelte'
+  import Dropdown from './Dropdown.svelte'
 
   // ── Props ───────────────────────────────────────────────────────────────────
 
@@ -168,12 +169,8 @@
       <div class="field-group">
         <label class="field-label" for="def-filepath">Tuning file</label>
         <div class="field-control">
-          <select id="def-filepath" class="field-select" bind:value={file_path}>
-            <option value="">None</option>
-            {#each fileOptions as f}
-              <option value={f.relative_path}>{f.canonical_name}</option>
-            {/each}
-          </select>
+          <Dropdown id="def-filepath" label="Tuning file" value={file_path} --dd-width="100%" onChange={v => file_path = v}
+            options={[{ value: '', label: 'None' }, ...fileOptions.map(f => ({ value: f.relative_path, label: f.canonical_name }))]} />
           {#if file_path}
             <span class="field-path">{file_path}</span>
           {/if}
@@ -329,19 +326,6 @@
   .field-input:focus       { border-color: var(--accent-dim); }
   .field-input.input-error { border-color: var(--text-error); }
 
-  .field-select {
-    background: var(--bg-0);
-    border: 1px solid var(--border-mid);
-    border-radius: var(--radius-sm);
-    color: var(--text-0);
-    font-family: var(--font-body);
-    font-size: 12px;
-    padding: 6px 10px;
-    outline: none;
-    cursor: pointer;
-    width: 100%;
-  }
-  .field-select:focus { border-color: var(--accent-dim); }
 
   .field-readonly {
     font-family: var(--font-mono);
