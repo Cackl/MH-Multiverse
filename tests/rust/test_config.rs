@@ -48,6 +48,7 @@ fn config_from_1_6_1_loads_and_keeps_the_advanced_editors() {
     let config: AppConfig = serde_json::from_str(CONFIG_1_6_1).unwrap();
     assert_eq!(config.servers.len(), 1);
     assert_eq!(config.theme, "phoenix");
+    assert_eq!(config.text_size, 1.0);
     assert!(config.advanced_data, "an upgraded config must stay in Advanced");
 }
 
@@ -200,4 +201,14 @@ fn a_new_app_version_or_an_unreadable_file_backs_the_config_up_first() {
     // A file that can't be read.
     assert!(backup_on_upgrade(&path, "{ broken", None, "1.7.0"));
     assert_eq!(std::fs::read_to_string(&bak).unwrap(), "{ broken");
+}
+
+#[test]
+fn text_size_accepts_usable_zooms_only() {
+    for ok in [0.5, 0.9, 1.0, 1.25, 2.0] {
+        assert!(valid_text_size(ok), "{ok}");
+    }
+    for bad in [0.0, 0.49, 2.01, -1.0, f64::NAN, f64::INFINITY] {
+        assert!(!valid_text_size(bad), "{bad}");
+    }
 }

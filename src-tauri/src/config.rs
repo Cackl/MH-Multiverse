@@ -17,6 +17,8 @@ const CONFIG_FILENAME: &str = "multiverse.json";
 
 fn default_true() -> bool { true }
 
+fn default_text_size() -> f64 { 1.0 }
+
 fn default_shutdown_broadcast() -> String {
     "Server is shutting down in {minutes} minute(s).".to_string()
 }
@@ -155,6 +157,9 @@ pub struct AppConfig {
     pub servers: Vec<Server>,
     #[serde(default)]
     pub theme: String,
+    /// Whole-window zoom factor set in Settings › Display (1.0 = 100%).
+    #[serde(default = "default_text_size")]
+    pub text_size: f64,
     #[serde(default)]
     pub launch_options: LaunchOptions,
     #[serde(default)]
@@ -186,6 +191,7 @@ impl Default for AppConfig {
             active_server_id: String::new(),
             servers: Vec::new(),
             theme: String::new(),
+            text_size: 1.0,
             launch_options: LaunchOptions::default(),
             shutdown: ShutdownConfig::default(),
             console_presets: default_console_presets(),
@@ -551,6 +557,21 @@ pub fn set_theme(app: tauri::AppHandle, theme: String) -> Result<(), String> {
     let mut config = load_config(&app);
     config.theme = theme;
     save_config(&app, &config)
+}
+
+#[tauri::command]
+pub fn set_text_size(app: tauri::AppHandle, size: f64) -> Result<(), String> {
+    if !valid_text_size(size) {
+        return Err(format!("Text size {size} is out of range"));
+    }
+    let mut config = load_config(&app);
+    config.text_size = size;
+    save_config(&app, &config)
+}
+
+/// A zoom the window can still be used at. NaN and infinity fail the range check too.
+fn valid_text_size(size: f64) -> bool {
+    (0.5..=2.0).contains(&size)
 }
 
 #[tauri::command]

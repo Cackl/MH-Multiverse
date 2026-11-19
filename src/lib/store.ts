@@ -1,5 +1,6 @@
 import { writable, derived, get } from 'svelte/store'
 import { invoke } from '@tauri-apps/api/core'
+import { getCurrentWebview } from '@tauri-apps/api/webview'
 import { versionCaps } from './versionCaps'
 
 export type DataTab = 'events' | 'tuning' | 'store' | 'patches'
@@ -375,6 +376,8 @@ export interface AppConfig {
   active_server_id: string
   servers: Server[]
   theme: string
+  /** Whole-window zoom (1 = 100%). */
+  text_size: number
   launch_options: LaunchOptions
   shutdown: ShutdownConfig
   console_presets: string[]
@@ -433,6 +436,7 @@ export const appConfig = writable<AppConfig>({
   active_server_id: '',
   servers: [],
   theme: '',
+  text_size: 1,
   launch_options: defaultLaunchOptions,
   shutdown: defaultShutdownConfig,
   console_presets: ["!commands","!account userlevel","!server status","!server broadcast","!server shutdown","!server reloadcatalog","!server reloadlivetuning"],
@@ -460,11 +464,17 @@ function applyTheme(theme: string) {
   }
 }
 
+function applyTextSize(size: number) {
+  // Zoom scales text and layout together, so nothing wraps that would not at 100%.
+  try { getCurrentWebview().setZoom(size).catch(() => {}) } catch { /* outside Tauri (tests) */ }
+}
+
 export async function loadConfig(): Promise<void> {
   const config = await invoke<AppConfig>('get_config')
   appConfig.set(config)
   activeTheme.set(config.theme ?? '')
   applyTheme(config.theme ?? '')
+  applyTextSize(config.text_size ?? 1)
   if (config.active_server_id) {
     activeServerId.set(config.active_server_id)
   } else if (config.servers.length > 0) {
@@ -548,6 +558,13 @@ export async function setTheme(theme: string): Promise<void> {
     applyTheme(previousTheme)
     appConfig.set(previous)
   }
+}
+
+export async function setTextSize(size: number): Promise<void> {
+  applyTextSize(size)
+  await updateConfigOptimistic(c => ({ ...c, text_size: size }), 'set_text_size', { size })
+  // A failed save restored the previous config, so this puts its zoom back.
+  applyTextSize(get(appConfig).text_size)
 }
 
 export async function setLaunchOptions(options: LaunchOptions): Promise<void> {

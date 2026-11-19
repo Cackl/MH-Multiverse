@@ -90,6 +90,7 @@ pub fn run() {
             config::set_server_exe,
             ini::uses_json_persistence,
             config::set_theme,
+            config::set_text_size,
             config::set_launch_options,
             config::set_shutdown_config,
             config::set_backup_targets,

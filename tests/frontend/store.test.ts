@@ -3,6 +3,8 @@ import { get } from 'svelte/store'
 
 const invokeMock = vi.hoisted(() => vi.fn())
 vi.mock('@tauri-apps/api/core', () => ({ invoke: invokeMock }))
+const zoomMock = vi.hoisted(() => vi.fn(() => Promise.resolve()))
+vi.mock('@tauri-apps/api/webview', () => ({ getCurrentWebview: () => ({ setZoom: zoomMock }) }))
 
 import {
   appendLog,
@@ -23,6 +25,7 @@ import {
   activeServerId,
   upsertServer,
   setAdvancedData,
+  setTextSize,
   type AppConfig,
   type Server,
 } from '../../src/lib/store'
@@ -204,5 +207,26 @@ describe('upsertServer selection', () => {
     await upsertServer(srv(id), 'pw')
     const calls = invokeMock.mock.calls.filter(([cmd]) => cmd === 'set_active_server')
     expect(calls).toEqual(persisted ? [['set_active_server', { serverId: id }]] : [])
+  })
+})
+
+describe('setTextSize', () => {
+  it('zooms the window and saves the size', async () => {
+    invokeMock.mockReset().mockResolvedValue(undefined)
+    zoomMock.mockClear()
+    await setTextSize(1.25)
+    expect(invokeMock).toHaveBeenCalledWith('set_text_size', { size: 1.25 })
+    expect(get(appConfig).text_size).toBe(1.25)
+    expect(zoomMock).toHaveBeenLastCalledWith(1.25)
+  })
+
+  it('puts the previous zoom back when the save fails', async () => {
+    invokeMock.mockReset().mockResolvedValue(undefined)
+    await setTextSize(1)
+    invokeMock.mockReset().mockRejectedValue('disk full')
+    zoomMock.mockClear()
+    await setTextSize(1.1)
+    expect(get(appConfig).text_size).toBe(1)
+    expect(zoomMock).toHaveBeenLastCalledWith(1)
   })
 })
