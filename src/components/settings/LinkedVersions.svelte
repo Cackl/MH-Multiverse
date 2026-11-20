@@ -1,6 +1,6 @@
 <script lang="ts">
   import { invoke } from '@tauri-apps/api/core'
-  import { appConfig, upsertLinked, deleteLinked, activateLinked, askConfirm, type LinkedInstall } from '../../lib/store'
+  import { appConfig, upsertLinked, deleteLinked, activateLinked, askConfirm, switchBlocked, type LinkedInstall } from '../../lib/store'
   import { pickExe } from '../../lib/browseExe'
   import { versionMatch } from '../../lib/versionCaps'
   import { serverFolder, withExes } from '../../lib/linkedVersions'
@@ -93,6 +93,8 @@
 {#each $appConfig.linked as l (l.id)}
   {@const i = info(l)}
   {@const active = l.id === $appConfig.active_linked_id}
+  <!-- New exes on the active version are a switch, which is refused while the server, game or an update runs. -->
+  {@const locked = active && !!$switchBlocked}
   <IntegrationCard id={`linked-${l.id}`} title={l.name || 'Unnamed'} subtitle={serverFolder(l.server_exe) || 'No server'}>
     <svelte:fragment slot="actions">
       {#if l.custom}<span class="tag">Experimental</span>{/if}
@@ -114,11 +116,11 @@
 
       <span class="field-label">Client</span>
       <div class="field-value path-value" use:tip={l.game_exe}>{l.game_exe || 'Not set'}</div>
-      <button class="btn btn-sm btn-outline" on:click={() => browse(l, 'game_exe')}>Browse</button>
+      {#if locked}<span></span>{:else}<button class="btn btn-sm btn-outline" on:click={() => browse(l, 'game_exe')}>Browse</button>{/if}
 
       <span class="field-label">Server</span>
       <div class="field-value path-value" use:tip={l.server_exe}>{l.server_exe || 'Not set'}</div>
-      <button class="btn btn-sm btn-outline" on:click={() => browse(l, 'server_exe')}>Browse</button>
+      {#if locked}<span></span>{:else}<button class="btn btn-sm btn-outline" on:click={() => browse(l, 'server_exe')}>Browse</button>{/if}
 
       <span class="field-label">Version</span>
       {#if i.match === 'mismatch'}
