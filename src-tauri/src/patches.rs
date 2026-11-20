@@ -237,7 +237,8 @@ pub fn scan_patch_files(server_exe: String) -> Result<Vec<PatchFileInfo>, String
         collect_patch_files(&off, false, &mut files)?;
     }
 
-    files.sort_by(|a, b| a.file_name.cmp(&b.file_name));
+    // The server's load order (culture sort, see tuning.rs). Off/ files sit among them by name.
+    files.sort_by_cached_key(|f| crate::tuning::server_sort_key(&f.file_name));
     Ok(files)
 }
 

@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   clampCooldown, readCooldowns, withCooldowns, COOLDOWN_DEFAULT,
-  clampSummon, summonCapEntry, readSummonCaps, withSummonCaps, SUMMON_DEFAULT,
+  clampSummon, summonCapEntry, readSummonCaps, withSummonCaps, SUMMON_DEFAULT, shadowedCooldowns,
 } from '../../src/lib/gameTweaks'
 import type { PatchEntry } from '../../src/lib/patchesMeta'
 
@@ -130,5 +130,38 @@ describe('clampCooldown', () => {
     expect(clampCooldown(100)).toBe(99)
     expect(clampCooldown(150)).toBe(99)
     expect(clampCooldown(NaN)).toBe(COOLDOWN_DEFAULT)
+  })
+})
+
+describe('shadowedCooldowns', () => {
+  const T = 'PatchDataZMultiverseTweaks.json'
+  const tweak = withCooldowns([], heroes, { all: 25, powers: [] })
+  // Another Properties entry for Angela, with the path cased differently (the server ignores case).
+  const props = (extra: Partial<PatchEntry> = {}): PatchEntry => ({
+    Enabled: true, Prototype: heroes[0].toUpperCase(), Path: 'Properties', Description: 'Hand-made',
+    ValueType: 'Properties', Value: '{"HealthMaxOther":1}', ...extra,
+  })
+
+  it('names an earlier file that sets Properties first', () => {
+    const files = [{ file_name: 'PatchDataA.json', entries: [props()] }, { file_name: T, entries: tweak }]
+    expect(shadowedCooldowns(files, T, heroes)).toEqual({ [heroes[0]]: 'PatchDataA.json' })
+  })
+
+  it('names the tweaks file when a hand-made entry comes before the cooldowns', () => {
+    expect(shadowedCooldowns([{ file_name: T, entries: [props(), ...tweak] }], T, heroes)).toEqual({ [heroes[0]]: T })
+  })
+
+  it('ignores disabled entries and files after the tweaks file', () => {
+    const files = [
+      { file_name: 'PatchDataA.json', entries: [props({ Enabled: false })] },
+      { file_name: T, entries: tweak },
+      { file_name: 'PatchDataZZ.json', entries: [props()] },
+    ]
+    expect(shadowedCooldowns(files, T, heroes)).toEqual({})
+  })
+
+  it('finds nothing without another Properties entry', () => {
+    const files = [{ file_name: 'PatchDataA.json', entries: [mine, props({ ValueType: 'Integer', Path: 'Properties.X' })] }, { file_name: T, entries: tweak }]
+    expect(shadowedCooldowns(files, T, heroes)).toEqual({})
   })
 })

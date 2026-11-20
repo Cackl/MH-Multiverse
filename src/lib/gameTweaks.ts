@@ -127,3 +127,29 @@ export function withCooldowns(entries: PatchEntry[], avatarPaths: string[], c: C
     })),
   ]
 }
+
+/**
+ * Heroes whose cooldown entry the server would ignore, with the file that wins instead.
+ * The server keeps only the first enabled Properties entry per prototype, matching names
+ * without case (PrototypePatchManager.CheckProperties). `files` are the enabled patch files
+ * in load order, up to and including the tweaks file. The cooldown entries go last in the
+ * tweaks file, so any other Properties entry in it comes first.
+ */
+export function shadowedCooldowns(
+  files: { file_name: string; entries: PatchEntry[] }[],
+  tweaksFile: string,
+  heroes: string[],
+): Record<string, string> {
+  const wanted = new Map(heroes.map(h => [h.toLowerCase(), h]))
+  const out: Record<string, string> = {}
+  for (const f of files) {
+    for (const e of f.entries) {
+      const hero = wanted.get(e.Prototype.toLowerCase())
+      if (!e.Enabled || e.ValueType !== 'Properties' || !hero || hero in out) continue
+      if (f.file_name === tweaksFile && e.Description.startsWith(COOLDOWN_TAG)) continue
+      out[hero] = f.file_name
+    }
+    if (f.file_name === tweaksFile) break
+  }
+  return out
+}

@@ -485,7 +485,7 @@ pub(crate) const SERVER_RATES_FILE: &str = "LiveTuningDataMultiverse.json";
 /// ignoring case first. This is why `LiveTuningData_X.json` loads before
 /// `LiveTuningDataGlobal.json`.
 // ponytail: covers the characters that appear in tuning file names, not full ICU collation.
-fn server_sort_key(name: &str) -> (Vec<(u8, u32)>, String) {
+pub(crate) fn server_sort_key(name: &str) -> (Vec<(u8, u32)>, String) {
     let primary = name
         .chars()
         .map(|c| match c {

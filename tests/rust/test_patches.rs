@@ -310,3 +310,13 @@ fn load_accepts_a_byte_order_mark() {
     assert_eq!(entries.len(), 1);
     assert_eq!(entries[0].value, 1);
 }
+
+#[test]
+fn scan_lists_files_in_server_load_order() {
+    let (_tmp, server_exe) = setup();
+    fs::write(patches_dir(&server_exe).unwrap().join("PatchData_X.json"), "[]").unwrap();
+    let names: Vec<String> = scan_patch_files(server_exe).unwrap().into_iter().map(|f| f.file_name).collect();
+    let at = |n: &str| names.iter().position(|f| f == n).unwrap();
+    // The server's culture sort puts _ before letters. An ordinal sort would not.
+    assert!(at("PatchData_X.json") < at("PatchDataBugFixes.json"), "{names:?}");
+}

@@ -10,7 +10,7 @@
   import AddTweakModal, { type NewTweak } from './AddTweakModal.svelte'
   import {
     AVATAR_FOLDER, COOLDOWN_MIN, COOLDOWN_MAX, COOLDOWN_STEP, COOLDOWN_DEFAULT,
-    clampCooldown, readCooldowns, withCooldowns, type PowerCooldown,
+    clampCooldown, readCooldowns, withCooldowns, shadowedCooldowns, type PowerCooldown,
     SUMMON_MIN, SUMMON_MAX, SUMMON_TIP, clampSummon, readSummonCaps, withSummonCaps, type SummonCap,
   } from '../../../lib/gameTweaks'
 
@@ -34,6 +34,9 @@
   // Tweaks: the shipping heroes the cooldown recipe writes to, the launcher file's entries,
   // and the reduction saved there and being edited (null = off). The box keeps its number while off.
   let avatars: string[] = []
+  let heroNames: Record<string, string> = {}
+  // Hero path to the file whose Properties entry the server uses instead of the cooldown one.
+  let shadowed: Record<string, string> = {}
   let tweakEntries: PatchEntry[] = []
   let savedPct: number | null = null
   let draftPct: number | null = null
@@ -89,6 +92,7 @@
         serverExe: exe, query: '', categoryPath: AVATAR_FOLDER, classFilter: 'AvatarPrototype',
       })
       avatars = heroes.map(h => h.path)
+      heroNames = Object.fromEntries(heroes.map(h => [h.path, h.display_name]))
     } catch {
       avatars = [] // no Calligraphy.sip: the Tweaks group stays hidden
     }
@@ -103,6 +107,7 @@
       saveError = String(e)
       return
     }
+    shadowed = await findShadowed(exe)
     const saved = readCooldowns(tweakEntries)
     savedPct = saved.all
     draftPct = savedPct
@@ -120,6 +125,17 @@
         summonNames = { ...summonNames, ...names.paths }
       } catch { /* rows fall back to the id or path */ }
     }
+  }
+
+  /** Heroes whose cooldowns lose to an earlier Properties entry. Only files the server loads first count. */
+  async function findShadowed(exe: string): Promise<Record<string, string>> {
+    const at = files.findIndex(f => f.file_name === TWEAKS_FILE && f.enabled)
+    if (at < 0) return {}
+    const earlier = await Promise.all(files.slice(0, at).filter(f => f.enabled).map(f =>
+      invoke<PatchEntry[]>('load_patch_file', { serverExe: exe, fileName: f.file_name, enabled: true })
+        .catch(() => [] as PatchEntry[]) // the server skips a file it can't read too
+        .then(entries => ({ file_name: f.file_name, entries }))))
+    return shadowedCooldowns([...earlier, { file_name: TWEAKS_FILE, entries: tweakEntries }], TWEAKS_FILE, avatars)
   }
 
   // Adding a power that is already listed updates its row.
@@ -175,6 +191,11 @@
 
   $: tweaksReady = !!serverExe && loaded && avatars.length > 0
   $: tweaksOn = tweaksFile?.enabled ?? true
+  // Grouped by the winning file, for one warning line each.
+  $: shadowWarnings = Object.entries(Object.entries(shadowed).reduce<Record<string, string[]>>((by, [hero, file]) => {
+    (by[file] ??= []).push(heroNames[hero] ?? hero)
+    return by
+  }, {}))
   $: anyTweak = draftPct !== null || draftPowers.length > 0 || draftSummons.length > 0
   $: views = [
     { id: 'all', label: 'All' },
@@ -204,6 +225,7 @@
         .map(x => keyOf(x) === key ? { ...x, enabled } : x)
       pendingRestart = true
       sawStopped = !$serverRunning
+      shadowed = await findShadowed(serverExe)
     } catch (e) {
       toggleError = String(e)
     } finally {
@@ -279,6 +301,11 @@
         <div class="content-col">
         {#if showTweaks}
           {#if view === 'all'}<div class="subsection-title patches-group">Multiverse</div>{/if}
+          {#if tweaksOn && (draftPct !== null || draftPowers.length)}
+            {#each shadowWarnings as [file, names]}
+              <p class="shadow-warn">Cooldowns for {names.join(', ')} won't apply. {file} sets Properties for {names.length === 1 ? 'this hero' : 'these heroes'} first.</p>
+            {/each}
+          {/if}
           {#if !readOnly || draftPct !== null}
           <div class="pack-row" class:off={draftPct === null || !tweaksOn}>
             <span class="pack-name"><span class="pack-title">All heroes' cooldowns</span></span>
@@ -477,6 +504,7 @@
     overflow-y: auto;
     padding: 4px 20px 22px;
   }
+  .shadow-warn { margin: 10px 0 0; font-size: 12px; color: var(--text-warning); }
   .patches-msg { font-size: 12px; color: var(--text-2); }
   .error { font-size: 12px; color: var(--text-error); }
   .patches-status {
