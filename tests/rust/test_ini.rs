@@ -37,6 +37,13 @@ fn parse_ini_no_section() {
 }
 
 #[test]
+fn parse_ini_skips_bom() {
+    let data = parse_ini("\u{FEFF}[PlayerManager]\nUseJsonDBManager=true\n\n[Frontend]\nPort=4306\n");
+    assert_eq!(data["PlayerManager"]["UseJsonDBManager"], "true");
+    assert_eq!(data["Frontend"]["Port"], "4306");
+}
+
+#[test]
 fn parse_descriptions_from_comments() {
     let content = "\
 ; Before any section: ignored
@@ -126,6 +133,25 @@ fn write_config_removes_default_match() {
     let content = fs::read_to_string(dir.join("ConfigOverride.ini")).unwrap();
     assert!(!content.contains("Port=8080"));
     assert!(!content.contains("[WebFrontend]"));
+}
+
+#[test]
+fn write_config_keeps_first_section_after_bom() {
+    let (_tmp, server_exe) = empty_server();
+    let dir = std::path::Path::new(&server_exe).parent().unwrap().to_path_buf();
+    copy_config_fixtures(&dir, false);
+    fs::write(dir.join("ConfigOverride.ini"), "\u{FEFF}[Frontend]\nPort=7777\n\n[WebFrontend]\nPort=9090\n").unwrap();
+
+    let mut updates: IniData = HashMap::new();
+    updates.insert(
+        "WebFrontend".to_string(),
+        HashMap::from([("Port".to_string(), "9191".to_string())]),
+    );
+    write_config(server_exe, updates).unwrap();
+
+    let content = fs::read_to_string(dir.join("ConfigOverride.ini")).unwrap();
+    assert!(content.contains("[Frontend]\nPort=7777\n"));
+    assert!(content.contains("Port=9191"));
 }
 
 #[test]

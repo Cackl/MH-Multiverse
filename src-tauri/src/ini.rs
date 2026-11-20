@@ -27,7 +27,7 @@ fn parse_ini(content: &str) -> IniData {
     let mut data: IniData = HashMap::new();
     let mut current_section = String::new();
 
-    for line in content.lines() {
+    for line in content.strip_prefix('\u{FEFF}').unwrap_or(content).lines() {
         let line = line.trim();
         if line.is_empty() || line.starts_with(';') {
             continue;
@@ -55,7 +55,7 @@ fn parse_descriptions(content: &str) -> IniData {
     let mut section = String::new();
     let mut last_key: Option<String> = None;
 
-    for line in content.lines() {
+    for line in content.strip_prefix('\u{FEFF}').unwrap_or(content).lines() {
         let line = line.trim();
         if line.starts_with('[') && line.ends_with(']') {
             section = line[1..line.len() - 1].to_string();
