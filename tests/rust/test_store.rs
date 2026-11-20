@@ -529,3 +529,16 @@ fn catalog_files_load_with_fields_the_server_defaults() {
     assert_eq!((g.prototype_guid.as_str(), g.quantity), ("0", 0));
     assert_eq!(entries[0].entry.info_urls[0].image_data, "");
 }
+
+#[test]
+fn catalog_files_load_in_the_server_order() {
+    let (_tmp, server_exe) = empty_mtxstore();
+    let dir = mtxstore_dir(&server_exe).unwrap();
+    for name in ["Catalog.json", "Catalog_X.json", "catalogLower.json", "CatalogMODIFIED.json", "Other.json"] {
+        fs::write(dir.join(name), "[]").unwrap();
+    }
+    assert_eq!(
+        catalog_files_in_load_order(&dir).unwrap(),
+        ["Catalog_X.json", "Catalog.json", "catalogLower.json", "CatalogMODIFIED.json"],
+    );
+}

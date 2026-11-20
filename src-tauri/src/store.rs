@@ -271,6 +271,12 @@ fn mtxstore_dir(server_exe: &str) -> Result<PathBuf, String> {
         .join("MTXStore"))
 }
 
+/// `Catalog*.json`, matched without case as the server's file search is on Windows.
+fn is_catalog_name(name: &str) -> bool {
+    let lower = name.to_ascii_lowercase();
+    lower.starts_with("catalog") && lower.ends_with(".json")
+}
+
 /// Returns sorted paths of base `Catalog*.json` files, excluding `*MODIFIED*` variants.
 fn base_catalog_files(dir: &Path) -> Result<Vec<PathBuf>, String> {
     let mut files = Vec::new();
@@ -279,14 +285,13 @@ fn base_catalog_files(dir: &Path) -> Result<Vec<PathBuf>, String> {
     {
         let entry = entry.map_err(|e| e.to_string())?;
         let name = entry.file_name().to_string_lossy().to_string();
-        if name.starts_with("Catalog")
-            && name.ends_with(".json")
+        if is_catalog_name(&name)
             && !name.to_ascii_uppercase().contains("MODIFIED")
         {
             files.push(entry.path());
         }
     }
-    files.sort();
+    files.sort_by_cached_key(|p| crate::tuning::server_sort_key(&p.file_name().unwrap_or_default().to_string_lossy()));
     Ok(files)
 }
 
@@ -481,18 +486,17 @@ pub fn set_catalog_file_enabled(server_exe: String, file: String, enabled: bool)
 }
 
 /// Every `Catalog*.json` file name (base and MODIFIED) in the order the server loads them:
-/// one list sorted case-insensitively, so `CatalogMODIFIED.json` loads before
-/// `CatalogRestoredHeroes.json`.
+/// one list in the server's culture sort, so `CatalogMODIFIED.json` loads before
+/// `CatalogRestoredHeroes.json` and `Catalog_X.json` before `Catalog.json`.
 fn catalog_files_in_load_order(dir: &Path) -> Result<Vec<String>, String> {
     let mut names = Vec::new();
     for entry in fs::read_dir(dir).map_err(|e| format!("Cannot read MTXStore directory: {e}"))? {
         let name = entry.map_err(|e| e.to_string())?.file_name().to_string_lossy().to_string();
-        if name.starts_with("Catalog") && name.ends_with(".json") {
+        if is_catalog_name(&name) {
             names.push(name);
         }
     }
-    // ponytail: approximates the server's culture-sensitive sort; differs only for exotic names.
-    names.sort_by_key(|n| (n.to_lowercase(), n.clone()));
+    crate::tuning::sort_like_server(&mut names);
     Ok(names)
 }
 
@@ -644,7 +648,7 @@ const STORE_STATE_FILE: &str = "MultiverseStore.json";
 
 /// `name` must be a plain base catalog file name, so a write can't leave the MTXStore folder.
 fn checked_base_name(name: &str) -> Result<&str, String> {
-    let plain = !name.contains(['/', '\\']) && name.starts_with("Catalog") && name.ends_with(".json");
+    let plain = !name.contains(['/', '\\']) && is_catalog_name(name);
     if plain && base_of_modified(name).is_none() {
         Ok(name)
     } else {
@@ -741,7 +745,7 @@ pub fn get_next_sku_id(server_exe: String) -> Result<String, String> {
         {
             let entry = entry.map_err(|e| e.to_string())?;
             let name = entry.file_name().to_string_lossy().to_string();
-            if !name.starts_with("Catalog") || !name.ends_with(".json") {
+            if !is_catalog_name(&name) {
                 continue;
             }
             for e in load_disk_entries(&entry.path())? {
