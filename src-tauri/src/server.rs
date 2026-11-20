@@ -721,14 +721,15 @@ pub async fn stop_server(app: AppHandle) -> Result<(), String> {
     let player_state = app.state::<PlayerState>().0.clone();
 
     // Send "!server shutdown" via stdin, holding the lock only briefly.
-    {
+    let pid = {
         let mut proc = state_arc.lock().map_err(|e| e.to_string())?;
         let child = proc.child.as_mut().ok_or("Server is not running.")?;
         if let Some(ref mut stdin) = child.stdin {
             let _ = stdin.write_all(b"!server shutdown\n");
             let _ = stdin.flush();
         }
-    }
+        child.id()
+    };
     // Lock released — returns to frontend immediately.
     // The watcher thread (spawned by start_server) will detect exit via
     // try_wait, clear proc.child, and emit server-stopped.
@@ -748,8 +749,9 @@ pub async fn stop_server(app: AppHandle) -> Result<(), String> {
                 Err(_) => return,
             };
 
-            // If child is already None, the watcher handled it — nothing to do.
-            if proc.child.is_none() {
+            // Nothing to do if the watcher already saw it exit, or if the
+            // server running now is a new one started after this Stop.
+            if proc.child.as_ref().map(|c| c.id()) != Some(pid) {
                 return;
             }
 
