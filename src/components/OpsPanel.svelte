@@ -180,12 +180,16 @@
     confirmingRestore = null
     backupError = ''
     try {
-      await invoke('restore_backup', { serverExe: $appConfig.server_exe, backupId: id })
-      backupSuccess = 'Backup restored.'
-      setTimeout(() => backupSuccess = '', 3000)
+      const moved = await invoke<string[]>('restore_backup', { serverExe: $appConfig.server_exe, backupId: id })
+      backupSuccess = moved.length
+        ? `Backup restored. Copies switched the other way saved as ${moved.join(', ')}`
+        : 'Backup restored.'
+      setTimeout(() => backupSuccess = '', moved.length ? 8000 : 3000)
     } catch (e) {
       backupError = String(e)
     }
+    // The restore backs up the files it replaces first, failed or not.
+    await loadBackups()
   }
 
   async function deleteBackup(id: string) {
@@ -567,7 +571,7 @@
                   <div class="backup-meta">
                     <span class="backup-date">{formatDate(backup.created_at)}</span>
                     <span class="backup-label-badge" class:pre-update={backup.label === 'pre-update'}>
-                      {backup.label === 'pre-update' ? 'Pre-update' : 'Manual'}
+                      {backup.label === 'pre-update' ? 'Pre-update' : backup.label === 'pre-restore' ? 'Pre-restore' : 'Manual'}
                     </span>
                     <span class="backup-size">{formatBytes(backup.size_bytes)}</span>
                   </div>
@@ -577,7 +581,7 @@
 
                   {#if confirmingRestore === backup.id}
                     <div class="confirm-row">
-                      <span class="confirm-text">This will overwrite current files.</span>
+                      <span class="confirm-text">Current files are backed up first, then overwritten.</span>
                       <button class="btn btn-sm btn-accent" on:click={() => restoreBackup(backup.id)} disabled={$serverRunning}>Confirm Restore</button>
                       <button class="btn btn-sm btn-outline" on:click={cancelConfirm}>Cancel</button>
                     </div>

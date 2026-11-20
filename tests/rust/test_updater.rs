@@ -86,6 +86,28 @@ fn restore_backup_overwrites_files() {
 }
 
 #[test]
+fn restore_backs_up_first_and_keeps_one_state_per_file() {
+    let (_tmp, server_exe) = empty_server();
+    let dir = crate::paths::server_dir(&server_exe).unwrap();
+    let patches = dir.join("Data/Game/Patches");
+    fs::create_dir_all(patches.join("Off")).unwrap();
+    fs::write(patches.join("A.json"), "backed up").unwrap();
+    let manifest = backup(&server_exe, vec!["Data/Game/Patches".to_string()], "manual").unwrap();
+
+    // Switched off after the backup
+    fs::rename(patches.join("A.json"), patches.join("Off/A.json")).unwrap();
+
+    let moved = restore(&server_exe, &manifest.id).unwrap();
+    assert_eq!(fs::read_to_string(patches.join("A.json")).unwrap(), "backed up");
+    assert!(!patches.join("Off/A.json").exists());
+    assert_eq!(moved.len(), 1);
+    assert!(patches.join("Off").join(&moved[0]).exists());
+
+    let before = list_backups(server_exe).unwrap().into_iter().find(|b| b.label == "pre-restore").unwrap();
+    assert!(dir.join("Backups").join(before.id).join("Data/Game/Patches/Off/A.json").exists());
+}
+
+#[test]
 fn restore_backup_missing_errors() {
     let (_tmp, server_exe) = empty_server();
     let err = restore(&server_exe, "nonexistent").unwrap_err();

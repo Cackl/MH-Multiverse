@@ -336,17 +336,24 @@ fn create_backup_inner(
     label: &str,
 ) -> Result<BackupManifest, String> {
     let now = Local::now();
-    let id = now.format("%Y%m%d-%H%M%S").to_string();
+    let stamp = now.format("%Y%m%d-%H%M%S").to_string();
     let created_at = now.to_rfc3339();
 
-    let backup_dir = server_dir.join("Backups").join(&id);
     std::fs::create_dir_all(server_dir.join("Backups"))
         .map_err(|e| format!("Cannot create backup directory: {e}"))?;
     // Not create_dir_all: a failed backup removes its folder, which must never be another backup's.
-    std::fs::create_dir(&backup_dir).map_err(|e| match e.kind() {
-        std::io::ErrorKind::AlreadyExists => format!("Backup {id} already exists. Try again in a moment."),
-        _ => format!("Cannot create backup directory: {e}"),
-    })?;
+    let (mut id, mut n) = (stamp.clone(), 1);
+    let backup_dir = loop {
+        let dir = server_dir.join("Backups").join(&id);
+        match std::fs::create_dir(&dir) {
+            Ok(()) => break dir,
+            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
+                id = format!("{stamp}-{n}");
+                n += 1;
+            }
+            Err(e) => return Err(format!("Cannot create backup directory: {e}")),
+        }
+    };
 
     // A backup without its manifest never shows in the list, so a failed one is removed.
     let result = (|| {
@@ -712,13 +719,15 @@ pub fn list_backups(server_exe: String) -> Result<Vec<BackupManifest>, String> {
 }
 
 #[tauri::command]
-pub async fn restore_backup(app: AppHandle, server_exe: String, backup_id: String) -> Result<(), String> {
+pub async fn restore_backup(app: AppHandle, server_exe: String, backup_id: String) -> Result<Vec<String>, String> {
     // A running server writes its players back over the restored files.
     ensure_server_stopped(&app, &server_exe)?;
     off_main(move || restore(&server_exe, &backup_id)).await
 }
 
-fn restore(server_exe: &str, backup_id: &str) -> Result<(), String> {
+/// Copies the backup's targets back, after backing up what they replace. Returns the names that
+/// copies switched the other way were moved aside to.
+fn restore(server_exe: &str, backup_id: &str) -> Result<Vec<String>, String> {
     let server_dir = server_dir_from_exe(server_exe)?;
     let backup_dir = server_dir.join("Backups").join(&backup_id);
 
@@ -731,13 +740,25 @@ fn restore(server_exe: &str, backup_id: &str) -> Result<(), String> {
     let manifest: BackupManifest = serde_json::from_str(&contents)
         .map_err(|e| format!("Cannot parse backup manifest: {e}"))?;
 
+    // So a restore can be undone, a partial one included.
+    let before = create_backup_inner(&server_dir, manifest.targets.clone(), "pre-restore")?;
+    let failed = |e: String| format!("{e}. The files from before the restore are in backup {}.", before.id);
+
     for target in &manifest.targets {
-        let src = backup_dir.join(target);
-        let dst = server_dir.join(target);
-        copy_path(&src, &dst)?;
+        copy_path(&backup_dir.join(target), &server_dir.join(target)).map_err(failed)?;
     }
 
-    Ok(())
+    // Copying merges, so a file switched the other way since the backup would now be in both
+    // places, and the next update would take that copy as the user's choice. Move it aside.
+    let mut moved = Vec::new();
+    for (_, _, other, _) in switchable_files(&backup_dir) {
+        let other_path = server_dir.join(&other);
+        if !backup_dir.join(&other).is_file() && other_path.is_file() {
+            let bak = crate::store::move_aside(&other_path).map_err(failed)?;
+            moved.push(crate::store::file_name_of(&bak));
+        }
+    }
+    Ok(moved)
 }
 
 #[tauri::command]
