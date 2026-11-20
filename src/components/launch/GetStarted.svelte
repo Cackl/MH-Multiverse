@@ -123,7 +123,8 @@
         {/if}
       </div>
       {#if missingData.length}
-        <button class="btn btn-sm btn-outline" on:click={copyGameData} disabled={!$appConfig.game_exe || copying}>
+        <button class="btn btn-sm btn-outline" on:click={copyGameData} disabled={!$appConfig.game_exe || copying || match === 'mismatch'}
+          use:tip={match === 'mismatch' ? "The client and server versions don't match" : ''}>
           {copying ? 'Copying...' : 'Copy from client'}
         </button>
       {/if}
