@@ -96,7 +96,7 @@
     setLevelPending = false
     await runCommand(`!account userlevel ${player.email} ${setLevelValue}`,
       { ok: 'Successfully set user level for account ', fail: 'Failed to set user level: ' },
-      `Set ${player.username} to ${userLevelLabel(setLevelValue)}`)
+      `Set ${player.username} to ${userLevelLabel(setLevelValue)}. It applies on their next login.`)
   }
 
   async function executeClientInfo() {
