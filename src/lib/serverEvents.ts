@@ -5,6 +5,7 @@ import {
   appendLog,
   appendLogBatch,
   apacheRunning,
+  apacheStartError,
   clearServerError,
   setServerError,
   serverRunning,
@@ -36,6 +37,7 @@ type BridgeState = {
   unlistenLog: UnlistenFn | null
   unlistenStarted: UnlistenFn | null
   unlistenStopped: UnlistenFn | null
+  unlistenApacheStopped: UnlistenFn | null
   unlistenOverlay: UnlistenFn | null
   unlistenOverlayPipe: UnlistenFn | null
 }
@@ -61,6 +63,7 @@ function getBridgeState(): BridgeState {
       unlistenLog: null,
       unlistenStarted: null,
       unlistenStopped: null,
+      unlistenApacheStopped: null,
       unlistenOverlay: null,
       unlistenOverlayPipe: null,
     }
@@ -172,6 +175,11 @@ export async function initServerEventBridge(): Promise<void> {
     } catch {
       apacheRunning.set(false)
     }
+  })
+
+  bridge.unlistenApacheStopped = await listen('apache-stopped', () => {
+    apacheRunning.set(false)
+    apacheStartError.set('Apache stopped unexpectedly. See the server log.')
   })
 
   bridge.unlistenOverlay = await listen<{ ok: boolean; message: string }>('overlay-inject', (event) => {

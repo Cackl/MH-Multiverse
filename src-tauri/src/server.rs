@@ -469,6 +469,12 @@ fn release_console_wait(state: &Mutex<ServerProcess>) {
     }
 }
 
+/// The port from httpd's "could not bind to address 0.0.0.0:80" line, or None for other lines.
+fn apache_port_in_use(line: &str) -> Option<&str> {
+    let addr = line.split("could not bind to address ").nth(1)?;
+    addr.trim().rsplit(':').next()
+}
+
 /// How long Stop waits for the server to exit before it kills the process.
 const STOP_TIMEOUT_SECS: u64 = 60;
 
@@ -849,13 +855,71 @@ pub async fn start_apache(app: AppHandle, server_exe: String) -> Result<(), Stri
     cmd.current_dir(apache_working)
         .env("APACHE_SERVER_ROOT", root_dir.join("Apache24"))
         .stdout(Stdio::null())
-        .stderr(Stdio::null())
+        .stderr(Stdio::piped())
         .stdin(Stdio::null());
     #[cfg(target_os = "windows")]
     cmd.creation_flags(CREATE_NO_WINDOW);
-    let child = cmd
+    let mut child = cmd
         .spawn()
         .map_err(|e| format!("Failed to start Apache: {e}"))?;
+
+    // httpd reports startup errors, like a port already in use, on stderr.
+    if let Some(stderr) = child.stderr.take() {
+        let app_clone = app.clone();
+        std::thread::spawn(move || {
+            let mut port_in_use = false;
+            for line in BufReader::new(stderr).lines().map_while(Result::ok) {
+                let line = line.trim();
+                // httpd exits after a port error, and what it prints after it only says it gave up.
+                if line.is_empty() || port_in_use {
+                    continue;
+                }
+                let msg = match apache_port_in_use(line) {
+                    Some(port) => {
+                        port_in_use = true;
+                        format!("[MH Multiverse] Apache can't start. Port {port} is already in use.")
+                    }
+                    None => format!("[Apache] {line}"),
+                };
+                let _ = app_clone.emit("server-log", vec![LogLinePayload {
+                    time: log_timestamp(),
+                    level: "err".into(),
+                    msg,
+                }]);
+            }
+        });
+    }
+
+    // Watch for httpd exiting on its own. Stop takes the child first, so this only reports
+    // a failed start or a crash.
+    {
+        let state_arc = state.0.clone();
+        let app_clone = app.clone();
+        let pid = child.id();
+        std::thread::spawn(move || loop {
+            std::thread::sleep(std::time::Duration::from_millis(500));
+            let Ok(mut proc) = state_arc.lock() else { break };
+            let Some(apache) = proc.apache_child.as_mut().filter(|c| c.id() == pid) else { break };
+            match apache.try_wait() {
+                Ok(None) => {}
+                Ok(Some(status)) => {
+                    proc.apache_child = None;
+                    #[cfg(target_os = "windows")]
+                    { proc._apache_job = None; }
+                    drop(proc);
+                    let code = status.code().map_or("unknown".to_string(), |c| c.to_string());
+                    let _ = app_clone.emit("server-log", vec![LogLinePayload {
+                        time: log_timestamp(),
+                        level: "err".into(),
+                        msg: format!("[MH Multiverse] Apache stopped unexpectedly (code {code})"),
+                    }]);
+                    let _ = app_clone.emit("apache-stopped", ());
+                    break;
+                }
+                Err(_) => break,
+            }
+        });
+    }
 
     // Windows: put Apache in its own Job Object so it dies with this app.
     #[cfg(target_os = "windows")]
@@ -963,4 +1027,17 @@ pub fn get_players(app: AppHandle) -> Result<Vec<PlayerSession>, String> {
     });
 
     Ok(players)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::apache_port_in_use;
+
+    #[test]
+    fn apache_port_in_use_reads_the_port() {
+        let line = "(OS 10048)Only one usage of each socket address (protocol/network address/port) is normally permitted. : AH00072: make_sock: could not bind to address 0.0.0.0:80";
+        assert_eq!(apache_port_in_use(line), Some("80"));
+        assert_eq!(apache_port_in_use("[::]:8080 could not bind to address [::]:8080"), Some("8080"));
+        assert_eq!(apache_port_in_use("AH00451: no listening sockets available, shutting down"), None);
+    }
 }
