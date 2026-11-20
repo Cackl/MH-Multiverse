@@ -570,12 +570,14 @@ pub async fn start_server(
                 for line in reader.lines() {
                     match line {
                         Ok(raw) => {
-                            // After shutdown the server still waits on a console line before it
-                            // exits (ServerApp.cs), so give it one.
-                            if raw.contains("All services shut down") {
+                            // After shutdown, and after a Fatal error or crash, the server still
+                            // waits on a console line before it exits (ServerApp.cs), so give it one.
+                            // Every Fatal it logs is terminal, and an empty line does nothing otherwise.
+                            let parsed = parse_log_line(&raw);
+                            if parsed.level == "fatal" || raw.contains("All services shut down") {
                                 release_console_wait(&state_for_reader);
                             }
-                            let _ = tx.send(parse_log_line(&raw));
+                            let _ = tx.send(parsed);
 
                             if let Some(event) = parse_player_log_event(&raw) {
                                 handle_player_log_event(
