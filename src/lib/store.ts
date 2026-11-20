@@ -532,10 +532,21 @@ export async function setServerExe(path: string): Promise<void> {
   await updateConfigOptimistic(c => syncActiveLinked({ ...c, server_exe: path }), 'set_server_exe', { path })
 }
 
-/** Switching is refused while the server or the game runs. Throws the backend's message.
+// True while a nightly update runs. Set by OpsPanel and kept here so leaving the tab doesn't lose it.
+export const updateRunning = writable<boolean>(false)
+
+/** Why the active version can't change right now, or null when it can. */
+export const switchBlocked = derived([serverRunning, gameRunning, updateRunning], ([server, game, update]) =>
+  update ? 'Wait for the update to finish'
+  : server || game ? 'Stop the server and the game first'
+  : null)
+
+/** Switching is refused while the server, the game or an update runs. Throws the reason.
  *  Open editors hold the old version's data, so unsaved edits are confirmed first. */
 export async function activateLinked(id: string): Promise<void> {
   if (id === get(appConfig).active_linked_id) return
+  const blocked = get(switchBlocked)
+  if (blocked) throw blocked
   if (!(await confirmLeave())) return
   appConfig.set(await invoke<AppConfig>('activate_linked', { id }))
 }

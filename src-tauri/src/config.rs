@@ -413,6 +413,9 @@ fn delete_linked_in(config: &mut AppConfig, id: &str) -> Result<(), String> {
 }
 
 fn ensure_stopped(app: &tauri::AppHandle) -> Result<(), String> {
+    if crate::updater::update_running() {
+        return Err("Wait for the update to finish".into());
+    }
     if server::server_process_is_running(&app.state::<server::ServerState>())
         || crate::launcher::game_is_running(app.clone(), app.state())
     {

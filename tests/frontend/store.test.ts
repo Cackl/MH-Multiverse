@@ -27,6 +27,10 @@ import {
   setAdvancedData,
   setTextSize,
   activateLinked,
+  switchBlocked,
+  updateRunning,
+  serverRunning,
+  gameRunning,
   type AppConfig,
   type Server,
 } from '../../src/lib/store'
@@ -190,6 +194,26 @@ describe('unsaved-changes guard', () => {
     await leave
     expect(invokeMock).toHaveBeenCalledWith('activate_linked', { id: 'b' })
     expect(get(appConfig).active_linked_id).toBe('b')
+  })
+
+  it('a switch while the server, the game or an update runs is refused before asking', async () => {
+    invokeMock.mockReset()
+    appConfig.update(c => ({ ...c, active_linked_id: 'a' }))
+    setUnsaved('events', 'Events')
+    for (const [flag, reason] of [
+      [updateRunning, 'Wait for the update to finish'],
+      [serverRunning, 'Stop the server and the game first'],
+      [gameRunning, 'Stop the server and the game first'],
+    ] as const) {
+      flag.set(true)
+      expect(get(switchBlocked)).toBe(reason)
+      await expect(activateLinked('b')).rejects.toBe(reason)
+      expect(asked()).toBe(false)
+      flag.set(false)
+    }
+    expect(get(switchBlocked)).toBeNull()
+    expect(invokeMock).not.toHaveBeenCalled()
+    expect(get(unsavedSources)).toEqual({ events: 'Events' })
   })
 
   it('picking the active version again never asks', async () => {

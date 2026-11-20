@@ -1,6 +1,7 @@
 <script lang="ts">
   import { getCurrentWindow } from '@tauri-apps/api/window'
-  import { appConfig, activateLinked } from '../lib/store'
+  import { appConfig, activateLinked, switchBlocked } from '../lib/store'
+  import { tip } from '../lib/tooltip'
   import Dropdown from './Dropdown.svelte'
 
   const appWindow = getCurrentWindow()
@@ -37,9 +38,11 @@
   {#if $appConfig.linked.length}
     <div class="titlebar-version">
       {#if switchError}<span class="titlebar-error">{switchError}</span>{/if}
-      <Dropdown subtle label="Active version" value={$appConfig.active_linked_id}
-        options={$appConfig.linked.map(l => ({ value: l.id, label: l.name || 'Unnamed' }))}
-        onChange={switchTo} />
+      <span use:tip={$switchBlocked ?? ''}>
+        <Dropdown subtle label="Active version" value={$appConfig.active_linked_id}
+          options={$appConfig.linked.map(l => ({ value: l.id, label: l.name || 'Unnamed' }))}
+          disabled={!!$switchBlocked} onChange={switchTo} />
+      </span>
     </div>
   {/if}
   <div class="titlebar-controls">
