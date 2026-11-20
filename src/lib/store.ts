@@ -485,6 +485,8 @@ export const activeServerId = writable<string>('')
 
 // The Launch page's Get Started guide, opened by hand. Kept here so a remount on a new server exe keeps it open.
 export const guideRequested = writable<boolean>(false)
+// Get Started's game data copy. Kept here so closing and reopening the guide can't start a second copy.
+export const gameDataCopying = writable<boolean>(false)
 
 // -- Tauri invoke helpers --
 

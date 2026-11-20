@@ -2,7 +2,7 @@
   import {
     appConfig, serverRunning, apacheRunning, startingServer, startingApache,
     startServer, startApache, activeTab, settingsSection, launchOptionsReviewed,
-    jsonPersistence, refreshPersistence,
+    jsonPersistence, refreshPersistence, gameDataCopying,
   } from '../../lib/store'
   import { invoke } from '@tauri-apps/api/core'
   import { browseGameExe, browseServerExe } from '../../lib/browseExe'
@@ -37,24 +37,23 @@
   let serverExeError = ''
 
   let missingData: string[] = []
-  let copying = false
   let copyError = ''
   async function checkGameData(serverExe: string) {
     const missing = serverExe ? await invoke<string[]>('missing_game_data', { serverExe }).catch(() => []) : []
     if (serverExe === $appConfig.server_exe) missingData = missing
   }
-  $: checkGameData($appConfig.server_exe)
+  // Rechecked when a copy ends, which may be one started before this guide was reopened.
+  $: if (!$gameDataCopying) checkGameData($appConfig.server_exe)
 
   async function copyGameData() {
-    copying = true
+    gameDataCopying.set(true)
     copyError = ''
     try {
       await invoke('copy_game_data', { gameExe: $appConfig.game_exe, serverExe: $appConfig.server_exe })
     } catch (e) {
       copyError = String(e)
     }
-    copying = false
-    await checkGameData($appConfig.server_exe)
+    gameDataCopying.set(false)
   }
 
   function openLaunchOptions() {
@@ -123,9 +122,9 @@
         {/if}
       </div>
       {#if missingData.length}
-        <button class="btn btn-sm btn-outline" on:click={copyGameData} disabled={!$appConfig.game_exe || copying || match === 'mismatch'}
+        <button class="btn btn-sm btn-outline" on:click={copyGameData} disabled={!$appConfig.game_exe || $gameDataCopying || match === 'mismatch'}
           use:tip={match === 'mismatch' ? "The client and server versions don't match" : ''}>
-          {copying ? 'Copying...' : 'Copy from client'}
+          {$gameDataCopying ? 'Copying...' : 'Copy from client'}
         </button>
       {/if}
     </div>
