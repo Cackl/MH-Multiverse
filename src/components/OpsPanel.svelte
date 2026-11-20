@@ -1,9 +1,10 @@
 <script lang="ts">
-  import { onMount, onDestroy } from 'svelte'
+  import { onMount } from 'svelte'
   import { invoke } from '@tauri-apps/api/core'
   import { openPath, openUrl } from '@tauri-apps/plugin-opener'
-  import { listen, type UnlistenFn } from '@tauri-apps/api/event'
-  import { appConfig, serverRunning, setBackupTargets, updateRunning } from '../lib/store'
+  import {
+    appConfig, serverRunning, setBackupTargets, updateRunning, updateProgress, updateOutcome, runServerUpdate,
+  } from '../lib/store'
   import PanelSidebar from './PanelSidebar.svelte'
   import { tip } from '../lib/tooltip'
 
@@ -16,12 +17,6 @@
     installed_build_date?: string | null
     up_to_date?: boolean
     unavailable_reason?: string | null
-  }
-
-  interface UpdateProgress {
-    stage: 'backing_up' | 'downloading' | 'extracting' | 'installing' | 'restoring' | 'done'
-    pct: number
-    message?: string
   }
 
   interface BackupManifest {
@@ -72,14 +67,6 @@
   let updateInfo: UpdateInfo | null = null
   let checking = false
   let checkError = ''
-  let updating = false
-  let updateProgress: UpdateProgress | null = null
-  let updateError = ''
-  let updateSuccess = false
-  /** Stock files the update shipped switched the other way, kept as the user had them. */
-  let keptFiles: { file: string; enabled: boolean; kept_as: string }[] = []
-  /** Files saved in the app that the update replaced. Their edited copies are in the backup. */
-  let editedFiles: string[] = []
 
   // Backups
   let backups: BackupManifest[] = []
@@ -90,13 +77,13 @@
   let confirmingRestore: string | null = null
   let confirmingDelete: string | null = null
 
-  let unlistenProgress: UnlistenFn | null = null
-
   // ── Derived ────────────────────────────────────────────────────────────────
 
   $: hasServerExe = !!$appConfig.server_exe
   $: selectedTargets = new Set($appConfig.backup_targets)
   $: fullDataSelected = selectedTargets.has('Data')
+  $: updating = $updateRunning
+  $: outcome = $updateOutcome?.serverExe === $appConfig.server_exe ? $updateOutcome : null
 
   // ── Update ─────────────────────────────────────────────────────────────────
 
@@ -115,31 +102,18 @@
 
   async function runUpdate() {
     if (!hasServerExe || !updateInfo?.available || updateInfo.up_to_date || updating || $serverRunning) return
-    updating = true
-    updateRunning.set(true)
-    updateError = ''
-    updateSuccess = false
-    keptFiles = []
-    editedFiles = []
-    updateProgress = null
-    try {
-      const result = await invoke<{ kept: typeof keptFiles; edited: string[] }>('run_update', {
-        serverExe: $appConfig.server_exe,
-        backupTargets: [...selectedTargets],
-      })
-      keptFiles = result.kept
-      editedFiles = result.edited
-      updateSuccess = true
-      updateProgress = null
-      await loadBackups()
-      await checkForUpdate()
-    } catch (e) {
-      updateError = String(e)
-      updateProgress = null
-    } finally {
-      updating = false
-      updateRunning.set(false)
+    await runServerUpdate($appConfig.server_exe, [...selectedTargets])
+  }
+
+  // When an update ends, even one started before this panel opened. A failed install keeps its
+  // backup, so the list reloads either way.
+  let wasUpdating = $updateRunning
+  $: {
+    if (wasUpdating && !updating) {
+      loadBackups()
+      if (outcome && !outcome.error) checkForUpdate()
     }
+    wasUpdating = updating
   }
 
   // ── Backups ────────────────────────────────────────────────────────────────
@@ -273,17 +247,10 @@
   // ── Lifecycle ──────────────────────────────────────────────────────────────
 
   onMount(async () => {
-    unlistenProgress = await listen<UpdateProgress>('update-progress', e => {
-      updateProgress = e.payload
-    })
     if (hasServerExe) {
       await checkForUpdate()
       await loadBackups()
     }
-  })
-
-  onDestroy(() => {
-    if (unlistenProgress) unlistenProgress()
   })
 </script>
 
@@ -419,32 +386,32 @@
               Update Server
             {/if}
           </button>
-          {#if updating && ['downloading', 'extracting', 'backing_up'].includes(updateProgress?.stage ?? '')}
+          {#if updating && ['downloading', 'extracting', 'backing_up'].includes($updateProgress?.stage ?? '')}
             <button class="btn btn-sm btn-outline" on:click={() => invoke('cancel_update')}>Cancel Update</button>
           {/if}
           <button class="btn btn-sm btn-outline" on:click={() => openUrl('https://github.com/Crypto137/MHServerEmu')}>MHServerEmu GitHub</button>
         </div>
 
         <!-- Progress -->
-        {#if updating && updateProgress && updateProgress.stage !== 'done'}
+        {#if updating && $updateProgress && $updateProgress.stage !== 'done'}
           <div class="progress-wrap">
             <div class="progress-bar">
-              <div class="progress-fill" style="width: {updateProgress.pct}%"></div>
+              <div class="progress-fill" style="width: {$updateProgress.pct}%"></div>
             </div>
             <div class="progress-meta">
-              <span class="progress-stage">{STAGE_LABELS[updateProgress.stage] ?? updateProgress.stage}</span>
-              <span class="progress-pct">{Math.round(updateProgress.pct)}%</span>
+              <span class="progress-stage">{STAGE_LABELS[$updateProgress.stage] ?? $updateProgress.stage}</span>
+              <span class="progress-pct">{Math.round($updateProgress.pct)}%</span>
             </div>
           </div>
         {/if}
 
-        {#if updateSuccess}
+        {#if outcome && !outcome.error}
           <div class="feedback-ok">Update complete.</div>
-          {#if editedFiles.length}
-            <div class="kept-files">Replaced your edits to {editedFiles.join(', ')}. Your copies are in the Pre-update backup.</div>
+          {#if outcome.edited.length}
+            <div class="kept-files">Replaced your edits to {outcome.edited.join(', ')}. Your copies are in the Pre-update backup.</div>
           {/if}
           {#each [true, false] as on}
-            {@const group = keptFiles.filter(k => k.enabled === on)}
+            {@const group = outcome.kept.filter(k => k.enabled === on)}
             {#if group.length}
               <div class="kept-files" use:tip={'The update shipped these switched the other way'}>
                 {on ? 'Kept on' : 'Kept off'}: {group.map(k => k.file).join(', ')}
@@ -453,8 +420,8 @@
             {/if}
           {/each}
         {/if}
-        {#if updateError}
-          <div class="feedback-error">{updateError}</div>
+        {#if outcome?.error}
+          <div class="feedback-error">{outcome.error}</div>
         {/if}
 
         <div class="restart-notice">

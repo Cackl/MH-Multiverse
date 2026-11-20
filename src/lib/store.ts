@@ -1,5 +1,6 @@
 import { writable, derived, get } from 'svelte/store'
 import { invoke } from '@tauri-apps/api/core'
+import { listen } from '@tauri-apps/api/event'
 import { getCurrentWebview } from '@tauri-apps/api/webview'
 import { versionCaps } from './versionCaps'
 
@@ -609,8 +610,46 @@ export function setServerExe(path: string): Promise<string> {
   return saveExe('set_server_exe', path)
 }
 
-// True while a nightly update runs. Set by OpsPanel and kept here so leaving the tab doesn't lose it.
+// -- Nightly update (kept here so leaving the Ops tab doesn't lose it) --
+
+export interface UpdateProgress {
+  stage: 'backing_up' | 'downloading' | 'extracting' | 'installing' | 'restoring' | 'done'
+  pct: number
+  message?: string
+}
+
+export interface UpdateOutcome {
+  /** The server it ran against. The outcome only shows for that server. */
+  serverExe: string
+  error: string
+  /** Stock files the update shipped switched the other way, kept as the user had them. */
+  kept: { file: string; enabled: boolean; kept_as: string }[]
+  /** Files saved in the app that the update replaced. Their edited copies are in the backup. */
+  edited: string[]
+}
+
 export const updateRunning = writable<boolean>(false)
+export const updateProgress = writable<UpdateProgress | null>(null)
+export const updateOutcome = writable<UpdateOutcome | null>(null)
+
+/** Runs a nightly update on `serverExe`. Resolves once it ends, whatever the outcome. */
+export async function runServerUpdate(serverExe: string, backupTargets: string[]) {
+  if (get(updateRunning)) return
+  updateRunning.set(true)
+  updateOutcome.set(null)
+  updateProgress.set(null)
+  const unlisten = await listen<UpdateProgress>('update-progress', e => updateProgress.set(e.payload))
+  try {
+    const result = await invoke<{ kept: UpdateOutcome['kept']; edited: string[] }>('run_update', { serverExe, backupTargets })
+    updateOutcome.set({ serverExe, error: '', ...result })
+  } catch (e) {
+    updateOutcome.set({ serverExe, error: String(e), kept: [], edited: [] })
+  } finally {
+    unlisten()
+    updateProgress.set(null)
+    updateRunning.set(false)
+  }
+}
 
 let closing = false
 

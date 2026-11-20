@@ -36,6 +36,8 @@ import {
   activateLinked,
   switchBlocked,
   updateRunning,
+  updateOutcome,
+  runServerUpdate,
   serverRunning,
   eventsRestartPending,
   markEventsSaved,
@@ -370,5 +372,18 @@ describe('eventsRestartPending', () => {
     expect(get(eventsRestartPending)).toBe(true)
     serverRunning.set(true)
     expect(get(eventsRestartPending)).toBe(false)
+  })
+})
+
+describe('runServerUpdate', () => {
+  it('keeps the outcome with the server it ran against and clears the running flag', async () => {
+    invokeMock.mockResolvedValueOnce({ kept: [], edited: ['LiveTuningData.json'] })
+    await runServerUpdate('C:/a/MHServerEmu.exe', [])
+    expect(get(updateRunning)).toBe(false)
+    expect(get(updateOutcome)).toEqual({ serverExe: 'C:/a/MHServerEmu.exe', error: '', kept: [], edited: ['LiveTuningData.json'] })
+
+    invokeMock.mockRejectedValueOnce('Update cancelled.')
+    await runServerUpdate('C:/a/MHServerEmu.exe', [])
+    expect(get(updateOutcome)?.error).toBe('Update cancelled.')
   })
 })
