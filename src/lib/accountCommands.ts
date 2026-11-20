@@ -48,7 +48,7 @@ export function validatePassword(password: string): string {
 
 // Mirrors AccountManager.ValidateEmail: at most 320 characters, an "@", and a final "." after it
 // followed by at least two characters. The server lowercases before checking.
-function validateEmail(email: string): string {
+export function validateEmail(email: string): string {
   const unsafe = checkArg('Email', email)
   if (unsafe) return unsafe
   const at = email.indexOf('@')
@@ -61,7 +61,7 @@ function validateEmail(email: string): string {
 
 // PlayerNameValidator allows 1 to 16 letters or digits. The blocked-name list is checked
 // separately (blocked_player_names), since it lives in the server's Data folder.
-function validatePlayerName(name: string): string {
+export function validatePlayerName(name: string): string {
   if (!name) return 'Player name is required.'
   return /^[a-zA-Z0-9]{1,16}$/.test(name) ? '' : 'Player name must be 1 to 16 letters or numbers.'
 }

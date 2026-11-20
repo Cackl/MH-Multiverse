@@ -643,7 +643,19 @@ fn do_add(
     .map_err(|e| format!("Failed to insert account: {e}"))?;
 
     // Entity IDs begin one above the new account ID.
-    insert_player_data(conn, new_account_id, new_account_id + 1, data)
+    insert_player_data(conn, new_account_id, new_account_id + 1, data)?;
+
+    // Like the server's own importer: on first login the server clears the friend and ignore
+    // lists, whose ids point at the other server, then the flag. Schema 6 added the column.
+    let has_flags = conn
+        .query_row("SELECT COUNT(*) FROM pragma_table_info('Player') WHERE name = 'Flags'", [], |r| r.get::<_, i64>(0))
+        .map_err(|e| e.to_string())?
+        > 0;
+    if has_flags {
+        conn.execute("UPDATE Player SET Flags = Flags | 1 WHERE DbGuid = ?1", params![new_account_id])
+            .map_err(|e| format!("Failed to mark the player as imported: {e}"))?;
+    }
+    Ok(())
 }
 
 /// Overwrite an existing account's game data (Player, Avatar, TeamUp, Item,

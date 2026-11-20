@@ -55,7 +55,7 @@ export const CONFIG_SCHEMA: NavSection[] = [
         title: 'Web frontend',
         fields: [
           { key: 'Address',                section: 'WebFrontend', type: 'string', label: 'Address',            description: 'Address the web frontend listens on.' },
-          { key: 'Port',                   section: 'WebFrontend', type: 'number', label: 'Port',               description: 'Port for logins, the web API and the dashboard.', min: 1, max: 65535, int: true },
+          { key: 'Port',                   section: 'WebFrontend', type: 'number', label: 'Port',               description: 'Port for logins, the web API and the dashboard. The bundled Apache forwards logins to 8080, so change it in Apache24\\conf\\extra\\httpd-ssl.conf to match.', min: 1, max: 65535, int: true },
           { key: 'EnableWebApi',           section: 'WebFrontend', type: 'bool',   label: 'Web API',            description: 'Turns on the server\'s custom web API endpoints.' },
           { key: 'EnableDashboard',        section: 'WebFrontend', type: 'bool',   label: 'Dashboard',          description: 'Serves a server dashboard in the browser. Needs the web API.' },
         ],

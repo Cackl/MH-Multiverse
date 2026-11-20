@@ -152,6 +152,33 @@ fn import_add_creates_account() {
     assert_eq!(name, "ImportedPlayer");
 }
 
+fn player_flags(conn: &Connection, email: &str) -> i64 {
+    conn.query_row(
+        "SELECT p.Flags FROM Player p JOIN Account a ON a.Id = p.DbGuid WHERE a.Email = ?1",
+        [email],
+        |r| r.get(0),
+    )
+    .unwrap()
+}
+
+#[test]
+fn import_add_marks_the_player_imported_but_replace_does_not() {
+    let (_tmp, _server_exe, conn) = seeded_db();
+    let data = sample_data();
+    do_add_with_overrides(&conn, &no_overrides(), &data).unwrap();
+    assert_eq!(player_flags(&conn, "imported@test.local"), 1);
+
+    do_replace(&conn, 1, &data).unwrap();
+    assert_eq!(player_flags(&conn, "admin@test.local"), 0);
+}
+
+#[test]
+fn import_add_works_on_a_database_from_before_player_flags() {
+    let (_tmp, _server_exe, conn) = seeded_db();
+    conn.execute_batch("ALTER TABLE Player DROP COLUMN Flags").unwrap();
+    do_add_with_overrides(&conn, &no_overrides(), &sample_data()).unwrap();
+}
+
 #[test]
 fn import_add_remaps_ids() {
     let (_tmp, _server_exe, conn) = seeded_db();

@@ -5,7 +5,7 @@
   import {
     appConfig, activeServerId,
     selectServer, deleteServer, guideRequested,
-    gameRunning, overlayStatus, type OverlayStatus, activeTab, settingsSection,
+    gameRunning, overlayStatus, overlayInject, type OverlayStatus, activeTab, settingsSection,
     type Server
   } from '../../lib/store'
   import { tip } from '../../lib/tooltip'
@@ -59,10 +59,13 @@
 
   // Only check the overlay folder when injection is on (the indicator is the only consumer).
   // Reactive, not onMount: this panel mounts before loadConfig() resolves, so the config
-  // is still the empty default at mount time.
-  $: if ($appConfig.overlay?.auto_inject && !$overlayStatus) {
-    invoke<OverlayStatus>('overlay_status').then(s => overlayStatus.set(s)).catch(() => {})
+  // is still the empty default at mount time. Checked again before each launch, since the
+  // files can change at any time.
+  function refreshOverlay() {
+    return invoke<OverlayStatus>('overlay_status').then(s => overlayStatus.set(s)).catch(() => {})
   }
+  $: autoInject = !!$appConfig.overlay?.auto_inject
+  $: if (autoInject) refreshOverlay()
 
   // Read WebFrontend port for the localhost dashboard URL. Reactive for the same reason as above.
   async function readDashboardConfig(serverExe: string) {
@@ -101,8 +104,12 @@
     if (!activeServer) return
     launching = true
     launchError = ''
+    overlayInject.set(null)
+    if (autoInject) await refreshOverlay()
     try {
       await invoke('launch_game', { serverId: activeServer.id })
+      // Don't wait for the next poll to disable Launch.
+      gameRunning.set(true)
     } catch (e) {
       launchError = String(e)
     } finally {
@@ -252,6 +259,8 @@
       <div class="launch-bar">
         {#if launchError}
           <div class="launch-error">{launchError}</div>
+        {:else if $overlayInject && !$overlayInject.ok}
+          <div class="launch-error">{$overlayInject.message}</div>
         {/if}
         {#if !activeServer.is_local && !isLocalhost(activeServer.host)}
           <button class="btn btn-secondary" on:click={openHome}>Home</button>

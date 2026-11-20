@@ -123,6 +123,10 @@ fn use_steam(config: &crate::config::AppConfig) -> bool {
 
 #[tauri::command]
 pub fn launch_game(app: tauri::AppHandle, server_id: String) -> Result<(), String> {
+    // gameRunning is polled every few seconds, so a quick second click can get here.
+    if app.state::<LaunchedGame>().get().is_some_and(|g| g.is_running()) {
+        return Err("The game is already running.".into());
+    }
     let config = load_config(&app);
 
     let exe = config.game_exe.trim().to_string();
