@@ -491,13 +491,18 @@ fn restore_json_save(server_exe: &str, json_path: &str) -> Result<Option<String>
     let content = serde_json::to_string(&account).map_err(|e| e.to_string())?;
 
     let copy = if save.exists() { Some(copy_json_save(server_exe, &save)?) } else { None };
-    fs::write(&save, content).map_err(|e| format!("Failed to write the save: {e}"))?;
+    let copy_note = copy.as_ref().map(|c| format!(" The previous save is in Data\\{c}.")).unwrap_or_default();
 
+    // The ini first, so a failure there leaves the save untouched.
     let updates = HashMap::from([(
         "JsonDBManager".to_string(),
         HashMap::from([("PlayerName".to_string(), data.player_name)]),
     )]);
-    crate::ini::write_config(server_exe.to_string(), updates)?;
+    crate::ini::write_config(server_exe.to_string(), updates)
+        .map_err(|e| format!("Couldn't set the player name: {e}. The save wasn't changed.{copy_note}"))?;
+    // Atomic: a write cut off halfway would leave a save the server resets to a new account.
+    crate::store::write_atomic(&save, &content)
+        .map_err(|e| format!("The save wasn't written ({e}).{copy_note}"))?;
     Ok(copy)
 }
 

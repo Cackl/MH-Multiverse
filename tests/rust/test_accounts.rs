@@ -343,6 +343,20 @@ fn restore_json_writes_the_backup_as_admin_and_sets_the_player_name() {
 }
 
 #[test]
+fn restore_json_leaves_the_save_alone_when_the_ini_fails_and_names_the_copy() {
+    let (tmp, server_exe, backup_path, _) = json_server();
+    let save = tmp.path().join("Data/DefaultAccount.json");
+    fs::write(&save, "old save").unwrap();
+    // A folder where ConfigOverride.ini should be makes the ini write fail.
+    fs::create_dir(tmp.path().join("ConfigOverride.ini")).unwrap();
+
+    let err = restore_json_save(&server_exe, &backup_path).unwrap_err();
+    assert_eq!(fs::read_to_string(&save).unwrap(), "old save");
+    let copy = &multiverse_copies(&tmp)[0];
+    assert!(err.contains("wasn't changed") && err.contains(copy.as_str()), "{err}");
+}
+
+#[test]
 fn restore_json_honours_the_filename_override() {
     let (tmp, server_exe, backup_path, _) = json_server();
     fs::write(tmp.path().join("ConfigOverride.ini"), "[JsonDBManager]\nFileName=Mine.json\n").unwrap();
