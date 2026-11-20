@@ -113,6 +113,8 @@ fn create_job_object() -> Option<JobObject> {
 
 pub struct ServerProcess {
     pub child: Option<Child>,
+    /// A shutdown was already sent to `child`, so a second Stop doesn't send another.
+    stopping: bool,
     pub apache_child: Option<Child>,
     #[cfg(target_os = "windows")]
     _job: Option<JobObject>,
@@ -126,6 +128,7 @@ impl ServerProcess {
     pub fn empty() -> Self {
         Self {
             child: None,
+            stopping: false,
             apache_child: None,
             #[cfg(target_os = "windows")]
             _job: None,
@@ -703,6 +706,7 @@ pub async fn start_server(
     }
 
     proc.child = Some(child);
+    proc.stopping = false;
     #[cfg(target_os = "windows")]
     { proc._job = job; }
 
@@ -714,6 +718,25 @@ pub async fn start_server(
 
 #[tauri::command]
 pub async fn stop_server(app: AppHandle) -> Result<(), String> {
+    stop_gracefully(&app)
+}
+
+/// Asks the server to shut down, then waits for it to exit and stops the app.
+/// Shared by the window close (`exit_app`) and its no-reply fallback.
+pub fn exit_gracefully(app: &AppHandle) {
+    let state = app.state::<ServerState>();
+    if server_process_is_running(&state) && stop_gracefully(app).is_ok() {
+        // The stop timer force-closes it at STOP_TIMEOUT_SECS, so this ends.
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(STOP_TIMEOUT_SECS + 5);
+        while server_process_is_running(&state) && std::time::Instant::now() < deadline {
+            std::thread::sleep(std::time::Duration::from_millis(150));
+        }
+    }
+    crate::shutdown(app);
+}
+
+/// Sends "!server shutdown" once, and starts the force-close timer.
+fn stop_gracefully(app: &AppHandle) -> Result<(), String> {
     use std::io::Write;
 
     let state = app.state::<ServerState>();
@@ -723,12 +746,17 @@ pub async fn stop_server(app: AppHandle) -> Result<(), String> {
     // Send "!server shutdown" via stdin, holding the lock only briefly.
     let pid = {
         let mut proc = state_arc.lock().map_err(|e| e.to_string())?;
+        if proc.child.is_some() && proc.stopping {
+            return Ok(());
+        }
         let child = proc.child.as_mut().ok_or("Server is not running.")?;
         if let Some(ref mut stdin) = child.stdin {
             let _ = stdin.write_all(b"!server shutdown\n");
             let _ = stdin.flush();
         }
-        child.id()
+        let pid = child.id();
+        proc.stopping = true;
+        pid
     };
     // Lock released — returns to frontend immediately.
     // The watcher thread (spawned by start_server) will detect exit via

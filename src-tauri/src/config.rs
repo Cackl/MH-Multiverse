@@ -51,6 +51,9 @@ pub struct ShutdownConfig {
     pub delay_minutes: u32,
     #[serde(default = "default_shutdown_broadcast")]
     pub broadcast_message: String,
+    /// Closing the app asks first when the server is running. Off: it stops the server and closes.
+    #[serde(default)]
+    pub ask_before_close: bool,
 }
 
 impl Default for ShutdownConfig {
@@ -58,6 +61,7 @@ impl Default for ShutdownConfig {
         Self {
             delay_minutes: 0,
             broadcast_message: default_shutdown_broadcast(),
+            ask_before_close: false,
         }
     }
 }

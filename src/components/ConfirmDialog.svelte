@@ -29,9 +29,11 @@
         <button class="btn btn-sm btn-outline" bind:this={stayBtn} on:click={() => answer(false)}>
           {$confirmRequest.cancelLabel}
         </button>
-        <button class="btn btn-sm btn-red" on:click={() => answer(true)}>
-          {$confirmRequest.okLabel}
-        </button>
+        {#if $confirmRequest.okLabel}
+          <button class="btn btn-sm btn-red" on:click={() => answer(true)}>
+            {$confirmRequest.okLabel}
+          </button>
+        {/if}
       </div>
     </div>
   </div>
