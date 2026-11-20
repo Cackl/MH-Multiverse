@@ -6,7 +6,7 @@
   import { pickedValue } from '../../../lib/patchesMeta'
   import {
     RECIPES, PARENTS, ID_FIELDS, CHOICE_FIELDS, CHOICE_NOTES, FIXED_FIELDS, LOAD_INT,
-    parsePairs, pairsText, emptyKeys, withParent, pathHint, problems, entryJson, parseEntryJson,
+    parsePairs, pairsText, emptyKeys, withParent, pathHint, problems, entryJson, parseEntryJson, valueError,
     type Pair, type Recipe,
   } from '../../../lib/patchEntryEdit'
   import PrototypePicker from '../../PrototypePicker.svelte'
@@ -109,10 +109,9 @@
       const empty = emptyKeys(rows)
       return empty.length ? `Fill in ${empty.join(', ')}.` : ''
     }
-    if (!s.trim()) return ''
-    if (vt === 'Integer' && isNaN(parseInt(s, 10)))  return 'Expected integer.'
-    if (vt === 'Float'   && isNaN(parseFloat(s)))    return 'Expected number.'
-    if (COMPLEX.has(vt)) {
+    const err = valueError(vt, s)
+    if (err) return err
+    if (COMPLEX.has(vt) && s.trim()) {
       try { JSON.parse(s) } catch { return 'Invalid JSON.' }
     }
     return ''
