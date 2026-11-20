@@ -112,7 +112,7 @@
 
     {#if selectedPlayer !== null}
       <div class="blade-detail">
-        <PlayerCard player={selectedPlayer} compact={true} />
+        <PlayerCard player={selectedPlayer} compact={true} on:changed={loadPlayers} />
       </div>
     {/if}
 

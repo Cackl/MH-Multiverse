@@ -1016,9 +1016,20 @@ pub fn apache_is_running(app: AppHandle) -> bool {
 #[tauri::command]
 pub fn get_players(app: AppHandle) -> Result<Vec<PlayerSession>, String> {
     let state = app.state::<PlayerState>();
-    let sessions = state.0.lock().map_err(|e| e.to_string())?;
+    let mut players: Vec<PlayerSession> =
+        state.0.lock().map_err(|e| e.to_string())?.values().cloned().collect();
 
-    let mut players: Vec<PlayerSession> = sessions.values().cloned().collect();
+    // Re-read the account fields, so a ban, whitelist or level change since login shows.
+    let db = app.state::<DbPath>().0.lock().ok().and_then(|g| g.clone());
+    if let Some(db) = db {
+        for p in &mut players {
+            if let Some(a) = lookup_account(&db, &p.username) {
+                p.user_level = Some(a.user_level);
+                p.flags = Some(a.flags);
+            }
+        }
+    }
+
     players.sort_by(|a, b| {
         a.username
             .to_lowercase()

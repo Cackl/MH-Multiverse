@@ -1,6 +1,8 @@
 <script lang="ts">
+  import { createEventDispatcher } from 'svelte'
   import { invoke } from '@tauri-apps/api/core'
   import { tip } from '../../lib/tooltip'
+  import { sendAndWait } from '../../lib/accountCommands'
   import Dropdown from '../Dropdown.svelte'
   import {
     type PlayerSession,
@@ -13,6 +15,8 @@
 
   export let player: PlayerSession
   export let compact = false
+
+  const dispatch = createEventDispatcher<{ changed: void }>()
 
   // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -49,62 +53,69 @@
     feedbackTimer = setTimeout(() => (feedback = null), 4000)
   }
 
-  async function runCommand(cmd: string): Promise<boolean> {
+  // Sends a console command and shows the server's reply. A confirmed account change
+  // tells the blade to re-read the players, which re-reads their flags and level.
+  async function runCommand(cmd: string, reply: { ok: string; fail: string }, okMsg: string) {
     commandRunning = true
     try {
-      await invoke('send_command', { cmd })
-      return true
-    } catch (e) {
-      showFeedback(false, String(e))
-      return false
+      const r = await sendAndWait(cmd, reply)
+      if (r === null) showFeedback(false, 'No reply from the server. Check the console.')
+      else if ('sendError' in r) showFeedback(false, r.sendError)
+      else if (r.ok) { showFeedback(true, okMsg); dispatch('changed') }
+      else showFeedback(false, r.error)
     } finally {
       commandRunning = false
     }
   }
 
+  // Replies from the server's AccountCommands.cs and ClientCommands.cs.
+  const setFlag = (flag: string) => ({ ok: `Successfully set flag ${flag} `, fail: `Failed to set flag ${flag}: ` })
+  const clearFlag = (flag: string) => ({ ok: `Successfully cleared flag ${flag} `, fail: `Failed to clear flag ${flag}: ` })
+
   // ── Commands ──────────────────────────────────────────────────────────────
 
   async function executeKick() {
     confirmAction = null
-    const ok = await runCommand(`!client kick ${player.username}`)
-    if (ok) showFeedback(true, `Kicked ${player.username}`)
+    await runCommand(`!client kick ${player.username}`,
+      { ok: 'Kicked ', fail: `Player ${player.username} not found.` }, `Kicked ${player.username}`)
   }
 
   async function executeBan() {
     confirmAction = null
     if (!player.email) { showFeedback(false, 'No email on record, cannot ban this player'); return }
-    const ok = await runCommand(`!account ban ${player.email}`)
-    if (ok) showFeedback(true, `Banned ${player.username} (${player.email})`)
+    await runCommand(`!account ban ${player.email}`, setFlag('IsBanned'), `Banned ${player.username} (${player.email})`)
   }
 
   async function executeUnban() {
     if (!player.email) { showFeedback(false, 'No email on record, cannot unban this player'); return }
-    const ok = await runCommand(`!account unban ${player.email}`)
-    if (ok) showFeedback(true, `Unbanned ${player.username}`)
+    await runCommand(`!account unban ${player.email}`, clearFlag('IsBanned'), `Unbanned ${player.username}`)
   }
 
   async function executeSetLevel() {
     if (!player.email) { showFeedback(false, 'No email on record, cannot change user level'); return }
     setLevelPending = false
-    const ok = await runCommand(`!account userlevel ${player.email} ${setLevelValue}`)
-    if (ok) showFeedback(true, `Set ${player.username} to ${userLevelLabel(setLevelValue)}`)
+    await runCommand(`!account userlevel ${player.email} ${setLevelValue}`,
+      { ok: 'Successfully set user level for account ', fail: 'Failed to set user level: ' },
+      `Set ${player.username} to ${userLevelLabel(setLevelValue)}`)
   }
 
   async function executeClientInfo() {
-    const ok = await runCommand(`!client info ${player.session_id}`)
-    if (ok) showFeedback(true, `Info for ${player.username} sent to console`)
+    try {
+      await invoke('send_command', { cmd: `!client info ${player.session_id}` })
+      showFeedback(true, `Info for ${player.username} sent to console`)
+    } catch (e) {
+      showFeedback(false, String(e))
+    }
   }
 
   async function executeWhitelist() {
     if (!player.email) { showFeedback(false, 'No email on record'); return }
-    const ok = await runCommand(`!account whitelist ${player.email}`)
-    if (ok) showFeedback(true, `Whitelisted ${player.username}`)
+    await runCommand(`!account whitelist ${player.email}`, setFlag('IsWhitelisted'), `Whitelisted ${player.username}`)
   }
 
   async function executeUnwhitelist() {
     if (!player.email) { showFeedback(false, 'No email on record'); return }
-    const ok = await runCommand(`!account unwhitelist ${player.email}`)
-    if (ok) showFeedback(true, `Removed ${player.username} from whitelist`)
+    await runCommand(`!account unwhitelist ${player.email}`, clearFlag('IsWhitelisted'), `Removed ${player.username} from whitelist`)
   }
 </script>
 
@@ -210,11 +221,11 @@
     </div>
 
     <!-- Feedback -->
-    <!-- {#if feedback}
+    {#if feedback}
       <div class="feedback" class:feedback-ok={feedback.ok} class:feedback-err={!feedback.ok}>
         {feedback.msg}
       </div>
-    {/if} -->
+    {/if}
 
     <!-- Info -->
     <div class="info-section">
