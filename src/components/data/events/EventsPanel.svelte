@@ -152,8 +152,8 @@
 
   // ── Rule operations ──────────────────────────────────────────────────────────
 
-  async function saveRule(updated: ScheduleRule) {
-    if (!scheduleData) return
+  async function saveRule(updated: ScheduleRule): Promise<boolean> {
+    if (!scheduleData) return false
     saving  = true
     opError = ''
     try {
@@ -169,8 +169,10 @@
       creatingRule = false
       opSuccess    = 'Saved'
       setTimeout(() => opSuccess = '', 3000)
+      return true
     } catch (e) {
       opError = String(e)
+      return false
     } finally {
       saving = false
     }
@@ -202,8 +204,9 @@
 
   // ── Definition operations ────────────────────────────────────────────────────
 
-  async function saveDefinition(updated: EventDefinition) {
-    if (!eventsData) return
+  // The modal covers the page header, so a failed save returns its error for the modal to show.
+  async function saveDefinition(updated: EventDefinition): Promise<string> {
+    if (!eventsData) return 'Events are not loaded.'
     saving  = true
     opError = ''
     try {
@@ -219,8 +222,9 @@
       creatingDefinition = false
       opSuccess = 'Saved'
       setTimeout(() => opSuccess = '', 3000)
+      return ''
     } catch (e) {
-      opError = String(e)
+      return String(e)
     } finally {
       saving = false
     }
