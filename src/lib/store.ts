@@ -480,6 +480,14 @@ export async function loadConfig(): Promise<void> {
   } else if (config.servers.length > 0) {
     activeServerId.set(config.servers[0].id)
   }
+  // Not awaited, so callers don't wait on the dialog.
+  try {
+    Promise.resolve(invoke<string | null>('take_config_notice'))
+      .then(notice => {
+        if (notice) askConfirm({ title: "Settings file couldn't be read", message: notice, okLabel: 'OK', cancelLabel: 'Close' })
+      })
+      .catch(() => {})
+  } catch {}
 }
 
 export async function upsertServer(server: Server, password: string): Promise<void> {

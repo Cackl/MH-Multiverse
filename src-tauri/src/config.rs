@@ -299,15 +299,9 @@ pub fn load_config(app: &tauri::AppHandle) -> AppConfig {
         Ok(p) => p,
         Err(_) => return AppConfig::default(),
     };
-    let contents = match std::fs::read_to_string(&path) {
-        Ok(c) => c,
-        Err(_) => return AppConfig::default(),
-    };
-    let parsed: Option<AppConfig> = serde_json::from_str(&contents).ok();
-    backup_on_upgrade(&path, &contents, parsed.as_ref(), APP_VERSION);
-    let Some(mut config) = parsed else {
-        // Left as it is on disk, so the .bak and the original both hold what couldn't be read.
-        return AppConfig::default();
+    let Some(mut config) = read_config_file(&path, APP_VERSION) else {
+        // Stamped so the next load doesn't back these defaults up as another version's file.
+        return AppConfig { app_version: APP_VERSION.into(), ..AppConfig::default() };
     };
     let migrated = migrate_linked(&mut config, detect_version);
     let stamped = config.app_version != APP_VERSION;
@@ -320,13 +314,62 @@ pub fn load_config(app: &tauri::AppHandle) -> AppConfig {
 
 const APP_VERSION: &str = env!("CARGO_PKG_VERSION");
 
+/// Set while multiverse.json exists but couldn't be read or moved aside, so saves would replace it.
+static CONFIG_UNREADABLE: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+/// A message for the user about the last load, shown once by the frontend.
+static CONFIG_NOTICE: std::sync::Mutex<Option<String>> = std::sync::Mutex::new(None);
+const CONFIG_UNREADABLE_MSG: &str = "multiverse.json can't be read. Fix or remove it, then restart the app";
+
+/// Reads the config file. None means use defaults: there is no file, or it couldn't be read, in
+/// which case it is moved aside (or saves are blocked if that fails) and a notice is left.
+fn read_config_file(path: &std::path::Path, current: &str) -> Option<AppConfig> {
+    use std::sync::atomic::Ordering;
+    let parsed = match std::fs::read_to_string(path) {
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+            CONFIG_UNREADABLE.store(false, Ordering::SeqCst);
+            return None;
+        }
+        Err(_) => None,
+        Ok(contents) => serde_json::from_str::<AppConfig>(contents.trim_start_matches('\u{FEFF}'))
+            .ok()
+            .map(|c| (c, contents)),
+    };
+    let Some((config, contents)) = parsed else {
+        let notice = match crate::store::move_aside(path) {
+            Ok(kept) => {
+                CONFIG_UNREADABLE.store(false, Ordering::SeqCst);
+                format!(
+                    "multiverse.json couldn't be read, so the app started with default settings. It was kept as {}.",
+                    kept.display()
+                )
+            }
+            Err(_) => {
+                CONFIG_UNREADABLE.store(true, Ordering::SeqCst);
+                CONFIG_UNREADABLE_MSG.into()
+            }
+        };
+        if let Ok(mut n) = CONFIG_NOTICE.lock() {
+            *n = Some(notice);
+        }
+        return None;
+    };
+    CONFIG_UNREADABLE.store(false, Ordering::SeqCst);
+    backup_on_upgrade(path, &contents, &config, current);
+    Some(config)
+}
+
 /// Copies the config file to multiverse.json.bak when another app version last loaded it, which is
-/// before this one changes its shape, or when it can't be read. Returns true when it made one.
-fn backup_on_upgrade(path: &std::path::Path, contents: &str, parsed: Option<&AppConfig>, current: &str) -> bool {
-    if parsed.is_some_and(|c| c.app_version == current) {
+/// before this one changes its shape. Returns true when it made one.
+fn backup_on_upgrade(path: &std::path::Path, contents: &str, parsed: &AppConfig, current: &str) -> bool {
+    if parsed.app_version == current {
         return false;
     }
     std::fs::write(path.with_extension("json.bak"), contents).is_ok()
+}
+
+#[tauri::command]
+pub fn take_config_notice() -> Option<String> {
+    CONFIG_NOTICE.lock().ok()?.take()
 }
 
 // ── Linked installs ───────────────────────────────────────────────────────────
@@ -460,12 +503,13 @@ pub fn delete_linked(app: tauri::AppHandle, id: String) -> Result<AppConfig, Str
 }
 
 pub fn save_config(app: &tauri::AppHandle, config: &AppConfig) -> Result<(), String> {
+    if CONFIG_UNREADABLE.load(std::sync::atomic::Ordering::SeqCst) {
+        return Err(CONFIG_UNREADABLE_MSG.into());
+    }
     let path = config_path(app)?;
     let contents = serde_json::to_string_pretty(config)
         .map_err(|e| format!("Serialisation failed: {e}"))?;
-    std::fs::write(&path, contents)
-        .map_err(|e| format!("Write failed: {e}"))?;
-    Ok(())
+    crate::store::write_atomic(&path, &contents)
 }
 
 // ── Tauri commands ────────────────────────────────────────────────────────────

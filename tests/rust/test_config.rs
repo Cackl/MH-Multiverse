@@ -183,7 +183,7 @@ fn the_active_entry_cannot_be_removed() {
 }
 
 #[test]
-fn a_new_app_version_or_an_unreadable_file_backs_the_config_up_first() {
+fn a_new_app_version_backs_the_config_up_first() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("multiverse.json");
     let bak = dir.path().join("multiverse.json.bak");
@@ -191,16 +191,50 @@ fn a_new_app_version_or_an_unreadable_file_backs_the_config_up_first() {
 
     // Same version: no backup.
     let current = AppConfig { app_version: "1.7.0".into(), ..old.clone() };
-    assert!(!backup_on_upgrade(&path, "same", Some(&current), "1.7.0"));
+    assert!(!backup_on_upgrade(&path, "same", &current, "1.7.0"));
     assert!(!bak.exists());
 
     // A file from before the stamp existed, or from another version.
-    assert!(backup_on_upgrade(&path, CONFIG_1_6_1, Some(&old), "1.7.0"));
+    assert!(backup_on_upgrade(&path, CONFIG_1_6_1, &old, "1.7.0"));
     assert_eq!(std::fs::read_to_string(&bak).unwrap(), CONFIG_1_6_1);
+}
 
-    // A file that can't be read.
-    assert!(backup_on_upgrade(&path, "{ broken", None, "1.7.0"));
-    assert_eq!(std::fs::read_to_string(&bak).unwrap(), "{ broken");
+#[test]
+fn a_config_with_a_bom_loads_its_data() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("multiverse.json");
+    std::fs::write(&path, format!("\u{FEFF}{CONFIG_1_6_1}")).unwrap();
+    let expected: AppConfig = serde_json::from_str(CONFIG_1_6_1).unwrap();
+    let config = read_config_file(&path, "1.7.0").expect("parses");
+    assert_eq!(config.game_exe, expected.game_exe);
+    assert_eq!(config.server_exe, expected.server_exe);
+}
+
+#[test]
+fn an_unreadable_config_is_moved_aside_and_the_backup_kept() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("multiverse.json");
+    let bak = dir.path().join("multiverse.json.bak");
+    std::fs::write(&path, "{ broken").unwrap();
+    std::fs::write(&bak, CONFIG_1_6_1).unwrap();
+
+    assert!(read_config_file(&path, "1.7.0").is_none());
+    assert!(!path.exists());
+    let kept = crate::test_helpers::moved_aside(&path).expect("moved aside");
+    assert_eq!(std::fs::read_to_string(&kept).unwrap(), "{ broken");
+    assert_eq!(std::fs::read_to_string(&bak).unwrap(), CONFIG_1_6_1);
+    assert!(!CONFIG_UNREADABLE.load(std::sync::atomic::Ordering::SeqCst));
+    assert!(take_config_notice().unwrap().contains(&kept.display().to_string()));
+}
+
+#[test]
+fn a_current_config_makes_no_backup() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("multiverse.json");
+    let current = AppConfig { app_version: "1.7.0".into(), ..AppConfig::default() };
+    std::fs::write(&path, serde_json::to_string(&current).unwrap()).unwrap();
+    assert_eq!(read_config_file(&path, "1.7.0").unwrap().app_version, "1.7.0");
+    assert!(!dir.path().join("multiverse.json.bak").exists());
 }
 
 #[test]
