@@ -269,6 +269,8 @@ fn detect_source_dir(staging: &Path) -> Result<PathBuf, String> {
 pub struct KeptFile {
     pub file: String,
     pub enabled: bool,
+    /// The name the replaced copy was moved to, in the same folder.
+    pub kept_as: String,
 }
 
 /// Each `.json` file the update ships where the app can switch it: its name, where it ships, where
@@ -300,9 +302,9 @@ fn switchable_files(source: &Path) -> Vec<(String, String, String, bool)> {
 
 /// Puts back the user's on/off choice for stock files the update shipped in the other state.
 /// Only a switch moves a stock file out of the place it ships in, so when both copies exist, the
-/// other one is the user's choice. The update's copy replaces it and the replaced copy is kept as
-/// `.json.bak`. Where the backup was just restored, the restored copy stays and the update's copy
-/// is the one kept as `.json.bak`.
+/// other one is the user's choice. The update's copy replaces it and the replaced copy is moved
+/// aside to `<name>.<timestamp>.bak`. Where the backup was just restored, the restored copy stays
+/// and the update's copy is the one moved aside.
 fn keep_switched_files(server_dir: &Path, source: &Path, restored: &[String]) -> Result<Vec<KeptFile>, String> {
     let is_restored = |rel: &str| restored.iter().any(|t| rel == t || rel.starts_with(&format!("{t}/")));
     let rename = |from: &Path, to: &Path| {
@@ -314,13 +316,14 @@ fn keep_switched_files(server_dir: &Path, source: &Path, restored: &[String]) ->
         if !shipped_path.is_file() || !other_path.is_file() {
             continue;
         }
-        if is_restored(&other) {
-            rename(&shipped_path, &shipped_path.with_extension("json.bak"))?;
+        let bak = if is_restored(&other) {
+            crate::store::move_aside(&shipped_path)?
         } else {
-            rename(&other_path, &other_path.with_extension("json.bak"))?;
+            let bak = crate::store::move_aside(&other_path)?;
             rename(&shipped_path, &other_path)?;
-        }
-        kept.push(KeptFile { file: name, enabled: other_on });
+            bak
+        };
+        kept.push(KeptFile { file: name, enabled: other_on, kept_as: crate::store::file_name_of(&bak) });
     }
     Ok(kept)
 }

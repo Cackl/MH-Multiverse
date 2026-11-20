@@ -136,3 +136,16 @@ pub(crate) fn seed_account_db(path: &std::path::Path) {
     )
     .unwrap();
 }
+
+/// The copy `store::move_aside` made of `path`, if there is exactly one.
+pub(crate) fn moved_aside(path: &Path) -> Option<PathBuf> {
+    let prefix = format!("{}.", path.file_name()?.to_string_lossy());
+    let found: Vec<PathBuf> = std::fs::read_dir(path.parent()?).ok()?
+        .filter_map(|e| e.ok().map(|e| e.path()))
+        .filter(|p| {
+            let n = p.file_name().unwrap_or_default().to_string_lossy();
+            n.starts_with(&prefix) && n.ends_with(".bak") && *n != format!("{prefix}bak")
+        })
+        .collect();
+    (found.len() == 1).then(|| found[0].clone())
+}

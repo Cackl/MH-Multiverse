@@ -76,7 +76,7 @@
   let updateError = ''
   let updateSuccess = false
   /** Stock files the update shipped switched the other way, kept as the user had them. */
-  let keptFiles: { file: string; enabled: boolean }[] = []
+  let keptFiles: { file: string; enabled: boolean; kept_as: string }[] = []
 
   // Backups
   let backups: BackupManifest[] = []
@@ -119,7 +119,7 @@
     keptFiles = []
     updateProgress = null
     try {
-      keptFiles = await invoke<{ file: string; enabled: boolean }[]>('run_update', {
+      keptFiles = await invoke<typeof keptFiles>('run_update', {
         serverExe: $appConfig.server_exe,
         backupTargets: [...selectedTargets],
       })
@@ -427,11 +427,12 @@
         {#if updateSuccess}
           <div class="feedback-ok">Update complete.</div>
           {#each [true, false] as on}
-            {@const names = keptFiles.filter(k => k.enabled === on).map(k => k.file)}
-            {#if names.length}
-              <div class="kept-files" use:tip={'The update shipped these switched the other way. Each replaced copy is saved as .json.bak'}>
-                {on ? 'Kept on' : 'Kept off'}: {names.join(', ')}
+            {@const group = keptFiles.filter(k => k.enabled === on)}
+            {#if group.length}
+              <div class="kept-files" use:tip={'The update shipped these switched the other way'}>
+                {on ? 'Kept on' : 'Kept off'}: {group.map(k => k.file).join(', ')}
               </div>
+              <div class="kept-files">Replaced copies saved as {group.map(k => k.kept_as).join(', ')}</div>
             {/if}
           {/each}
         {/if}
@@ -967,6 +968,7 @@
   .kept-files {
     font-size: 11px;
     color: var(--text-2);
+    overflow-wrap: anywhere;
   }
 
   .restart-notice {

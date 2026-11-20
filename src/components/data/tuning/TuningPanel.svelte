@@ -13,6 +13,8 @@
 
   let files: TuningFileInfo[] = []
   let scanError = ''
+  /** Names the copy a switch moved aside when both OFF_ and plain copies existed. */
+  let keptNote = ''
   let scanning = false
 
   let editingFile: TuningFileInfo | null = null
@@ -98,11 +100,12 @@
     if (!file.toggleable || file.event_id) return
     const newEnabled = !file.enabled
     try {
-      await invoke('toggle_tuning_file', {
+      const keptAs = await invoke<string | null>('toggle_tuning_file', {
         serverExe: $appConfig.server_exe,
         relativePath: file.relative_path,
         enabled: newEnabled,
       })
+      keptNote = keptAs ? `The other copy was kept as ${keptAs}` : ''
       files = files.map(f =>
         f.relative_path === file.relative_path ? { ...f, enabled: newEnabled } : f
       )
@@ -197,6 +200,7 @@
 
     <!-- File list (unfiltered — full navigation list) -->
     <div class="file-list">
+      {#if keptNote}<div class="file-notice kept">{keptNote}</div>{/if}
       {#if !$appConfig.server_exe}
         <div class="file-notice">Set server exe in Settings to load Tuning files.</div>
       {:else if scanning}
@@ -376,6 +380,7 @@
     text-transform: uppercase;
     color: var(--text-2);
   }
+  .file-notice.kept { color: var(--text-2); text-transform: none; font-family: var(--font-body); letter-spacing: 0; overflow-wrap: anywhere; }
   .file-notice.error {
     color: var(--text-error);
     text-transform: none;

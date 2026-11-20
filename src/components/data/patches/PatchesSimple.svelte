@@ -23,6 +23,7 @@
   let loaded = false
   let loadError = ''
   let toggleError = ''
+  let keptNote = ''
   let folderError = ''
   let toggling: string | null = null
   let view: View = 'all'
@@ -191,12 +192,13 @@
     toggling = key
     toggleError = ''
     try {
-      const enabled = await invoke<boolean>('set_patch_file_enabled', {
+      const { enabled, kept_as } = await invoke<{ enabled: boolean; kept_as: string | null }>('set_patch_file_enabled', {
         serverExe,
         fileName: f.file_name,
         currentlyEnabled: f.enabled,
       })
-      // With a copy in both folders, the switched one replaced the other (kept as .json.bak).
+      keptNote = kept_as ? `The other copy was kept as ${kept_as}` : ''
+      // With a copy in both folders, the switched one replaced the other.
       files = files
         .filter(x => x.file_name !== f.file_name || keyOf(x) === key)
         .map(x => keyOf(x) === key ? { ...x, enabled } : x)
@@ -432,6 +434,7 @@
           {#if saveError}<span class="error">{saveError}</span>
           {:else if toggleError}<span class="error">{toggleError}</span>
           {:else if folderError}<span class="error">{folderError}</span>
+          {:else if keptNote}<span>{keptNote}</span>
           {:else if dirty}<span class="dirty-badge">{changeCount} unsaved change{changeCount === 1 ? '' : 's'}</span>
           {:else if pendingRestart}<span>{$serverRunning ? 'Takes effect after a server restart.' : 'Applies next time the server starts.'}</span>{/if}
         </div>

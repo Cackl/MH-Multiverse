@@ -394,12 +394,14 @@ pub fn create_tuning_file(
     Ok(())
 }
 
+/// Switches a root tuning file on or off. Returns the name the replaced copy was moved to, when
+/// both copies existed.
 #[tauri::command]
 pub fn toggle_tuning_file(
     server_exe: String,
     relative_path: String,
     enabled: bool,
-) -> Result<(), String> {
+) -> Result<Option<String>, String> {
     // Guard: subdirectory files cannot be toggled.
     if relative_path.contains('/') || relative_path.contains('\\') {
         return Err(format!(
@@ -420,12 +422,13 @@ pub fn toggle_tuning_file(
     let inactive_path = dir.join(format!("OFF_{relative_path}"));
 
     // Both copies exist when an older server update added one back. The copy being switched
-    // wins, and the one it replaces is kept as .json.bak (fs::rename would delete it).
-    if active_path.exists() && inactive_path.exists() {
+    // wins, and the one it replaces is moved aside (fs::rename would delete it).
+    let kept_as = if active_path.exists() && inactive_path.exists() {
         let replaced = if enabled { &active_path } else { &inactive_path };
-        std::fs::rename(replaced, replaced.with_extension("json.bak"))
-            .map_err(|e| format!("Cannot keep a copy of {}: {e}", replaced.display()))?;
-    }
+        Some(crate::store::file_name_of(&crate::store::move_aside(replaced)?))
+    } else {
+        None
+    };
 
     if enabled {
         if inactive_path.exists() {
@@ -445,7 +448,7 @@ pub fn toggle_tuning_file(
         // Already inactive — no-op.
     }
 
-    Ok(())
+    Ok(kept_as)
 }
 
 // ── Global settings across files (effective values) ──────────────────────────

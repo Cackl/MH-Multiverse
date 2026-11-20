@@ -56,7 +56,8 @@ fn toggle_moves_file() {
         true,
     )
     .unwrap();
-    assert!(!new_state);
+    assert!(!new_state.enabled);
+    assert_eq!(new_state.kept_as, None);
 
     let files = scan_patch_files(server_exe).unwrap();
     let f = files.iter().find(|f| f.file_name == "PatchDataBugFixes.json").unwrap();
@@ -72,7 +73,8 @@ fn toggle_with_both_copies_keeps_the_switched_one_and_backs_up_the_other() {
         let on_text = fs::read_to_string(&on).unwrap();
         fs::write(&off, "[\"off copy\"]").unwrap();
 
-        let now = set_patch_file_enabled(server_exe, "PatchDataBugFixes.json".to_string(), currently_enabled).unwrap();
+        let switch = set_patch_file_enabled(server_exe, "PatchDataBugFixes.json".to_string(), currently_enabled).unwrap();
+        let now = switch.enabled;
 
         let read = |p: &Path| fs::read_to_string(p).ok();
         let (kept, gone, kept_text, replaced_text) = if currently_enabled {
@@ -82,7 +84,10 @@ fn toggle_with_both_copies_keeps_the_switched_one_and_backs_up_the_other() {
         };
         assert_eq!(now, !currently_enabled);
         assert_eq!(read(kept).as_deref(), Some(kept_text), "was enabled={currently_enabled}");
-        assert_eq!(read(&kept.with_extension("json.bak")).as_deref(), Some(replaced_text), "was enabled={currently_enabled}");
+        let bak = crate::test_helpers::moved_aside(kept).expect("the replaced copy is moved aside");
+        assert_eq!(read(&bak).as_deref(), Some(replaced_text), "was enabled={currently_enabled}");
+        let folder = if currently_enabled { "Off/" } else { "" };
+        assert_eq!(switch.kept_as, Some(format!("{folder}{}", crate::store::file_name_of(&bak))));
         assert!(!gone.exists(), "was enabled={currently_enabled}");
     }
 }
@@ -96,7 +101,7 @@ fn toggle_of_a_missing_file_leaves_the_other_copy_alone() {
     // Asked to switch off a copy that isn't in Patches/: nothing may be moved aside.
     assert!(set_patch_file_enabled(server_exe, "PatchDataDisabled.json".to_string(), true).is_err());
     assert_eq!(fs::read_to_string(&off).unwrap(), off_text);
-    assert!(!off.with_extension("json.bak").exists());
+    assert!(crate::test_helpers::moved_aside(&off).is_none());
 }
 
 #[test]

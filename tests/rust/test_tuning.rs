@@ -201,13 +201,15 @@ fn toggle_with_both_copies_keeps_the_switched_one_and_backs_up_the_other() {
         let on_text = fs::read_to_string(&active).unwrap();
         fs::write(&off, "off copy").unwrap();
 
-        toggle_tuning_file(server_exe, "LiveTuningDataBugFixes.json".to_string(), enabled).unwrap();
+        let kept_as = toggle_tuning_file(server_exe, "LiveTuningDataBugFixes.json".to_string(), enabled).unwrap();
 
         let read = |p: &std::path::Path| fs::read_to_string(p).ok();
         let (kept, gone, kept_text, replaced_text) =
             if enabled { (&active, &off, "off copy", on_text.as_str()) } else { (&off, &active, on_text.as_str(), "off copy") };
         assert_eq!(read(kept).as_deref(), Some(kept_text), "enabled={enabled}");
-        assert_eq!(read(&kept.with_extension("json.bak")).as_deref(), Some(replaced_text), "enabled={enabled}");
+        let bak = crate::test_helpers::moved_aside(kept).expect("the replaced copy is moved aside");
+        assert_eq!(read(&bak).as_deref(), Some(replaced_text), "enabled={enabled}");
+        assert_eq!(kept_as, Some(crate::store::file_name_of(&bak)), "enabled={enabled}");
         assert!(!gone.exists(), "enabled={enabled}");
     }
 }

@@ -267,7 +267,7 @@ fn bundle_keeps_a_removed_event_file_as_bak() {
 
     save_event_bundle(server_exe.clone(), vec![], vec![], vec![], vec!["A".into()]).unwrap();
     assert!(!owned.join("LiveTuningDataA.json").exists());
-    assert!(owned.join("LiveTuningDataA.json.bak").exists());
+    assert!(crate::test_helpers::moved_aside(&owned.join("LiveTuningDataA.json")).is_some());
 
     let err = save_event_bundle(server_exe, vec![], vec![], vec![], vec!["../Events".into()]).unwrap_err();
     assert!(err.contains("Invalid event file name"), "{err}");

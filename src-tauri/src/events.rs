@@ -341,7 +341,7 @@ fn check_bundle(
 
 /// Saves custom events in one go: their tuning files first, then both override files, which
 /// must always be written together (a schedule naming an id missing from the events list loses
-/// that rule), then the files of deleted events, which are kept as `.json.bak`.
+/// that rule), then the files of deleted events, which are moved aside to `<name>.<timestamp>.bak`.
 #[tauri::command]
 pub fn save_event_bundle(
     server_exe: String,
@@ -368,8 +368,7 @@ pub fn save_event_bundle(
     for slug in removed_slugs {
         let path = owned_dir.join(format!("LiveTuningData{slug}.json"));
         if path.exists() {
-            std::fs::rename(&path, path.with_extension("json.bak"))
-                .map_err(|e| format!("Cannot remove {}: {e}", path.display()))?;
+            crate::store::move_aside(&path)?;
         }
     }
     Ok(())

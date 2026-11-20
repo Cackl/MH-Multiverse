@@ -449,3 +449,24 @@ fn apply_store_changes_refuses_bad_targets_and_negative_prices() {
         assert_eq!(fs::read_dir(&dir).unwrap().count(), 0, "{target} {price}");
     }
 }
+
+#[test]
+fn move_aside_never_overwrites_an_earlier_copy() {
+    let tmp = tempfile::tempdir().unwrap();
+    let path = tmp.path().join("X.json");
+
+    fs::write(&path, "first").unwrap();
+    let a = move_aside(&path).unwrap();
+    fs::write(&path, "second").unwrap();
+    let b = move_aside(&path).unwrap();
+    assert_ne!(a, b, "two moves in the same second get different names");
+    assert!(!path.exists());
+
+    // An ordinary save keeps its own single .bak and leaves both copies alone.
+    write_with_backup(&path, "third").unwrap();
+    write_with_backup(&path, "fourth").unwrap();
+    assert_eq!(fs::read_to_string(&a).unwrap(), "first");
+    assert_eq!(fs::read_to_string(&b).unwrap(), "second");
+    let name = file_name_of(&a);
+    assert!(name.starts_with("X.json.") && name.ends_with(".bak"), "{name}");
+}

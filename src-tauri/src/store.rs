@@ -320,6 +320,27 @@ pub(crate) fn write_with_backup(path: &Path, contents: &str) -> Result<(), Strin
     write_atomic(path, contents)
 }
 
+/// Moves a file that is being replaced to `<name>.<timestamp>.bak` and returns that path. Unlike
+/// the single `.bak` of `write_with_backup`, a later save never overwrites it. The app's scanners
+/// and the server only read names ending in `.json`, so the copy is ignored.
+pub(crate) fn move_aside(path: &Path) -> Result<std::path::PathBuf, String> {
+    let name = path.file_name().unwrap_or_default().to_string_lossy();
+    let stamp = chrono::Local::now().format("%Y%m%d-%H%M%S");
+    let mut bak = path.with_file_name(format!("{name}.{stamp}.bak"));
+    let mut n = 1;
+    while bak.exists() {
+        bak = path.with_file_name(format!("{name}.{stamp}-{n}.bak"));
+        n += 1;
+    }
+    fs::rename(path, &bak).map_err(|e| format!("Cannot keep a copy of {}: {e}", path.display()))?;
+    Ok(bak)
+}
+
+/// The file name of a path, for messages.
+pub(crate) fn file_name_of(path: &Path) -> String {
+    path.file_name().unwrap_or_default().to_string_lossy().into_owned()
+}
+
 // ── Display name resolution (internal) ───────────────────────────────────────
 
 /// Resolve a prototype runtime ID (as a decimal string) to its display name from the loaded

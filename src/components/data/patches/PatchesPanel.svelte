@@ -14,6 +14,8 @@
   let files: PatchFileInfo[] = []
   let scanning = false
   let scanError = ''
+  /** Names the copy a switch moved aside when both folders had the file. */
+  let keptNote = ''
   let openDirError = ''
 
   let selectedFile: PatchFileInfo | null = null
@@ -197,12 +199,13 @@
   async function toggleFileEnabled(f: PatchFileInfo) {
     togglingFile = f.file_name
     try {
-      const newEnabled = await invoke<boolean>('set_patch_file_enabled', {
+      const { enabled: newEnabled, kept_as } = await invoke<{ enabled: boolean; kept_as: string | null }>('set_patch_file_enabled', {
         serverExe:        $appConfig.server_exe,
         fileName:         f.file_name,
         currentlyEnabled: f.enabled,
       })
-      // With a copy in both folders, the switched one replaced the other (kept as .json.bak).
+      keptNote = kept_as ? `The other copy was kept as ${kept_as}` : ''
+      // With a copy in both folders, the switched one replaced the other.
       files = files
         .filter(x => x.file_name !== f.file_name || x.enabled === f.enabled)
         .map(x => x.file_name === f.file_name ? { ...x, enabled: newEnabled } : x)
@@ -316,6 +319,7 @@
 
       <!-- File list -->
       <div class="file-list">
+        {#if keptNote}<div class="file-notice kept">{keptNote}</div>{/if}
         {#if !$appConfig.server_exe}
           <div class="file-notice">Set server exe in Settings to load patch files.</div>
         {:else if scanning}
@@ -622,6 +626,7 @@
     color: var(--text-2);
   }
   .file-notice.error { color: var(--text-error); text-transform: none; font-family: var(--font-body); letter-spacing: 0; }
+  .file-notice.kept { color: var(--text-2); text-transform: none; font-family: var(--font-body); letter-spacing: 0; overflow-wrap: anywhere; }
 
   .file-list > .side-label:first-child { margin-top: 0; border-top: none; }
 
