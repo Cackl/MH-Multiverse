@@ -7,7 +7,7 @@
   import ConfigPanel from './components/ConfigPanel.svelte'
   import OpsPanel from './components/OpsPanel.svelte'
   import AppPanel from './components/settings/AppPanel.svelte'
-  import { activeTab, loadConfig, startGameRunningPoll, checkAppUpdate } from './lib/store'
+  import { activeTab, appConfig, loadConfig, startGameRunningPoll, checkAppUpdate } from './lib/store'
   import { initServerEventBridge } from './lib/serverEvents'
   import DataPanel from './components/data/DataPanel.svelte'
   import ConfirmDialog from './components/ConfirmDialog.svelte'
@@ -27,6 +27,8 @@
   <div class="main-area">
     <Rail />
     <div class="content">
+      <!-- A new server_exe remounts the tab, so no panel keeps the old version's data. -->
+      {#key $appConfig.server_exe}
       {#if $activeTab === 'launch'}
         <LaunchPanel />
       {:else if $activeTab === 'server'}
@@ -40,6 +42,7 @@
       {:else if $activeTab === 'settings'}
         <AppPanel />
       {/if}
+      {/key}
     </div>
   </div>
 </div>

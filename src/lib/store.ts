@@ -532,8 +532,11 @@ export async function setServerExe(path: string): Promise<void> {
   await updateConfigOptimistic(c => syncActiveLinked({ ...c, server_exe: path }), 'set_server_exe', { path })
 }
 
-/** Switching is refused while the server or the game runs. Throws the backend's message. */
+/** Switching is refused while the server or the game runs. Throws the backend's message.
+ *  Open editors hold the old version's data, so unsaved edits are confirmed first. */
 export async function activateLinked(id: string): Promise<void> {
+  if (id === get(appConfig).active_linked_id) return
+  if (!(await confirmLeave())) return
   appConfig.set(await invoke<AppConfig>('activate_linked', { id }))
 }
 

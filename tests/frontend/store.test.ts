@@ -26,6 +26,7 @@ import {
   upsertServer,
   setAdvancedData,
   setTextSize,
+  activateLinked,
   type AppConfig,
   type Server,
 } from '../../src/lib/store'
@@ -172,6 +173,32 @@ describe('unsaved-changes guard', () => {
     answerNext(false)
     await nav
     expect(get(activeDataTab)).toBe('events')
+  })
+
+  it('switching version with unsaved edits asks, and staying keeps the version', async () => {
+    invokeMock.mockReset().mockResolvedValue({ ...get(appConfig), active_linked_id: 'b' })
+    appConfig.update(c => ({ ...c, active_linked_id: 'a' }))
+    setUnsaved('events', 'Events')
+    const stay = activateLinked('b')
+    expect(answerNext(false)).toContain('Events')
+    await stay
+    expect(invokeMock).not.toHaveBeenCalled()
+    expect(get(appConfig).active_linked_id).toBe('a')
+
+    const leave = activateLinked('b')
+    answerNext(true)
+    await leave
+    expect(invokeMock).toHaveBeenCalledWith('activate_linked', { id: 'b' })
+    expect(get(appConfig).active_linked_id).toBe('b')
+  })
+
+  it('picking the active version again never asks', async () => {
+    invokeMock.mockReset()
+    appConfig.update(c => ({ ...c, active_linked_id: 'a' }))
+    setUnsaved('events', 'Events')
+    await activateLinked('a')
+    expect(asked()).toBe(false)
+    expect(invokeMock).not.toHaveBeenCalled()
   })
 })
 
