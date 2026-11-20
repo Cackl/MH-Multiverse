@@ -455,6 +455,18 @@ fn delete_linked_in(config: &mut AppConfig, id: &str) -> Result<(), String> {
     Ok(())
 }
 
+/// For changes the server reads: its exe and database path.
+fn ensure_server_stopped(app: &tauri::AppHandle) -> Result<(), String> {
+    if crate::updater::update_running() {
+        return Err("Wait for the update to finish".into());
+    }
+    if server::server_process_is_running(&app.state::<server::ServerState>()) {
+        return Err("Stop the server first".into());
+    }
+    Ok(())
+}
+
+/// For a version switch, which also changes the game exe.
 fn ensure_stopped(app: &tauri::AppHandle) -> Result<(), String> {
     if crate::updater::update_running() {
         return Err("Wait for the update to finish".into());
@@ -591,7 +603,7 @@ pub fn set_game_exe(app: tauri::AppHandle, path: String) -> Result<AppConfig, St
 
 #[tauri::command]
 pub fn set_server_exe(app: tauri::AppHandle, path: String) -> Result<AppConfig, String> {
-    ensure_stopped(&app)?;
+    ensure_server_stopped(&app)?;
     let mut config = load_config(&app);
     config.server_exe = path.clone();
     sync_active_linked(&mut config, detect_version);
