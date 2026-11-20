@@ -1,9 +1,10 @@
 <script lang="ts">
-  import { onMount, onDestroy } from 'svelte'
+  import { onMount } from 'svelte'
   import { invoke } from '@tauri-apps/api/core'
   import { openPath, openUrl } from '@tauri-apps/plugin-opener'
-  import { listen, type UnlistenFn } from '@tauri-apps/api/event'
-  import { appConfig, serverRunning, setBackupTargets, updateRunning } from '../lib/store'
+  import {
+    appConfig, serverRunning, setBackupTargets, updateRunning, updateProgress, updateOutcome, runServerUpdate,
+  } from '../lib/store'
   import PanelSidebar from './PanelSidebar.svelte'
   import { tip } from '../lib/tooltip'
 
@@ -18,18 +19,13 @@
     unavailable_reason?: string | null
   }
 
-  interface UpdateProgress {
-    stage: 'backing_up' | 'downloading' | 'extracting' | 'installing' | 'restoring' | 'done'
-    pct: number
-    message?: string
-  }
-
   interface BackupManifest {
     id: string
     created_at: string
     label: string
     targets: string[]
     size_bytes: number
+    replaced?: string[]
   }
 
   // ── Constants ──────────────────────────────────────────────────────────────
@@ -71,12 +67,6 @@
   let updateInfo: UpdateInfo | null = null
   let checking = false
   let checkError = ''
-  let updating = false
-  let updateProgress: UpdateProgress | null = null
-  let updateError = ''
-  let updateSuccess = false
-  /** Stock files the update shipped switched the other way, kept as the user had them. */
-  let keptFiles: { file: string; enabled: boolean; kept_as: string }[] = []
 
   // Backups
   let backups: BackupManifest[] = []
@@ -87,13 +77,13 @@
   let confirmingRestore: string | null = null
   let confirmingDelete: string | null = null
 
-  let unlistenProgress: UnlistenFn | null = null
-
   // ── Derived ────────────────────────────────────────────────────────────────
 
   $: hasServerExe = !!$appConfig.server_exe
   $: selectedTargets = new Set($appConfig.backup_targets)
   $: fullDataSelected = selectedTargets.has('Data')
+  $: updating = $updateRunning
+  $: outcome = $updateOutcome?.serverExe === $appConfig.server_exe ? $updateOutcome : null
 
   // ── Update ─────────────────────────────────────────────────────────────────
 
@@ -112,28 +102,18 @@
 
   async function runUpdate() {
     if (!hasServerExe || !updateInfo?.available || updateInfo.up_to_date || updating || $serverRunning) return
-    updating = true
-    updateRunning.set(true)
-    updateError = ''
-    updateSuccess = false
-    keptFiles = []
-    updateProgress = null
-    try {
-      keptFiles = await invoke<typeof keptFiles>('run_update', {
-        serverExe: $appConfig.server_exe,
-        backupTargets: [...selectedTargets],
-      })
-      updateSuccess = true
-      updateProgress = null
-      await loadBackups()
-      await checkForUpdate()
-    } catch (e) {
-      updateError = String(e)
-      updateProgress = null
-    } finally {
-      updating = false
-      updateRunning.set(false)
+    await runServerUpdate($appConfig.server_exe, [...selectedTargets])
+  }
+
+  // When an update ends, even one started before this panel opened. A failed install keeps its
+  // backup, so the list reloads either way.
+  let wasUpdating = $updateRunning
+  $: {
+    if (wasUpdating && !updating) {
+      loadBackups()
+      if (outcome && !outcome.error) checkForUpdate()
     }
+    wasUpdating = updating
   }
 
   // ── Backups ────────────────────────────────────────────────────────────────
@@ -180,12 +160,16 @@
     confirmingRestore = null
     backupError = ''
     try {
-      await invoke('restore_backup', { serverExe: $appConfig.server_exe, backupId: id })
-      backupSuccess = 'Backup restored.'
-      setTimeout(() => backupSuccess = '', 3000)
+      const moved = await invoke<string[]>('restore_backup', { serverExe: $appConfig.server_exe, backupId: id })
+      backupSuccess = moved.length
+        ? `Backup restored. Copies switched the other way saved as ${moved.join(', ')}`
+        : 'Backup restored.'
+      setTimeout(() => backupSuccess = '', moved.length ? 8000 : 3000)
     } catch (e) {
       backupError = String(e)
     }
+    // The restore backs up the files it replaces first, failed or not.
+    await loadBackups()
   }
 
   async function deleteBackup(id: string) {
@@ -263,17 +247,10 @@
   // ── Lifecycle ──────────────────────────────────────────────────────────────
 
   onMount(async () => {
-    unlistenProgress = await listen<UpdateProgress>('update-progress', e => {
-      updateProgress = e.payload
-    })
     if (hasServerExe) {
       await checkForUpdate()
       await loadBackups()
     }
-  })
-
-  onDestroy(() => {
-    if (unlistenProgress) unlistenProgress()
   })
 </script>
 
@@ -409,26 +386,32 @@
               Update Server
             {/if}
           </button>
+          {#if updating && ['downloading', 'extracting', 'backing_up'].includes($updateProgress?.stage ?? '')}
+            <button class="btn btn-sm btn-outline" on:click={() => invoke('cancel_update')}>Cancel Update</button>
+          {/if}
           <button class="btn btn-sm btn-outline" on:click={() => openUrl('https://github.com/Crypto137/MHServerEmu')}>MHServerEmu GitHub</button>
         </div>
 
         <!-- Progress -->
-        {#if updating && updateProgress && updateProgress.stage !== 'done'}
+        {#if updating && $updateProgress && $updateProgress.stage !== 'done'}
           <div class="progress-wrap">
             <div class="progress-bar">
-              <div class="progress-fill" style="width: {updateProgress.pct}%"></div>
+              <div class="progress-fill" style="width: {$updateProgress.pct}%"></div>
             </div>
             <div class="progress-meta">
-              <span class="progress-stage">{STAGE_LABELS[updateProgress.stage] ?? updateProgress.stage}</span>
-              <span class="progress-pct">{Math.round(updateProgress.pct)}%</span>
+              <span class="progress-stage">{STAGE_LABELS[$updateProgress.stage] ?? $updateProgress.stage}</span>
+              <span class="progress-pct">{Math.round($updateProgress.pct)}%</span>
             </div>
           </div>
         {/if}
 
-        {#if updateSuccess}
+        {#if outcome && !outcome.error}
           <div class="feedback-ok">Update complete.</div>
+          {#if outcome.edited.length}
+            <div class="kept-files">Replaced your edits to {outcome.edited.join(', ')}. Your copies are in the Pre-update backup.</div>
+          {/if}
           {#each [true, false] as on}
-            {@const group = keptFiles.filter(k => k.enabled === on)}
+            {@const group = outcome.kept.filter(k => k.enabled === on)}
             {#if group.length}
               <div class="kept-files" use:tip={'The update shipped these switched the other way'}>
                 {on ? 'Kept on' : 'Kept off'}: {group.map(k => k.file).join(', ')}
@@ -437,12 +420,12 @@
             {/if}
           {/each}
         {/if}
-        {#if updateError}
-          <div class="feedback-error">{updateError}</div>
+        {#if outcome?.error}
+          <div class="feedback-error">{outcome.error}</div>
         {/if}
 
         <div class="restart-notice">
-          <span>Before updating, a backup is automatically created with the Targets selected on the Backups page</span>
+          <span>Before installing, a backup is made of the Targets selected on the Backups page and of every file the update replaces. The Targets are put back afterwards</span>
           <span>Multiverse doesn't check the server's system requirements. If the server stops working after an update, see MHServerEmu's GitHub or Discord</span>
         </div>
 
@@ -456,7 +439,7 @@
           <button
             class="btn btn-sm btn-outline"
             on:click={createBackup}
-            disabled={creatingBackup || selectedTargets.size === 0}
+            disabled={creatingBackup || selectedTargets.size === 0 || $serverRunning}
           >
             {creatingBackup ? 'Creating...' : 'Create Backup'}
           </button>
@@ -546,6 +529,16 @@
             </button>
           </div>
 
+          {#if $serverRunning}
+            <div class="warning-notice">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;flex-shrink:0;">
+                <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+                <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+              </svg>
+              Stop the server to create or restore a backup.
+            </div>
+          {/if}
+
           {#if loadingBackups}
             <div class="empty-state"><span class="empty-state-label">Loading backups</span></div>
           {:else if backups.length === 0}
@@ -557,18 +550,18 @@
                   <div class="backup-meta">
                     <span class="backup-date">{formatDate(backup.created_at)}</span>
                     <span class="backup-label-badge" class:pre-update={backup.label === 'pre-update'}>
-                      {backup.label === 'pre-update' ? 'Pre-update' : 'Manual'}
+                      {backup.label === 'pre-update' ? 'Pre-update' : backup.label === 'pre-restore' ? 'Pre-restore' : 'Manual'}
                     </span>
                     <span class="backup-size">{formatBytes(backup.size_bytes)}</span>
                   </div>
                   <div class="backup-targets-line">
-                    {backup.targets.map(targetLabel).join(', ') || 'No files'}
+                    {[...backup.targets.map(targetLabel), ...(backup.replaced?.length ? [`${backup.replaced.length} files the update replaced`] : [])].join(', ') || 'No files'}
                   </div>
 
                   {#if confirmingRestore === backup.id}
                     <div class="confirm-row">
-                      <span class="confirm-text">This will overwrite current files.</span>
-                      <button class="btn btn-sm btn-accent" on:click={() => restoreBackup(backup.id)}>Confirm Restore</button>
+                      <span class="confirm-text">Current files are backed up first, then overwritten.</span>
+                      <button class="btn btn-sm btn-accent" on:click={() => restoreBackup(backup.id)} disabled={$serverRunning}>Confirm Restore</button>
                       <button class="btn btn-sm btn-outline" on:click={cancelConfirm}>Cancel</button>
                     </div>
                   {:else if confirmingDelete === backup.id}
@@ -579,7 +572,7 @@
                     </div>
                   {:else}
                     <div class="backup-row-actions">
-                      <button class="btn btn-sm btn-outline" on:click={() => restoreBackup(backup.id)}>Restore</button>
+                      <button class="btn btn-sm btn-outline" on:click={() => restoreBackup(backup.id)} disabled={$serverRunning}>Restore</button>
                       <button class="btn btn-sm btn-red" on:click={() => deleteBackup(backup.id)}>Delete</button>
                     </div>
                   {/if}

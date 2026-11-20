@@ -3,9 +3,8 @@ use crate::test_helpers::{empty_server, fixture_path, seed_account_db};
 use rusqlite::Connection;
 use std::fs;
 
-// import_account itself takes `tauri::State<ServerState>`, which can't be
-// constructed outside a running Tauri app — tauri::State's inner field is
-// private with no public constructor. So these tests call the same
+// import_account itself takes an `AppHandle`, which can't be
+// constructed outside a running Tauri app. So these tests call the same
 // do_add_with_overrides/do_replace functions import_account delegates to,
 // directly against a real seeded Account.db, bypassing only the
 // server-running guard (which has no DB-logic risk of its own).
@@ -344,6 +343,20 @@ fn restore_json_writes_the_backup_as_admin_and_sets_the_player_name() {
 }
 
 #[test]
+fn restore_json_leaves_the_save_alone_when_the_ini_fails_and_names_the_copy() {
+    let (tmp, server_exe, backup_path, _) = json_server();
+    let save = tmp.path().join("Data/DefaultAccount.json");
+    fs::write(&save, "old save").unwrap();
+    // A folder where ConfigOverride.ini should be makes the ini write fail.
+    fs::create_dir(tmp.path().join("ConfigOverride.ini")).unwrap();
+
+    let err = restore_json_save(&server_exe, &backup_path).unwrap_err();
+    assert_eq!(fs::read_to_string(&save).unwrap(), "old save");
+    let copy = &multiverse_copies(&tmp)[0];
+    assert!(err.contains("wasn't changed") && err.contains(copy.as_str()), "{err}");
+}
+
+#[test]
 fn restore_json_honours_the_filename_override() {
     let (tmp, server_exe, backup_path, _) = json_server();
     fs::write(tmp.path().join("ConfigOverride.ini"), "[JsonDBManager]\nFileName=Mine.json\n").unwrap();
@@ -353,9 +366,9 @@ fn restore_json_honours_the_filename_override() {
 }
 
 #[test]
-fn restore_json_copies_the_previous_save_and_keeps_max_backup_number_copies() {
+fn restore_json_copies_the_previous_save_and_keeps_the_oldest_and_max_backup_number_copies() {
     // (older copies already there, MaxBackupNumber, copies left afterwards)
-    let cases = [(0, None, 1), (6, None, 5), (3, Some("2"), 2), (2, Some("0"), 1), (2, Some("x"), 3)];
+    let cases = [(0, None, 1), (6, None, 6), (3, Some("2"), 3), (2, Some("0"), 2), (2, Some("x"), 3)];
     for (older, max, left) in cases {
         let (tmp, server_exe, backup_path, _) = json_server();
         let data = tmp.path().join("Data");
@@ -372,6 +385,9 @@ fn restore_json_copies_the_previous_save_and_keeps_max_backup_number_copies() {
         let copies = multiverse_copies(&tmp);
         assert_eq!(copies.len(), left, "{older} older, max {max:?}: {copies:?}");
         assert_eq!(copies.last(), Some(&copy), "the new copy must be kept");
+        if older > 0 {
+            assert_eq!(copies[0], "DefaultAccount.json.multiverse-20200101-000000.bak", "the oldest copy must be kept");
+        }
         assert_eq!(fs::read_to_string(data.join(&copy)).unwrap(), "old save");
         assert!(data.join("DefaultAccount.json.bak0").exists(), "server backups are not ours to prune");
     }

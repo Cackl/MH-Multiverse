@@ -164,6 +164,7 @@ pub fn run() {
             tuning::read_global_tuning,
             updater::check_update_available,
             updater::run_update,
+            updater::cancel_update,
             updater::create_backup,
             updater::list_backups,
             updater::restore_backup,

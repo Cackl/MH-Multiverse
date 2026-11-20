@@ -14,9 +14,7 @@ use regex::Regex;
 use rusqlite::{params, Connection, OpenFlags};
 use serde::{Deserialize, Serialize};
 use sha2::Sha512;
-use tauri::State;
-
-use crate::server::ServerState;
+use tauri::AppHandle;
 
 // ── JSON import types ──────────────────────────────────────────────────────
 
@@ -408,11 +406,10 @@ pub fn import_account(
     mode: String,
     target_id: Option<String>,
     overrides: Option<ImportOverrides>,
-    server_state: State<'_, ServerState>,
+    app: AppHandle,
 ) -> Result<(), String> {
-    // Guard: importing while the server is running risks DB lock contention.
-    // See the note at the top of this file for the required server.rs addition.
-    if crate::server::server_process_is_running(&server_state) {
+    // A running server holds the account in memory and writes it back over the import.
+    if crate::server::server_running(&app, &server_exe) {
         return Err("Stop the server before importing an account.".into());
     }
 
@@ -460,10 +457,10 @@ pub fn import_account(
 pub fn restore_json_account(
     server_exe: String,
     json_path: String,
-    server_state: State<'_, ServerState>,
+    app: AppHandle,
 ) -> Result<Option<String>, String> {
     // A running server rewrites the save from memory on every player save.
-    if crate::server::server_process_is_running(&server_state) {
+    if crate::server::server_running(&app, &server_exe) {
         return Err("Stop the server before restoring a backup.".into());
     }
     restore_json_save(&server_exe, &json_path)
@@ -494,18 +491,24 @@ fn restore_json_save(server_exe: &str, json_path: &str) -> Result<Option<String>
     let content = serde_json::to_string(&account).map_err(|e| e.to_string())?;
 
     let copy = if save.exists() { Some(copy_json_save(server_exe, &save)?) } else { None };
-    fs::write(&save, content).map_err(|e| format!("Failed to write the save: {e}"))?;
+    let copy_note = copy.as_ref().map(|c| format!(" The previous save is in Data\\{c}.")).unwrap_or_default();
 
+    // The ini first, so a failure there leaves the save untouched.
     let updates = HashMap::from([(
         "JsonDBManager".to_string(),
         HashMap::from([("PlayerName".to_string(), data.player_name)]),
     )]);
-    crate::ini::write_config(server_exe.to_string(), updates)?;
+    crate::ini::write_config(server_exe.to_string(), updates)
+        .map_err(|e| format!("Couldn't set the player name: {e}. The save wasn't changed.{copy_note}"))?;
+    // Atomic: a write cut off halfway would leave a save the server resets to a new account.
+    crate::store::write_atomic(&save, &content)
+        .map_err(|e| format!("The save wasn't written ({e}).{copy_note}"))?;
     Ok(copy)
 }
 
 /// Copy the current save to `<FileName>.multiverse-<timestamp>.bak`, then keep
-/// only the newest [JsonDBManager] MaxBackupNumber of those copies (at least one).
+/// the oldest copy and the newest [JsonDBManager] MaxBackupNumber (at least one).
+/// The oldest is the save from before the first restore.
 /// Separate from the server's own rotating backups, which would push this copy
 /// out after a few saves.
 fn copy_json_save(server_exe: &str, save: &Path) -> Result<String, String> {
@@ -534,8 +537,10 @@ fn copy_json_save(server_exe: &str, save: &Path) -> Result<String, String> {
         })
         .collect();
     copies.sort();
-    for old in &copies[..copies.len().saturating_sub(keep)] {
-        let _ = fs::remove_file(old);
+    if copies.len() > keep + 1 {
+        for old in &copies[1..copies.len() - keep] {
+            let _ = fs::remove_file(old);
+        }
     }
     Ok(name)
 }

@@ -11,10 +11,10 @@ fn create_backup_copies_targets() {
     fs::write(dir.join("Config.ini"), "[A]\nX=1\n").unwrap();
     fs::write(dir.join("Data/Game/LiveTuning/LiveTuningDataBugFixes.json"), "[]").unwrap();
 
-    let manifest = create_backup(
-        server_exe,
+    let manifest = backup(
+        &server_exe,
         vec!["Config.ini".to_string(), "Data/Game/LiveTuning".to_string()],
-        "pre-update".to_string(),
+        "pre-update",
     )
     .unwrap();
 
@@ -30,7 +30,7 @@ fn create_backup_writes_manifest() {
     let dir = crate::paths::server_dir(&server_exe).unwrap();
     fs::write(dir.join("Config.ini"), "[A]\nX=1\n").unwrap();
 
-    let manifest = create_backup(server_exe, vec!["Config.ini".to_string()], "pre-update".to_string()).unwrap();
+    let manifest = backup(&server_exe, vec!["Config.ini".to_string()], "pre-update").unwrap();
 
     let manifest_path = dir.join("Backups").join(&manifest.id).join("manifest.json");
     let reread: BackupManifest = serde_json::from_str(&fs::read_to_string(manifest_path).unwrap()).unwrap();
@@ -45,10 +45,10 @@ fn create_backup_skips_blacklisted() {
     fs::create_dir_all(dir.join("Data/Game")).unwrap();
     fs::write(dir.join("Data/Game/Calligraphy.sip"), "dummy-pak-bytes").unwrap();
 
-    let manifest = create_backup(
-        server_exe,
+    let manifest = backup(
+        &server_exe,
         vec!["Data/Game/Calligraphy.sip".to_string()],
-        "pre-update".to_string(),
+        "pre-update",
     )
     .unwrap();
 
@@ -60,22 +60,57 @@ fn create_backup_skips_blacklisted() {
 }
 
 #[test]
+fn a_failed_backup_leaves_no_folder() {
+    use std::os::windows::fs::OpenOptionsExt;
+    let (_tmp, server_exe) = empty_server();
+    let dir = crate::paths::server_dir(&server_exe).unwrap();
+    fs::write(dir.join("Config.ini"), "x").unwrap();
+    // No sharing, so the copy can't read it.
+    let _lock = fs::OpenOptions::new().read(true).share_mode(0).open(dir.join("Config.ini")).unwrap();
+
+    assert!(backup(&server_exe, vec!["Config.ini".to_string()], "manual").is_err());
+    assert_eq!(fs::read_dir(dir.join("Backups")).unwrap().count(), 0);
+}
+
+#[test]
 fn restore_backup_overwrites_files() {
     let (_tmp, server_exe) = empty_server();
     let dir = crate::paths::server_dir(&server_exe).unwrap();
     fs::write(dir.join("Config.ini"), "original").unwrap();
 
-    let manifest = create_backup(server_exe.clone(), vec!["Config.ini".to_string()], "pre-update".to_string()).unwrap();
+    let manifest = backup(&server_exe, vec!["Config.ini".to_string()], "pre-update").unwrap();
     fs::write(dir.join("Config.ini"), "modified").unwrap();
 
-    restore_backup(server_exe, manifest.id).unwrap();
+    restore(&server_exe, &manifest.id).unwrap();
     assert_eq!(fs::read_to_string(dir.join("Config.ini")).unwrap(), "original");
+}
+
+#[test]
+fn restore_backs_up_first_and_keeps_one_state_per_file() {
+    let (_tmp, server_exe) = empty_server();
+    let dir = crate::paths::server_dir(&server_exe).unwrap();
+    let patches = dir.join("Data/Game/Patches");
+    fs::create_dir_all(patches.join("Off")).unwrap();
+    fs::write(patches.join("A.json"), "backed up").unwrap();
+    let manifest = backup(&server_exe, vec!["Data/Game/Patches".to_string()], "manual").unwrap();
+
+    // Switched off after the backup
+    fs::rename(patches.join("A.json"), patches.join("Off/A.json")).unwrap();
+
+    let moved = restore(&server_exe, &manifest.id).unwrap();
+    assert_eq!(fs::read_to_string(patches.join("A.json")).unwrap(), "backed up");
+    assert!(!patches.join("Off/A.json").exists());
+    assert_eq!(moved.len(), 1);
+    assert!(patches.join("Off").join(&moved[0]).exists());
+
+    let before = list_backups(server_exe).unwrap().into_iter().find(|b| b.label == "pre-restore").unwrap();
+    assert!(dir.join("Backups").join(before.id).join("Data/Game/Patches/Off/A.json").exists());
 }
 
 #[test]
 fn restore_backup_missing_errors() {
     let (_tmp, server_exe) = empty_server();
-    let err = restore_backup(server_exe, "nonexistent".to_string()).unwrap_err();
+    let err = restore(&server_exe, "nonexistent").unwrap_err();
     assert!(err.contains("not found"));
 }
 
@@ -93,6 +128,8 @@ fn list_backups_sorted_newest_first() {
             label: "test".to_string(),
             targets: vec![],
             size_bytes: 0,
+            replaced: vec![],
+            update: None,
         };
         fs::write(backup_dir.join("manifest.json"), serde_json::to_string(&manifest).unwrap()).unwrap();
     }
@@ -108,19 +145,19 @@ fn delete_backup_removes_directory() {
     let (_tmp, server_exe) = empty_server();
     let dir = crate::paths::server_dir(&server_exe).unwrap();
     fs::write(dir.join("Config.ini"), "content").unwrap();
-    let manifest = create_backup(server_exe.clone(), vec!["Config.ini".to_string()], "pre-update".to_string()).unwrap();
+    let manifest = backup(&server_exe, vec!["Config.ini".to_string()], "pre-update").unwrap();
 
     let backup_dir = dir.join("Backups").join(&manifest.id);
     assert!(backup_dir.exists());
 
-    delete_backup(server_exe, manifest.id).unwrap();
+    remove_backup(&server_exe, &manifest.id).unwrap();
     assert!(!backup_dir.exists());
 }
 
 #[test]
 fn delete_backup_missing_errors() {
     let (_tmp, server_exe) = empty_server();
-    let err = delete_backup(server_exe, "nonexistent".to_string()).unwrap_err();
+    let err = remove_backup(&server_exe, "nonexistent").unwrap_err();
     assert!(err.contains("not found"));
 }
 
@@ -240,11 +277,58 @@ fn up_to_date_needs_an_installed_build_at_least_as_new() {
 }
 
 #[test]
+fn update_backs_up_the_files_it_replaces() {
+    let (_tmp, server_exe) = empty_server();
+    let server = crate::paths::server_dir(&server_exe).unwrap();
+    let source = tempfile::tempdir().unwrap();
+    let write = |root: &Path, rel: &str, text: &str| {
+        fs::create_dir_all(root.join(rel).parent().unwrap()).unwrap();
+        fs::write(root.join(rel), text).unwrap();
+    };
+    const EDITED: &str = "Data/Game/Patches/PatchDataBugFixes.json";
+    for (rel, shipped, installed) in [
+        ("MHServerEmu.Core.dll", "new", Some("old")),
+        ("Same.dll", "same", Some("same")),
+        ("New.dll", "new", None),
+        ("Data/Game/Calligraphy.sip", "new", Some("old")),
+        ("Config.ini", "new", Some("mine")),
+        (EDITED, "new", Some("mine")),
+    ] {
+        write(source.path(), rel, shipped);
+        if let Some(text) = installed {
+            write(&server, rel, text);
+        }
+    }
+    write(&server, &format!("{EDITED}.bak"), "older");
+
+    let replaced = changed_files(source.path(), &server).unwrap();
+    assert_eq!(replaced, ["Config.ini", EDITED, "MHServerEmu.Core.dll"]);
+
+    let manifest = create_backup_inner(&server, vec!["Config.ini".into()], replaced, None, "pre-update").unwrap();
+    let backup_dir = server.join("Backups").join(&manifest.id);
+    assert_eq!(fs::read_to_string(backup_dir.join(EDITED)).unwrap(), "mine");
+    assert_eq!(fs::read_to_string(backup_dir.join("MHServerEmu.Core.dll")).unwrap(), "old");
+    // Config.ini is a target, so the update puts it back and it isn't reported.
+    assert_eq!(edited_files(&server, &manifest), ["PatchDataBugFixes.json"]);
+
+    // A failed install puts the replaced files and the targets back, and names the backup.
+    write(&server, "MHServerEmu.Core.dll", "half-installed");
+    write(&server, "Config.ini", "shipped");
+    let error = roll_back(&server, &manifest, "Cannot copy X".into());
+    assert_eq!(fs::read_to_string(server.join("MHServerEmu.Core.dll")).unwrap(), "old");
+    assert_eq!(fs::read_to_string(server.join("Config.ini")).unwrap(), "mine");
+    assert!(error.contains("Cannot copy X") && error.contains(&manifest.id), "{error}");
+}
+
+#[test]
 fn only_one_update_can_run_at_a_time() {
     let first = UpdateLock::acquire().expect("lock is free");
     assert!(UpdateLock::acquire().is_none(), "a second run while the first holds the lock");
+    cancel_update();
+    assert!(check_cancelled().is_err());
     drop(first);
     assert!(UpdateLock::acquire().is_some(), "free again once the first run ends");
+    assert!(check_cancelled().is_ok(), "a new run starts uncancelled");
 }
 
 #[test]
