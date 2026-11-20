@@ -38,6 +38,8 @@
   // Hero path to the file whose Properties entry the server uses instead of the cooldown one.
   let shadowed: Record<string, string> = {}
   let tweakEntries: PatchEntry[] = []
+  /** EnablePatchManager in Config. Off, the server loads no patch file. */
+  let patchesOn = true
   let savedPct: number | null = null
   let draftPct: number | null = null
   let boxPct = COOLDOWN_DEFAULT
@@ -78,6 +80,7 @@
     loadError = ''
     try {
       files = await invoke<PatchFileInfo[]>('scan_patch_files', { serverExe: exe })
+      patchesOn = await invoke<boolean>('patch_manager_enabled', { serverExe: exe })
       await loadTweaks(exe)
       loaded = true
     } catch (e) {
@@ -464,6 +467,7 @@
           {:else if folderError}<span class="error">{folderError}</span>
           {:else if keptNote}<span>{keptNote}</span>
           {:else if dirty}<span class="dirty-badge">{changeCount} unsaved change{changeCount === 1 ? '' : 's'}</span>
+          {:else if !patchesOn}<span class="patches-off">Data patches is off in Config. The server loads none of these.</span>
           {:else if pendingRestart}<span>{$serverRunning ? 'Takes effect after a server restart.' : 'Applies next time the server starts.'}</span>{/if}
         </div>
         {#if avatars.length}
@@ -504,6 +508,7 @@
     overflow-y: auto;
     padding: 4px 20px 22px;
   }
+  .patches-off { font-size: 12px; color: var(--text-warning); }
   .shadow-warn { margin: 10px 0 0; font-size: 12px; color: var(--text-warning); }
   .patches-msg { font-size: 12px; color: var(--text-2); }
   .error { font-size: 12px; color: var(--text-error); }

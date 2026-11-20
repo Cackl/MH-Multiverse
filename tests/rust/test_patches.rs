@@ -320,3 +320,11 @@ fn scan_lists_files_in_server_load_order() {
     // The server's culture sort puts _ before letters. An ordinal sort would not.
     assert!(at("PatchData_X.json") < at("PatchDataBugFixes.json"), "{names:?}");
 }
+
+#[test]
+fn patch_manager_is_off_only_when_config_says_false() {
+    assert!(patch_manager_on("true"));
+    assert!(patch_manager_on(""));
+    assert!(!patch_manager_on("False"));
+    assert!(!patch_manager_on(" false "));
+}

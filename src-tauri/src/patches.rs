@@ -218,6 +218,17 @@ fn to_disk_all(entries: Vec<PatchEntry>) -> Result<Vec<DiskEntry>, String> {
 
 // ── Tauri commands ────────────────────────────────────────────────────────────
 
+/// `[GameData] EnablePatchManager`. Off, the server loads no patch file at all.
+#[tauri::command]
+pub fn patch_manager_enabled(server_exe: String) -> bool {
+    patch_manager_on(&crate::ini::read_merged_value(&server_exe, "GameData", "EnablePatchManager", "true"))
+}
+
+/// The server's default is on, so only a clear false turns it off.
+fn patch_manager_on(value: &str) -> bool {
+    !value.trim().eq_ignore_ascii_case("false")
+}
+
 /// Scan the Patches directory and return all PatchData*.json files.
 /// Files in Patches/ are enabled; files in Patches/Off/ are disabled.
 #[tauri::command]

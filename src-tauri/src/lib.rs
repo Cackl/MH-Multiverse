@@ -153,6 +153,7 @@ pub fn run() {
             store::save_thumbnail,
             store::apache_bundles_found,
             patches::scan_patch_files,
+            patches::patch_manager_enabled,
             patches::load_patch_file,
             patches::save_patch_file,
             patches::create_patch_file,
