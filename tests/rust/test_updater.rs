@@ -310,6 +310,14 @@ fn update_backs_up_the_files_it_replaces() {
     assert_eq!(fs::read_to_string(backup_dir.join("MHServerEmu.Core.dll")).unwrap(), "old");
     // Config.ini is a target, so the update puts it back and it isn't reported.
     assert_eq!(edited_files(&server, &manifest), ["PatchDataBugFixes.json"]);
+
+    // A failed install puts the replaced files and the targets back, and names the backup.
+    write(&server, "MHServerEmu.Core.dll", "half-installed");
+    write(&server, "Config.ini", "shipped");
+    let error = roll_back(&server, &manifest, "Cannot copy X".into());
+    assert_eq!(fs::read_to_string(server.join("MHServerEmu.Core.dll")).unwrap(), "old");
+    assert_eq!(fs::read_to_string(server.join("Config.ini")).unwrap(), "mine");
+    assert!(error.contains("Cannot copy X") && error.contains(&manifest.id), "{error}");
 }
 
 #[test]

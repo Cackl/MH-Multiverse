@@ -563,6 +563,10 @@ pub async fn start_server(
     if proc.child.is_some() {
         return Err("Server is already running.".into());
     }
+    // An install mid-way would fail on the dlls the server locks.
+    if crate::updater::update_running() {
+        return Err("Wait for the update to finish".into());
+    }
 
     if server_exe.trim().is_empty() {
         return Err("Server executable path is not set.".into());

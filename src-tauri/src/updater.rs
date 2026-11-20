@@ -597,9 +597,10 @@ async fn run_update_inner(
     {
         let staging = staging_dir.to_path_buf();
         let dst = server_dir.to_path_buf();
+        let m = manifest.clone();
         tokio::task::spawn_blocking(move || -> Result<(), String> {
             let source = detect_source_dir(&staging)?;
-            copy_dir_contents(&source, &dst)
+            copy_dir_contents(&source, &dst).map_err(|e| roll_back(&dst, &m, e))
         })
         .await
         .map_err(|e| format!("Install task failed: {e}"))??;
@@ -609,7 +610,8 @@ async fn run_update_inner(
     emit_progress(app, "restoring", 0.0, None);
     let backup_dir = server_dir.join("Backups").join(&manifest.id);
     for (i, target) in manifest.targets.iter().enumerate() {
-        copy_path(&backup_dir.join(target), &server_dir.join(target))?;
+        copy_path(&backup_dir.join(target), &server_dir.join(target))
+            .map_err(|e| format!("{e}. Restore the Pre-update backup {} to put your files back.", manifest.id))?;
         emit_progress(
             app,
             "restoring",
@@ -622,6 +624,24 @@ async fn run_update_inner(
         edited: edited_files(server_dir, &manifest),
         kept: keep_switched_files(server_dir, &detect_source_dir(staging_dir)?, &manifest.targets)?,
     })
+}
+
+/// After a failed install, copies the replaced files and then the targets back from the pre-update
+/// backup, carrying on past errors. Returns the install error with what happened to the rollback.
+/// ponytail: files new in the build and the blacklisted .sip files stay as the update left them.
+fn roll_back(server_dir: &Path, manifest: &BackupManifest, error: String) -> String {
+    let backup_dir = server_dir.join("Backups").join(&manifest.id);
+    let mut failed = None;
+    for rel in manifest.replaced.iter().chain(&manifest.targets) {
+        if let Err(e) = copy_path(&backup_dir.join(rel), &server_dir.join(rel)) {
+            failed.get_or_insert(e);
+        }
+    }
+    let id = &manifest.id;
+    match failed {
+        None => format!("Install failed: {error}. The replaced files were put back from the Pre-update backup {id}."),
+        Some(e) => format!("Install failed: {error}. Some files couldn't be put back ({e}). Copy them from Backups\\{id} in the server folder."),
+    }
 }
 
 /// Replaced files the app had saved over (`write_with_backup` leaves a `.json.bak` beside them),
