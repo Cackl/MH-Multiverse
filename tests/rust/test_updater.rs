@@ -11,10 +11,10 @@ fn create_backup_copies_targets() {
     fs::write(dir.join("Config.ini"), "[A]\nX=1\n").unwrap();
     fs::write(dir.join("Data/Game/LiveTuning/LiveTuningDataBugFixes.json"), "[]").unwrap();
 
-    let manifest = create_backup(
-        server_exe,
+    let manifest = backup(
+        &server_exe,
         vec!["Config.ini".to_string(), "Data/Game/LiveTuning".to_string()],
-        "pre-update".to_string(),
+        "pre-update",
     )
     .unwrap();
 
@@ -30,7 +30,7 @@ fn create_backup_writes_manifest() {
     let dir = crate::paths::server_dir(&server_exe).unwrap();
     fs::write(dir.join("Config.ini"), "[A]\nX=1\n").unwrap();
 
-    let manifest = create_backup(server_exe, vec!["Config.ini".to_string()], "pre-update".to_string()).unwrap();
+    let manifest = backup(&server_exe, vec!["Config.ini".to_string()], "pre-update").unwrap();
 
     let manifest_path = dir.join("Backups").join(&manifest.id).join("manifest.json");
     let reread: BackupManifest = serde_json::from_str(&fs::read_to_string(manifest_path).unwrap()).unwrap();
@@ -45,10 +45,10 @@ fn create_backup_skips_blacklisted() {
     fs::create_dir_all(dir.join("Data/Game")).unwrap();
     fs::write(dir.join("Data/Game/Calligraphy.sip"), "dummy-pak-bytes").unwrap();
 
-    let manifest = create_backup(
-        server_exe,
+    let manifest = backup(
+        &server_exe,
         vec!["Data/Game/Calligraphy.sip".to_string()],
-        "pre-update".to_string(),
+        "pre-update",
     )
     .unwrap();
 
@@ -65,17 +65,17 @@ fn restore_backup_overwrites_files() {
     let dir = crate::paths::server_dir(&server_exe).unwrap();
     fs::write(dir.join("Config.ini"), "original").unwrap();
 
-    let manifest = create_backup(server_exe.clone(), vec!["Config.ini".to_string()], "pre-update".to_string()).unwrap();
+    let manifest = backup(&server_exe, vec!["Config.ini".to_string()], "pre-update").unwrap();
     fs::write(dir.join("Config.ini"), "modified").unwrap();
 
-    restore_backup(server_exe, manifest.id).unwrap();
+    restore(&server_exe, &manifest.id).unwrap();
     assert_eq!(fs::read_to_string(dir.join("Config.ini")).unwrap(), "original");
 }
 
 #[test]
 fn restore_backup_missing_errors() {
     let (_tmp, server_exe) = empty_server();
-    let err = restore_backup(server_exe, "nonexistent".to_string()).unwrap_err();
+    let err = restore(&server_exe, "nonexistent").unwrap_err();
     assert!(err.contains("not found"));
 }
 
@@ -108,7 +108,7 @@ fn delete_backup_removes_directory() {
     let (_tmp, server_exe) = empty_server();
     let dir = crate::paths::server_dir(&server_exe).unwrap();
     fs::write(dir.join("Config.ini"), "content").unwrap();
-    let manifest = create_backup(server_exe.clone(), vec!["Config.ini".to_string()], "pre-update".to_string()).unwrap();
+    let manifest = backup(&server_exe, vec!["Config.ini".to_string()], "pre-update").unwrap();
 
     let backup_dir = dir.join("Backups").join(&manifest.id);
     assert!(backup_dir.exists());

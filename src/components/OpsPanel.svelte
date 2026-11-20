@@ -456,7 +456,7 @@
           <button
             class="btn btn-sm btn-outline"
             on:click={createBackup}
-            disabled={creatingBackup || selectedTargets.size === 0}
+            disabled={creatingBackup || selectedTargets.size === 0 || $serverRunning}
           >
             {creatingBackup ? 'Creating...' : 'Create Backup'}
           </button>
@@ -546,6 +546,16 @@
             </button>
           </div>
 
+          {#if $serverRunning}
+            <div class="warning-notice">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;flex-shrink:0;">
+                <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+                <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+              </svg>
+              Stop the server to create or restore a backup.
+            </div>
+          {/if}
+
           {#if loadingBackups}
             <div class="empty-state"><span class="empty-state-label">Loading backups</span></div>
           {:else if backups.length === 0}
@@ -568,7 +578,7 @@
                   {#if confirmingRestore === backup.id}
                     <div class="confirm-row">
                       <span class="confirm-text">This will overwrite current files.</span>
-                      <button class="btn btn-sm btn-accent" on:click={() => restoreBackup(backup.id)}>Confirm Restore</button>
+                      <button class="btn btn-sm btn-accent" on:click={() => restoreBackup(backup.id)} disabled={$serverRunning}>Confirm Restore</button>
                       <button class="btn btn-sm btn-outline" on:click={cancelConfirm}>Cancel</button>
                     </div>
                   {:else if confirmingDelete === backup.id}
@@ -579,7 +589,7 @@
                     </div>
                   {:else}
                     <div class="backup-row-actions">
-                      <button class="btn btn-sm btn-outline" on:click={() => restoreBackup(backup.id)}>Restore</button>
+                      <button class="btn btn-sm btn-outline" on:click={() => restoreBackup(backup.id)} disabled={$serverRunning}>Restore</button>
                       <button class="btn btn-sm btn-red" on:click={() => deleteBackup(backup.id)}>Delete</button>
                     </div>
                   {/if}

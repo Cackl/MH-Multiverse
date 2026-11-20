@@ -639,14 +639,27 @@ pub async fn run_update(
     result
 }
 
+fn ensure_server_stopped(app: &AppHandle, server_exe: &str) -> Result<(), String> {
+    if crate::server::server_running(app, server_exe) {
+        return Err("Stop the server first".into());
+    }
+    Ok(())
+}
+
 #[tauri::command]
 pub fn create_backup(
+    app: AppHandle,
     server_exe: String,
     targets: Vec<String>,
     label: String,
 ) -> Result<BackupManifest, String> {
-    let server_dir = server_dir_from_exe(&server_exe)?;
-    create_backup_inner(&server_dir, targets, &label)
+    // A copy of Account.db taken mid-write is torn.
+    ensure_server_stopped(&app, &server_exe)?;
+    backup(&server_exe, targets, &label)
+}
+
+fn backup(server_exe: &str, targets: Vec<String>, label: &str) -> Result<BackupManifest, String> {
+    create_backup_inner(&server_dir_from_exe(server_exe)?, targets, label)
 }
 
 #[tauri::command]
@@ -687,8 +700,14 @@ pub fn list_backups(server_exe: String) -> Result<Vec<BackupManifest>, String> {
 }
 
 #[tauri::command]
-pub fn restore_backup(server_exe: String, backup_id: String) -> Result<(), String> {
-    let server_dir = server_dir_from_exe(&server_exe)?;
+pub fn restore_backup(app: AppHandle, server_exe: String, backup_id: String) -> Result<(), String> {
+    // A running server writes its players back over the restored files.
+    ensure_server_stopped(&app, &server_exe)?;
+    restore(&server_exe, &backup_id)
+}
+
+fn restore(server_exe: &str, backup_id: &str) -> Result<(), String> {
+    let server_dir = server_dir_from_exe(server_exe)?;
     let backup_dir = server_dir.join("Backups").join(&backup_id);
 
     if !backup_dir.exists() {
