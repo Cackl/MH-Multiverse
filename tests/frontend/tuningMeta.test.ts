@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { categoryForSetting, tuningEntriesChanged, blueprintHintForSetting, parseTuningValue, ruleDateError, newTuningFileName, tuningDisplayName, CATEGORY_PREFIXES,
   RATE_ROWS, SERVER_RATES_FILE, rateRows, formatRate, toShown, fromShown, resolveRate, planServerRatesWrite, reloadResult,
-  KNOWN_SETTINGS, knownSettingsFor, settingTip, tuningGroup, type GlobalTuning, type RateRow, type TuningEntry } from '../../src/lib/tuningMeta'
+  KNOWN_SETTINGS, knownSettingsFor, settingTip, tuningGroup, replaceRuleAt, type GlobalTuning, type RateRow, type TuningEntry } from '../../src/lib/tuningMeta'
 
 describe('tuningGroup', () => {
   const file = (canonical_name: string, toggleable = true, event_id: string | null = null) =>
@@ -340,5 +340,21 @@ describe('tuningEntriesChanged', () => {
     expect(tuningEntriesChanged([{ ...a, value: 2 }], [a])).toBe(true)
     expect(tuningEntriesChanged([a, b], [a])).toBe(true)
     expect(tuningEntriesChanged([], [a])).toBe(true)
+  })
+})
+
+describe('replaceRuleAt', () => {
+  const rule = (name: string) => ({ name, is_enabled: true, rule_type: 'Always', start_day_of_week: null, start_month: null, start_day: null, duration_days: null, events: [] })
+
+  it('replaces the rule at the index even when another rule has the same name', () => {
+    const rules = [rule('A'), rule('B'), rule('A')]
+    const out = replaceRuleAt(rules, 2, { ...rule('A'), is_enabled: false })
+    expect(out.map(r => r.is_enabled)).toEqual([true, true, false])
+    expect(rules[2].is_enabled).toBe(true)
+  })
+
+  it('throws for an index that is gone, so a save never writes the old rules back', () => {
+    expect(() => replaceRuleAt([rule('A')], -1, rule('B'))).toThrow()
+    expect(() => replaceRuleAt([rule('A')], 1, rule('B'))).toThrow()
   })
 })

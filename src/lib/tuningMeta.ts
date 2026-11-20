@@ -126,6 +126,15 @@ export interface ScheduleRule {
 }
 
 /**
+ * `rules` with the rule at `index` replaced. Rules have no id, so the editor keeps the index of the
+ * rule it opened. An index that no longer exists throws, so a save never writes the old rules back.
+ */
+export function replaceRuleAt(rules: ScheduleRule[], index: number, updated: ScheduleRule): ScheduleRule[] {
+  if (index < 0 || index >= rules.length) throw new Error('The rule being edited is no longer in the schedule. Reload and open it again.')
+  return rules.map((r, i) => i === index ? updated : r)
+}
+
+/**
  * Why a dated rule can't be saved, or '' if it can. The server builds a SpecialDate rule's
  * start with `new DateTime(year, month, day)` and no guard, so an impossible date (31 Apr,
  * or 29 Feb in a non-leap year) takes it down. Lunar dates are converted inside a try, so

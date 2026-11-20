@@ -7,6 +7,7 @@
   import { eventTimezoneOffset } from '../../../lib/store'
   import { serverNow, ruleIsValid, ruleActiveIds, activeEventIds as eventsActiveAt } from '../../../lib/eventSchedule'
   import type { TuningFileInfo, EventDefinition, EventsData, ScheduleRule, ScheduleData } from '../../../lib/tuningMeta'
+  import { replaceRuleAt } from '../../../lib/tuningMeta'
   import PanelSidebar from '../../PanelSidebar.svelte'
   import EventRuleEditorModal from './EventRuleEditorModal.svelte'
   import EventDefinitionEditorModal from './EventDefinitionEditorModal.svelte'
@@ -33,6 +34,8 @@
   let opSuccess = ''
 
   let selectedRule:       ScheduleRule | null  = null
+  /** Where the open rule sits in scheduleData.rules, which is the order saved to the file. */
+  let selectedIndex = -1
   let creatingRule        = false
   let editingDefinition:  EventDefinition | null = null
   let creatingDefinition  = false
@@ -127,6 +130,13 @@
     }
   }
 
+  // Reloading replaces every rule, so an open rule asks first and then closes: it can't be found again.
+  async function reload() {
+    if (!(await confirmLeave())) return
+    discardEditor()
+    await loadData()
+  }
+
   let openDirError = ''
 
   async function openLiveTuningDir() {
@@ -147,14 +157,14 @@
     saving  = true
     opError = ''
     try {
-      const newRules = creatingRule
-        ? [...rules, updated]
-        : rules.map(r => r === selectedRule ? updated : r)
+      const all = scheduleData.rules
+      const newRules = creatingRule ? [...all, updated] : replaceRuleAt(all, selectedIndex, updated)
       await invoke('save_schedule_override', {
         serverExe: $appConfig.server_exe,
         rules: newRules,
       })
       scheduleData = { rules: newRules, using_override: true }
+      if (creatingRule) selectedIndex = newRules.length - 1
       selectedRule = updated
       creatingRule = false
       opSuccess    = 'Saved'
@@ -176,6 +186,7 @@
   async function selectRule(rule: ScheduleRule) {
     if ((selectedRule === rule && !creatingRule) || !(await confirmLeave())) return
     selectedRule = rule
+    selectedIndex = scheduleData?.rules.indexOf(rule) ?? -1
     creatingRule = false
   }
 
@@ -185,6 +196,7 @@
 
   function discardEditor() {
     selectedRule = null
+    selectedIndex = -1
     creatingRule = false
   }
 
@@ -309,7 +321,7 @@
           aria-label="Reload events and schedule"
           use:tip={'Reload events and schedule'}
           disabled={loading}
-          on:click={loadData}
+          on:click={reload}
         >
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <polyline points="23 4 23 10 17 10"/>
