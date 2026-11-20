@@ -2,7 +2,7 @@
   import { invoke } from '@tauri-apps/api/core'
   import { open } from '@tauri-apps/plugin-dialog'
   import { appConfig, activeTab as appTab, serverRunning, upsertServer, jsonPersistence, refreshPersistence, type Server } from '../../lib/store'
-  import { syncAccount } from '../../lib/accountCommands'
+  import { syncAccount, validateEmail, validatePassword, validatePlayerName } from '../../lib/accountCommands'
   import { tip } from '../../lib/tooltip'
 
   export let server: Server | null = null
@@ -339,6 +339,16 @@
         await runJsonRestore(importFilePath, localProfile ? null : importServerName.trim())
         return
       }
+      // The server's own rules for a new account, as console create checks them.
+      const finalName = importPlayerName.trim() || importSummary.player_name
+      importEmailError = validateEmail(finalEmail)
+      importNameError = validatePlayerName(finalName)
+      importError = validatePassword(importPassword.trim())
+      if (!importNameError) {
+        const blocked = await invoke<string[]>('blocked_player_names', { serverExe: $appConfig.server_exe }).catch((): string[] => [])
+        if (blocked.includes(finalName.toLowerCase())) importNameError = "That player name isn't allowed on this server."
+      }
+      if (importEmailError || importNameError || importError) return
       await invoke('import_account', {
         serverExe: $appConfig.server_exe,
         jsonPath: importFilePath,
