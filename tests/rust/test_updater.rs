@@ -113,14 +113,14 @@ fn delete_backup_removes_directory() {
     let backup_dir = dir.join("Backups").join(&manifest.id);
     assert!(backup_dir.exists());
 
-    delete_backup(server_exe, manifest.id).unwrap();
+    remove_backup(&server_exe, &manifest.id).unwrap();
     assert!(!backup_dir.exists());
 }
 
 #[test]
 fn delete_backup_missing_errors() {
     let (_tmp, server_exe) = empty_server();
-    let err = delete_backup(server_exe, "nonexistent".to_string()).unwrap_err();
+    let err = remove_backup(&server_exe, "nonexistent").unwrap_err();
     assert!(err.contains("not found"));
 }
 

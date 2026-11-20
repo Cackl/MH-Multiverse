@@ -646,8 +646,13 @@ fn ensure_server_stopped(app: &AppHandle, server_exe: &str) -> Result<(), String
     Ok(())
 }
 
+/// Runs file copies off the main thread, so the window doesn't freeze while they run.
+async fn off_main<T: Send + 'static>(f: impl FnOnce() -> Result<T, String> + Send + 'static) -> Result<T, String> {
+    tauri::async_runtime::spawn_blocking(f).await.map_err(|e| e.to_string())?
+}
+
 #[tauri::command]
-pub fn create_backup(
+pub async fn create_backup(
     app: AppHandle,
     server_exe: String,
     targets: Vec<String>,
@@ -655,7 +660,7 @@ pub fn create_backup(
 ) -> Result<BackupManifest, String> {
     // A copy of Account.db taken mid-write is torn.
     ensure_server_stopped(&app, &server_exe)?;
-    backup(&server_exe, targets, &label)
+    off_main(move || backup(&server_exe, targets, &label)).await
 }
 
 fn backup(server_exe: &str, targets: Vec<String>, label: &str) -> Result<BackupManifest, String> {
@@ -700,10 +705,10 @@ pub fn list_backups(server_exe: String) -> Result<Vec<BackupManifest>, String> {
 }
 
 #[tauri::command]
-pub fn restore_backup(app: AppHandle, server_exe: String, backup_id: String) -> Result<(), String> {
+pub async fn restore_backup(app: AppHandle, server_exe: String, backup_id: String) -> Result<(), String> {
     // A running server writes its players back over the restored files.
     ensure_server_stopped(&app, &server_exe)?;
-    restore(&server_exe, &backup_id)
+    off_main(move || restore(&server_exe, &backup_id)).await
 }
 
 fn restore(server_exe: &str, backup_id: &str) -> Result<(), String> {
@@ -729,8 +734,12 @@ fn restore(server_exe: &str, backup_id: &str) -> Result<(), String> {
 }
 
 #[tauri::command]
-pub fn delete_backup(server_exe: String, backup_id: String) -> Result<(), String> {
-    let server_dir = server_dir_from_exe(&server_exe)?;
+pub async fn delete_backup(server_exe: String, backup_id: String) -> Result<(), String> {
+    off_main(move || remove_backup(&server_exe, &backup_id)).await
+}
+
+fn remove_backup(server_exe: &str, backup_id: &str) -> Result<(), String> {
+    let server_dir = server_dir_from_exe(server_exe)?;
     let backup_dir = server_dir.join("Backups").join(&backup_id);
 
     if !backup_dir.exists() {
