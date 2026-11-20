@@ -237,11 +237,12 @@ pub fn overlay_set_omega_gear(app: tauri::AppHandle, enabled: bool) -> Result<Ov
     if status_of(&config.overlay).state != "trusted" {
         return Err("Trust the overlay before changing Omega gear.".into());
     }
-    config.overlay.omega_gear = enabled;
-    save_config(&app, &config)?;
+    // The file first, so a failed write leaves the setting as it was.
     if let Some(path) = loot_config_path() {
         set_show_omega_at(&path, enabled)?;
     }
+    config.overlay.omega_gear = enabled;
+    save_config(&app, &config)?;
     Ok(status_of(&config.overlay))
 }
 
