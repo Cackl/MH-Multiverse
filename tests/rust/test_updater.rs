@@ -324,8 +324,11 @@ fn update_backs_up_the_files_it_replaces() {
 fn only_one_update_can_run_at_a_time() {
     let first = UpdateLock::acquire().expect("lock is free");
     assert!(UpdateLock::acquire().is_none(), "a second run while the first holds the lock");
+    cancel_update();
+    assert!(check_cancelled().is_err());
     drop(first);
     assert!(UpdateLock::acquire().is_some(), "free again once the first run ends");
+    assert!(check_cancelled().is_ok(), "a new run starts uncancelled");
 }
 
 #[test]

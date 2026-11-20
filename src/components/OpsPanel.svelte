@@ -419,6 +419,9 @@
               Update Server
             {/if}
           </button>
+          {#if updating && ['downloading', 'extracting', 'backing_up'].includes(updateProgress?.stage ?? '')}
+            <button class="btn btn-sm btn-outline" on:click={() => invoke('cancel_update')}>Cancel Update</button>
+          {/if}
           <button class="btn btn-sm btn-outline" on:click={() => openUrl('https://github.com/Crypto137/MHServerEmu')}>MHServerEmu GitHub</button>
         </div>
 

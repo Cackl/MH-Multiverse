@@ -116,26 +116,38 @@ fn build_download_url(flavour: &str, build_date: &str) -> String {
 fn client() -> Result<reqwest::Client, String> {
     reqwest::Client::builder()
         .user_agent(format!("mh-multiverse/{APP_VERSION}"))
+        .connect_timeout(std::time::Duration::from_secs(15))
+        .read_timeout(std::time::Duration::from_secs(30))
         .build()
         .map_err(|e| format!("Cannot create HTTP client: {e}"))
 }
 
-/// The newest nightly that exists, as (build date, download url).
-async fn newest_build(client: &reqwest::Client, flavour: &str) -> Option<(String, String)> {
+/// The newest nightly that exists, as (build date, download url). Err when the site can't be reached.
+async fn newest_build(client: &reqwest::Client, flavour: &str) -> Result<Option<(String, String)>, String> {
     for build_date in candidate_dates(Utc::now()) {
         let url = build_download_url(flavour, &build_date);
-        let exists = client
+        let status = client
             .get(&url)
             .header("Range", "bytes=0-0")
             .send()
             .await
-            .map(|r| r.status().is_success() || r.status().as_u16() == 206)
-            .unwrap_or(false);
-        if exists {
-            return Some((build_date, url));
+            .map_err(|e| format!("Couldn't reach nightly.link: {e}"))?
+            .status();
+        if status.is_success() {
+            return Ok(Some((build_date, url)));
         }
     }
-    None
+    Ok(None)
+}
+
+static CANCEL_REQUESTED: AtomicBool = AtomicBool::new(false);
+
+/// Err once Cancel was pressed. Checked until the install starts, never during it.
+fn check_cancelled() -> Result<(), String> {
+    if CANCEL_REQUESTED.load(Ordering::SeqCst) {
+        return Err("Update cancelled.".into());
+    }
+    Ok(())
 }
 
 /// The exe's ProductVersion string, e.g. "1.0.3+build20261027131155". The numeric file version
@@ -453,12 +465,7 @@ fn create_backup_inner(
 // ── Update internals ──────────────────────────────────────────────────────────
 
 async fn download_with_progress(app: &AppHandle, url: &str, dest: &Path) -> Result<(), String> {
-    let client = reqwest::Client::builder()
-        .user_agent(format!("mh-multiverse/{APP_VERSION}"))
-        .build()
-        .map_err(|e| format!("Cannot create HTTP client: {e}"))?;
-
-    let mut response = client.get(url).send().await
+    let mut response = client()?.get(url).send().await
         .map_err(|e| format!("Download request failed: {e}"))?;
 
     if !response.status().is_success() {
@@ -474,6 +481,7 @@ async fn download_with_progress(app: &AppHandle, url: &str, dest: &Path) -> Resu
     while let Some(chunk) = response.chunk().await
         .map_err(|e| format!("Download stream error: {e}"))?
     {
+        check_cancelled()?;
         downloaded += chunk.len() as u64;
 
         file.write_all(&chunk).await
@@ -551,7 +559,7 @@ async fn run_update_inner(
 
     let flavour = server_flavour(app, server_exe)?;
     let (build_date, url) = newest_build(&client()?, flavour)
-        .await
+        .await?
         .ok_or("No nightly build is available yet. Try again later.")?;
     if is_up_to_date(installed_build_date(server_exe).as_deref(), &build_date) {
         return Err(format!("This server already has the {build_date} build or a newer one."));
@@ -571,6 +579,7 @@ async fn run_update_inner(
             .await
             .map_err(|e| format!("Extraction task failed: {e}"))??;
     }
+    check_cancelled()?;
 
     // Pre-update backup: the chosen targets, and every file the install will replace. After the
     // download, so a failed download leaves nothing behind.
@@ -591,6 +600,10 @@ async fn run_update_inner(
         .await
         .map_err(|e| format!("Backup task failed: {e}"))??
     };
+    if let Err(e) = check_cancelled() {
+        let _ = std::fs::remove_dir_all(server_dir.join("Backups").join(&manifest.id));
+        return Err(e);
+    }
 
     // Copy staged files into server dir
     emit_progress(app, "installing", 0.0, None);
@@ -677,7 +690,7 @@ pub async fn check_update_available(app: AppHandle, server_exe: Option<String>) 
             })
         }
     };
-    Ok(match newest_build(&client()?, flavour).await {
+    Ok(match newest_build(&client()?, flavour).await? {
         Some((build_date, download_url)) => UpdateInfo {
             up_to_date: is_up_to_date(installed_build_date.as_deref(), &build_date),
             installed_build_date,
@@ -716,8 +729,17 @@ impl UpdateLock {
         UPDATE_RUNNING
             .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
             .ok()
-            .map(|_| Self)
+            .map(|_| {
+                CANCEL_REQUESTED.store(false, Ordering::SeqCst);
+                Self
+            })
     }
+}
+
+/// Stops the running update at its next check. The install itself can't be cancelled.
+#[tauri::command]
+pub fn cancel_update() {
+    CANCEL_REQUESTED.store(true, Ordering::SeqCst);
 }
 
 impl Drop for UpdateLock {
