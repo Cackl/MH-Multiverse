@@ -4,7 +4,7 @@
   import { openUrl } from '@tauri-apps/plugin-opener'
   import {
     appConfig, activeServerId,
-    selectServer, deleteServer,
+    selectServer, deleteServer, guideRequested,
     gameRunning, overlayStatus, type OverlayStatus, activeTab, settingsSection,
     type Server
   } from '../../lib/store'
@@ -17,8 +17,7 @@
   $: activeServer = $appConfig.servers.find(s => s.id === $activeServerId) ?? null
 
   // The guide shows on its own with no servers; the sidebar button brings it back afterwards.
-  let guideRequested = false
-  $: showGuide = $appConfig.servers.length === 0 || guideRequested
+  $: showGuide = $appConfig.servers.length === 0 || $guideRequested
 
   let showModal = false
   let editingServer: Server | null = null
@@ -54,7 +53,7 @@
 
   let serverError = ''
   async function pickServer(id: string) {
-    guideRequested = false
+    guideRequested.set(false)
     serverError = await selectServer(id)
   }
 
@@ -158,7 +157,7 @@
     <PanelSidebar width="var(--sidebar-wide)">
       <svelte:fragment slot="header">
         <div class="section-title">Servers</div>
-        <button class="btn-icon" aria-label="Get started guide" use:tip={'Get started guide'} on:click={() => guideRequested = !guideRequested} style="margin-left:auto;">
+        <button class="btn-icon" aria-label="Get started guide" use:tip={'Get started guide'} on:click={() => guideRequested.update(v => !v)} style="margin-left:auto;">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <circle cx="12" cy="12" r="10"/>
             <path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3"/>

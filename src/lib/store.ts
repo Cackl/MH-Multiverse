@@ -454,6 +454,9 @@ export const activeTheme = writable<string>('')
 
 export const activeServerId = writable<string>('')
 
+// The Launch page's Get Started guide, opened by hand. Kept here so a remount on a new server exe keeps it open.
+export const guideRequested = writable<boolean>(false)
+
 // -- Tauri invoke helpers --
 
 function applyTheme(theme: string) {
