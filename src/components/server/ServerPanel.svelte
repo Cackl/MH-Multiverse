@@ -25,6 +25,8 @@
     startingApache,
     startServer,
     startApache,
+    serverStopping,
+    stopServerNow,
   } from '../../lib/store'
   import { FALLBACK_COMMANDS, maskSecrets } from '../../lib/serverCommands'
   import PlayersBlade from './PlayersBlade.svelte'
@@ -35,14 +37,11 @@
   let playerCount = 0
 
   let command = ''
-  let stopping = false
   let stoppingApache = false
   let scrollLocked = false
   let logEl: HTMLDivElement
   let dashboardPort = DASHBOARD_PORT_DEFAULT
   let dashboardPath = '/Dashboard/'
-
-  $: if (!$serverRunning) stopping = false
 
   $: countdownLabel = (() => {
     if (!$shutdownCountdownActive) return ''
@@ -55,14 +54,7 @@
   async function initiateStop() {
     const delay = $appConfig.shutdown.delay_minutes
     if (!delay || delay <= 0) {
-      stopping = true
-      clearServerError()
-      try {
-        await invoke('stop_server')
-      } catch (e) {
-        setServerError(String(e))
-        stopping = false
-      }
+      await stopServerNow()
       return
     }
 
@@ -294,9 +286,9 @@
               {countdownLabel}
             </button>
           {:else}
-            <button class="btn btn-sm btn-red" on:click={initiateStop} disabled={stopping}>
+            <button class="btn btn-sm btn-red" on:click={initiateStop} disabled={$serverStopping}>
               <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" style="width:10px;height:10px;"><rect x="3" y="3" width="8" height="8" rx="1"/></svg>
-              {stopping ? 'Stopping...' : 'Server'}
+              {$serverStopping ? 'Stopping...' : 'Server'}
             </button>
           {/if}
         {:else}

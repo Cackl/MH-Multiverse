@@ -23,8 +23,9 @@ mod stock_patterns;
 
 pub use config::*;
 
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
-use tauri::{AppHandle, Manager};
+use tauri::{AppHandle, Emitter, Manager};
 use tauri_plugin_window_state::{AppHandleExt, StateFlags, WindowExt};
 use server::{ServerProcess, ServerState};
 
@@ -44,6 +45,41 @@ pub(crate) fn shutdown(app: &AppHandle) {
     }
     let _ = app.save_window_state(WINDOW_STATE_FLAGS);
     app.exit(0);
+}
+
+static CLOSE_REQUESTS: AtomicU64 = AtomicU64::new(0);
+static CLOSE_ACKED: AtomicU64 = AtomicU64::new(0);
+
+/// Hands the close to the window, which checks for unsaved edits and a running
+/// update, then calls `exit_app`. If the window doesn't answer within 3 s it is
+/// hung, so the server is stopped gracefully and the app exits from here.
+// ponytail: the fallback drops unsaved edits, the hung window couldn't save them anyway.
+fn request_close(app: &AppHandle) {
+    let id = CLOSE_REQUESTS.fetch_add(1, Ordering::SeqCst) + 1;
+    let _ = app.emit("close-requested", id);
+    let app = app.clone();
+    std::thread::spawn(move || {
+        std::thread::sleep(std::time::Duration::from_secs(3));
+        if CLOSE_ACKED.load(Ordering::SeqCst) < id && !updater::update_running() {
+            server::exit_gracefully(&app);
+        }
+    });
+}
+
+/// The window received close request `id`.
+#[tauri::command]
+fn close_ack(id: u64) {
+    CLOSE_ACKED.fetch_max(id, Ordering::SeqCst);
+}
+
+/// Stops the server gracefully, then exits. Called by the window once it agreed to close.
+#[tauri::command]
+fn exit_app(app: AppHandle) -> Result<(), String> {
+    if updater::update_running() {
+        return Err("Wait for the update to finish".into());
+    }
+    std::thread::spawn(move || server::exit_gracefully(&app));
+    Ok(())
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -76,11 +112,12 @@ pub fn run() {
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
                 api.prevent_close();
-                let app = window.app_handle().clone();
-                tauri::async_runtime::spawn(async move { shutdown(&app) });
+                request_close(window.app_handle());
             }
         })
         .invoke_handler(tauri::generate_handler![
+            close_ack,
+            exit_app,
             config::get_config,
             config::take_config_notice,
             config::cmd_save_config,

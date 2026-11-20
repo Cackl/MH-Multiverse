@@ -174,6 +174,21 @@ export function startGameRunningPoll() {
 
 export const shutdownCountdownSec = writable<number>(0)
 export const shutdownCountdownActive = writable<boolean>(false)
+// True from a Stop until the server exits. Lives here so a remount doesn't re-enable Stop.
+export const serverStopping = writable<boolean>(false)
+
+/** Asks the server to shut down now, once. */
+export async function stopServerNow() {
+  if (get(serverStopping)) return
+  serverStopping.set(true)
+  clearServerError()
+  try {
+    await invoke('stop_server')
+  } catch (e) {
+    setServerError(String(e))
+    serverStopping.set(false)
+  }
+}
 
 let _shutdownCountdownInterval: ReturnType<typeof setInterval> | null = null
 
@@ -187,7 +202,10 @@ export function clearShutdownCountdown() {
 // Auto-cancel if the server stops running for any other reason (crash, manual
 // stop elsewhere), even while ServerPanel isn't mounted to observe it itself.
 serverRunning.subscribe(running => {
-  if (!running) clearShutdownCountdown()
+  if (!running) {
+    clearShutdownCountdown()
+    serverStopping.set(false)
+  }
 })
 
 export function startShutdownCountdown(delayMinutes: number, broadcastMessage: string) {
@@ -209,12 +227,7 @@ export function startShutdownCountdown(delayMinutes: number, broadcastMessage: s
 
     if (remaining <= 0) {
       clearShutdownCountdown()
-      clearServerError()
-      try {
-        await invoke('stop_server')
-      } catch (e) {
-        setServerError(String(e))
-      }
+      await stopServerNow()
     }
   }, 1000)
 }
@@ -370,6 +383,7 @@ export interface LaunchOptions {
 export interface ShutdownConfig {
   delay_minutes: number
   broadcast_message: string
+  ask_before_close: boolean
 }
 
 export interface Server {
@@ -439,6 +453,7 @@ const defaultLaunchOptions: LaunchOptions = {
 const defaultShutdownConfig: ShutdownConfig = {
   delay_minutes: 0,
   broadcast_message: 'Server is shutting down in {minutes} minute(s).',
+  ask_before_close: false,
 }
 
 export const appConfig = writable<AppConfig>({
@@ -596,6 +611,39 @@ export function setServerExe(path: string): Promise<string> {
 
 // True while a nightly update runs. Set by OpsPanel and kept here so leaving the tab doesn't lose it.
 export const updateRunning = writable<boolean>(false)
+
+let closing = false
+
+/** Answers the window's close button: unsaved edits, a running update and the server come first. */
+export async function handleCloseRequest(id: number) {
+  invoke('close_ack', { id }).catch(() => {})
+  if (closing) return
+  closing = true
+  let exiting = false
+  try {
+    if (get(updateRunning)) {
+      await askConfirm({ title: 'Update running', message: 'Close MH Multiverse after the update finishes.', okLabel: '', cancelLabel: 'OK' })
+      return
+    }
+    if (!(await confirmLeave())) return
+    if (get(serverRunning) && get(appConfig).shutdown.ask_before_close) {
+      const ok = await askConfirm({
+        title: 'Stop the server?',
+        message: 'The server is running. Closing stops it and saves player progress first.',
+        okLabel: 'Stop and close',
+        cancelLabel: 'Cancel',
+      })
+      if (!ok) return
+    }
+    await invoke('exit_app')
+    exiting = true
+    if (get(serverRunning)) serverStopping.set(true)
+  } catch (e) {
+    setServerError(String(e))
+  } finally {
+    if (!exiting) closing = false
+  }
+}
 
 /** Why the active version can't change right now, or null when it can. */
 export const switchBlocked = derived([serverRunning, gameRunning, updateRunning], ([server, game, update]) =>

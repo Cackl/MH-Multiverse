@@ -113,6 +113,8 @@ fn create_job_object() -> Option<JobObject> {
 
 pub struct ServerProcess {
     pub child: Option<Child>,
+    /// A shutdown was already sent to `child`, so a second Stop doesn't send another.
+    stopping: bool,
     pub apache_child: Option<Child>,
     #[cfg(target_os = "windows")]
     _job: Option<JobObject>,
@@ -126,6 +128,7 @@ impl ServerProcess {
     pub fn empty() -> Self {
         Self {
             child: None,
+            stopping: false,
             apache_child: None,
             #[cfg(target_os = "windows")]
             _job: None,
@@ -455,6 +458,74 @@ pub fn server_process_is_running(state: &ServerState) -> bool {
     state.0.lock().map(|proc| proc.child.is_some()).unwrap_or(false)
 }
 
+// The server runs without a console (CREATE_NO_WINDOW), so .NET reads and writes its
+// console in the OEM code page (437 on an English Windows), not UTF-8.
+
+/// Text in the OEM code page, for the server's stdin. Characters it lacks become "?".
+#[cfg(target_os = "windows")]
+fn oem_encode(s: &str) -> Vec<u8> {
+    use windows::Win32::Globalization::{WideCharToMultiByte, CP_OEMCP};
+    if s.is_ascii() {
+        return s.as_bytes().to_vec();
+    }
+    let wide: Vec<u16> = s.encode_utf16().collect();
+    unsafe {
+        let len = WideCharToMultiByte(CP_OEMCP, 0, &wide, None, windows::core::PCSTR::null(), None);
+        let mut out = vec![0u8; len.max(0) as usize];
+        WideCharToMultiByte(CP_OEMCP, 0, &wide, Some(&mut out), windows::core::PCSTR::null(), None);
+        out
+    }
+}
+
+/// A line of the server's output, from the OEM code page.
+#[cfg(target_os = "windows")]
+fn oem_decode(bytes: &[u8]) -> String {
+    use windows::Win32::Globalization::{MultiByteToWideChar, MULTI_BYTE_TO_WIDE_CHAR_FLAGS, CP_OEMCP};
+    if bytes.is_ascii() {
+        return String::from_utf8_lossy(bytes).into_owned();
+    }
+    unsafe {
+        let len = MultiByteToWideChar(CP_OEMCP, MULTI_BYTE_TO_WIDE_CHAR_FLAGS(0), bytes, None);
+        let mut wide = vec![0u16; len.max(0) as usize];
+        MultiByteToWideChar(CP_OEMCP, MULTI_BYTE_TO_WIDE_CHAR_FLAGS(0), bytes, Some(&mut wide));
+        String::from_utf16_lossy(&wide)
+    }
+}
+
+#[cfg(not(target_os = "windows"))]
+fn oem_encode(s: &str) -> Vec<u8> { s.as_bytes().to_vec() }
+
+#[cfg(not(target_os = "windows"))]
+fn oem_decode(bytes: &[u8]) -> String { String::from_utf8_lossy(bytes).into_owned() }
+
+/// The server's output, line by line. Unlike `lines()`, a byte that isn't UTF-8 doesn't end it.
+fn console_lines(r: impl std::io::Read) -> impl Iterator<Item = String> {
+    BufReader::new(r).split(b'\n').map_while(Result::ok).map(|mut b| {
+        if b.last() == Some(&b'\r') { b.pop(); }
+        oem_decode(&b)
+    })
+}
+
+/// Writes an empty console line, which lets a server waiting in `Console.ReadLine` exit.
+fn release_console_wait(state: &Mutex<ServerProcess>) {
+    use std::io::Write;
+    if let Ok(mut proc) = state.lock() {
+        if let Some(stdin) = proc.child.as_mut().and_then(|c| c.stdin.as_mut()) {
+            let _ = stdin.write_all(b"\n");
+            let _ = stdin.flush();
+        }
+    }
+}
+
+/// The port from httpd's "could not bind to address 0.0.0.0:80" line, or None for other lines.
+fn apache_port_in_use(line: &str) -> Option<&str> {
+    let addr = line.split("could not bind to address ").nth(1)?;
+    addr.trim().rsplit(':').next()
+}
+
+/// How long Stop waits for the server to exit before it kills the process.
+const STOP_TIMEOUT_SECS: u64 = 60;
+
 // -- Commands --
 
 #[tauri::command]
@@ -544,26 +615,28 @@ pub async fn start_server(
         let app_for_players = app.clone();
         let player_state_for_thread = player_state.clone();
         let db_path_for_thread = db_path.clone();
+        let state_for_reader = state.0.clone();
 
         std::thread::Builder::new()
             .name("mhserver-stdout-reader".into())
             .spawn(move || {
-                let reader = BufReader::new(stdout);
-                for line in reader.lines() {
-                    match line {
-                        Ok(raw) => {
-                            let _ = tx.send(parse_log_line(&raw));
+                for raw in console_lines(stdout) {
+                    // After shutdown, and after a Fatal error or crash, the server still
+                    // waits on a console line before it exits (ServerApp.cs), so give it one.
+                    // Every Fatal it logs is terminal, and an empty line does nothing otherwise.
+                    let parsed = parse_log_line(&raw);
+                    if parsed.level == "fatal" || raw.contains("All services shut down") {
+                        release_console_wait(&state_for_reader);
+                    }
+                    let _ = tx.send(parsed);
 
-                            if let Some(event) = parse_player_log_event(&raw) {
-                                handle_player_log_event(
-                                    &app_for_players,
-                                    &player_state_for_thread,
-                                    &db_path_for_thread,
-                                    event,
-                                );
-                            }
-                        }
-                        Err(_) => break,
+                    if let Some(event) = parse_player_log_event(&raw) {
+                        handle_player_log_event(
+                            &app_for_players,
+                            &player_state_for_thread,
+                            &db_path_for_thread,
+                            event,
+                        );
                     }
                 }
             })
@@ -575,18 +648,13 @@ pub async fn start_server(
         std::thread::Builder::new()
             .name("mhserver-stderr-reader".into())
             .spawn(move || {
-                let reader = BufReader::new(stderr);
-                for line in reader.lines() {
-                    match line {
-                        Ok(raw) if !raw.trim().is_empty() => {
-                            let _ = tx.send(LogLinePayload {
-                                time: String::new(),
-                                level: "err".into(),
-                                msg: raw.trim().to_string(),
-                            });
-                        }
-                        _ => break,
-                    }
+                for raw in console_lines(stderr) {
+                    if raw.trim().is_empty() { continue; }
+                    let _ = tx.send(LogLinePayload {
+                        time: String::new(),
+                        level: "err".into(),
+                        msg: raw.trim().to_string(),
+                    });
                 }
             })
             .expect("failed to spawn stderr reader thread");
@@ -683,6 +751,7 @@ pub async fn start_server(
     }
 
     proc.child = Some(child);
+    proc.stopping = false;
     #[cfg(target_os = "windows")]
     { proc._job = job; }
 
@@ -694,6 +763,25 @@ pub async fn start_server(
 
 #[tauri::command]
 pub async fn stop_server(app: AppHandle) -> Result<(), String> {
+    stop_gracefully(&app)
+}
+
+/// Asks the server to shut down, then waits for it to exit and stops the app.
+/// Shared by the window close (`exit_app`) and its no-reply fallback.
+pub fn exit_gracefully(app: &AppHandle) {
+    let state = app.state::<ServerState>();
+    if server_process_is_running(&state) && stop_gracefully(app).is_ok() {
+        // The stop timer force-closes it at STOP_TIMEOUT_SECS, so this ends.
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(STOP_TIMEOUT_SECS + 5);
+        while server_process_is_running(&state) && std::time::Instant::now() < deadline {
+            std::thread::sleep(std::time::Duration::from_millis(150));
+        }
+    }
+    crate::shutdown(app);
+}
+
+/// Sends "!server shutdown" once, and starts the force-close timer.
+fn stop_gracefully(app: &AppHandle) -> Result<(), String> {
     use std::io::Write;
 
     let state = app.state::<ServerState>();
@@ -701,38 +789,46 @@ pub async fn stop_server(app: AppHandle) -> Result<(), String> {
     let player_state = app.state::<PlayerState>().0.clone();
 
     // Send "!server shutdown" via stdin, holding the lock only briefly.
-    {
+    let pid = {
         let mut proc = state_arc.lock().map_err(|e| e.to_string())?;
+        if proc.child.is_some() && proc.stopping {
+            return Ok(());
+        }
         let child = proc.child.as_mut().ok_or("Server is not running.")?;
         if let Some(ref mut stdin) = child.stdin {
             let _ = stdin.write_all(b"!server shutdown\n");
             let _ = stdin.flush();
         }
-    }
+        let pid = child.id();
+        proc.stopping = true;
+        pid
+    };
     // Lock released — returns to frontend immediately.
     // The watcher thread (spawned by start_server) will detect exit via
     // try_wait, clear proc.child, and emit server-stopped.
 
-    // Safety net: if the process hasn't exited after 10 seconds,
-    // hard-kill it. This thread does NOT poll or emit — it just
-    // sleeps and then checks once.
+    // Safety net: the stdout reader releases the server once its services are
+    // down, so it normally exits in a second or two. If it is still running
+    // after STOP_TIMEOUT_SECS, hard-kill it. This thread does NOT poll, it
+    // just sleeps and then checks once.
     let app_clone = app.clone();
     std::thread::Builder::new()
         .name("mhserver-stop-timeout".into())
         .spawn(move || {
-            std::thread::sleep(std::time::Duration::from_secs(10));
+            std::thread::sleep(std::time::Duration::from_secs(STOP_TIMEOUT_SECS));
 
             let mut proc = match state_arc.lock() {
                 Ok(g) => g,
                 Err(_) => return,
             };
 
-            // If child is already None, the watcher handled it — nothing to do.
-            if proc.child.is_none() {
+            // Nothing to do if the watcher already saw it exit, or if the
+            // server running now is a new one started after this Stop.
+            if proc.child.as_ref().map(|c| c.id()) != Some(pid) {
                 return;
             }
 
-            // Still running after 10s — hard kill.
+            // Still running: hard kill.
             if let Some(ref mut c) = proc.child {
                 let _ = c.kill();
                 let _ = c.wait();
@@ -750,6 +846,11 @@ pub async fn stop_server(app: AppHandle) -> Result<(), String> {
 
             clear_player_state(&app_clone, &player_state);
 
+            let _ = app_clone.emit("server-log", vec![LogLinePayload {
+                time: log_timestamp(),
+                level: "warn".into(),
+                msg: format!("[MH Multiverse] The server didn't stop within {STOP_TIMEOUT_SECS} s and was force-closed"),
+            }]);
             let _ = app_clone.emit("server-stopped", ServerStatusPayload {
                 running: false,
                 exit_code: None,
@@ -791,13 +892,71 @@ pub async fn start_apache(app: AppHandle, server_exe: String) -> Result<(), Stri
     cmd.current_dir(apache_working)
         .env("APACHE_SERVER_ROOT", root_dir.join("Apache24"))
         .stdout(Stdio::null())
-        .stderr(Stdio::null())
+        .stderr(Stdio::piped())
         .stdin(Stdio::null());
     #[cfg(target_os = "windows")]
     cmd.creation_flags(CREATE_NO_WINDOW);
-    let child = cmd
+    let mut child = cmd
         .spawn()
         .map_err(|e| format!("Failed to start Apache: {e}"))?;
+
+    // httpd reports startup errors, like a port already in use, on stderr.
+    if let Some(stderr) = child.stderr.take() {
+        let app_clone = app.clone();
+        std::thread::spawn(move || {
+            let mut port_in_use = false;
+            for line in BufReader::new(stderr).lines().map_while(Result::ok) {
+                let line = line.trim();
+                // httpd exits after a port error, and what it prints after it only says it gave up.
+                if line.is_empty() || port_in_use {
+                    continue;
+                }
+                let msg = match apache_port_in_use(line) {
+                    Some(port) => {
+                        port_in_use = true;
+                        format!("[MH Multiverse] Apache can't start. Port {port} is already in use.")
+                    }
+                    None => format!("[Apache] {line}"),
+                };
+                let _ = app_clone.emit("server-log", vec![LogLinePayload {
+                    time: log_timestamp(),
+                    level: "err".into(),
+                    msg,
+                }]);
+            }
+        });
+    }
+
+    // Watch for httpd exiting on its own. Stop takes the child first, so this only reports
+    // a failed start or a crash.
+    {
+        let state_arc = state.0.clone();
+        let app_clone = app.clone();
+        let pid = child.id();
+        std::thread::spawn(move || loop {
+            std::thread::sleep(std::time::Duration::from_millis(500));
+            let Ok(mut proc) = state_arc.lock() else { break };
+            let Some(apache) = proc.apache_child.as_mut().filter(|c| c.id() == pid) else { break };
+            match apache.try_wait() {
+                Ok(None) => {}
+                Ok(Some(status)) => {
+                    proc.apache_child = None;
+                    #[cfg(target_os = "windows")]
+                    { proc._apache_job = None; }
+                    drop(proc);
+                    let code = status.code().map_or("unknown".to_string(), |c| c.to_string());
+                    let _ = app_clone.emit("server-log", vec![LogLinePayload {
+                        time: log_timestamp(),
+                        level: "err".into(),
+                        msg: format!("[MH Multiverse] Apache stopped unexpectedly (code {code})"),
+                    }]);
+                    let _ = app_clone.emit("apache-stopped", ());
+                    break;
+                }
+                Err(_) => break,
+            }
+        });
+    }
 
     // Windows: put Apache in its own Job Object so it dies with this app.
     #[cfg(target_os = "windows")]
@@ -855,7 +1014,7 @@ pub fn send_command(app: AppHandle, cmd: String) -> Result<(), String> {
     let stdin = child.stdin.as_mut().ok_or("Server stdin is not available.")?;
 
     let line = format!("{}\n", cmd.trim());
-    stdin.write_all(line.as_bytes())
+    stdin.write_all(&oem_encode(&line))
         .map_err(|e| format!("Failed to send command: {e}"))?;
     stdin.flush()
         .map_err(|e| format!("Failed to flush stdin: {e}"))?;
@@ -894,9 +1053,20 @@ pub fn apache_is_running(app: AppHandle) -> bool {
 #[tauri::command]
 pub fn get_players(app: AppHandle) -> Result<Vec<PlayerSession>, String> {
     let state = app.state::<PlayerState>();
-    let sessions = state.0.lock().map_err(|e| e.to_string())?;
+    let mut players: Vec<PlayerSession> =
+        state.0.lock().map_err(|e| e.to_string())?.values().cloned().collect();
 
-    let mut players: Vec<PlayerSession> = sessions.values().cloned().collect();
+    // Re-read the account fields, so a ban, whitelist or level change since login shows.
+    let db = app.state::<DbPath>().0.lock().ok().and_then(|g| g.clone());
+    if let Some(db) = db {
+        for p in &mut players {
+            if let Some(a) = lookup_account(&db, &p.username) {
+                p.user_level = Some(a.user_level);
+                p.flags = Some(a.flags);
+            }
+        }
+    }
+
     players.sort_by(|a, b| {
         a.username
             .to_lowercase()
@@ -905,4 +1075,26 @@ pub fn get_players(app: AppHandle) -> Result<Vec<PlayerSession>, String> {
     });
 
     Ok(players)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{apache_port_in_use, console_lines, oem_encode};
+
+    #[test]
+    fn console_text_round_trips_through_the_oem_code_page() {
+        let sent = oem_encode("!server broadcast Café\n");
+        assert!(sent.starts_with(b"!server broadcast Caf"));
+        // A byte that isn't UTF-8 (é in the OEM code page) must not end the output.
+        let read: Vec<String> = console_lines(&[sent.as_slice(), b"next\r\n"].concat()[..]).collect();
+        assert_eq!(read, ["!server broadcast Café", "next"]);
+    }
+
+    #[test]
+    fn apache_port_in_use_reads_the_port() {
+        let line = "(OS 10048)Only one usage of each socket address (protocol/network address/port) is normally permitted. : AH00072: make_sock: could not bind to address 0.0.0.0:80";
+        assert_eq!(apache_port_in_use(line), Some("80"));
+        assert_eq!(apache_port_in_use("[::]:8080 could not bind to address [::]:8080"), Some("8080"));
+        assert_eq!(apache_port_in_use("AH00451: no listening sockets available, shutting down"), None);
+    }
 }

@@ -7,12 +7,14 @@
   import ConfigPanel from './components/ConfigPanel.svelte'
   import OpsPanel from './components/OpsPanel.svelte'
   import AppPanel from './components/settings/AppPanel.svelte'
-  import { activeTab, appConfig, loadConfig, startGameRunningPoll, checkAppUpdate } from './lib/store'
+  import { listen } from '@tauri-apps/api/event'
+  import { activeTab, appConfig, loadConfig, startGameRunningPoll, checkAppUpdate, handleCloseRequest } from './lib/store'
   import { initServerEventBridge } from './lib/serverEvents'
   import DataPanel from './components/data/DataPanel.svelte'
   import ConfirmDialog from './components/ConfirmDialog.svelte'
 
   onMount(async () => {
+    listen<number>('close-requested', e => handleCloseRequest(e.payload))
     startGameRunningPoll()
     checkAppUpdate()
     await Promise.all([

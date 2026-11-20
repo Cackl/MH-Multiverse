@@ -466,6 +466,23 @@
               >
               <span class="config-field-hint">Use {'{minutes}'} as a placeholder for the remaining time.</span>
             </div>
+            <div class="config-field full">
+              <div class="toggle-row">
+                <div class="toggle-info">
+                  <span class="config-field-label">Ask before closing</span>
+                  <span class="config-tooltip">Closing MH Multiverse with the server running asks first. When off, it stops the server and closes.</span>
+                </div>
+                <div
+                  class="toggle-switch"
+                  class:on={$appConfig.shutdown.ask_before_close}
+                  role="switch"
+                  aria-checked={$appConfig.shutdown.ask_before_close}
+                  tabindex="0"
+                  on:click={async () => multiverseError = await setShutdownConfig({ ...$appConfig.shutdown, ask_before_close: !$appConfig.shutdown.ask_before_close })}
+                  on:keydown={async (e) => { if (e.key === 'Enter') multiverseError = await setShutdownConfig({ ...$appConfig.shutdown, ask_before_close: !$appConfig.shutdown.ask_before_close }) }}
+                ></div>
+              </div>
+            </div>
           </div>
 
           <div class="subsection-title">Console</div>

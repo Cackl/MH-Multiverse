@@ -1,9 +1,11 @@
 import { invoke } from '@tauri-apps/api/core'
 import { listen, type UnlistenFn } from '@tauri-apps/api/event'
+import { get } from 'svelte/store'
 import {
   appendLog,
   appendLogBatch,
   apacheRunning,
+  apacheStartError,
   clearServerError,
   setServerError,
   serverRunning,
@@ -35,6 +37,7 @@ type BridgeState = {
   unlistenLog: UnlistenFn | null
   unlistenStarted: UnlistenFn | null
   unlistenStopped: UnlistenFn | null
+  unlistenApacheStopped: UnlistenFn | null
   unlistenOverlay: UnlistenFn | null
   unlistenOverlayPipe: UnlistenFn | null
 }
@@ -60,6 +63,7 @@ function getBridgeState(): BridgeState {
       unlistenLog: null,
       unlistenStarted: null,
       unlistenStopped: null,
+      unlistenApacheStopped: null,
       unlistenOverlay: null,
       unlistenOverlayPipe: null,
     }
@@ -89,6 +93,9 @@ export function normalizeLogBatch(lines: RawLogEventPayload): Omit<LogLine, 'id'
     msg: maskSecrets(line.msg ?? ''),
   }))
 }
+
+// The last Fatal line the running server logged, '' when none.
+let fatalError = ''
 
 // Logged by ServerApp.Run right before it starts reading console input.
 const READY_TEXT = "Type '!commands' for a list of available commands"
@@ -144,12 +151,18 @@ export async function initServerEventBridge(): Promise<void> {
         setSchedulerNow(dt)
       }
       if (line.msg.includes(READY_TEXT)) serverReady.set(true)
+      // The server logs Fatal only when it can't go on. It then exits, released by the backend.
+      if (line.level === 'fatal' && get(serverRunning)) {
+        fatalError = line.msg
+        setServerError(line.msg)
+      }
     }
 
     appendLogBatch(batch)
   })
 
   bridge.unlistenStarted = await listen('server-started', async () => {
+    fatalError = ''
     serverRunning.set(true)
     serverReady.set(false)
     clearServerError()
@@ -162,6 +175,11 @@ export async function initServerEventBridge(): Promise<void> {
     } catch {
       apacheRunning.set(false)
     }
+  })
+
+  bridge.unlistenApacheStopped = await listen('apache-stopped', () => {
+    apacheRunning.set(false)
+    apacheStartError.set('Apache stopped unexpectedly. See the server log.')
   })
 
   bridge.unlistenOverlay = await listen<{ ok: boolean; message: string }>('overlay-inject', (event) => {
@@ -181,6 +199,10 @@ export async function initServerEventBridge(): Promise<void> {
       const message = `Server exited unexpectedly (code ${event.payload.exit_code})`
       setServerError(message)
       appendLog({ time: logTimestamp(), level: 'err', msg: `[MH Multiverse] ${message}` })
+    } else if (fatalError) {
+      // A failed start exits with code 0, so keep the Fatal line as the error.
+      setServerError(fatalError)
+      appendLog({ time: logTimestamp(), level: 'err', msg: '[MH Multiverse] Server stopped after a fatal error' })
     } else {
       clearServerError()
       appendLog({ time: logTimestamp(), level: 'info', msg: '[MH Multiverse] Server stopped' })
