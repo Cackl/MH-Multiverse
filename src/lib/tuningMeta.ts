@@ -1,3 +1,5 @@
+import { FLOAT_MAX } from './patchEntryEdit'
+
 // ── Prefix-ordering safety net ───────────────────────────────────────────────
 // Both maps below do a first-match scan over a prefix list. If a prefix is
 // itself a prefix of a later, more specific one in the same list, the later
@@ -69,14 +71,15 @@ const BLUEPRINT_HINT_PREFIXES: [string, string | null][] = [
 assertPrefixOrder(BLUEPRINT_HINT_PREFIXES, 'BLUEPRINT_HINT_PREFIXES')
 
 // Parses a tuning value from an <input type="number"> (a number, or null/''
-// when empty) or a plain string. Returns null for blank or non-numeric input,
+// when empty) or a plain string. Returns null for blank, non-numeric or out-of-float-range input,
 // so a real 0 is never confused with "no value".
 export function parseTuningValue(raw: string | number | null | undefined): number | null {
   if (raw === null || raw === undefined) return null
   const text = String(raw).trim()
   if (text === '') return null
   const n = Number(text)
-  return Number.isFinite(n) ? n : null
+  // The server reads values as floats and skips the whole file on one it can't read.
+  return Math.abs(n) <= FLOAT_MAX ? n : null
 }
 
 export function blueprintHintForSetting(setting: string): string | null {

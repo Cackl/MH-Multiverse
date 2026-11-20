@@ -96,7 +96,7 @@ describe('parseTuningValue', () => {
     expect(parseTuningValue(-2)).toBe(-2)
   })
   it('returns null for blank or non-numeric input', () => {
-    for (const bad of ['', '  ', null, undefined, 'abc', '1abc', 'NaN', 'Infinity']) {
+    for (const bad of ['', '  ', null, undefined, 'abc', '1abc', 'NaN', 'Infinity', '1e39', '-3.5e38']) {
       expect(parseTuningValue(bad as never), String(bad)).toBeNull()
     }
   })

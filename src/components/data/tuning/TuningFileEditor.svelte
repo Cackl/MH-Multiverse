@@ -224,7 +224,7 @@
     const trimmedProto = newPrototype.trim()
     // Blank keeps the "1" placeholder; anything else must be a real number.
     const value = String(newValue ?? '').trim() === '' ? 1 : parseTuningValue(newValue)
-    if (value === null) { addError = 'Value must be a number.'; return }
+    if (value === null) { addError = 'Value must be a number no bigger than 3.4e38.'; return }
     // Rows are keyed by prototype|setting, so a duplicate would crash the list.
     if (entries.some(e => e.prototype === trimmedProto && e.setting === trimmedSetting)) {
       addError = 'This setting is already in the file for that prototype.'
