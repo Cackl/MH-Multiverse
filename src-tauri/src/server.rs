@@ -452,10 +452,32 @@ fn clear_player_state(
 /// Reads the watcher-owned `child` slot rather than calling `try_wait`
 /// itself: the watcher thread spawned in `start_server` is the single
 /// source of truth for exit detection and clears `child` when the process
-/// goes away. Shared by the `server_is_running` command,
-/// `accounts::import_account`, and `updater::run_update_inner`.
+/// goes away. Commands that change the server's files use `server_running`.
 pub fn server_process_is_running(state: &ServerState) -> bool {
     state.0.lock().map(|proc| proc.child.is_some()).unwrap_or(false)
+}
+
+/// The app's server, or this same server exe started outside the app. For changes to the
+/// server's files: a server the app didn't start writes over them just the same.
+pub fn server_running(app: &AppHandle, server_exe: &str) -> bool {
+    server_process_is_running(&app.state::<ServerState>()) || exe_is_running(std::path::Path::new(server_exe))
+}
+
+/// A process runs this exe. Matched by path, or by name when its path can't be read.
+fn exe_is_running(exe: &std::path::Path) -> bool {
+    use sysinfo::{ProcessRefreshKind, ProcessesToUpdate, System, UpdateKind};
+    let Some(name) = exe.file_name() else { return false };
+    let target = std::fs::canonicalize(exe).ok();
+    let mut sys = System::new();
+    sys.refresh_processes_specifics(
+        ProcessesToUpdate::All,
+        true,
+        ProcessRefreshKind::nothing().with_exe(UpdateKind::OnlyIfNotSet),
+    );
+    sys.processes().values().any(|p| {
+        p.name().eq_ignore_ascii_case(name)
+            && p.exe().is_none_or(|e| std::fs::canonicalize(e).ok() == target)
+    })
 }
 
 // The server runs without a console (CREATE_NO_WINDOW), so .NET reads and writes its
@@ -1079,7 +1101,13 @@ pub fn get_players(app: AppHandle) -> Result<Vec<PlayerSession>, String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{apache_port_in_use, console_lines, oem_encode};
+    use super::{apache_port_in_use, console_lines, exe_is_running, oem_encode};
+
+    #[test]
+    fn a_running_exe_is_found_by_its_path() {
+        assert!(exe_is_running(&std::env::current_exe().unwrap()));
+        assert!(!exe_is_running(std::path::Path::new("C:/nowhere/NotRunning123.exe")));
+    }
 
     #[test]
     fn console_text_round_trips_through_the_oem_code_page() {

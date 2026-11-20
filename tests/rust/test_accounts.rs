@@ -3,9 +3,8 @@ use crate::test_helpers::{empty_server, fixture_path, seed_account_db};
 use rusqlite::Connection;
 use std::fs;
 
-// import_account itself takes `tauri::State<ServerState>`, which can't be
-// constructed outside a running Tauri app — tauri::State's inner field is
-// private with no public constructor. So these tests call the same
+// import_account itself takes an `AppHandle`, which can't be
+// constructed outside a running Tauri app. So these tests call the same
 // do_add_with_overrides/do_replace functions import_account delegates to,
 // directly against a real seeded Account.db, bypassing only the
 // server-running guard (which has no DB-logic risk of its own).

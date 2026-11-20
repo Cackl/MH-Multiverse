@@ -14,9 +14,7 @@ use regex::Regex;
 use rusqlite::{params, Connection, OpenFlags};
 use serde::{Deserialize, Serialize};
 use sha2::Sha512;
-use tauri::State;
-
-use crate::server::ServerState;
+use tauri::AppHandle;
 
 // ── JSON import types ──────────────────────────────────────────────────────
 
@@ -408,11 +406,10 @@ pub fn import_account(
     mode: String,
     target_id: Option<String>,
     overrides: Option<ImportOverrides>,
-    server_state: State<'_, ServerState>,
+    app: AppHandle,
 ) -> Result<(), String> {
-    // Guard: importing while the server is running risks DB lock contention.
-    // See the note at the top of this file for the required server.rs addition.
-    if crate::server::server_process_is_running(&server_state) {
+    // A running server holds the account in memory and writes it back over the import.
+    if crate::server::server_running(&app, &server_exe) {
         return Err("Stop the server before importing an account.".into());
     }
 
@@ -460,10 +457,10 @@ pub fn import_account(
 pub fn restore_json_account(
     server_exe: String,
     json_path: String,
-    server_state: State<'_, ServerState>,
+    app: AppHandle,
 ) -> Result<Option<String>, String> {
     // A running server rewrites the save from memory on every player save.
-    if crate::server::server_process_is_running(&server_state) {
+    if crate::server::server_running(&app, &server_exe) {
         return Err("Stop the server before restoring a backup.".into());
     }
     restore_json_save(&server_exe, &json_path)

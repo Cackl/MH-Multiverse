@@ -2,7 +2,7 @@ use chrono::{DateTime, Duration, Local, Utc};
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
-use tauri::{AppHandle, Emitter, Manager};
+use tauri::{AppHandle, Emitter};
 use tokio::io::AsyncWriteExt;
 
 // ── App Version ───────────────────────────────────────────────────────────────
@@ -467,7 +467,7 @@ async fn run_update_inner(
     staging_dir: &Path,
     backup_targets: Vec<String>,
 ) -> Result<Vec<KeptFile>, String> {
-    if crate::server::server_process_is_running(&app.state::<crate::server::ServerState>()) {
+    if crate::server::server_running(app, server_exe) {
         return Err("Cannot update while the server is running. Stop the server first.".into());
     }
 
