@@ -53,8 +53,11 @@ pub(crate) fn usable_name(name: &str) -> bool {
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(rename_all = "PascalCase")]
 struct GuidItemDisk {
+    // The server's JsonConstructor takes a missing PrototypeGuid or Quantity as 0.
+    #[serde(default)]
     prototype_guid: u64,
     item_prototype_runtime_id_for_client: u64,
+    #[serde(default)]
     quantity: i32,
 }
 
@@ -112,10 +115,15 @@ fn default_lang() -> String {
 pub struct UrlEntry {
     #[serde(default = "default_lang")]
     pub language_id: String,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "null_as_default")]
     pub url: String,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "null_as_default")]
     pub image_data: String,
+}
+
+/// The server reads `null` as an empty value, so these fields take it too.
+fn null_as_default<'de, D: serde::Deserializer<'de>, T: Default + Deserialize<'de>>(d: D) -> Result<T, D::Error> {
+    Ok(Option::<T>::deserialize(d)?.unwrap_or_default())
 }
 
 /// Shared shape for `Type` and each entry in `TypeModifiers`.
@@ -187,6 +195,10 @@ fn view_to_disk(v: CatalogEntry) -> Result<CatalogEntryDisk, String> {
         .sku_id
         .parse::<u64>()
         .map_err(|e| format!("Invalid SKU ID '{}': {e}", v.sku_id))?;
+    // The server charges Math.Max(balance - price, 0), so a negative price gives G.
+    if v.localized_entries.iter().any(|l| l.item_price < 0) {
+        return Err(format!("SKU {sku_id}: a price can't be negative"));
+    }
     let guid_items = v
         .guid_items
         .into_iter()
@@ -667,9 +679,6 @@ pub fn apply_store_changes(
         ops.push((open(&r.source_file)?, sku, None));
     }
     for u in upserts {
-        if u.entry.localized_entries.iter().any(|l| l.item_price < 0) {
-            return Err(format!("SKU {}: a price can't be negative", u.entry.sku_id));
-        }
         let disk = view_to_disk(u.entry)?;
         ops.push((open(&u.target_file)?, disk.sku_id, Some(disk)));
     }
