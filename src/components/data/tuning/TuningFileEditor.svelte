@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte'
   import { invoke } from '@tauri-apps/api/core'
-  import { categoryForSetting, KNOWN_CORE, KNOWN_EVENTS, KNOWN_SETTINGS, NEW_TUNING_FILE_PREFIX, blueprintHintForSetting, knownSettingsFor, newTuningFileName, parseTuningValue, tuningDisplayName, settingTip, type KnownSetting } from '../../../lib/tuningMeta'
+  import { categoryForSetting, KNOWN_CORE, KNOWN_EVENTS, KNOWN_SETTINGS, NEW_TUNING_FILE_PREFIX, blueprintHintForSetting, knownSettingsFor, newTuningFileName, parseTuningValue, tuningDisplayName, settingTip, tuningEntriesChanged, type KnownSetting } from '../../../lib/tuningMeta'
   import { tip } from '../../../lib/tooltip'
   import { activeLinked, setUnsaved } from '../../../lib/store'
   import type { PatchNames } from '../../../lib/patchesMeta'
@@ -86,11 +86,7 @@
   $: if (newSetting || newPrototype) addError = ''
   $: dirty = isNew
     ? entries.length > 0
-    : entries.length !== savedEntries.length ||
-      entries.some((e, i) => {
-        const s = savedEntries[i]
-        return !s || e.value !== s.value
-      })
+    : tuningEntriesChanged(entries, savedEntries)
 
   // Leaving the tab asks first while there are unsaved edits.
   $: setUnsaved('tuning', dirty ? 'Live Tuning' : null)

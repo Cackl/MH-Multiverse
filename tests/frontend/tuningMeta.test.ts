@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { categoryForSetting, blueprintHintForSetting, parseTuningValue, ruleDateError, newTuningFileName, tuningDisplayName, CATEGORY_PREFIXES,
+import { categoryForSetting, tuningEntriesChanged, blueprintHintForSetting, parseTuningValue, ruleDateError, newTuningFileName, tuningDisplayName, CATEGORY_PREFIXES,
   RATE_ROWS, SERVER_RATES_FILE, rateRows, formatRate, toShown, fromShown, resolveRate, planServerRatesWrite, reloadResult,
   KNOWN_SETTINGS, knownSettingsFor, settingTip, tuningGroup, type GlobalTuning, type RateRow, type TuningEntry } from '../../src/lib/tuningMeta'
 
@@ -320,5 +320,25 @@ describe('reloadResult', () => {
     ['lines after the load line are ignored', [loaded, '[General] Verify failed: later'], { count: 42, rejected: 0 }],
   ])('%s', (_name, lines, expected) => {
     expect(reloadResult(lines)).toEqual(expected)
+  })
+})
+
+describe('tuningEntriesChanged', () => {
+  const a = { prototype: 'Avatars/A.prototype', setting: 'eAETV_XPGainPct', value: 1 }
+  const b = { prototype: 'Avatars/B.prototype', setting: 'eAETV_XPGainPct', value: 1 }
+
+  it('is false for the same rows', () => {
+    expect(tuningEntriesChanged([{ ...a }], [a])).toBe(false)
+  })
+
+  it('sees a row swapped for another with the same value', () => {
+    expect(tuningEntriesChanged([b], [a])).toBe(true)
+    expect(tuningEntriesChanged([{ ...a, setting: 'eAETV_Enabled' }], [a])).toBe(true)
+  })
+
+  it('sees a changed value, an added row and a removed row', () => {
+    expect(tuningEntriesChanged([{ ...a, value: 2 }], [a])).toBe(true)
+    expect(tuningEntriesChanged([a, b], [a])).toBe(true)
+    expect(tuningEntriesChanged([], [a])).toBe(true)
   })
 })

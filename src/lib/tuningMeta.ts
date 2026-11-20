@@ -341,6 +341,12 @@ export interface TuningEntry {
   value: number
 }
 
+/** True when the rows differ from the saved ones in count, order or any field. */
+export function tuningEntriesChanged(entries: TuningEntry[], saved: TuningEntry[]): boolean {
+  return entries.length !== saved.length || entries.some((e, i) =>
+    e.prototype !== saved[i].prototype || e.setting !== saved[i].setting || e.value !== saved[i].value)
+}
+
 // Mirror read_global_tuning in tuning.rs.
 export interface GlobalValue { setting: string; value: number }
 export interface GlobalTuningFile { file: string; values: GlobalValue[]; error: string | null }
