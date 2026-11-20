@@ -179,14 +179,16 @@
     saving     = true
     saveError  = ''
     saveSuccess = ''
+    // What is written is what counts as saved: an edit made during the save stays unsaved.
+    const written = dirtyEntries.map(e => ({ ...e }))
     try {
       await invoke('save_patch_file', {
         serverExe: $appConfig.server_exe,
         fileName:  selectedFile.file_name,
         enabled:   selectedFile.enabled,
-        entries:   dirtyEntries,
+        entries:   written,
       })
-      entries     = dirtyEntries.map(e => ({ ...e }))
+      entries     = written
       saveSuccess = 'Saved.'
       setTimeout(() => saveSuccess = '', 3000)
     } catch (e) {
