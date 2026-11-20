@@ -87,6 +87,9 @@
       }
       const changes = dirty.map(setting => ({ setting, value: edits[setting], below: states[setting].below }))
       const entries = planServerRatesWrite(existing, changes)
+      const wasOff = tuning.rates_off
+      // The server doesn't load an OFF_ file, so saving switches it back on first.
+      if (wasOff) await invoke('toggle_tuning_file', { serverExe, relativePath: SERVER_RATES_FILE, enabled: true })
       if (exists) {
         await invoke('write_tuning_file', { serverExe, relativePath: SERVER_RATES_FILE, entries })
       } else if (entries.length > 0) {
@@ -95,7 +98,7 @@
       edits = {}
       reloadRun++
       reloadError = ''
-      saveMsg = 'Saved'
+      saveMsg = wasOff ? 'Saved and switched the file back on' : 'Saved'
       await load(serverExe)
     } catch (e) {
       saveError = String(e)
@@ -288,7 +291,8 @@
           {#if saveError}<span class="error">{saveError}</span>
           {:else if folderError}<span class="error">{folderError}</span>
           {:else if dirty.length}<span class="dirty-badge">{dirty.length} unsaved {dirty.length === 1 ? 'change' : 'changes'}</span>
-          {:else if saveMsg}<span>{saveMsg}</span>{/if}
+          {:else if saveMsg}<span>{saveMsg}</span>
+          {:else if tuning?.rates_off}<span>{SERVER_RATES_FILE} is switched off. Saving switches it back on.</span>{/if}
         </div>
         <button
           class="btn btn-sm btn-accent"

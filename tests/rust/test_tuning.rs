@@ -379,6 +379,18 @@ fn global_tuning_lists_the_server_rates_file_where_it_would_load_before_it_exist
 }
 
 #[test]
+fn global_tuning_says_when_the_server_rates_file_is_switched_off() {
+    let (_tmp, server_exe) = crate::test_helpers::empty_server();
+    let dir = live_tuning_dir(&server_exe).unwrap();
+    fs::create_dir_all(&dir).unwrap();
+    assert!(!read_global_tuning(server_exe.clone()).unwrap().rates_off, "missing is not off");
+    fs::write(dir.join(format!("OFF_{SERVER_RATES_FILE}")), "[]").unwrap();
+    assert!(read_global_tuning(server_exe.clone()).unwrap().rates_off);
+    fs::write(dir.join(SERVER_RATES_FILE), "[]").unwrap();
+    assert!(!read_global_tuning(server_exe).unwrap().rates_off, "an active copy loads");
+}
+
+#[test]
 fn global_tuning_reads_the_infinity_switch() {
     // (Config.ini, ConfigOverride.ini, infinity_system); the server default is true.
     let cases = [

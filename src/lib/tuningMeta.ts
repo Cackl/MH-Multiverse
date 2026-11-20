@@ -366,6 +366,8 @@ export interface GlobalTuningFile { file: string; values: GlobalValue[]; error: 
 export interface GlobalTuning {
   files: GlobalTuningFile[]
   infinity_system: boolean
+  /** The Server Rates file exists only as OFF_, so the server doesn't load it. */
+  rates_off: boolean
 }
 
 export type RateGroup = 'XP' | 'Loot' | 'Vendors' | 'Rules'

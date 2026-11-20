@@ -248,6 +248,7 @@ type Files = [string, [string, number][]][]
 const tuning = (files: Files): GlobalTuning => ({
   files: files.map(([file, values]) => ({ file, values: values.map(([setting, value]) => ({ setting, value })), error: null })),
   infinity_system: true,
+  rates_off: false,
 })
 const G = 'LiveTuningDataGlobal.json'
 const OWN = SERVER_RATES_FILE
