@@ -591,6 +591,7 @@ pub fn set_game_exe(app: tauri::AppHandle, path: String) -> Result<AppConfig, St
 
 #[tauri::command]
 pub fn set_server_exe(app: tauri::AppHandle, path: String) -> Result<AppConfig, String> {
+    ensure_stopped(&app)?;
     let mut config = load_config(&app);
     config.server_exe = path.clone();
     sync_active_linked(&mut config, detect_version);
