@@ -17,8 +17,12 @@
   export let onSelect: ((match: PrototypeMatch) => void) | undefined = undefined
   export let onEnter: (() => void) | undefined = undefined
 
+  /** Drops matches the caller can't use. */
+  export let allow: ((match: PrototypeMatch) => boolean) | undefined = undefined
+
   const search = createPrototypeSearch(query =>
     invoke<PrototypeMatch[]>('search_prototypes', { serverExe, query, blueprintHint, classFilter })
+      .then(found => allow ? found.filter(allow) : found)
   )
   const { state: searchState } = search
 
