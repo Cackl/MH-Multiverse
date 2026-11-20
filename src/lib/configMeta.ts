@@ -10,6 +10,10 @@ export interface Field {
   description: string
   min?: number
   max?: number
+  /** The server reads it as an integer */
+  int?: boolean
+  /** The server parses it as an IP address */
+  ip?: boolean
   options?: { value: string; label: string }[]
 }
 
@@ -42,8 +46,8 @@ export const CONFIG_SCHEMA: NavSection[] = [
       {
         title: 'Game server',
         fields: [
-          { key: 'BindIP',           section: 'Frontend', type: 'string', label: 'Bind IP',              description: 'IP address the game server listens on. 0.0.0.0 listens on all network interfaces.' },
-          { key: 'Port',             section: 'Frontend', type: 'number', label: 'Port',                 description: 'Port the game client connects to.', min: 1, max: 65535 },
+          { key: 'BindIP',           section: 'Frontend', type: 'string', label: 'Bind IP',              description: 'IP address the game server listens on. 0.0.0.0 listens on all network interfaces.', ip: true },
+          { key: 'Port',             section: 'Frontend', type: 'number', label: 'Port',                 description: 'Port the game client connects to.', min: 1, max: 65535, int: true },
           { key: 'PublicAddress',    section: 'Frontend', type: 'string', label: 'Public address',       description: 'Address clients use to reach this server. An IP like 192.168.1.2 or a host name.' },
         ],
       },
@@ -51,7 +55,7 @@ export const CONFIG_SCHEMA: NavSection[] = [
         title: 'Web frontend',
         fields: [
           { key: 'Address',                section: 'WebFrontend', type: 'string', label: 'Address',            description: 'Address the web frontend listens on.' },
-          { key: 'Port',                   section: 'WebFrontend', type: 'number', label: 'Port',               description: 'Port for logins, the web API and the dashboard.', min: 1, max: 65535 },
+          { key: 'Port',                   section: 'WebFrontend', type: 'number', label: 'Port',               description: 'Port for logins, the web API and the dashboard.', min: 1, max: 65535, int: true },
           { key: 'EnableWebApi',           section: 'WebFrontend', type: 'bool',   label: 'Web API',            description: 'Turns on the server\'s custom web API endpoints.' },
           { key: 'EnableDashboard',        section: 'WebFrontend', type: 'bool',   label: 'Dashboard',          description: 'Serves a server dashboard in the browser. Needs the web API.' },
         ],
@@ -60,9 +64,9 @@ export const CONFIG_SCHEMA: NavSection[] = [
         title: 'Connection limits',
         fields: [
           { key: 'EnableLoginRateLimit', section: 'WebFrontend', type: 'bool',   label: 'Limit login attempts', description: 'Slows down repeated login attempts.' },
-          { key: 'LoginRateLimitCostMS', section: 'WebFrontend', type: 'number', label: 'Cost per attempt (ms)', description: 'Time each login attempt costs.', min: 0 },
-          { key: 'LoginRateLimitBurst',  section: 'WebFrontend', type: 'number', label: 'Burst',                 description: 'Attempts allowed in a row before the limit applies. At least 2.', min: 2 },
-          { key: 'ReceiveTimeoutMS',     section: 'Frontend',    type: 'number', label: 'Receive timeout (ms)',  description: 'How long the server waits for data from a client before closing the connection. 0 waits forever. Doesn\'t affect the client\'s AFK kick.', min: 0 },
+          { key: 'LoginRateLimitCostMS', section: 'WebFrontend', type: 'number', label: 'Cost per attempt (ms)', description: 'Time each login attempt costs.', min: 0, int: true },
+          { key: 'LoginRateLimitBurst',  section: 'WebFrontend', type: 'number', label: 'Burst',                 description: 'Attempts allowed in a row before the limit applies. At least 2.', min: 2, int: true },
+          { key: 'ReceiveTimeoutMS',     section: 'Frontend',    type: 'number', label: 'Receive timeout (ms)',  description: 'How long the server waits for data from a client before closing the connection. 0 waits forever. Doesn\'t affect the client\'s AFK kick.', min: 0, int: true },
         ],
       },
     ],
@@ -82,9 +86,9 @@ export const CONFIG_SCHEMA: NavSection[] = [
       {
         title: 'Players',
         fields: [
-          { key: 'ServerCapacity',        section: 'PlayerManager', type: 'number', label: 'Capacity',          description: 'Most players online at once. Players over the cap wait in a queue. 0 means no limit.', min: 0 },
+          { key: 'ServerCapacity',        section: 'PlayerManager', type: 'number', label: 'Capacity',          description: 'Most players online at once. Players over the cap wait in a queue. 0 means no limit.', min: 0, int: true },
           { key: 'UseWhitelist',          section: 'PlayerManager', type: 'bool',   label: 'Whitelist only',    description: 'Only accounts added with !account whitelist can log in.' },
-          { key: 'MaxLoginQueueClients',  section: 'PlayerManager', type: 'number', label: 'Login queue size',  description: 'Most players that can wait in the login queue at once.', min: 0 },
+          { key: 'MaxLoginQueueClients',  section: 'PlayerManager', type: 'number', label: 'Login queue size',  description: 'Most players that can wait in the login queue at once.', min: 0, int: true },
           { key: 'EnableTownPlayerLimit', section: 'PlayerManager', type: 'bool',   label: 'Town player limit', description: 'Towns respect the player limits set in their region data.' },
           { key: 'ShowNewsOnLogin',       section: 'PlayerManager', type: 'bool',   label: 'News on login',     description: 'Opens the news window after login.' },
           { key: 'NewsUrl',               section: 'PlayerManager', type: 'string', label: 'News URL',          description: 'Page shown in the news window.' },
@@ -103,7 +107,7 @@ export const CONFIG_SCHEMA: NavSection[] = [
       {
         title: 'Performance',
         fields: [
-          { key: 'NumWorkerThreads', section: 'GameInstance', type: 'number', label: 'Worker threads', description: 'Threads that run game instances. Keep it at or below the number of logical CPUs.', min: 1 },
+          { key: 'NumWorkerThreads', section: 'GameInstance', type: 'number', label: 'Worker threads', description: 'Threads that run game instances. Keep it at or below the number of logical CPUs.', min: 1, int: true },
         ],
       },
     ],
@@ -118,23 +122,23 @@ export const CONFIG_SCHEMA: NavSection[] = [
           { key: 'EnablePersistence',          section: 'PlayerManager',     type: 'bool',   label: 'Save player data',        description: 'Saves player data between sessions.' },
           { key: 'AllowClientVersionMismatch', section: 'PlayerManager',     type: 'bool',   label: 'Allow version mismatch',  description: 'Lets clients with a different game version connect.' },
           { key: 'UseJsonDBManager',           section: 'PlayerManager',     type: 'bool',   label: 'Use JSON save file',      description: 'Saves to a JSON file instead of SQLite. Supports one account only.' },
-          { key: 'AutosaveIntervalMinutes',    section: 'CustomGameOptions', type: 'number', label: 'Autosave interval (min)', description: 'How often player data is saved outside region changes. 0 or less turns autosave off.', min: -1 },
+          { key: 'AutosaveIntervalMinutes',    section: 'CustomGameOptions', type: 'number', label: 'Autosave interval (min)', description: 'How often player data is saved outside region changes. 0 or less turns autosave off.', min: -1, int: true },
         ],
       },
       {
         title: 'SQLite',
         fields: [
           { key: 'FileName',              section: 'SQLiteDBManager', type: 'string', label: 'Database file',         description: 'SQLite file name in the Data folder.' },
-          { key: 'MaxBackupNumber',       section: 'SQLiteDBManager', type: 'number', label: 'Max backups',           description: 'Backups to keep. The oldest is overwritten. 0 turns backups off.', min: 0 },
-          { key: 'BackupIntervalMinutes', section: 'SQLiteDBManager', type: 'number', label: 'Backup interval (min)', description: 'Shortest time between backups.', min: 1 },
+          { key: 'MaxBackupNumber',       section: 'SQLiteDBManager', type: 'number', label: 'Max backups',           description: 'Backups to keep. The oldest is overwritten. 0 turns backups off.', min: 0, int: true },
+          { key: 'BackupIntervalMinutes', section: 'SQLiteDBManager', type: 'number', label: 'Backup interval (min)', description: 'Shortest time between backups.', min: 1, int: true },
         ],
       },
       {
         title: 'JSON',
         fields: [
           { key: 'FileName',              section: 'JsonDBManager', type: 'string', label: 'Save file',             description: 'JSON save file name in the Data folder.' },
-          { key: 'MaxBackupNumber',       section: 'JsonDBManager', type: 'number', label: 'Max backups',           description: 'Backups to keep. The oldest is overwritten. 0 turns backups off.', min: 0 },
-          { key: 'BackupIntervalMinutes', section: 'JsonDBManager', type: 'number', label: 'Backup interval (min)', description: 'Shortest time between backups.', min: 1 },
+          { key: 'MaxBackupNumber',       section: 'JsonDBManager', type: 'number', label: 'Max backups',           description: 'Backups to keep. The oldest is overwritten. 0 turns backups off.', min: 0, int: true },
+          { key: 'BackupIntervalMinutes', section: 'JsonDBManager', type: 'number', label: 'Backup interval (min)', description: 'Shortest time between backups.', min: 1, int: true },
           { key: 'PlayerName',            section: 'JsonDBManager', type: 'string', label: 'Player name',           description: 'Name given to the account loaded from the JSON file.' },
         ],
       },
@@ -143,7 +147,7 @@ export const CONFIG_SCHEMA: NavSection[] = [
         fields: [
           { key: 'DatabaseFile',            section: 'Leaderboards', type: 'string', label: 'Database file',           description: 'SQLite file name in Data\\Leaderboards.' },
           { key: 'ScheduleFile',            section: 'Leaderboards', type: 'string', label: 'Schedule file',           description: 'JSON schedule file name in Data\\Leaderboards.' },
-          { key: 'AutoSaveIntervalMinutes', section: 'Leaderboards', type: 'number', label: 'Autosave interval (min)', description: 'Shortest time between leaderboard saves.', min: 1 },
+          { key: 'AutoSaveIntervalMinutes', section: 'Leaderboards', type: 'number', label: 'Autosave interval (min)', description: 'Shortest time between leaderboard saves.', min: 1, int: true },
         ],
       },
     ],
@@ -226,9 +230,9 @@ export const CONFIG_SCHEMA: NavSection[] = [
       {
         title: 'Currency',
         fields: [
-          { key: 'GazillioniteBalanceForNewAccounts', section: 'MTXStore', type: 'number', label: 'Starting G',              description: 'G new accounts get on their first login.', min: 0 },
+          { key: 'GazillioniteBalanceForNewAccounts', section: 'MTXStore', type: 'number', label: 'Starting G',              description: 'G new accounts get on their first login.', min: 0, int: true },
           { key: 'ESToGazillioniteConversionRatio',   section: 'MTXStore', type: 'number', label: 'G per Eternity Splinter', description: 'G given for each Eternity Splinter converted.' },
-          { key: 'ESToGazillioniteConversionStep',    section: 'MTXStore', type: 'number', label: 'Conversion step',         description: 'Splinters are converted in steps of this size to avoid rounding errors.', min: 1 },
+          { key: 'ESToGazillioniteConversionStep',    section: 'MTXStore', type: 'number', label: 'Conversion step',         description: 'Splinters are converted in steps of this size to avoid rounding errors.', min: 1, int: true },
           { key: 'ESCooldownOverrideMinutes',         section: 'CustomGameOptions', type: 'number', label: 'Splinter drop cooldown (min)', description: 'Replaces the Eternity Splinter drop cooldown. A negative value keeps the stock cooldown.' },
           { key: 'CombineESStacks',                   section: 'CustomGameOptions', type: 'bool',   label: 'Combine splinter stacks',      description: 'Splinters that drop together become one stack.' },
         ],
@@ -237,11 +241,11 @@ export const CONFIG_SCHEMA: NavSection[] = [
         title: 'Gifting',
         fields: [
           { key: 'GiftingEnabled',                  section: 'GameOptions', type: 'bool',   label: 'Store gifting',      description: 'Players can buy gifts for others in the store.' },
-          { key: 'GiftingAccountAgeInDaysRequired', section: 'GameOptions', type: 'number', label: 'Account age (days)', description: 'Days since the account was made before it can gift.', min: 0 },
-          { key: 'GiftingAvatarLevelRequired',      section: 'GameOptions', type: 'number', label: 'Hero level',         description: 'Hero level needed to gift.', min: 0 },
-          { key: 'GiftingLoginCountRequired',       section: 'GameOptions', type: 'number', label: 'Days logged in',     description: 'Days the account must have logged in before it can gift.', min: 0 },
-          { key: 'GiftingOmegaLevelRequired',       section: 'MTXStore',    type: 'number', label: 'Omega level',        description: 'Omega level needed to buy gifts, when Omega is in use.', min: 0 },
-          { key: 'GiftingInfinityLevelRequired',    section: 'MTXStore',    type: 'number', label: 'Infinity level',     description: 'Infinity level needed to buy gifts, when Infinity is in use.', min: 0 },
+          { key: 'GiftingAccountAgeInDaysRequired', section: 'GameOptions', type: 'number', label: 'Account age (days)', description: 'Days since the account was made before it can gift.', min: 0, int: true },
+          { key: 'GiftingAvatarLevelRequired',      section: 'GameOptions', type: 'number', label: 'Hero level',         description: 'Hero level needed to gift.', min: 0, int: true },
+          { key: 'GiftingLoginCountRequired',       section: 'GameOptions', type: 'number', label: 'Days logged in',     description: 'Days the account must have logged in before it can gift.', min: 0, int: true },
+          { key: 'GiftingOmegaLevelRequired',       section: 'MTXStore',    type: 'number', label: 'Omega level',        description: 'Omega level needed to buy gifts, when Omega is in use.', min: 0, int: true },
+          { key: 'GiftingInfinityLevelRequired',    section: 'MTXStore',    type: 'number', label: 'Infinity level',     description: 'Infinity level needed to buy gifts, when Infinity is in use.', min: 0, int: true },
         ],
       },
       {
@@ -326,6 +330,28 @@ const NEEDS_INFINITY = new Set(['GameOptions.InfinitySystemEnabled', 'GameOption
 /** The fields to show for the active version. */
 export function fieldsFor(fields: Field[], hasInfinity: boolean): Field[] {
   return hasInfinity ? fields : fields.filter(f => !NEEDS_INFINITY.has(`${f.section}.${f.key}`))
+}
+
+/** Why the server can't use this value, or null if it can. The server crashes on a bad port or bind IP and skips other bad numbers. */
+export function fieldError(field: Field, value: string): string | null {
+  const v = value.trim()
+  if (field.ip) {
+    const parts = v.split('.')
+    const v4 = parts.length === 4 && parts.every(p => /^\d{1,3}$/.test(p) && Number(p) <= 255)
+    const v6 = v.includes(':') && /^[0-9a-f:.]+$/i.test(v)
+    return v4 || v6 ? null : 'Enter an IP address like 127.0.0.1'
+  }
+  if (field.type !== 'number') return null
+  if (field.int ? !/^-?\d+$/.test(v) : v === '' || !Number.isFinite(Number(v))) {
+    return field.int ? 'Enter a whole number' : 'Enter a number'
+  }
+  const n = Number(v)
+  if ((field.min !== undefined && n < field.min) || (field.max !== undefined && n > field.max)) {
+    return field.min !== undefined && field.max !== undefined ? `Enter a number from ${field.min} to ${field.max}`
+      : field.min !== undefined ? `Enter a number of at least ${field.min}`
+      : `Enter a number of at most ${field.max}`
+  }
+  return null
 }
 
 /** Every key whose value on screen differs from the saved one, across all pages. Missing counts as ''. */

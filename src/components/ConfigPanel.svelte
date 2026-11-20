@@ -9,7 +9,7 @@
   import { invoke } from '@tauri-apps/api/core'
   import { activeCaps, appConfig, setUnsaved, setConsolePresets, serverRunning, setShutdownConfig, logFilterThreshold, type ShutdownConfig } from '../lib/store'
   import { FALLBACK_COMMANDS } from '../lib/serverCommands'
-  import { CONFIG_SCHEMA, changedValues, fieldsFor, otherSettings, type Field, type NavSection } from '../lib/configMeta'
+  import { CONFIG_SCHEMA, changedValues, fieldError, fieldsFor, otherSettings, type Field, type NavSection } from '../lib/configMeta'
   import { tip } from '../lib/tooltip'
   import PanelSidebar from './PanelSidebar.svelte'
   import Dropdown from './Dropdown.svelte'
@@ -62,6 +62,12 @@
   $: changes = changedValues(values, savedValues)
   $: dirty = loaded && Object.keys(changes).length > 0
   $: pageDirty = allFields.some(f => changes[f.section]?.[f.key] !== undefined)
+  // Only edits are checked, so an odd value already in Config.ini doesn't block saving. Going back to the default is always allowed.
+  $: editError = (field: Field): string | null => {
+    const v = changes[field.section]?.[field.key]
+    return v === undefined || v === defaultOf(field) ? null : fieldError(field, v)
+  }
+  const schemaFields = CONFIG_SCHEMA.flatMap(p => [...(p.fields ?? []), ...(p.subsections ?? []).flatMap(s => s.fields)])
   $: presets = [...($appConfig.console_presets ?? [])]
   $: setUnsaved('config', dirty ? 'Config' : null)
   onDestroy(() => setUnsaved('config', null))
@@ -88,6 +94,11 @@
   async function save() {
     saveError = ''
     saveSuccess = false
+    const bad = [...new Set(schemaFields.filter(f => editError(f)).map(f => f.label))]
+    if (bad.length) {
+      saveError = `Fix these fields first: ${bad.join(', ')}`
+      return
+    }
     try {
       await invoke('write_config', { serverExe: $appConfig.server_exe, updates: changes })
       await load()
@@ -616,6 +627,7 @@
             {#each section.fields as field (field.section + '.' + field.key)}
               {@const value = getValue(field)}
               {@const def = defaultOf(field)}
+              {@const err = editError(field)}
               <div class="cfg-row">
                 <span class="cfg-name" class:raw={activeSection === 'all'}>
                   {field.label}
@@ -668,6 +680,7 @@
                     </button>
                   {/if}
                 </span>
+                {#if err}<span class="cfg-error">{err}</span>{/if}
               </div>
             {/each}
           {/each}
@@ -837,6 +850,7 @@
     gap: 10px;
     min-width: 0;
   }
+  .cfg-error { grid-column: 2; justify-self: end; font-size: var(--fs-min); color: var(--text-error); }
   .cfg-onoff { order: -1; font-size: 12px; color: var(--text-1); }
 
   .config-tooltip {
