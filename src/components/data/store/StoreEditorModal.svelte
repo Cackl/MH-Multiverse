@@ -54,7 +54,10 @@
    */
   export let allEntries: CatalogEntryWithMeta[] = []
   export let onClose: () => void
-  export let onSaved: (entry: CatalogEntryWithMeta) => void = () => {}
+  /** For a new entry, `pageError` says the store page wasn't made. The create modal closes, so the edit modal shows it. */
+  export let onSaved: (entry: CatalogEntryWithMeta, pageError?: string) => void = () => {}
+  /** An error to show when the modal opens. */
+  export let initialError = ''
   export let onDeleted: (skuId: string) => void = () => {}
 
   function deepClone<T>(value: T): T {
@@ -492,7 +495,7 @@
   // ── Save ──────────────────────────────────────────────────────────────────
 
   let saving      = false
-  let saveError   = ''
+  let saveError   = initialError
   let saveSuccess = false
 
   async function save() {
@@ -506,20 +509,22 @@
       await invoke('save_catalog_entry', { serverExe, entry: built, targetFile: target })
       const meta: CatalogEntryWithMeta = { ...built, source_file: target, from_modified: true, stock: entry?.stock ?? null }
       initialStateSerialized = currentStateSerialized
-      onSaved(meta)
+      if (!isNew) onSaved(meta)
       // Write the page and image now, so the game never caches a missing image.
+      let pageError = ''
       if (usesGeneratedPage(built, autoInfoUrl, autoThumbUrl)
           && await invoke<boolean>('apache_bundles_found', { serverExe })) {
         try {
           await writeStorePage(built, true)
         } catch (e) {
-          saveError = `Saved. The store page was not made: ${e}`
-          return
+          pageError = `Saved. The store page was not made: ${e}`
         }
       }
+      // A new entry reopens in the edit modal, which shows the page error.
+      if (isNew) { onSaved(meta, pageError); return }
+      if (pageError) { saveError = pageError; return }
       saveSuccess = true
       setTimeout(() => (saveSuccess = false), 3000)
-      if (isNew) onClose()
     } catch (e) {
       saveError = String(e)
     } finally {
