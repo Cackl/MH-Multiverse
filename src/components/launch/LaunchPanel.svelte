@@ -108,6 +108,8 @@
     if (autoInject) await refreshOverlay()
     try {
       await invoke('launch_game', { serverId: activeServer.id })
+      // Don't wait for the next poll to disable Launch.
+      gameRunning.set(true)
     } catch (e) {
       launchError = String(e)
     } finally {
