@@ -152,7 +152,8 @@ export function ruleDateError(
     const max = new Date(Date.UTC(2023, month!, 0)).getUTCDate() // 2023: not a leap year
     if (!Number.isInteger(day) || day! < 1 || day! > max) return `Day must be 1 to ${max} for this month.`
   }
-  if (!Number.isInteger(durationDays) || durationDays! < 1) return 'Duration must be at least 1 day.'
+  // A huge duration overflows the server's AddDays and crashes it at start. A rule ends at year end anyway.
+  if (!Number.isInteger(durationDays) || durationDays! < 1 || durationDays! > 366) return 'Duration must be 1 to 366 days.'
   return ''
 }
 

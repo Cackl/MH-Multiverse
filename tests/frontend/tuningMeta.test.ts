@@ -119,11 +119,15 @@ describe('ruleDateError', () => {
     ['SpecialDate',       0,    1,   7,    'Month must be 1 to 12.'],
     ['SpecialDate',       13,   1,   7,    'Month must be 1 to 12.'],
     ['SpecialDate',       null, 1,   7,    'Month must be 1 to 12.'],
-    ['SpecialDate',       1,    1,   0,    'Duration must be at least 1 day.'],
-    ['SpecialDate',       1,    1,   null, 'Duration must be at least 1 day.'],
+    ['SpecialDate',       1,    1,   0,    'Duration must be 1 to 366 days.'],
+    ['SpecialDate',       1,    1,   null, 'Duration must be 1 to 366 days.'],
+    ['SpecialDate',       1,    1,   366,  ok],
+    // The server's AddDays overflows and crashes it at start.
+    ['SpecialDate',       1,    1,   3000000, 'Duration must be 1 to 366 days.'],
+    ['SpecialDateLunar',  2,    30,  367,  'Duration must be 1 to 366 days.'],
     // Lunar months have up to 30 days and the server converts them safely.
     ['SpecialDateLunar',  2,    30,  7,    ok],
-    ['SpecialDateLunar',  2,    30,  null, 'Duration must be at least 1 day.'],
+    ['SpecialDateLunar',  2,    30,  null, 'Duration must be 1 to 366 days.'],
     // Undated rules ignore the date fields.
     ['AlwaysOn',          null, null, null, ok],
     ['DayOfWeek',         2,    31,  0,    ok],
