@@ -2,7 +2,7 @@
   import { onDestroy } from 'svelte'
   import { invoke } from '@tauri-apps/api/core'
   import { openPath } from '@tauri-apps/plugin-opener'
-  import { appConfig, serverRunning, eventTimezoneOffset, setUnsaved } from '../../../lib/store'
+  import { appConfig, serverRunning, eventTimezoneOffset, setUnsaved, eventsRestartPending, markEventsSaved } from '../../../lib/store'
   import { tip } from '../../../lib/tooltip'
   import PanelSidebar from '../../PanelSidebar.svelte'
   import Dropdown from '../../Dropdown.svelte'
@@ -34,8 +34,6 @@
   let saveError = ''
   let folderError = ''
   /** Set by a save; cleared once the server has (re)started, which is when events load. */
-  let pendingRestart = false
-  let sawStopped = false
 
   $: serverExe = $appConfig.server_exe
   $: if (serverExe) load(serverExe)
@@ -64,8 +62,6 @@
   const byName = (defs: EventDefinition[]) => defs.slice().sort((a, b) => a.display_name.localeCompare(b.display_name))
   const slugOf = (id: string) => id.slice(CUSTOM_PREFIX.length)
 
-  $: if (!$serverRunning) sawStopped = true
-  $: if ($serverRunning && sawStopped && pendingRestart) pendingRestart = false
 
   $: now = serverNow($eventTimezoneOffset)
   $: knownIds = new Set(definitions.map(d => d.id))
@@ -150,8 +146,7 @@
     try {
       const ownedFiles = Object.entries(pendingFiles).map(([slug, entries]) => ({ slug, entries }))
       await invoke('save_event_bundle', { serverExe, definitions, rules, ownedFiles, removedSlugs })
-      pendingRestart = true
-      sawStopped = !$serverRunning
+      markEventsSaved()
       await load(serverExe)
     } catch (e) {
       saveError = String(e)
@@ -357,7 +352,7 @@
           {#if saveError}<span class="error">{saveError}</span>
           {:else if folderError}<span class="error">{folderError}</span>
           {:else if dirty}<span class="dirty-badge">{dirty} unsaved {dirty === 1 ? 'change' : 'changes'}</span>
-          {:else if pendingRestart}<span>{$serverRunning ? 'Takes effect after a server restart.' : 'Applies next time the server starts.'}</span>{/if}
+          {:else if $eventsRestartPending && $serverRunning}<span>Takes effect after a server restart.</span>{/if}
         </div>
         <button
           class="btn btn-sm btn-accent"

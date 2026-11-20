@@ -37,6 +37,8 @@ import {
   switchBlocked,
   updateRunning,
   serverRunning,
+  eventsRestartPending,
+  markEventsSaved,
   gameRunning,
   type AppConfig,
   type Server,
@@ -347,5 +349,26 @@ describe('failed settings saves', () => {
   it('deleteServer returns the error instead of throwing', async () => {
     invokeMock.mockReset().mockRejectedValue('no write')
     expect(await deleteServer('a')).toBe('no write')
+  })
+})
+
+describe('eventsRestartPending', () => {
+  it('stays until the server starts after the save', () => {
+    serverRunning.set(true)
+    markEventsSaved()
+    expect(get(eventsRestartPending)).toBe(true)
+    serverRunning.set(true)
+    expect(get(eventsRestartPending)).toBe(true)
+    serverRunning.set(false)
+    expect(get(eventsRestartPending)).toBe(true)
+    serverRunning.set(true)
+    expect(get(eventsRestartPending)).toBe(false)
+  })
+  it('clears on the next start when saved while stopped', () => {
+    serverRunning.set(false)
+    markEventsSaved()
+    expect(get(eventsRestartPending)).toBe(true)
+    serverRunning.set(true)
+    expect(get(eventsRestartPending)).toBe(false)
   })
 })

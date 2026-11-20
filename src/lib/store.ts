@@ -80,6 +80,19 @@ export async function goDataTab(sub: DataTab) {
   activeDataTab.set(sub)
 }
 export const serverRunning = writable<boolean>(false)
+
+// Events saved since the running server started. The server reads Events and EventSchedule
+// only at startup, so both Events views show a restart notice until it starts again.
+export const eventsRestartPending = writable<boolean>(false)
+let eventsSawStop = false
+export function markEventsSaved() {
+  eventsRestartPending.set(true)
+  eventsSawStop = !get(serverRunning)
+}
+serverRunning.subscribe(running => {
+  if (!running) eventsSawStop = true
+  else if (eventsSawStop) eventsRestartPending.set(false)
+})
 // True once the server has finished starting and reads console commands (see serverEvents.ts).
 export const serverReady = writable<boolean>(false)
 serverRunning.subscribe(running => { if (!running) serverReady.set(false) })
