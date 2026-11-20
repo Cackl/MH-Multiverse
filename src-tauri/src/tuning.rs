@@ -474,6 +474,8 @@ pub struct GlobalTuning {
     pub files: Vec<GlobalTuningFile>,
     /// `[GameOptions] InfinitySystemEnabled`: true means Infinity XP is live, false Omega XP.
     pub infinity_system: bool,
+    /// The Server Rates file exists only as OFF_, so the server doesn't load it.
+    pub rates_off: bool,
 }
 
 /// The file the Server Rates form owns. It loads after `LiveTuningDataGlobal.json`, and user
@@ -485,7 +487,7 @@ pub(crate) const SERVER_RATES_FILE: &str = "LiveTuningDataMultiverse.json";
 /// ignoring case first. This is why `LiveTuningData_X.json` loads before
 /// `LiveTuningDataGlobal.json`.
 // ponytail: covers the characters that appear in tuning file names, not full ICU collation.
-fn server_sort_key(name: &str) -> (Vec<(u8, u32)>, String) {
+pub(crate) fn server_sort_key(name: &str) -> (Vec<(u8, u32)>, String) {
     let primary = name
         .chars()
         .map(|c| match c {
@@ -524,8 +526,10 @@ pub fn read_global_tuning(server_exe: String) -> Result<GlobalTuning, String> {
         .eq_ignore_ascii_case("true");
     if !dir.exists() {
         let files = vec![GlobalTuningFile { file: SERVER_RATES_FILE.into(), values: vec![], error: None }];
-        return Ok(GlobalTuning { files, infinity_system });
+        return Ok(GlobalTuning { files, infinity_system, rates_off: false });
     }
+
+    let rates_off = !dir.join(SERVER_RATES_FILE).exists() && inactive_path_for(&dir, SERVER_RATES_FILE).exists();
 
     // The server reads only top-level LiveTuningData*.json (FileHelper.GetFilesWithPrefix),
     // so OFF_ files and subfolders are not part of the base chain.
@@ -552,7 +556,7 @@ pub fn read_global_tuning(server_exe: String) -> Result<GlobalTuning, String> {
         })
         .collect();
 
-    Ok(GlobalTuning { files, infinity_system })
+    Ok(GlobalTuning { files, infinity_system, rates_off })
 }
 
 #[cfg(test)]

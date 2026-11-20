@@ -236,7 +236,7 @@
           <input
             id="duration"
             class="field-input field-input-narrow"
-            type="number" min="1"
+            type="number" min="1" max="366"
             bind:value={duration_days}
             disabled={saving}
           />

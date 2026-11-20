@@ -14,6 +14,8 @@
   let files: PatchFileInfo[] = []
   let scanning = false
   let scanError = ''
+  /** EnablePatchManager in Config. Off, the server loads no patch file. */
+  let patchesOn = true
   /** Names the copy a switch moved aside when both folders had the file. */
   let keptNote = ''
   let openDirError = ''
@@ -134,6 +136,7 @@
     scanError = ''
     try {
       files = await invoke<PatchFileInfo[]>('scan_patch_files', { serverExe: $appConfig.server_exe })
+      patchesOn = await invoke<boolean>('patch_manager_enabled', { serverExe: $appConfig.server_exe })
     } catch (e) {
       scanError = String(e)
     } finally {
@@ -552,6 +555,9 @@
           {#if saveError}
             <span class="feedback-error">{saveError}</span>
           {/if}
+          {#if !patchesOn && !isDirty && !saveSuccess && !saveError}
+            <span class="patches-off">Data patches is off in Config. The server loads none of these.</span>
+          {/if}
           <button
             class="btn btn-sm btn-accent"
             class:btn-pulse={isDirty}
@@ -779,4 +785,5 @@
   .move-btn:hover:not(:disabled) { color: var(--text-1); border-color: var(--border-lit); }
   .move-btn:disabled { opacity: 0.25; cursor: not-allowed; }
 
+  .patches-off { font-size: 12px; color: var(--text-warning); }
 </style>

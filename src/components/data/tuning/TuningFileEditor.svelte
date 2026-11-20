@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte'
   import { invoke } from '@tauri-apps/api/core'
-  import { categoryForSetting, KNOWN_CORE, KNOWN_EVENTS, KNOWN_SETTINGS, NEW_TUNING_FILE_PREFIX, blueprintHintForSetting, knownSettingsFor, newTuningFileName, parseTuningValue, tuningDisplayName, settingTip, tuningEntriesChanged, type KnownSetting } from '../../../lib/tuningMeta'
+  import { categoryForSetting, KNOWN_CORE, KNOWN_EVENTS, KNOWN_SETTINGS, NEW_TUNING_FILE_PREFIX, blueprintHintForSetting, tuningClassForSetting, tuningPickAllowed, knownSettingsFor, newTuningFileName, parseTuningValue, tuningDisplayName, settingTip, tuningEntriesChanged, type KnownSetting } from '../../../lib/tuningMeta'
   import { tip } from '../../../lib/tooltip'
   import { activeLinked, setUnsaved } from '../../../lib/store'
   import type { PatchNames } from '../../../lib/patchesMeta'
@@ -224,7 +224,7 @@
     const trimmedProto = newPrototype.trim()
     // Blank keeps the "1" placeholder; anything else must be a real number.
     const value = String(newValue ?? '').trim() === '' ? 1 : parseTuningValue(newValue)
-    if (value === null) { addError = 'Value must be a number.'; return }
+    if (value === null) { addError = 'Value must be a number no bigger than 3.4e38.'; return }
     // Rows are keyed by prototype|setting, so a duplicate would crash the list.
     if (entries.some(e => e.prototype === trimmedProto && e.setting === trimmedSetting)) {
       addError = 'This setting is already in the file for that prototype.'
@@ -422,6 +422,8 @@
           compact
           disabled={isGlobalSetting}
           blueprintHint={blueprintHintForSetting(newSetting) ?? undefined}
+          classFilter={tuningClassForSetting(newSetting) ?? undefined}
+          allow={m => tuningPickAllowed(newSetting, m)}
           placeholder={isGlobalSetting ? 'Not required (Global setting)' : undefined}
         />
       </div>

@@ -223,6 +223,82 @@ fn save_rejects_complex_value_that_is_not_json() {
 }
 
 #[test]
+fn value_error_refuses_only_what_the_server_cannot_read() {
+    let ok = |t: &str, v: &str| value_error(t, &serde_json::from_str(v).unwrap());
+    for (t, v) in [
+        ("String", r#""x""#), ("String", "null"), ("Enum", r#""A""#), ("Boolean", "false"),
+        ("Float", "1.5"), ("Float", "3"), ("Float", "-3.4028235e38"),
+        ("Integer", "-2147483648"), ("Integer", "2147483647"),
+        ("PrototypeId", "18446744073709551615"), ("PrototypeGuid", "0"), ("LocaleStringId", "7"),
+        ("PrototypeId[]", "[]"), ("PrototypeDataRef[]", "[1, 18446744073709551615]"),
+        ("Vector3", "[1, 2.5, -3]"),
+        ("Prototype", r#"{"ParentDataRef": 10449030269642610036, "Anything": "goes"}"#),
+        ("Prototype[]", r#"[{"ParentDataRef": 1}]"#), ("Prototype[]", "[]"),
+        ("Properties", r#"{"CooldownModifierPctGlobal": -0.25, "LootTablePrototype": [1, 2]}"#),
+        ("Properties", r#"{"5": 1, " AIDefeated , Invalid ": 1}"#),
+        ("SomethingNew", "null"),
+    ] {
+        assert_eq!(ok(t, v), None, "{t} {v}");
+    }
+    for (t, v) in [
+        ("String", "5"), ("Enum", "true"), ("Boolean", r#""true""#), ("Boolean", "null"),
+        ("Float", "null"), ("Float", r#""1""#), ("Float", "3.5e38"),
+        ("Integer", "1.0"), ("Integer", "2147483648"), ("Integer", "-2147483649"), ("Integer", "null"),
+        ("PrototypeId", r#""Powers/Foo.prototype""#), ("PrototypeId", "-1"), ("PrototypeId", "1.5"),
+        ("PrototypeDataRef", "18446744073709551616"), ("PrototypeGuid", "null"),
+        ("PrototypeId[]", r#"[1, "abc"]"#), ("PrototypeDataRef[]", "1"),
+        ("Vector3", "[1, 2]"), ("Vector3", "[1, 2, 3, 4]"), ("Vector3", r#"[1, 2, "3"]"#), ("Vector3", "[1, 2, 1e39]"),
+        ("Prototype", "null"), ("Prototype", r#"{"Value": 1}"#), ("Prototype", r#"{"ParentDataRef": "1"}"#),
+        ("Prototype[]", r#"{"ParentDataRef": 1}"#), ("Prototype[]", r#"[{"ParentDataRef": 1}, {}]"#),
+        ("Properties", "null"), ("Properties", "[]"), ("Properties", r#"{"CooldownModifierPctGlobl": 1}"#),
+    ] {
+        assert!(ok(t, v).is_some(), "{t} {v} should be refused");
+    }
+    assert_eq!(ok("Properties", r#"{"Typo": 1}"#).as_deref(), Some("Unknown property Typo."));
+}
+
+#[test]
+fn save_refuses_a_value_the_server_cannot_read_even_when_disabled() {
+    let (_tmp, server_exe) = setup();
+    let file = patches_dir(&server_exe).unwrap().join("PatchDataComplex.json");
+    let before = std::fs::read_to_string(&file).unwrap();
+    let mut entries = load_complex(&server_exe);
+    entries.push(PatchEntry {
+        enabled: false,
+        prototype: "Powers/Foo.prototype".into(),
+        path: "Keywords[]".into(),
+        description: String::new(),
+        value_type: "PrototypeId".into(),
+        value: JsonValue::String("Powers/Keywords/Bar.prototype".into()),
+    });
+
+    let err = save_patch_file(server_exe, "PatchDataComplex.json".to_string(), true, entries).unwrap_err();
+
+    assert!(err.contains("Entry 5 (Powers/Foo.prototype): PrototypeId needs a numeric id."), "{err}");
+    assert_eq!(std::fs::read_to_string(&file).unwrap(), before);
+}
+
+#[test]
+fn id_text_is_checked_after_it_becomes_a_number() {
+    let entry = |value: JsonValue| PatchEntry {
+        enabled: true, prototype: "P".into(), path: "X".into(), description: "Named".into(),
+        value_type: "PrototypeId[]".into(), value,
+    };
+    assert!(to_disk_all(vec![entry(serde_json::json!(["18446744073709551615", " 5 "]))]).is_ok());
+    let err = to_disk_all(vec![entry(serde_json::json!(["5", "abc"]))]).err().unwrap();
+    assert_eq!(err, "Entry 1 (Named): PrototypeId[] needs a list of numeric ids.");
+}
+
+#[test]
+fn every_fixture_file_saves() {
+    let (_tmp, server_exe) = setup();
+    for f in scan_patch_files(server_exe.clone()).unwrap() {
+        let entries = load_patch_file(server_exe.clone(), f.file_name.clone(), f.enabled).unwrap();
+        assert!(to_disk_all(entries).is_ok(), "{}", f.file_name);
+    }
+}
+
+#[test]
 fn load_accepts_a_byte_order_mark() {
     let (_tmp, server_exe) = setup();
     let file = patches_dir(&server_exe).unwrap().join("PatchDataBom.json");
@@ -233,4 +309,22 @@ fn load_accepts_a_byte_order_mark() {
 
     assert_eq!(entries.len(), 1);
     assert_eq!(entries[0].value, 1);
+}
+
+#[test]
+fn scan_lists_files_in_server_load_order() {
+    let (_tmp, server_exe) = setup();
+    fs::write(patches_dir(&server_exe).unwrap().join("PatchData_X.json"), "[]").unwrap();
+    let names: Vec<String> = scan_patch_files(server_exe).unwrap().into_iter().map(|f| f.file_name).collect();
+    let at = |n: &str| names.iter().position(|f| f == n).unwrap();
+    // The server's culture sort puts _ before letters. An ordinal sort would not.
+    assert!(at("PatchData_X.json") < at("PatchDataBugFixes.json"), "{names:?}");
+}
+
+#[test]
+fn patch_manager_is_off_only_when_config_says_false() {
+    assert!(patch_manager_on("true"));
+    assert!(patch_manager_on(""));
+    assert!(!patch_manager_on("False"));
+    assert!(!patch_manager_on(" false "));
 }

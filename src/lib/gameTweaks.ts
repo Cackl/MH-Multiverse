@@ -28,6 +28,7 @@ export const SUMMON_MIN = 1
 // The shared summon inventory holds 128 (AgentSummonedEntities Capacity).
 export const SUMMON_MAX = 128
 export const SUMMON_DEFAULT = 4
+export { SUMMON_TIP } from './patchEntryEdit'
 const SUMMON_TAG = '[MV:summons'
 
 /** How many a summon power can keep out at once. `path` is the power's prototype path. */
@@ -125,4 +126,30 @@ export function withCooldowns(entries: PatchEntry[], avatarPaths: string[], c: C
       Value: `{${parts.join(',')}}`,
     })),
   ]
+}
+
+/**
+ * Heroes whose cooldown entry the server would ignore, with the file that wins instead.
+ * The server keeps only the first enabled Properties entry per prototype, matching names
+ * without case (PrototypePatchManager.CheckProperties). `files` are the enabled patch files
+ * in load order, up to and including the tweaks file. The cooldown entries go last in the
+ * tweaks file, so any other Properties entry in it comes first.
+ */
+export function shadowedCooldowns(
+  files: { file_name: string; entries: PatchEntry[] }[],
+  tweaksFile: string,
+  heroes: string[],
+): Record<string, string> {
+  const wanted = new Map(heroes.map(h => [h.toLowerCase(), h]))
+  const out: Record<string, string> = {}
+  for (const f of files) {
+    for (const e of f.entries) {
+      const hero = wanted.get(e.Prototype.toLowerCase())
+      if (!e.Enabled || e.ValueType !== 'Properties' || !hero || hero in out) continue
+      if (f.file_name === tweaksFile && e.Description.startsWith(COOLDOWN_TAG)) continue
+      out[hero] = f.file_name
+    }
+    if (f.file_name === tweaksFile) break
+  }
+  return out
 }

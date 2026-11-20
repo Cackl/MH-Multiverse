@@ -4,7 +4,7 @@
   import { openPath } from '@tauri-apps/plugin-opener'
   import { appConfig } from '../../../lib/store'
   import { activeDataTab, tuningFocusFile, confirmLeave, askConfirm } from '../../../lib/store'
-  import { eventTimezoneOffset } from '../../../lib/store'
+  import { eventTimezoneOffset, serverRunning, eventsRestartPending, markEventsSaved } from '../../../lib/store'
   import { serverNow, ruleIsValid, ruleActiveIds, activeEventIds as eventsActiveAt } from '../../../lib/eventSchedule'
   import type { TuningFileInfo, EventDefinition, EventsData, ScheduleRule, ScheduleData } from '../../../lib/tuningMeta'
   import { replaceRuleAt } from '../../../lib/tuningMeta'
@@ -167,6 +167,7 @@
       if (creatingRule) selectedIndex = newRules.length - 1
       selectedRule = updated
       creatingRule = false
+      markEventsSaved()
       opSuccess    = 'Saved'
       setTimeout(() => opSuccess = '', 3000)
       return true
@@ -220,6 +221,7 @@
       eventsData        = { definitions: newDefs, using_override: true }
       editingDefinition = null
       creatingDefinition = false
+      markEventsSaved()
       opSuccess = 'Saved'
       setTimeout(() => opSuccess = '', 3000)
       return ''
@@ -236,6 +238,7 @@
     saving = true; opError = ''
     try {
       eventsData = await invoke<EventsData>('reset_events_override', { serverExe: $appConfig.server_exe })
+      markEventsSaved()
     } catch (e) { opError = String(e) }
     finally { saving = false }
   }
@@ -244,6 +247,7 @@
     saving = true; opError = ''
     try {
       eventsData = await invoke<EventsData>('merge_events_override', { serverExe: $appConfig.server_exe })
+      markEventsSaved()
     } catch (e) { opError = String(e) }
     finally { saving = false }
   }
@@ -252,6 +256,7 @@
     saving = true; opError = ''
     try {
       scheduleData = await invoke<ScheduleData>('reset_schedule_override', { serverExe: $appConfig.server_exe })
+      markEventsSaved()
       discardEditor()  // selection is by object reference; these are new objects
     } catch (e) { opError = String(e) }
     finally { saving = false }
@@ -261,6 +266,7 @@
     saving = true; opError = ''
     try {
       scheduleData = await invoke<ScheduleData>('merge_schedule_override', { serverExe: $appConfig.server_exe })
+      markEventsSaved()
       discardEditor()  // selection is by object reference; these are new objects
     } catch (e) { opError = String(e) }
     finally { saving = false }
@@ -399,7 +405,8 @@
         {/if}
         <div class="page-acts">
           {#if opError}<span class="feedback-error">{opError}</span>{/if}
-          {#if opSuccess}<span class="feedback-ok">{opSuccess}</span>{/if}
+          {#if opSuccess}<span class="feedback-ok">{opSuccess}</span>
+          {:else if $eventsRestartPending && $serverRunning && !opError}<span class="restart-note">Takes effect after a server restart.</span>{/if}
           {#if $appConfig.server_exe && !loading && !loadError && selectedRule === null && !creatingRule}
             <button class="btn btn-sm btn-outline" on:click={() => { creatingDefinition = true; editingDefinition = null }}>New event</button>
           {/if}
@@ -738,4 +745,5 @@
   }
 
   .def-edit-btn { flex-shrink: 0; }
+  .restart-note { font-size: 11px; color: var(--text-2); }
 </style>

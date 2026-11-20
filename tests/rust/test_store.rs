@@ -499,3 +499,46 @@ fn a_read_only_file_never_leaves_a_read_only_bak_or_a_tmp() {
     assert_eq!(fs::read_to_string(&bak).unwrap(), "three");
     assert_eq!(fs::read_to_string(&path).unwrap(), "four");
 }
+
+#[test]
+fn save_catalog_entry_refuses_a_negative_price() {
+    let (_tmp, server_exe) = empty_mtxstore();
+    let dir = mtxstore_dir(&server_exe).unwrap();
+    let mut e = sample_entry("1");
+    e.localized_entries[0].item_price = -1;
+    save_catalog_entry(server_exe, e, "Catalog.json".into()).unwrap_err();
+    assert_eq!(fs::read_dir(&dir).unwrap().count(), 0);
+}
+
+#[test]
+fn catalog_files_load_with_fields_the_server_defaults() {
+    let (_tmp, server_exe) = empty_mtxstore();
+    let dir = mtxstore_dir(&server_exe).unwrap();
+    fs::write(dir.join("Catalog.json"), r#"[{
+        "SkuId": 7,
+        "GuidItems": [{ "ItemPrototypeRuntimeIdForClient": 5 }],
+        "AdditionalGuidItems": [],
+        "LocalizedEntries": [{ "LanguageId": "en_us", "Description": "", "Title": "T", "ReleaseDate": "", "ItemPrice": 1 }],
+        "InfoUrls": [{ "LanguageId": "en_us", "Url": null, "ImageData": null }],
+        "ContentData": [],
+        "Type": { "Name": "Boost", "Order": 1 },
+        "TypeModifiers": []
+    }]"#).unwrap();
+    let entries = load_catalog_entries(server_exe).unwrap();
+    let g = &entries[0].entry.guid_items[0];
+    assert_eq!((g.prototype_guid.as_str(), g.quantity), ("0", 0));
+    assert_eq!(entries[0].entry.info_urls[0].image_data, "");
+}
+
+#[test]
+fn catalog_files_load_in_the_server_order() {
+    let (_tmp, server_exe) = empty_mtxstore();
+    let dir = mtxstore_dir(&server_exe).unwrap();
+    for name in ["Catalog.json", "Catalog_X.json", "catalogLower.json", "CatalogMODIFIED.json", "Other.json"] {
+        fs::write(dir.join(name), "[]").unwrap();
+    }
+    assert_eq!(
+        catalog_files_in_load_order(&dir).unwrap(),
+        ["Catalog_X.json", "Catalog.json", "catalogLower.json", "CatalogMODIFIED.json"],
+    );
+}

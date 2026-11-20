@@ -143,9 +143,13 @@ export function withParent(pairs: Pair[], parent: string): Pair[] {
 
 // ── Hints and checks ─────────────────────────────────────────────────────────
 
+// The server refuses a cast that summons more than the cap (SummonPower.cs SummonPayloadEntity).
+export const SUMMON_TIP = 'Must be at least the number the power summons per cast, or it summons nothing'
+
 /** A note under Path for paths that behave differently from a plain field. */
 export function pathHint(e: Pick<PatchEntry, 'Path' | 'ValueType' | 'Value'>): string {
   if (/(^|\.)ActionsTriggeredOnPowerEvent\[/.test(e.Path.trim())) return "The power it triggers must be a ComboEffect power that isn't passive and isn't already on the hero. The server refuses anything else."
+  if (/(^|\.)SummonMaxSimultaneous$/.test(e.Path.trim())) return `${SUMMON_TIP}.`
   if (e.Path.trim().endsWith('[]')) return 'Ends in [], so this adds to the list. [n] would replace element n.'
   if (e.ValueType === 'Properties') return 'Only the first Properties entry for a hero counts, across all files.'
   if (e.ValueType === 'Prototype' && typeof e.Value === 'string' && /"Op"\s*:/.test(e.Value)) return 'Replaces the whole formula, so powers that inherit it keep theirs.'
@@ -198,6 +202,35 @@ export function problems(e: PatchEntry): Problem[] {
     })
   }
   return out
+}
+
+/** The largest value the server reads as a float. */
+export const FLOAT_MAX = 3.4028235e38
+
+const U64_MAX = BigInt('18446744073709551615')
+const isId = (x: unknown) => (typeof x === 'string' || typeof x === 'number') && /^\d+$/.test(String(x).trim()) && BigInt(String(x).trim()) <= U64_MAX
+const isFloat = (x: unknown) => typeof x === 'number' && Math.abs(x) <= FLOAT_MAX
+
+/**
+ * Why the server can't read this value as typed in the editor, or ''. The server skips the
+ * whole file then, even for a switched off entry. Mirrors value_error in patches.rs for the
+ * plain types. Prototype and Properties values are checked there.
+ */
+export function valueError(valueType: string, text: string): string {
+  const t = text.trim()
+  if (['String', 'Enum', 'Boolean'].includes(valueType)) return ''
+  if (!t) return 'Fill in a value.'
+  if (valueType === 'Integer') {
+    const n = Number(t)
+    return /^[-+]?\d+$/.test(t) && n >= -2147483648 && n <= 2147483647 ? '' : 'Needs a whole number from -2147483648 to 2147483647.'
+  }
+  if (valueType === 'Float') return isFloat(Number(t)) ? '' : 'Needs a number no bigger than 3.4e38.'
+  if (ID.has(valueType)) return isId(t) ? '' : 'Needs a numeric id.'
+  if (!ID_LIST.has(valueType) && valueType !== 'Vector3') return ''
+  let v: unknown
+  try { v = JSON.parse(t) } catch { return 'Invalid JSON.' }
+  if (valueType === 'Vector3') return Array.isArray(v) && v.length === 3 && v.every(isFloat) ? '' : 'Needs a list of 3 numbers.'
+  return Array.isArray(v) && v.every(isId) ? '' : 'Needs a list of numeric ids.'
 }
 
 // ── JSON view ────────────────────────────────────────────────────────────────

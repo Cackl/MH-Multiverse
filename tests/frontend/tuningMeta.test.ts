@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { categoryForSetting, tuningEntriesChanged, blueprintHintForSetting, parseTuningValue, ruleDateError, newTuningFileName, tuningDisplayName, CATEGORY_PREFIXES,
+import { categoryForSetting, tuningEntriesChanged, blueprintHintForSetting, tuningClassForSetting, tuningPickAllowed, parseTuningValue, ruleDateError, newTuningFileName, tuningDisplayName, CATEGORY_PREFIXES,
   RATE_ROWS, SERVER_RATES_FILE, rateRows, formatRate, toShown, fromShown, resolveRate, planServerRatesWrite, reloadResult,
   KNOWN_SETTINGS, knownSettingsFor, settingTip, tuningGroup, replaceRuleAt, type GlobalTuning, type RateRow, type TuningEntry } from '../../src/lib/tuningMeta'
 
@@ -96,7 +96,7 @@ describe('parseTuningValue', () => {
     expect(parseTuningValue(-2)).toBe(-2)
   })
   it('returns null for blank or non-numeric input', () => {
-    for (const bad of ['', '  ', null, undefined, 'abc', '1abc', 'NaN', 'Infinity']) {
+    for (const bad of ['', '  ', null, undefined, 'abc', '1abc', 'NaN', 'Infinity', '1e39', '-3.5e38']) {
       expect(parseTuningValue(bad as never), String(bad)).toBeNull()
     }
   })
@@ -119,11 +119,15 @@ describe('ruleDateError', () => {
     ['SpecialDate',       0,    1,   7,    'Month must be 1 to 12.'],
     ['SpecialDate',       13,   1,   7,    'Month must be 1 to 12.'],
     ['SpecialDate',       null, 1,   7,    'Month must be 1 to 12.'],
-    ['SpecialDate',       1,    1,   0,    'Duration must be at least 1 day.'],
-    ['SpecialDate',       1,    1,   null, 'Duration must be at least 1 day.'],
+    ['SpecialDate',       1,    1,   0,    'Duration must be 1 to 366 days.'],
+    ['SpecialDate',       1,    1,   null, 'Duration must be 1 to 366 days.'],
+    ['SpecialDate',       1,    1,   366,  ok],
+    // The server's AddDays overflows and crashes it at start.
+    ['SpecialDate',       1,    1,   3000000, 'Duration must be 1 to 366 days.'],
+    ['SpecialDateLunar',  2,    30,  367,  'Duration must be 1 to 366 days.'],
     // Lunar months have up to 30 days and the server converts them safely.
     ['SpecialDateLunar',  2,    30,  7,    ok],
-    ['SpecialDateLunar',  2,    30,  null, 'Duration must be at least 1 day.'],
+    ['SpecialDateLunar',  2,    30,  null, 'Duration must be 1 to 366 days.'],
     // Undated rules ignore the date fields.
     ['AlwaysOn',          null, null, null, ok],
     ['DayOfWeek',         2,    31,  0,    ok],
@@ -244,6 +248,7 @@ type Files = [string, [string, number][]][]
 const tuning = (files: Files): GlobalTuning => ({
   files: files.map(([file, values]) => ({ file, values: values.map(([setting, value]) => ({ setting, value })), error: null })),
   infinity_system: true,
+  rates_off: false,
 })
 const G = 'LiveTuningDataGlobal.json'
 const OWN = SERVER_RATES_FILE
@@ -356,5 +361,20 @@ describe('replaceRuleAt', () => {
   it('throws for an index that is gone, so a save never writes the old rules back', () => {
     expect(() => replaceRuleAt([rule('A')], -1, rule('B'))).toThrow()
     expect(() => replaceRuleAt([rule('A')], 1, rule('B'))).toThrow()
+  })
+})
+
+describe('tuning prototype class', () => {
+  it('names the class the server needs for each prefix', () => {
+    expect(tuningClassForSetting('eAETV_Enabled')).toBe('AvatarPrototype')
+    expect(tuningClassForSetting('eWETV_MobXP')).toBe('WorldEntityPrototype')
+    expect(tuningClassForSetting('ePOTV_Spawn')).toBe('PopulationObjectPrototype')
+    expect(tuningClassForSetting('eRT_BonusXPPct')).toBe('RegionPrototype')
+    expect(tuningClassForSetting('eGTV_XPGain')).toBeNull()
+  })
+  it('leaves avatars out of world entity settings only', () => {
+    expect(tuningPickAllowed('eWETV_MobXP', { class: 'AvatarPrototype' })).toBe(false)
+    expect(tuningPickAllowed('eWETV_MobXP', { class: 'AgentPrototype' })).toBe(true)
+    expect(tuningPickAllowed('eAETV_Enabled', { class: 'AvatarPrototype' })).toBe(true)
   })
 })

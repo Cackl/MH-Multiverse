@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import {
-  parsePairs, pairsText, emptyKeys, withParent, pathHint, problems, entryJson, parseEntryJson,
+  parsePairs, pairsText, emptyKeys, withParent, pathHint, problems, entryJson, parseEntryJson, valueError,
   RECIPES, PARENTS, CHOICE_FIELDS, LOAD_INT, LOAD_FLOAT,
 } from '../../src/lib/patchEntryEdit'
 import type { PatchEntry } from '../../src/lib/patchesMeta'
@@ -90,6 +90,7 @@ describe('CHOICE_FIELDS', () => {
 describe('pathHint', () => {
   it('explains appends, Properties and whole formulas', () => {
     expect(pathHint(entry({ Path: 'Keywords[]' }))).toMatch(/adds to the list/)
+    expect(pathHint(entry({ Path: 'SummonMaxSimultaneous' }))).toMatch(/per cast/)
     expect(pathHint(entry({ Path: 'Keywords[0]' }))).toBe('')
     expect(pathHint(entry({ Path: 'ActionsTriggeredOnPowerEvent[]' }))).toMatch(/ComboEffect/)
     expect(pathHint(entry({ Path: 'ActionsTriggeredOnPowerEvent[2]' }))).toMatch(/ComboEffect/)
@@ -154,5 +155,24 @@ describe('entryJson and parseEntryJson', () => {
     expect(parseEntryJson(ok.replace('"Path": "F"', '"Path": 5'))).toEqual({ error: 'Path must be text in quotes.' })
     expect(parseEntryJson(ok.replace('"Value": 1', '"Value": [1'))).toEqual({ error: 'Not a JSON object.' })
     expect(parseEntryJson(ok.replace('"Value": 1', '"Value": 1,\n  "Extra": 2'))).toEqual({ error: 'Unknown key Extra.' })
+  })
+})
+
+describe('valueError', () => {
+  it('passes values the server reads', () => {
+    for (const [type, text] of [
+      ['Integer', '-2147483648'], ['Integer', ' 2147483647 '], ['Float', '1.5'], ['Float', '-3.4028235e38'],
+      ['PrototypeId', BIG], ['LocaleStringId', '18446744073709551615'], ['PrototypeId[]', `["${BIG}", 5]`],
+      ['PrototypeDataRef[]', '[]'], ['Vector3', '[1, 2.5, -3]'], ['String', ''], ['Boolean', ''], ['Prototype', '{"x":1}'],
+    ]) expect(valueError(type, text), `${type} ${text}`).toBe('')
+  })
+  it('refuses values that make the server skip the file', () => {
+    for (const [type, text] of [
+      ['Integer', ''], ['Integer', '1.5'], ['Integer', '2147483648'], ['Integer', 'abc'],
+      ['Float', ''], ['Float', 'abc'], ['Float', '3.5e38'], ['Float', 'Infinity'],
+      ['PrototypeId', 'Powers/Foo.prototype'], ['PrototypeGuid', '-1'], ['PrototypeDataRef', '18446744073709551616'],
+      ['PrototypeId[]', '[1, "abc"]'], ['PrototypeId[]', '5'], ['PrototypeId[]', '[1,'],
+      ['Vector3', '[1, 2]'], ['Vector3', '[1, 2, "3"]'], ['Vector3', '[1, 2, 1e39]'], ['Prototype[]', ''],
+    ]) expect(valueError(type, text), `${type} ${text}`).not.toBe('')
   })
 })

@@ -1,3 +1,5 @@
+import { FLOAT_MAX } from './patchEntryEdit'
+
 // ── Prefix-ordering safety net ───────────────────────────────────────────────
 // Both maps below do a first-match scan over a prefix list. If a prefix is
 // itself a prefix of a later, more specific one in the same list, the later
@@ -68,15 +70,46 @@ const BLUEPRINT_HINT_PREFIXES: [string, string | null][] = [
 
 assertPrefixOrder(BLUEPRINT_HINT_PREFIXES, 'BLUEPRINT_HINT_PREFIXES')
 
+// The server picks a setting's table by the prototype's class, testing an avatar first
+// (LiveTuningData.UpdateLiveTuningVar). A prototype of another class turns the value into a
+// different setting, so the picker only offers the class each prefix needs.
+const TUNING_CLASSES: [string, string][] = [
+  ['eAETV_', 'AvatarPrototype'],
+  ['eWETV_', 'WorldEntityPrototype'],
+  ['ePTV_',  'PowerPrototype'],
+  ['eATV_',  'AreaPrototype'],
+  ['eRTV_',  'RegionPrototype'],
+  ['eRT_',   'RegionPrototype'],
+  ['ePOTV_', 'PopulationObjectPrototype'],
+  ['eMTV_',  'MissionPrototype'],
+  ['eLTTV_', 'LootTablePrototype'],
+  ['eCTV_',  'ConditionPrototype'],
+  ['ePETV_', 'PublicEventPrototype'],
+  ['eMFTV_', 'MetricsFrequencyPrototype'],
+]
+
+assertPrefixOrder(TUNING_CLASSES, 'TUNING_CLASSES')
+
+/** The prototype class a setting needs, or null when any will do. */
+export function tuningClassForSetting(setting: string): string | null {
+  return TUNING_CLASSES.find(([prefix]) => setting.startsWith(prefix))?.[1] ?? null
+}
+
+/** Avatars are world entities too, but the server reads eWETV_ on an avatar as an avatar setting. */
+export function tuningPickAllowed(setting: string, match: { class: string }): boolean {
+  return !(setting.startsWith('eWETV_') && match.class === 'AvatarPrototype')
+}
+
 // Parses a tuning value from an <input type="number"> (a number, or null/''
-// when empty) or a plain string. Returns null for blank or non-numeric input,
+// when empty) or a plain string. Returns null for blank, non-numeric or out-of-float-range input,
 // so a real 0 is never confused with "no value".
 export function parseTuningValue(raw: string | number | null | undefined): number | null {
   if (raw === null || raw === undefined) return null
   const text = String(raw).trim()
   if (text === '') return null
   const n = Number(text)
-  return Number.isFinite(n) ? n : null
+  // The server reads values as floats and skips the whole file on one it can't read.
+  return Math.abs(n) <= FLOAT_MAX ? n : null
 }
 
 export function blueprintHintForSetting(setting: string): string | null {
@@ -149,7 +182,8 @@ export function ruleDateError(
     const max = new Date(Date.UTC(2023, month!, 0)).getUTCDate() // 2023: not a leap year
     if (!Number.isInteger(day) || day! < 1 || day! > max) return `Day must be 1 to ${max} for this month.`
   }
-  if (!Number.isInteger(durationDays) || durationDays! < 1) return 'Duration must be at least 1 day.'
+  // A huge duration overflows the server's AddDays and crashes it at start. A rule ends at year end anyway.
+  if (!Number.isInteger(durationDays) || durationDays! < 1 || durationDays! > 366) return 'Duration must be 1 to 366 days.'
   return ''
 }
 
@@ -362,6 +396,8 @@ export interface GlobalTuningFile { file: string; values: GlobalValue[]; error: 
 export interface GlobalTuning {
   files: GlobalTuningFile[]
   infinity_system: boolean
+  /** The Server Rates file exists only as OFF_, so the server doesn't load it. */
+  rates_off: boolean
 }
 
 export type RateGroup = 'XP' | 'Loot' | 'Vendors' | 'Rules'
