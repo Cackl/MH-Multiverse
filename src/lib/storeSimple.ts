@@ -147,10 +147,15 @@ export function startSale(entries: CatalogEntryWithMeta[], percent: number, sect
  * Undoes a sale. An entry whose price was changed during the sale is left alone and listed in
  * `kept`. An entry that had no overlay before the sale goes back to stock's current price, so a
  * stock update during the sale shows through; any other edit made to it during the sale stays.
+ * Entries that aren't loaded, because their file is switched off, stay on sale: `remaining` is the
+ * sale record for just those, or null when there are none.
  */
 export function endSale(entries: CatalogEntryWithMeta[], sale: Sale) {
   const edited: CatalogEntryWithMeta[] = []
   const kept: string[] = []
+  const loaded = new Set(entries.map(e => e.SkuId))
+  const missing = Object.entries(sale.prices).filter(([sku]) => !loaded.has(sku))
+  const remaining: Sale | null = missing.length ? { ...sale, prices: Object.fromEntries(missing) } : null
   for (const e of entries) {
     const p = sale.prices[e.SkuId]
     if (!p) continue
@@ -160,7 +165,7 @@ export function endSale(entries: CatalogEntryWithMeta[], sale: Sale) {
     }
     edited.push(setPrice(e, !p.hadOverlay && e.stock ? entryPrice(e.stock) : p.before))
   }
-  return { edited, kept }
+  return { edited, kept, remaining }
 }
 
 // ── Reload ────────────────────────────────────────────────────────────────────

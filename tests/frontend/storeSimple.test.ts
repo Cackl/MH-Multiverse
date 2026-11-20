@@ -140,11 +140,23 @@ describe('sale', () => {
     expect(planWrites(end.edited).upserts.map(u => u.entry.SkuId)).toEqual(['4'])
   })
 
+  it('an entry whose file is switched off stays on sale in the remaining record', () => {
+    const { edited, sale } = startSale([stock(entry('1', 'Costume', 950)), stock(entry('2', 'Costume', 1000))], 25, ['Costume'], 'T')
+    // Entry 2's file is switched off, so only entry 1 is loaded.
+    const end = endSale([overlay(edited[0], entry('1', 'Costume', 950))], sale)
+    expect(end.edited.map(e => e.SkuId)).toEqual(['1'])
+    expect(end.remaining).toEqual({ ...sale, prices: { '2': sale.prices['2'] } })
+    // Ending it again once the file is back on finishes the sale.
+    const again = endSale([overlay(edited[1], entry('2', 'Costume', 1000))], end.remaining!)
+    expect(entryPrice(again.edited[0])).toBe(1000)
+    expect(again.remaining).toBeNull()
+  })
+
   it('a price changed during the sale is kept and reported', () => {
     const base = entry('1', 'Costume', 950)
     const { sale } = startSale([stock(base)], 25, ['Costume'], 'T')
     const end = endSale([overlay(entry('1', 'Costume', 500), base)], sale)
-    expect(end).toEqual({ edited: [], kept: ['1'] })
+    expect(end).toEqual({ edited: [], kept: ['1'], remaining: null })
   })
 
   it("a stock price change during the sale shows through, and other edits made during it stay", () => {
