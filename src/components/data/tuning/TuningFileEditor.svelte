@@ -175,6 +175,7 @@
   }
 
   async function saveEntries() {
+    if (entryError) return
     saveError = ''
     saveSuccess = false
 
@@ -219,7 +220,7 @@
 
   function addEntry() {
     const trimmedSetting = newSetting.trim()
-    if (!trimmedSetting) return
+    if (!trimmedSetting || entryError) return
     const trimmedProto = newPrototype.trim()
     // Blank keeps the "1" placeholder; anything else must be a real number.
     const value = String(newValue ?? '').trim() === '' ? 1 : parseTuningValue(newValue)
@@ -462,7 +463,8 @@
         bind:value={newValue}
         step="0.01"
       >
-      <button class="btn btn-sm btn-outline" on:click={addEntry} disabled={!newSetting.trim()}>
+      <!-- A file that failed to load can't be added to or saved: the save would replace it. -->
+      <button class="btn btn-sm btn-outline" on:click={addEntry} disabled={!newSetting.trim() || !!entryError}>
         Add
       </button>
     </div>
@@ -485,7 +487,7 @@
           class="btn btn-sm btn-accent"
           class:btn-pulse={dirty}
           on:click={saveEntries}
-          disabled={saving || (!isNew && !dirty)}
+          disabled={saving || !!entryError || (!isNew && !dirty)}
         >
           {saving ? 'Saving...' : isNew ? 'Create File' : 'Save'}
         </button>
