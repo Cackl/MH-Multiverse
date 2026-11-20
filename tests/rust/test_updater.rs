@@ -128,6 +128,8 @@ fn list_backups_sorted_newest_first() {
             label: "test".to_string(),
             targets: vec![],
             size_bytes: 0,
+            replaced: vec![],
+            update: None,
         };
         fs::write(backup_dir.join("manifest.json"), serde_json::to_string(&manifest).unwrap()).unwrap();
     }
@@ -272,6 +274,42 @@ fn up_to_date_needs_an_installed_build_at_least_as_new() {
     for (installed, build_date, expected) in cases {
         assert_eq!(is_up_to_date(installed, build_date), expected, "{installed:?} vs {build_date}");
     }
+}
+
+#[test]
+fn update_backs_up_the_files_it_replaces() {
+    let (_tmp, server_exe) = empty_server();
+    let server = crate::paths::server_dir(&server_exe).unwrap();
+    let source = tempfile::tempdir().unwrap();
+    let write = |root: &Path, rel: &str, text: &str| {
+        fs::create_dir_all(root.join(rel).parent().unwrap()).unwrap();
+        fs::write(root.join(rel), text).unwrap();
+    };
+    const EDITED: &str = "Data/Game/Patches/PatchDataBugFixes.json";
+    for (rel, shipped, installed) in [
+        ("MHServerEmu.Core.dll", "new", Some("old")),
+        ("Same.dll", "same", Some("same")),
+        ("New.dll", "new", None),
+        ("Data/Game/Calligraphy.sip", "new", Some("old")),
+        ("Config.ini", "new", Some("mine")),
+        (EDITED, "new", Some("mine")),
+    ] {
+        write(source.path(), rel, shipped);
+        if let Some(text) = installed {
+            write(&server, rel, text);
+        }
+    }
+    write(&server, &format!("{EDITED}.bak"), "older");
+
+    let replaced = changed_files(source.path(), &server).unwrap();
+    assert_eq!(replaced, ["Config.ini", EDITED, "MHServerEmu.Core.dll"]);
+
+    let manifest = create_backup_inner(&server, vec!["Config.ini".into()], replaced, None, "pre-update").unwrap();
+    let backup_dir = server.join("Backups").join(&manifest.id);
+    assert_eq!(fs::read_to_string(backup_dir.join(EDITED)).unwrap(), "mine");
+    assert_eq!(fs::read_to_string(backup_dir.join("MHServerEmu.Core.dll")).unwrap(), "old");
+    // Config.ini is a target, so the update puts it back and it isn't reported.
+    assert_eq!(edited_files(&server, &manifest), ["PatchDataBugFixes.json"]);
 }
 
 #[test]

@@ -30,6 +30,7 @@
     label: string
     targets: string[]
     size_bytes: number
+    replaced?: string[]
   }
 
   // ── Constants ──────────────────────────────────────────────────────────────
@@ -77,6 +78,8 @@
   let updateSuccess = false
   /** Stock files the update shipped switched the other way, kept as the user had them. */
   let keptFiles: { file: string; enabled: boolean; kept_as: string }[] = []
+  /** Files saved in the app that the update replaced. Their edited copies are in the backup. */
+  let editedFiles: string[] = []
 
   // Backups
   let backups: BackupManifest[] = []
@@ -117,12 +120,15 @@
     updateError = ''
     updateSuccess = false
     keptFiles = []
+    editedFiles = []
     updateProgress = null
     try {
-      keptFiles = await invoke<typeof keptFiles>('run_update', {
+      const result = await invoke<{ kept: typeof keptFiles; edited: string[] }>('run_update', {
         serverExe: $appConfig.server_exe,
         backupTargets: [...selectedTargets],
       })
+      keptFiles = result.kept
+      editedFiles = result.edited
       updateSuccess = true
       updateProgress = null
       await loadBackups()
@@ -431,6 +437,9 @@
 
         {#if updateSuccess}
           <div class="feedback-ok">Update complete.</div>
+          {#if editedFiles.length}
+            <div class="kept-files">Replaced your edits to {editedFiles.join(', ')}. Your copies are in the Pre-update backup.</div>
+          {/if}
           {#each [true, false] as on}
             {@const group = keptFiles.filter(k => k.enabled === on)}
             {#if group.length}
@@ -446,7 +455,7 @@
         {/if}
 
         <div class="restart-notice">
-          <span>Before updating, a backup is automatically created with the Targets selected on the Backups page</span>
+          <span>Before installing, a backup is made of the Targets selected on the Backups page and of every file the update replaces. The Targets are put back afterwards</span>
           <span>Multiverse doesn't check the server's system requirements. If the server stops working after an update, see MHServerEmu's GitHub or Discord</span>
         </div>
 
@@ -576,7 +585,7 @@
                     <span class="backup-size">{formatBytes(backup.size_bytes)}</span>
                   </div>
                   <div class="backup-targets-line">
-                    {backup.targets.map(targetLabel).join(', ') || 'No files'}
+                    {[...backup.targets.map(targetLabel), ...(backup.replaced?.length ? [`${backup.replaced.length} files the update replaced`] : [])].join(', ') || 'No files'}
                   </div>
 
                   {#if confirmingRestore === backup.id}
