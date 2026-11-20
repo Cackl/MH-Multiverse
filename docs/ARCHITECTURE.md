@@ -44,40 +44,69 @@ mh-multiverse/
 │   │   │                         Tuning/Events payload type interfaces
 │   │   ├── catalogMeta.ts        Catalog type interfaces, type/modifier metadata, categories
 │   │   ├── configMeta.ts         ConfigPanel schema (Field/SubSection/NavSection types + data)
-│   │   └── patchesMeta.ts        Patches payload type interfaces (PatchFileInfo, PatchEntry)
+│   │   ├── patchesMeta.ts        Patches payload type interfaces (PatchFileInfo, PatchEntry),
+│   │   │                         stock pack labels
+│   │   ├── prototypes.ts         PrototypeMatch type and the debounced search behind PrototypePicker
+│   │   ├── serverReload.ts       reloadCatalog / reloadLiveTuning: send the reload command, report failures
+│   │   ├── eventSchedule.ts      Which events run on a given day (mirrors LiveTuningEventRule.cs),
+│   │   │                         custom event ids and rules for the Simple Events view
+│   │   ├── storeSimple.ts        Store Simple view logic: sections, hide, price, sale, what to write
+│   │   ├── gameTweaks.ts         Game Tweaks recipes written into PatchDataZMultiverseTweaks.json
+│   │   ├── patchEntryEdit.ts     Advanced patch entry editor helpers: Start from list, JSON view, checks
+│   │   ├── linkedVersions.ts     Version follow-up when a linked entry's exes change
+│   │   └── versionCaps.ts        What the app offers per linked version (overlay, Steam Mode,
+│   │                             Infinity XP, stock patch labels, nightly updates)
 │   └── components/
 │       ├── TitleBar.svelte        Custom window chrome (drag region, active version select, min/max/close)
 │       ├── Rail.svelte            Left nav rail (MHO / Local / App groups)
 │       ├── PanelSidebar.svelte    Reusable sidebar layout wrapper
-│       ├── LaunchPanel.svelte     Server profiles, credentials, game launch (shows an "Overlay" indicator when inject-on-launch is on; clicking it opens the Overlay card in Settings)
-│       ├── GetStarted.svelte      Launch-page checklist shown with no servers (game/server exe, game data with Copy from client, client and server version match, Server + Apache start, local account, launch options); reopened by the Servers header's ? button
 │       ├── ConfirmDialog.svelte   Themed confirm dialog driven by askConfirm() in store.ts
-│       ├── ServerPanel.svelte     Server start/stop, log viewer, command input, online players
-│       ├── PlayersBlade.svelte    Searchable list of players connected to the server
-│       ├── PlayerCard.svelte      Per-player moderation/admin card (kick, ban, user level, info)
-│       ├── ConfigPanel.svelte     INI editor (Config.ini / ConfigOverride.ini)
-│       ├── DataPanel.svelte       Sub-tab container for Events / Tuning / Store / Patches
-│       ├── EventsPanel.svelte     Event schedule dashboard, rule list, definition list
-│       ├── EventRuleEditorModal.svelte   Schedule rule editor (type, days, events list)
-│       ├── EventDefinitionEditorModal.svelte  Event definition editor (id, display name, file path, etc.)
-│       ├── TuningPanel.svelte     LiveTuning file list, tags, favourites
-│       ├── TuningEditorModal.svelte  Per-file tuning entry editor
-│       ├── StorePanel.svelte      Catalog entry list, filters, bulk operations
-│       ├── StoreEditorModal.svelte   Per-entry catalog editor, item picker, HTML gen
-│       ├── PatchesPanel.svelte    PatchData file list, enable/disable
-│       ├── PatchEditorModal.svelte   Per-file patch entry editor
+│       ├── Dropdown.svelte        Dropdown whose option list follows the theme (a native select's list is drawn by Windows). Every dropdown in the app uses it
+│       ├── PrototypePicker.svelte Prototype path input with search by name, class and blueprint filters
+│       ├── ConfigPanel.svelte     INI editor (Config.ini / ConfigOverride.ini): pages by purpose, All settings, per-row reset
 │       ├── OpsPanel.svelte        Server update, backup create/restore/delete
-│       ├── integrations/          Integrations page building blocks
-│       │   ├── IntegrationCard.svelte     Collapsible card shell (title, subtitle, optional head actions); one per integration and per linked version; openCard(id) pre-opens one for deep links
-│       │   ├── OverlayIntegration.svelte  MarvelHeroesOmega Overlay card: folder/trust, inject toggle and Inject now, flags, loot log
-│       │   └── ProfileImport.svelte       Import Server Profiles card (Bifrost, overlay launcher): detect/browse, preview, import
-│       ├── ServerModal.svelte     Add/edit server dialog; tabs Remote / Local / From Backup. Local
+│       ├── launch/
+│       │   ├── LaunchPanel.svelte Server profiles, credentials, game launch (shows an "Overlay" indicator when inject-on-launch is on; clicking it opens the Overlay card in Settings)
+│       │   ├── GetStarted.svelte  Launch-page checklist shown with no servers (game/server exe, game data with Copy from client, client and server version match, Server + Apache start, local account, launch options); reopened by the Servers header's ? button
+│       │   └── ServerModal.svelte Add/edit server dialog; tabs Remote / Local / From Backup. Local
 │       │                          profiles on an Account.db server sync the account on Save
 │       │                          (accountCommands.ts); From Backup imports or restores by storage mode
-│       ├── Dropdown.svelte        Dropdown whose option list follows the theme (a native select's list is drawn by Windows). Every dropdown in the app uses it
-│       ├── LinkedVersions.svelte  Settings list of linked versions: an IntegrationCard each, opened to edit Name, Client, Server, Version, Custom
-│       └── AppPanel.svelte        Settings: linked versions, launch options, themes, integrations
-│                                  (overlay link/trust/flags/loot log), about
+│       ├── server/
+│       │   ├── ServerPanel.svelte Server start/stop, log viewer, command input, online players
+│       │   ├── PlayersBlade.svelte  Searchable list of players connected to the server
+│       │   └── PlayerCard.svelte  Per-player moderation/admin card (kick, ban, user level, info)
+│       ├── data/
+│       │   ├── DataPanel.svelte   Sub-tabs Events / Tuning / Store / Patches and the Simple / Advanced switch
+│       │   ├── NewFileModal.svelte  New catalog or patch file name dialog (Store and Patches)
+│       │   ├── events/
+│       │   │   ├── EventsSimple.svelte   Simple: stock events with on/off and schedule, Make your own
+│       │   │   ├── CustomEventModal.svelte  Make your own event: settings, schedule, saved with save_event_bundle
+│       │   │   ├── EventsPanel.svelte    Advanced: schedule dashboard, rule list, definition list
+│       │   │   ├── EventRuleEditorModal.svelte   Schedule rule editor (type, days, events list)
+│       │   │   └── EventDefinitionEditorModal.svelte  Event definition editor (id, display name, file path, etc.)
+│       │   ├── tuning/
+│       │   │   ├── ServerRates.svelte    Simple: global rate sliders written to LiveTuningDataMultiverse.json
+│       │   │   ├── TuningPanel.svelte    Advanced: LiveTuning files grouped Your files / Core / Events / Other, on/off switches
+│       │   │   └── TuningFileEditor.svelte  Inline per-file tuning entry editor (Revert / Save)
+│       │   ├── store/
+│       │   │   ├── StoreSimple.svelte    Simple: prices, hide, Start/End sale, Add item
+│       │   │   ├── AddItemModal.svelte   Add a single item to CatalogMultiverse.json
+│       │   │   ├── SaleModal.svelte      Sale settings and how many items they reprice
+│       │   │   ├── StorePanel.svelte     Advanced: catalog entry list, file switches, New catalog file
+│       │   │   └── StoreEditorModal.svelte  Per-entry catalog editor, item picker, HTML gen
+│       │   └── patches/
+│       │       ├── PatchesSimple.svelte  Simple: patch packs and Game Tweaks
+│       │       ├── AddTweakModal.svelte  Per-power cooldown and summon cap tweaks
+│       │       ├── PatchesPanel.svelte   Advanced: PatchData file list, enable/disable
+│       │       └── PatchEditorModal.svelte  Per-file patch entry editor
+│       └── settings/
+│           ├── AppPanel.svelte    Settings: linked versions, launch options, display, integrations
+│           │                      (overlay link/trust/flags/loot log), about
+│           ├── LinkedVersions.svelte  Settings list of linked versions: an IntegrationCard each, opened to edit Name, Client, Server, Version, Custom
+│           └── integrations/      Integrations page building blocks
+│               ├── IntegrationCard.svelte     Collapsible card shell (title, subtitle, optional head actions); one per integration and per linked version; openCard(id) pre-opens one for deep links
+│               ├── OverlayIntegration.svelte  MarvelHeroesOmega Overlay card: folder/trust, inject toggle and Inject now, flags, loot log
+│               └── ProfileImport.svelte       Import Server Profiles card (Bifrost, overlay launcher): detect/browse, preview, import
 │
 ├── src-tauri/
 │   ├── src/
@@ -96,6 +125,7 @@ mh-multiverse/
 │   │   │                         management (load, save, reset, merge) for both definitions
 │   │   │                         and schedule rules
 │   │   ├── game_data.rs          Copies Calligraphy.sip and mu_cdata.sip from the client to the server when missing
+│   │   ├── versions.rs           Game version (1.48 / 1.52 / 1.53) of a client exe, server dll or save
 │   │   ├── launcher.rs           launch_game (spawn with args), LaunchedGame (last launched game), game_is_running (sysinfo poll)
 │   │   ├── ini.rs                Config.ini / ConfigOverride.ini read/write with diff-only saving
 │   │   ├── tuning.rs             LiveTuningData*.json scan/read/write/create/toggle
@@ -119,6 +149,9 @@ mh-multiverse/
 │   │   │   ├── inject.rs         LoadLibraryW remote-thread injection by PID
 │   │   │   ├── pipe.rs           Status pipe reader, line splitting/sanitising, event formatting, enumIdx name table
 │   │   │   └── tests.rs          Unit tests (compiled only under `cargo test`)
+│   │   ├── profile_import/       Server profile import from Bifrost and the overlay launcher
+│   │   │   ├── mod.rs            Source detection, preview and import commands
+│   │   │   └── tests.rs          Unit tests
 │   │   └── paths.rs             Shared server_dir() helper (derives the server's containing
 │   │                             directory from server_exe), used across most other modules
 │   ├── assets/
@@ -150,7 +183,7 @@ The app uses a flat conditional routing model driven by two stores:
 - `activeTab` (`Tab`): selects the top-level panel - `launch`, `server`, `config`, `data`, `ops`, `settings`
 - `activeDataTab` (`DataTab`): selects within the Data panel - `events`, `tuning`, `store`, `patches`
 
-`App.svelte` renders the active panel inside a fixed layout of `TitleBar` + `Rail` + content area. `DataPanel.svelte` is a sub-router that renders a secondary tab bar and conditionally mounts `EventsPanel`, `TuningPanel`, `StorePanel`, or `PatchesPanel`.
+`App.svelte` renders the active panel inside a fixed layout of `TitleBar` + `Rail` + content area. `DataPanel.svelte` is a sub-router that renders a secondary tab bar and a Simple / Advanced switch (`advanced_data` in `multiverse.json`, one setting for all four tabs). Simple mounts `EventsSimple`, `ServerRates`, `StoreSimple` or `PatchesSimple`. Advanced mounts `EventsPanel`, `TuningPanel`, `StorePanel` or `PatchesPanel`.
 
 There is no URL-based routing. Tab state is in-memory only and resets to `launch` on app restart.
 
@@ -165,10 +198,10 @@ Window size and position are persisted via `tauri-plugin-window-state`, filtered
 All shared frontend state lives in Svelte writable stores. The store module also exports async wrapper functions that optimistically update local state, then invoke the corresponding Tauri command:
 
 ```
-setTheme(theme)  →  activeTheme.set(theme)  →  invoke('set_theme', { theme })
+setLaunchOptions(options)  →  appConfig.update(...)  →  invoke('set_launch_options', { options })
 ```
 
-This pattern is consistent across `setGameExe`, `setServerExe`, `setLaunchOptions`, `setShutdownConfig`, `setTuningTags`, `setTuningFavourites`, `setBackupTargets`, `setStoreHtmlOutputDir`, and `setConsolePresets`.
+This pattern (`updateConfigOptimistic`) is used by `setLaunchOptions`, `setShutdownConfig`, `setBackupTargets`, `setConsolePresets`, `setTextSize` and `setAdvancedData`. Each returns an error string, `''` when saved. On a failure it re-reads `get_config`, so a revert can't undo a later change that did save. `setGameExe` and `setServerExe` are not optimistic: a `server_exe` change remounts the tab, which would drop the caller's error.
 
 `loadConfig()` is called once on mount. It invokes `get_config`, populates `appConfig`, applies the saved theme to the DOM, and sets `activeServerId`.
 
@@ -197,7 +230,7 @@ On bridge init, `syncInitialState()` polls `server_is_running` and `apache_is_ru
 
 ### Metadata Modules
 
-**`tuningMeta.ts`** - maps tuning enum prefixes (e.g. `eGTV_`, `eWETV_`) to display categories and blueprint hints for prototype search scoping. Contains known file sets (`KNOWN_CORE`, `KNOWN_EVENTS`) for auto-tagging, and the full tuning setting reference with descriptions and default values.
+**`tuningMeta.ts`** - maps tuning enum prefixes (e.g. `eGTV_`, `eWETV_`) to display categories and blueprint hints for prototype search scoping. Contains known file sets (`KNOWN_CORE`, `KNOWN_EVENTS`) for the Live Tuning sidebar groups, and the full tuning setting reference with descriptions and default values.
 
 **`catalogMeta.ts`** - defines TypeScript interfaces mirroring the Rust catalog types (PascalCase field names matching `serde(rename_all = "PascalCase")`). Contains the catalog type/modifier taxonomy, item category definitions with prototype path prefixes for the item picker, and helper functions for type inference and modifier construction.
 
@@ -207,13 +240,15 @@ On bridge init, `syncInitialState()` polls `server_is_running` and `apache_is_ru
 
 ### Component Patterns
 
-Panels follow a consistent layout: `PanelSidebar` on the left (file/item list with search and filters), detail/editor area on the right. Modal editors (`TuningEditorModal`, `StoreEditorModal`, `PatchEditorModal`, `EventRuleEditorModal`, `EventDefinitionEditorModal`) are mounted conditionally when editing state is set, and communicate back to their parent via `onClose`/`onSaved`/`onDeleted` callback props.
+Panels follow a consistent layout: `PanelSidebar` on the left (file/item list with search and filters), detail/editor area on the right. Modal editors (`StoreEditorModal`, `PatchEditorModal`, `EventRuleEditorModal`, `EventDefinitionEditorModal`) are mounted conditionally when editing state is set, and communicate back to their parent via `onClose`/`onSaved`/`onDeleted` callback props. Live Tuning edits inline instead: `TuningPanel` shows the selected file in `TuningFileEditor`, which asks before switching files with unsaved edits.
+
+Every prototype field uses `PrototypePicker` (search by name through `search_prototypes`, optionally limited by class or blueprint). Unsaved edits register through `setUnsaved`, and `confirmLeave` asks before a tab switch drops them.
 
 **`EventsPanel.svelte`** deviates from the standard sidebar/editor split. The sidebar lists schedule rules grouped by type (`AlwaysOn`, `DayOfWeek`, `WeeklyRotation`, `SpecialDate`), and the main area is a dashboard showing currently active events and a collapsible full event definition list. Selecting a rule or definition opens an inline editor area (not a separate modal) in place of the dashboard. Override status controls (Reset / Merge) for both Events and Schedule are rendered at the bottom of the sidebar.
 
 **`PlayerCard.svelte`** is a self-contained card rendered per online player in `PlayersBlade.svelte` (accessed via a button in `ServerPanel`). It issues moderation commands (`!client kick`, `!account ban/unban`, `!account whitelist/unwhitelist`, `!client info`) and admin commands (`!account userlevel`) directly via `invoke('send_command', { cmd })`. Actions requiring an email address check `player.email` before proceeding and display inline feedback. Destructive actions (kick, ban) require a two-step confirmation UI within the card.
 
-**`ServerModal.svelte`** is tabbed rather than a single form. Add mode shows Manual (the original host/email/password form) and Import Account (create a new local account from a `!account download` export, then create its server profile in the same step). Edit mode shows Manual and, for local servers only, Restore Backup (overwrite the existing profile's account data from a newer export — no identity fields, no picker, resolved automatically from the profile's `email`). The two non-Manual tabs are otherwise independent of each other and of Manual's fields, except that Restore's visibility reactively tracks the Local checkbox.
+**`ServerModal.svelte`** is tabbed rather than a single form: Remote, Local and From Backup. Add mode's From Backup creates a new local account from a `!account download` export, then its server profile in the same step. Edit mode shows From Backup only for profiles saved as local, and there it restores the profile's own account from a newer export (no identity fields, resolved from the profile's `email`). With JSON persistence From Backup writes the server's single save instead (`restore_json_account`).
 
 ---
 
@@ -239,9 +274,9 @@ Seven state objects are registered via `.manage()` in `lib.rs`:
 
 **`server.rs`** - Server lifecycle management and player session tracking. `start_server` spawns MHServerEmu with piped stdin/stdout/stderr and assigns it to a Windows Job Object (`JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`). Four named background threads are spawned per server start (`mhserver-stdout-reader`, `mhserver-stderr-reader`, `mhserver-log-batcher`, `mhserver-watcher`): stdout/stderr readers, a batcher that collects log lines and emits them to the frontend in batches (up to 50 lines per 50ms flush interval), and a watcher thread that polls `try_wait()` every 150ms to detect process exit, clearing `proc.child` and emitting `server-stopped` when it does. The watcher is the sole source of truth for exit state - `server_is_running` just reads `proc.child.is_some()` rather than also calling `try_wait()` itself. `start_server` performs a pre-flight TcpStream::connect check against the configured WebFrontend Port before spawning, returning a clear error if the port is already in use.
 
-The stdout reader additionally calls `parse_player_log_event` on every line (regexes compiled once via `LazyLock`, not per line); matches trigger `handle_player_log_event` which updates `PlayerState` and emits `player-event` to the frontend. On login, `lookup_account` opens a read-only SQLite connection to `Account.db` and queries the `Account`, `Player`, `Guild`, `GuildMember`, and `Avatar` tables to populate the full `PlayerSession`. On server stop, `clear_player_state` empties `PlayerState` and emits a `player-event` with `kind: "clear"`. `stop_server` writes `!server shutdown\n` to stdin and spawns a fifth thread (`mhserver-stop-timeout`) that falls back to a hard kill after 10 seconds if the watcher hasn't already detected exit. Apache is managed independently via `start_apache`/`stop_apache` - `apache_is_running` still calls `try_wait()` directly, since there's no equivalent watcher thread tracking Apache's own exit. `DbPath.set_from_server_exe` derives `<server_exe_dir>/Data/Account.db` and is called both when `set_server_exe` is invoked from config and when `start_server` is called.
+The stdout reader additionally calls `parse_player_log_event` on every line (regexes compiled once via `LazyLock`, not per line); matches trigger `handle_player_log_event` which updates `PlayerState` and emits `player-event` to the frontend. On login, `lookup_account` opens a read-only SQLite connection to `Account.db` and queries the `Account`, `Player`, `Guild`, `GuildMember`, and `Avatar` tables to populate the full `PlayerSession`. On server stop, `clear_player_state` empties `PlayerState` and emits a `player-event` with `kind: "clear"`. `stop_server` writes `!server shutdown\n` to stdin once (`ServerProcess.stopping` makes a second Stop a no-op) and spawns a fifth thread (`mhserver-stop-timeout`) that falls back to a hard kill after 60 seconds if the watcher hasn't already detected exit. When the server logs "All services shut down" or a Fatal line, `release_console_wait` writes an empty line so a server waiting in `Console.ReadLine` exits. The server runs without a console, so its stdin and stdout use the OEM code page (`oem_encode` / `oem_decode`), not UTF-8. Apache is managed independently via `start_apache`/`stop_apache`. A small thread polls Apache every 500 ms and, when it exits on its own, logs it and emits `apache-stopped`. `apache_is_running` still calls `try_wait()` directly. `DbPath.set_from_server_exe` derives `<server_exe_dir>/Data/Account.db` and is called both when `set_server_exe` is invoked from config and when `start_server` is called.
 
-**`events.rs`** - File I/O for `Events.json` / `EventsOverride.json` and `EventSchedule.json` / `EventScheduleOverride.json` in `Data/Game/LiveTuning/`. Both file pairs follow the same override pattern: the override file takes precedence if it exists, otherwise the default file is read. `Events.json` is a JSON object keyed by event ID; `EventSchedule.json` is a JSON array. Read functions deserialise into `EventDefinition` and `ScheduleRule` structs respectively. Write functions always target the override file. `reset_*_override` copies the default file over the override; `merge_*_override` adds any entries present in the default but missing from the override (by ID for events, by name for rules), without overwriting existing override entries.
+**`events.rs`** - File I/O for `Events.json` / `EventsOverride.json` and `EventSchedule.json` / `EventScheduleOverride.json` in `Data/Game/LiveTuning/`. Both file pairs follow the same override pattern: the override file takes precedence if it exists, otherwise the default file is read. `Events.json` is a JSON object keyed by event ID; `EventSchedule.json` is a JSON array. Read functions deserialise into `EventDefinition` and `ScheduleRule` structs respectively. Write functions always target the override file. `reset_*_override` copies the default file over the override; `merge_*_override` adds any entries present in the default but missing from the override (by ID for events, by name for rules), without overwriting existing override entries. For the Simple view, `load_stock_events` reads the stock files whether or not overrides exist, and `save_event_bundle` saves custom events in one go: their tuning files in `LiveTuning/Events/Multiverse/LiveTuningData<slug>.json`, then both override files together (a schedule naming an id missing from the events list loses that rule), then deleted events' files moved aside to `<name>.<timestamp>.bak`. Custom event ids start with `zzMultiverse_`.
 
 **`launcher.rs`** - Spawns the game client as a detached process with command-line arguments derived from the active server profile and launch options. Credentials are decrypted from the config at launch time. For local servers, the siteconfigurl host is derived at launch time from WebFrontend.Port in Config.ini via ini::read_merged_value. For remote servers, normalize_host strips any scheme and path from the stored host before building the URL; use_https determines the scheme. game_is_running uses sysinfo to check for a process with the linked game exe's file name (MarvelHeroesOmega.exe on 1.52, MarvelHeroes2016.exe on 1.48). After a successful spawn, `launch_game` stores the game as a `Game` (PID plus the `Child`) in `LaunchedGame`, then hands it and a copy of the overlay config to `overlay::on_game_spawned`, which returns immediately unless overlay injection is enabled and trusted. `game_is_running` finds the game by name and so also sees clients started elsewhere; `LaunchedGame` knows only our own launch.
 
@@ -257,15 +292,17 @@ The stdout reader additionally calls `parse_player_log_event` on every line (reg
 
 **`ini.rs`** - Reads `Config.ini` (defaults) and `ConfigOverride.ini` (overrides), merges them, and returns the merged values plus a set of which keys are overridden and the Config.ini defaults. Writes use diff-only logic: values matching the default are removed from the override file; only differing values are written. Also exposes `read_merged_value` (non-command pub fn) for reading a single merged key by section, used by `server.rs` for the port pre-check.
 
-**`tuning.rs`** - File I/O for `LiveTuningData*.json` files in `Data/Game/LiveTuning`. The enable/disable toggle works by renaming files with an `OFF_` prefix. JSON is read/written using PascalCase field names (`Prototype`, `Setting`, `Value`) to match MHServerEmu's expected format. Handles UTF-8 BOM stripping.
+**`tuning.rs`** - File I/O for `LiveTuningData*.json` files in `Data/Game/LiveTuning`. The enable/disable toggle works by renaming files with an `OFF_` prefix. JSON is read/written using PascalCase field names (`Prototype`, `Setting`, `Value`) to match MHServerEmu's expected format. Handles UTF-8 BOM stripping. `read_global_tuning` returns the global settings the server would load from the base files, in its load order, for the Server Rates view, which writes its own file `LiveTuningDataMultiverse.json`.
 
 **`patches.rs`** - File I/O for `PatchData*.json` files in `Data/Game/Patches`. Enable/disable works by moving files between `Patches/` and `Patches/Off/`. Patch entries use `serde_json::Value` for the `Value` field to support arbitrary JSON value types.
 
-**`store.rs`** - Catalog entry management for `Catalog*.json` in `Data/Game/MTXStore`. Uses a base/MODIFIED file separation: base files are read-only from MH Multiverse's perspective, and all edits go to `*MODIFIED.json` sidecar files. MODIFIED entries override base entries with the same `SkuId`. The module handles u64 precision by using a dual type system: `CatalogEntryDisk` (raw u64 for on-disk JSON) and `CatalogEntry` (String for the JS boundary). Display name resolution chains through: custom override file → embedded `display_names.json` → prototype path → raw ID. Also generates HTML/CSS bundle pages for in-game store display.
+**`store.rs`** - Catalog entry management for `Catalog*.json` in `Data/Game/MTXStore`. Uses a base/MODIFIED file separation: base files are read-only from MH Multiverse's perspective, and all edits go to `*MODIFIED.json` sidecar files. MODIFIED entries override base entries with the same `SkuId`. The module handles u64 precision by using a dual type system: `CatalogEntryDisk` (raw u64 for on-disk JSON) and `CatalogEntry` (String for the JS boundary). Display name resolution chains through: custom override file → embedded `display_names.json` → prototype path → raw ID. Also generates HTML/CSS bundle pages for in-game store display. A catalog file is switched off by moving it and its MODIFIED file into `MTXStore/Off/`, since the server only reads the MTXStore folder itself. `apply_store_changes` writes many changes at once (each touched MODIFIED file is parsed first and nothing is written unless all parse), and the Simple view's sale record goes last to `MultiverseStore.json`.
 
 **`calligraphy.rs`** - Reads MHServerEmu's `Calligraphy.sip` pak file (LZ4-compressed entries with a `KAPG` signature). Parses the `Blueprint.directory` and `Prototype.directory` files within the pak to build a `PrototypeCatalogue` with indices by runtime ID, path, and GUID. The catalogue is cached per sip file path and rebuilt automatically if the server executable changes. Prototype search supports multi-prefix category filtering and case-insensitive matching against both path and display name.
 
-**`updater.rs`** - Downloads nightly builds from `nightly.link/Crypto137/MHServerEmu/...` (the `windows-v48`, `-v52` or `-v53` workflow, matching the server's own game version), extracts them, and overlays onto the server directory. The update flow: check availability (HTTP range probe) → backup selected targets → download with progress events → extract to staging dir → detect wrapper directory → copy to server dir → restore backed-up user files. Backups are stored in `{server_dir}/Backups/{timestamp}/` with a `manifest.json`. `Calligraphy.sip` and `mu_cdata.sip` are blacklisted from backups.
+**`updater.rs`** - Downloads nightly builds from `nightly.link/Crypto137/MHServerEmu/...` (the `windows-v48`, `-v52` or `-v53` workflow, matching the server's own game version), extracts them, and overlays onto the server directory. The update flow: check availability (HTTP range probe) → download with progress events → extract to staging dir → pre-update backup of the selected targets and every file the install will replace → copy to server dir (a failure rolls back from that backup) → restore the targets. `cancel_update` stops it at the next check before the install, which can't be cancelled. Backups are stored in `{server_dir}/Backups/{timestamp}/` with a `manifest.json` (an id taken in the same second gets a `-1`, `-2` suffix). The manifest's `replaced` lists the files an update overwrote: a later Restore leaves them out, so it can't put the old server back. A Restore first makes a "pre-restore" backup of the files it will replace. Pre-update backups are never pruned. `Calligraphy.sip` and `mu_cdata.sip` are blacklisted from backups.
+
+Because the targets are restored after the install, a targeted file always keeps the user's copy, and upstream fixes to it never land.
 
 **`app_update.rs`** - Self-update for MH Multiverse itself. Checks `api.github.com/repos/Cackl/MH-Multiverse/releases`, picks the highest published `vX.Y.Z` (skipping drafts and prereleases), and returns notes for every newer release, flagging any whose body contains a `## Breaking Changes` heading. Installs re-fetch the release by tag and refuse to touch the running exe unless the download carries a valid minisign signature from the embedded `PUBKEY`, names the expected file in its trusted comment, and (exe) reports the expected version in its version resource. See [Releasing](#releasing-signed-updates).
 
@@ -273,7 +310,9 @@ The stdout reader additionally calls `parse_player_log_event` on every line (reg
 
 ### Window Close Hook
 
-`lib.rs` intercepts `CloseRequested`, prevents the default close, and calls `shutdown()`, which kills child processes via `kill_child()`, saves window state, then calls `app.exit(0)`. This runs in an async Tauri runtime task. `app_update.rs` uses the same `shutdown()` after installing an update.
+`lib.rs` intercepts `CloseRequested`, prevents the default close, and emits `close-requested` with a request id. The window answers with `close_ack`, then `handleCloseRequest` (store.ts) waits for a running update, asks about unsaved edits and (with `shutdown.ask_before_close`) a running server, and calls `exit_app`. `exit_app` refuses while an update runs, otherwise `server::exit_gracefully` sends `!server shutdown`, waits for the server to exit (the stop timer force-closes it after 60 s) and calls `shutdown()`. If the window doesn't acknowledge within 3 s it is taken as hung, and `exit_gracefully` runs from the backend.
+
+`shutdown()` kills child processes via `kill_child()`, saves window state, then calls `app.exit(0)`. `app_update.rs` uses the same `shutdown()` after installing an update.
 
 ---
 
@@ -302,6 +341,16 @@ The stdout reader additionally calls `parse_player_log_event` on every line (reg
 | `set_shutdown_config` | `shutdown: ShutdownConfig` | `()` | Set shutdown delay and broadcast message |
 | `set_backup_targets` | `targets: Vec<String>` | `()` | Set backup target paths |
 | `set_console_presets` | `presets: Vec<String>` | `()` | Set command shortcut preset list |
+| `set_text_size` | `size: f64` | `()` | Set the Display text size (0.5 to 2.0, applied as webview zoom) |
+| `set_advanced_data` | `advanced: bool` | `()` | Set the Data tab's Simple / Advanced mode |
+| `take_config_notice` | - | `Option<String>` | The one-time notice when `multiverse.json` couldn't be read and the app started with defaults (names where the old file was kept) |
+
+### App (`lib.rs`)
+
+| Command | Parameters | Returns | Description |
+|---|---|---|---|
+| `close_ack` | `id: u64` | `()` | The window received close request `id`, so the 3 s hung-window fallback stands down |
+| `exit_app` | - | `()` | Stop the server gracefully, then exit. Refused while an update runs |
 
 ### Launcher (`launcher.rs`)
 
@@ -316,7 +365,7 @@ The stdout reader additionally calls `parse_player_log_event` on every line (reg
 | Command | Parameters | Returns | Description |
 |---|---|---|---|
 | `start_server` | `server_exe: String` | `()` | Spawn MHServerEmu with log streaming and player tracking |
-| `stop_server` | - | `()` | Graceful shutdown via stdin, 10s hard-kill fallback |
+| `stop_server` | - | `()` | Graceful shutdown via stdin (sent once), 60s hard-kill fallback |
 | `start_apache` | `server_exe: String` | `()` | Spawn Apache (derived path from server_exe) |
 | `stop_apache` | - | `()` | Kill Apache process |
 | `send_command` | `cmd: String` | `()` | Write to MHServerEmu stdin |
@@ -336,6 +385,8 @@ The stdout reader additionally calls `parse_player_log_event` on every line (reg
 | `reset_schedule_override` | `server_exe: String` | `ScheduleData` | Copy EventSchedule.json → EventScheduleOverride.json, return result |
 | `merge_events_override` | `server_exe: String` | `EventsData` | Add missing default events to override (by ID), return result |
 | `merge_schedule_override` | `server_exe: String` | `ScheduleData` | Add missing default rules to override (by name), return result |
+| `load_stock_events` | `server_exe: String` | `StockEvents` | The stock Events.json and EventSchedule.json, whether or not overrides exist. Empty when missing |
+| `save_event_bundle` | `server_exe, definitions, rules, owned_files: Vec<OwnedEventFile>, removed_slugs: Vec<String>` | `()` | Save custom events: their tuning files, both override files together, then move deleted events' files aside |
 
 ### INI (`ini.rs`)
 
@@ -356,6 +407,7 @@ The stdout reader additionally calls `parse_player_log_event` on every line (reg
 | `create_tuning_file` | `server_exe: String, canonical_name: String, entries: Vec<TuningEntry>` | `()` | Create new tuning file |
 | `toggle_tuning_file` | `server_exe: String, canonical_name: String, enabled: bool` | `()` | Rename with/without OFF_ prefix |
 | `get_live_tuning_dir` | `server_exe: String` | `String` | Return LiveTuning directory path |
+| `read_global_tuning` | `server_exe: String` | `GlobalTuning` | Global settings per base file in the server's load order, plus `[GameOptions] InfinitySystemEnabled` and whether the Server Rates file is switched off |
 
 ### Patches (`patches.rs`)
 
@@ -367,6 +419,7 @@ The stdout reader additionally calls `parse_player_log_event` on every line (reg
 | `create_patch_file` | `server_exe: String, file_name: String` | `()` | Create empty patch file in Patches/ |
 | `set_patch_file_enabled` | `server_exe: String, file_name: String, currently_enabled: bool` | `bool` | Move between Patches/ and Patches/Off/ |
 | `get_patches_dir` | `server_exe: String` | `String` | Return Patches directory path |
+| `patch_manager_enabled` | `server_exe: String` | `bool` | `[GameData] EnablePatchManager` (merged). Off, the server loads no patch file |
 
 ### Store (`store.rs`)
 
@@ -381,23 +434,30 @@ The stdout reader additionally calls `parse_player_log_event` on every line (reg
 | `resolve_display_name` | `server_exe: String, prototype_runtime_id: String` | `String` | Resolve prototype ID to display name |
 | `generate_bundle_html` | `server_exe: String, entry: CatalogEntry, slug: String, save_to_apache: bool` | `String` | Generate HTML bundle page (always backed up to `MH-Multiverse-Bundles`; also written to Apache's `bundles/` dir when `save_to_apache`), return backup file path |
 | `save_thumbnail` | `server_exe: String, slug: String, sku_id: String, png_base64: String, save_to_apache: bool` | `String` | Decode and save a bundle thumbnail PNG (same backup/Apache dual-write pattern), return backup file path |
+| `apache_bundles_found` | `server_exe: String` | `bool` | Whether the bundled Apache's `htdocs/bundles` folder exists, so bundle pages can be served |
+| `list_off_catalog_files` | `server_exe: String` | `Vec<String>` | Base catalog files switched off in `MTXStore/Off/` |
+| `set_catalog_file_enabled` | `server_exe: String, file: String, enabled: bool` | `()` | Move a catalog file and its MODIFIED file into `MTXStore/Off/` or back. Nothing moves if the destination has either file |
+| `create_catalog_file` | `server_exe: String, suffix: String` | `String` | Create an empty `Catalog<suffix>.json`. The suffix is letters, digits, `_` or `-`, without MODIFIED |
+| `apply_store_changes` | `server_exe, upserts: Vec<StoreUpsert>, removes: Vec<StoreRemoval>, state: Option<Value>` | `()` | Write many Store changes at once: every touched MODIFIED file is parsed first and nothing is written unless all parse. `state` goes to `MultiverseStore.json` last |
+| `load_store_state` | `server_exe: String` | `Value` | Contents of `MultiverseStore.json` (the running sale), or `null` |
 
 ### Calligraphy (`calligraphy.rs`)
 
 | Command | Parameters | Returns | Description |
 |---|---|---|---|
 | `search_prototypes` | `server_exe, query, blueprint_hint?, category_path?, is_inventory_type?` | `Vec<PrototypeMatch>` | Search prototype paths in Calligraphy.sip |
-| `lookup_prototype_id` | `server_exe: String, prototype_path: String` | `String` | Resolve path to runtime ID (decimal string) |
+| `name_patch_targets` | `server_exe, paths: Vec<String>, ids: Vec<String>` | `PatchNames` | Names for a patch file's Prototype column and id values in one call. Paths the catalogue lacks are named from their file name, unknown ids are left out |
 
 ### Updater (`updater.rs`)
 
 | Command | Parameters | Returns | Description |
 |---|---|---|---|
 | `check_update_available` | `server_exe: Option<String>` | `UpdateInfo` | Probe nightly build URL availability and compare it with the installed build |
-| `run_update` | `server_exe: String, backup_targets: Vec<String>` | `()` | Full update flow: backup → download → extract → install → restore |
-| `create_backup` | `server_exe: String, targets: Vec<String>, label: String` | `BackupManifest` | Create a named backup |
+| `run_update` | `server_exe: String, backup_targets: Vec<String>` | `UpdateResult` | Full update flow: download → extract → backup → install → restore. Returns the switched files kept on or off and the edited files the update replaced |
+| `cancel_update` | - | `()` | Stop the running update at its next check. The install itself can't be cancelled |
+| `create_backup` | `server_exe: String, targets: Vec<String>, label: String` | `BackupManifest` | Create a named backup (off the main thread, refused while the server runs) |
 | `list_backups` | `server_exe: String` | `Vec<BackupManifest>` | List backups (newest first) |
-| `restore_backup` | `server_exe: String, backup_id: String` | `()` | Restore backup by ID |
+| `restore_backup` | `server_exe: String, backup_id: String` | `Vec<String>` | Back up what the restore replaces, then copy the backup's targets back. Returns where copies switched the other way were moved aside |
 | `delete_backup` | `server_exe: String, backup_id: String` | `()` | Delete backup directory |
 | `get_backups_dir` | `server_exe: String` | `String` | Return Backups directory path |
 
@@ -455,7 +515,7 @@ Imports server profiles from uploaded JSON files, detected by shape: Bifrost `Bi
 | Export | Type | Description |
 |---|---|---|
 | `activeTab` | `writable<Tab>` | Current top-level tab |
-| `settingsSection` | `writable<SettingsSection>` | Settings section to open next (`client` / `theme` / `integrations` / `about`); read once by `AppPanel` on mount, then reset to `client`. Set by the Launch page overlay indicator |
+| `settingsSection` | `writable<SettingsSection>` | Settings section to open next (`client` / `display` / `integrations` / `about`); read once by `AppPanel` on mount, then reset to `client`. Set by the Launch page overlay indicator |
 | `activeDataTab` | `writable<DataTab>` | Current data sub-tab (`events` / `tuning` / `store` / `patches`) |
 | `serverRunning` | `writable<boolean>` | MHServerEmu process state |
 | `serverReady` | `writable<boolean>` | True once the server logs its ready line and reads console commands; reset when it stops |
@@ -481,6 +541,20 @@ Imports server profiles from uploaded JSON files, detected by shape: Bifrost `Bi
 | `overlayInject` | `writable<{ ok, message } \| null>` | Outcome of the latest overlay injection attempt |
 | `overlayLog` | `writable<OverlayLine[]>` | Overlay status-pipe lines (capped at 500); `appendOverlayLog` adds to it |
 | `LOG_LEVEL_SEVERITY` | `Record<LogLevel, number>` | Severity order map used by threshold filtering; trace(0) through fatal(6), all(-1) |
+| `serverLogFilter` | `writable<LogLevel>` | Server console level filter, persisted to local storage |
+| `serverStopping` | `writable<boolean>` | True from a Stop until the server exits, so a remount doesn't re-enable Stop |
+| `shutdownCountdownSec` / `shutdownCountdownActive` | `writable` | Timed shutdown countdown, kept across tab switches |
+| `eventsRestartPending` | `writable<boolean>` | Events were saved since the running server started. Both Events views show a restart notice (the server reads Events only at startup) |
+| `activeLinked` | `derived` | The active linked version, from `appConfig` |
+| `activeCaps` | `derived<VersionCaps>` | What the active linked version supports (`versionCaps.ts`). With none linked, 1.52 behaviour |
+| `switchBlocked` | `derived<string \| null>` | Why the active version can't change right now (server, game or update running) |
+| `guideRequested` | `writable<boolean>` | Get Started opened by hand, kept here so a remount on a new server exe keeps it open |
+| `gameDataCopying` | `writable<boolean>` | Get Started's game data copy is running, so reopening the guide can't start a second one |
+| `updateRunning` / `updateProgress` / `updateOutcome` | `writable` | Nightly update state, kept across tab switches. The outcome is keyed by server exe |
+| `appUpdate` / `appUpdateError` / `appUpdateCheckedAt` | `writable` | Latest app self-update check |
+| `updateRemindLater` | `writable<boolean>` | Session only: hides the update badge until next launch |
+| `dismissedUpdate` | `writable<string>` | Version the user chose to ignore, persisted to local storage |
+| `showUpdateBadge` | `derived<boolean>` | Drives the update dot on the Rail and the About nav item |
 
 ### Functions
 
@@ -501,19 +575,26 @@ Imports server profiles from uploaded JSON files, detected by shape: Bifrost `Bi
 | `clearServerError` | `() => void` | Clear error message |
 | `loadConfig` | `() => Promise<void>` | Load config from backend, apply theme, set active server |
 | `upsertServer` | `(server, password) => Promise<void>` | Add/edit server |
-| `deleteServer` | `(serverId) => Promise<void>` | Delete server, update active if needed |
-| `selectServer` | `(serverId) => Promise<void>` | Set active server and persist |
-| `setGameExe` | `(path) => Promise<void>` | Update game exe path |
-| `setServerExe` | `(path) => Promise<void>` | Update server exe path |
-| `setTheme` | `(theme) => Promise<void>` | Apply theme to DOM and persist |
-| `setLaunchOptions` | `(options) => Promise<void>` | Update launch flags |
-| `setShutdownConfig` | `(shutdown) => Promise<void>` | Update shutdown delay/message |
-| `setTuningTags` | `(tags) => Promise<void>` | Update tuning file tag map |
-| `setTuningFavourites` | `(favourites) => Promise<void>` | Update pinned tuning files |
-| `setBackupTargets` | `(targets) => Promise<void>` | Update backup target list |
-| `setStoreHtmlOutputDir` | `(dir) => Promise<void>` | Update HTML output directory |
-| `setConsolePresets` | `(presets) => Promise<void>` | Update command shortcut preset list |
+| `deleteServer` | `(serverId) => Promise<string>` | Delete server, update active if needed |
+| `selectServer` | `(serverId) => Promise<string>` | Set active server and persist |
+| `setGameExe` | `(path) => Promise<string>` | Update game exe path |
+| `setServerExe` | `(path) => Promise<string>` | Update server exe path |
+| `setTheme` | `(theme) => Promise<string>` | Apply theme to DOM and persist |
+| `setLaunchOptions` | `(options) => Promise<string>` | Update launch flags |
+| `setShutdownConfig` | `(shutdown) => Promise<string>` | Update shutdown delay/message |
+| `setBackupTargets` | `(targets) => Promise<string>` | Update backup target list |
+| `setConsolePresets` | `(presets) => Promise<string>` | Update command shortcut preset list |
+| `setTextSize` | `(size) => Promise<string>` | Persist the text size and apply it as webview zoom (undone if the save fails) |
+| `setAdvancedData` | `(advanced) => Promise<string>` | Switch the Data tab between Simple and Advanced |
+| `activateLinked` / `upsertLinked` / `deleteLinked` | `(...) => Promise<void>` | Linked version commands. `activateLinked` confirms unsaved edits first and throws the refusal reason |
 | `setSchedulerNow` | `(dt: Date) => void` | Store server-parsed UTC time and recompute `eventTimezoneOffset` |
+| `markEventsSaved` | `() => void` | Set `eventsRestartPending`, cleared by the next server start |
+| `startGameRunningPoll` | `() => void` | Poll `game_is_running` into `gameRunning` |
+| `startShutdownCountdown` / `cancelShutdownCountdown` / `clearShutdownCountdown` | | Timed shutdown with broadcast messages |
+| `stopServerNow` | `() => Promise<void>` | Ask the server to shut down now, once |
+| `runServerUpdate` | `(serverExe, backupTargets) => Promise<void>` | Run a nightly update, tracking `updateRunning` / `updateProgress` / `updateOutcome`. Resolves whatever the outcome |
+| `handleCloseRequest` | `(id) => Promise<void>` | Answer the window's close request (see Window Close Hook) |
+| `checkAppUpdate` | `() => Promise<void>` | Check for an app update into `appUpdate` |
 
 ---
 
@@ -527,7 +608,9 @@ Imports server profiles from uploaded JSON files, detected by shape: Bifrost `Bi
 | `server-started` | `ServerStatusPayload` | `server.rs` after spawn | Server process started |
 | `server-stopped` | `ServerStatusPayload` | `server.rs` watcher thread | Server process exited (includes exit code) |
 | `player-event` | `PlayerEventPayload` | `server.rs` stdout reader | Player login, logout, or full session clear on server stop |
-| `update-progress` | `UpdateProgressPayload` | `updater.rs` | Update stage + percentage (downloading, extracting, installing, restoring, done) |
+| `apache-stopped` | `()` | `server.rs` Apache poll thread | Apache exited on its own (also logged to the console) |
+| `close-requested` | `u64` | `lib.rs` | The window's close button was pressed, answered with `close_ack` and `exit_app` |
+| `update-progress` | `UpdateProgressPayload` | `updater.rs` | Update stage + percentage (downloading, extracting, backing_up, installing, restoring) |
 | `app-update-progress` | `{ stage, pct }` | `app_update.rs` | App self-update stage (downloading, verifying, installing) |
 | `overlay-inject` | `{ ok: bool, message: string }` | `overlay/mod.rs` injection thread | Result of an overlay injection (post-launch or Inject now) |
 | `overlay-pipe` | `{ event: string, text: string, fields: string[], hits: OverlayHit[] }[]` | `overlay/pipe.rs` reader thread | Display rows from the overlay status pipe; `event` is `loot_hidden` (`fields` = time, category, item, code, rarity, reason), `region_entered` (time, terminal, tier), `tier_resolved`/`mission_state` (text only), `player_death` (`fields` = time, heading, detail; `hits` = damage rows) or `_status` (connection notes, no fields) |
@@ -566,17 +649,21 @@ start_server
   → emit "server-started"
 
 stop_server
-  → write "!server shutdown\n" to stdin
+  → already stopping? → return (one shutdown per server)
+  → write "!server shutdown\n" to stdin, set stopping
   → return immediately
   → (watcher thread detects exit, clears PlayerState, emits "server-stopped")
-  → safety net: background thread hard-kills after 10s if still running,
+  → safety net: background thread hard-kills after 60s if still running,
                 also clears PlayerState and emits "server-stopped" as fallback
 
 Window close
-  → prevent default close
-  → kill_child() - kills both MHServerEmu and Apache
-  → save window state
-  → exit(0)
+  → prevent default close, emit "close-requested" { id }
+  → window: close_ack(id), handleCloseRequest
+      update running? → tell the user, stay open
+      confirmLeave (unsaved edits), ask about a running server
+      exit_app → exit_gracefully: stop_server, wait for exit (60s timer + 5s)
+  → no close_ack within 3s → exit_gracefully from the backend
+  → shutdown(): kill_child() (MHServerEmu and Apache), save window state, exit(0)
 ```
 
 Apache start/stop is independent: `start_apache` derives the Apache path from `server_exe` (`../../Apache24/bin/httpd.exe`), spawns with `APACHE_SERVER_ROOT` env var, and stores the handle in `ServerProcess.apache_child`. Apache stdout/stderr is piped to null.
@@ -677,7 +764,7 @@ CatalogBundle.json           ← base file (read-only from MH Multiverse)
 CatalogBundleMODIFIED.json   ← sidecar with user edits
 ```
 
-On load, entries from both files are merged by `SkuId` - MODIFIED entries override base entries. On save, the entry is upserted into the MODIFIED file. On delete, the entry is removed from whichever file contains it (base or MODIFIED). A `.bak` snapshot of the target file is written before every mutation.
+On load, entries from both files are merged by `SkuId` - MODIFIED entries override base entries. On save, the entry is upserted into the MODIFIED file. On delete, the entry's row is removed from the MODIFIED file, which reverts a changed stock entry or deletes one only MODIFIED has. Stock files are never written, so deleting a stock entry is refused. A `.bak` snapshot of the target file is written before every mutation.
 
 ### Calligraphy.sip Reading
 
@@ -721,14 +808,20 @@ check_update_available(server_exe)
 run_update
   → guard: server must not be running
   → refuse when the installed build is the same or newer
-  → backup selected targets to {server_dir}/Backups/{timestamp}/
   → download zip with streaming progress events
   → extract to {server_dir}/_update_staging/
   → detect wrapper directory (if zip contains single subdirectory)
-  → copy staged files over server directory
-  → restore backed-up files
+  → pre-update backup to {server_dir}/Backups/{timestamp}/: the selected targets plus
+    every file the install will replace (manifest `replaced`, and `update` with the
+    linked version name and the server version before and after)
+  → copy staged files over server directory, on a failure roll back from the backup
+  → restore the targets (a targeted file keeps the user's copy)
+  → keep_switched_files: a stock file the user had switched off stays off
+  → return the files kept on or off and the edited files the update replaced
   → clean up temp files (_update.zip, _update_staging/)
 ```
+
+`cancel_update` is checked during the download, after the extraction and after the backup. A run cancelled after the backup deletes it. Once the install starts it can't be cancelled.
 
 ### App Self-Update Flow
 
@@ -912,11 +1005,17 @@ The in-app updater only installs files signed with the release key. The signatur
 │   │   │   │   ├── EventSchedule.json         (default, not modified)
 │   │   │   │   ├── EventScheduleOverride.json (created/managed by MH Multiverse)
 │   │   │   │   ├── LiveTuningData*.json       
+│   │   │   │   ├── LiveTuningDataMultiverse.json (Server Rates, created by MH Multiverse)
 │   │   │   │   └── Events/
-│   │   │   │       └── Weekly/
+│   │   │   │       ├── Weekly/
+│   │   │   │       └── Multiverse/   ← custom events' tuning files (created by MH Multiverse)
 │   │   │   ├── Patches/          ← PatchData*.json files (enabled)
+│   │   │   │   ├── PatchDataZMultiverseTweaks.json (Game Tweaks, created by MH Multiverse)
 │   │   │   │   └── Off/          ← PatchData*.json files (disabled)
 │   │   │   └── MTXStore/         ← Catalog*.json + *MODIFIED.json files
+│   │   │       ├── CatalogMultiverse.json  (Simple view's added items)
+│   │   │       ├── MultiverseStore.json    (Simple view's sale record)
+│   │   │       └── Off/          ← switched-off catalog files
 │   │   └── Web/
 │   │       └── MH-Multiverse-Bundles/          ← Generated HTML/CSS (default output)
 │   ├── Backups/                  ← Created by MH Multiverse's backup system
