@@ -350,6 +350,11 @@ async fn install_inner(app: &AppHandle, target: &Version, exe: &Path, dest: &Pat
         }
     }
 
+    // The download takes a while, so check again: the install ends in shutdown, which
+    // would kill a server started meanwhile.
+    if crate::server::server_process_is_running(&app.state::<crate::server::ServerState>()) {
+        return Err("Stop the server to finish the update".into());
+    }
     emit_progress(app, "installing", 100.0);
     if msi {
         std::process::Command::new("msiexec")
