@@ -359,7 +359,13 @@
         is_local: true,
         use_https: false,
       }
-      await upsertServer(entry, importPassword.trim())
+      // The account is in by now, so a retry would only hit EMAIL_CONFLICT.
+      try {
+        await upsertServer(entry, importPassword.trim())
+      } catch (e) {
+        importError = `Account imported. Profile not saved: ${e}`
+        return
+      }
       onClose()
     } catch (e) {
       const msg = String(e)
