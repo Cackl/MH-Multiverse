@@ -272,3 +272,17 @@ fn bundle_keeps_a_removed_event_file_as_bak() {
     let err = save_event_bundle(server_exe, vec![], vec![], vec![], vec!["../Events".into()]).unwrap_err();
     assert!(err.contains("Invalid event file name"), "{err}");
 }
+
+#[test]
+fn a_duplicate_event_id_is_refused_and_nothing_is_written() {
+    let (_tmp, server_exe) = setup();
+    let path = dir_for(&server_exe).join("EventsOverride.json");
+    let before = fs::read_to_string(&path).ok();
+
+    let defs = vec![custom_event("zzMultiverse_A", "A"), custom_event("zzMultiverse_A", "B")];
+    let err = save_events_override(server_exe.clone(), defs.clone()).unwrap_err();
+    assert!(err.contains("zzMultiverse_A"), "{err}");
+    let err = save_event_bundle(server_exe, defs, vec![], vec![], vec![]).unwrap_err();
+    assert!(err.contains("zzMultiverse_A"), "{err}");
+    assert_eq!(fs::read_to_string(&path).ok(), before);
+}

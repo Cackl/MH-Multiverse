@@ -168,7 +168,17 @@ fn read_schedule_from_path(path: &Path) -> Result<Vec<ScheduleRule>, String> {
         .collect())
 }
 
+/// The events file is keyed by id, so a second definition with the same id would replace the first.
+fn check_unique_ids(definitions: &[EventDefinition]) -> Result<(), String> {
+    let mut seen = HashSet::new();
+    match definitions.iter().find(|d| !seen.insert(d.id.as_str())) {
+        Some(dup) => Err(format!("Two events use the ID '{}'", dup.id)),
+        None => Ok(()),
+    }
+}
+
 fn write_events_to_path(path: &Path, definitions: &[EventDefinition]) -> Result<(), String> {
+    check_unique_ids(definitions)?;
     // BTreeMap keeps keys in sorted order, so re-saving the same definitions
     // produces a stable diff instead of reshuffling on every save.
     let map: BTreeMap<&str, RawEventDefOut> = definitions
@@ -330,6 +340,7 @@ fn check_bundle(
             return Err(format!("Invalid event file name '{slug}': use 1 to 60 letters and digits"));
         }
     }
+    check_unique_ids(definitions)?;
     let ids: HashSet<&str> = definitions.iter().map(|d| d.id.as_str()).collect();
     for r in rules {
         if let Some(id) = r.events.iter().find(|id| !id.trim().is_empty() && !ids.contains(id.as_str())) {

@@ -13,6 +13,8 @@
   export let serverExe: string
   export let onSave: (def: EventDefinition) => void | Promise<void>
   export let onClose: () => void
+  /** IDs of the other definitions, which this one can't reuse. */
+  export let takenIds: string[] = []
 
   // ── Local state ─────────────────────────────────────────────────────────────
 
@@ -60,6 +62,7 @@
     nameError = ''
 
     if (!id.trim())           { idError   = 'ID is required.';           return }
+    if (takenIds.includes(id.trim())) { idError = 'Another event already uses this ID.'; return }
     if (!display_name.trim()) { nameError = 'Display name is required.'; return }
 
     onSave({

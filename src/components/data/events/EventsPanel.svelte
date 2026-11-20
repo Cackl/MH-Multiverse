@@ -543,6 +543,7 @@
   <EventDefinitionEditorModal
     definition={creatingDefinition ? null : editingDefinition}
     {tuningFiles}
+    takenIds={definitions.map(d => d.id).filter(i => i !== editingDefinition?.id)}
     onSave={(def) => saveDefinition(def)}
     serverExe={$appConfig.server_exe}
     onClose={() => { editingDefinition = null; creatingDefinition = false }}
