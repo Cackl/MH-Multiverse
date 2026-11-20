@@ -13,3 +13,8 @@ export function withExes(l: LinkedInstall, game_exe: string, server_exe: string,
 export function serverFolder(serverExe: string): string {
   return serverExe.split(/[\\/]/).slice(-2, -1)[0] ?? ''
 }
+
+/** An empty entry for Add version. It keeps the current Steam setting, since the first one added becomes active. */
+export function newLinked(id: string, noSteam: boolean): LinkedInstall {
+  return { id, name: '', version: '', game_exe: '', server_exe: '', custom: false, no_steam: noSteam }
+}

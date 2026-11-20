@@ -3,7 +3,7 @@
   import { appConfig, upsertLinked, deleteLinked, activateLinked, askConfirm, switchBlocked, type LinkedInstall } from '../../lib/store'
   import { pickExe } from '../../lib/browseExe'
   import { versionMatch } from '../../lib/versionCaps'
-  import { serverFolder, withExes } from '../../lib/linkedVersions'
+  import { newLinked, serverFolder, withExes } from '../../lib/linkedVersions'
   import { tip } from '../../lib/tooltip'
   import IntegrationCard, { openCard } from './integrations/IntegrationCard.svelte'
   import Dropdown from '../Dropdown.svelte'
@@ -50,9 +50,7 @@
   }
 
   async function add() {
-    const l: LinkedInstall = {
-      id: crypto.randomUUID(), name: '', version: '', game_exe: '', server_exe: '', custom: false, no_steam: false,
-    }
+    const l = newLinked(crypto.randomUUID(), $appConfig.launch_options.no_steam)
     openCard(`linked-${l.id}`)
     await save(l)
   }
