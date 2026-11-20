@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { CONFIG_SCHEMA, fieldsFor, otherSettings } from '../../src/lib/configMeta'
+import { CONFIG_SCHEMA, changedValues, fieldsFor, otherSettings } from '../../src/lib/configMeta'
 
 describe('fieldsFor', () => {
   const progression = CONFIG_SCHEMA.find(p => p.id === 'gameplay')!.subsections!.flatMap(s => s.fields)
@@ -39,5 +39,25 @@ describe('otherSettings', () => {
         { key: 'NewKey', section: 'Zeta', label: 'NewKey', type: 'string', description: '' },
       ] },
     ])
+  })
+})
+
+describe('changedValues', () => {
+  const saved = { Frontend: { Port: '4306', BindIP: '127.0.0.1' }, Logging: { EnableFile: 'false' } }
+
+  it('is empty when nothing changed', () => {
+    expect(changedValues(structuredClone(saved), saved)).toEqual({})
+  })
+
+  it('keeps an edit on one page while another page is edited', () => {
+    const values = structuredClone(saved)
+    values.Frontend.Port = '4307'
+    values.Logging.EnableFile = 'true'
+    expect(changedValues(values, saved)).toEqual({ Frontend: { Port: '4307' }, Logging: { EnableFile: 'true' } })
+  })
+
+  it('treats a key missing from the saved file as blank', () => {
+    expect(changedValues({ Leaderboards: { AutoSave: '' } }, saved)).toEqual({})
+    expect(changedValues({ Leaderboards: { AutoSave: '5' } }, saved)).toEqual({ Leaderboards: { AutoSave: '5' } })
   })
 })

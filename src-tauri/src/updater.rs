@@ -587,6 +587,11 @@ pub async fn check_update_available(app: AppHandle, server_exe: Option<String>) 
 
 static UPDATE_RUNNING: AtomicBool = AtomicBool::new(false);
 
+/// True while `run_update` holds the lock.
+pub(crate) fn update_running() -> bool {
+    UPDATE_RUNNING.load(Ordering::SeqCst)
+}
+
 /// Held while an update runs. Two runs would share `_update.zip` and the staging folder, and the
 /// UI can't prevent it: leaving the tab resets its own "updating" flag while the run continues.
 struct UpdateLock;

@@ -3,7 +3,7 @@
   import { invoke } from '@tauri-apps/api/core'
   import { openPath, openUrl } from '@tauri-apps/plugin-opener'
   import { listen, type UnlistenFn } from '@tauri-apps/api/event'
-  import { appConfig, serverRunning, setBackupTargets } from '../lib/store'
+  import { appConfig, serverRunning, setBackupTargets, updateRunning } from '../lib/store'
   import PanelSidebar from './PanelSidebar.svelte'
   import { tip } from '../lib/tooltip'
 
@@ -113,6 +113,7 @@
   async function runUpdate() {
     if (!hasServerExe || !updateInfo?.available || updateInfo.up_to_date || updating || $serverRunning) return
     updating = true
+    updateRunning.set(true)
     updateError = ''
     updateSuccess = false
     keptFiles = []
@@ -131,6 +132,7 @@
       updateProgress = null
     } finally {
       updating = false
+      updateRunning.set(false)
     }
   }
 

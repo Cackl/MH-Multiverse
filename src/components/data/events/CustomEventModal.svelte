@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { askConfirm } from '../../../lib/store'
+  import { onDestroy } from 'svelte'
+  import { askConfirm, setUnsaved } from '../../../lib/store'
   import { tip } from '../../../lib/tooltip'
   import { RATE_ROWS } from '../../../lib/tuningMeta'
   import {
@@ -45,6 +46,8 @@
   $: nameError = eventNameError(name)
   $: daysError = kind === 'weekly' && days.length === 0 ? 'Pick at least one day.' : ''
   $: dirty = JSON.stringify(current) !== JSON.stringify({ ...start, name: start.name.trim(), values: Object.fromEntries(EVENT_SLIDERS.map(s => [s, start.values[s] ?? 1])) })
+  $: setUnsaved('custom-event', dirty ? 'Custom event' : null)
+  onDestroy(() => setUnsaved('custom-event', null))
 
   function toggleDay(d: string) {
     days = days.includes(d) ? days.filter(x => x !== d) : [...days, d]

@@ -1,8 +1,9 @@
 <script lang="ts">
+  import { onDestroy } from 'svelte'
   import { invoke } from '@tauri-apps/api/core'
   import { openPath } from '@tauri-apps/plugin-opener'
   import { reloadCatalog } from '../../../lib/serverReload'
-  import { appConfig, serverRunning } from '../../../lib/store'
+  import { appConfig, serverRunning, setUnsaved } from '../../../lib/store'
   import { tip } from '../../../lib/tooltip'
   import PanelSidebar from '../../PanelSidebar.svelte'
   import SaleModal from './SaleModal.svelte'
@@ -66,6 +67,8 @@
     .filter(r => !needle || r.title.toLowerCase().includes(needle))
     .sort((a, b) => a.title.localeCompare(b.title))
   $: dirty = rows.filter(r => r.changed)
+  $: setUnsaved('store', dirty.length ? 'Store' : null)
+  onDestroy(() => setUnsaved('store', null))
 
   function edit(e: CatalogEntryWithMeta, next: CatalogEntryWithMeta) {
     edits = { ...edits, [e.SkuId]: next }

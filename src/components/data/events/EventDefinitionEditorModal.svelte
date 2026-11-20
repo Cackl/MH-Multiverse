@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { askConfirm } from '../../../lib/store'
+  import { onDestroy } from 'svelte'
+  import { askConfirm, setUnsaved } from '../../../lib/store'
   import type { TuningFileInfo, EventDefinition } from '../../../lib/tuningMeta'
   import { tip } from '../../../lib/tooltip'
   import PrototypePicker from '../../PrototypePicker.svelte'
@@ -28,6 +29,8 @@
 
   const initialState = JSON.stringify([id, display_name, file_path, daily_gift, is_hidden, missions, newMission])
   $: dirty = JSON.stringify([id, display_name, file_path, daily_gift, is_hidden, missions, newMission]) !== initialState
+  $: setUnsaved('event-definition', dirty ? 'Event definition' : null)
+  onDestroy(() => setUnsaved('event-definition', null))
   let idError    = ''
   let nameError  = ''
 

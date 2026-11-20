@@ -328,6 +328,17 @@ export function fieldsFor(fields: Field[], hasInfinity: boolean): Field[] {
   return hasInfinity ? fields : fields.filter(f => !NEEDS_INFINITY.has(`${f.section}.${f.key}`))
 }
 
+/** Every key whose value on screen differs from the saved one, across all pages. Missing counts as ''. */
+export function changedValues(values: IniData, saved: IniData): IniData {
+  const out: IniData = {}
+  for (const [section, keys] of Object.entries(values)) {
+    for (const [key, val] of Object.entries(keys)) {
+      if (val !== (saved[section]?.[key] ?? '')) (out[section] ??= {})[key] = val
+    }
+  }
+  return out
+}
+
 /** The All settings page: every key the named pages don't show, grouped by INI section. */
 export function otherSettings(values: IniData, defaults: IniData, descriptions: IniData): SubSection[] {
   const sections = [...new Set([...Object.keys(defaults), ...Object.keys(values)])].sort()

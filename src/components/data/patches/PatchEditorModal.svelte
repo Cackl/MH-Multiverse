@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { askConfirm } from '../../../lib/store'
+  import { onDestroy } from 'svelte'
+  import { askConfirm, setUnsaved } from '../../../lib/store'
   import type { PatchEntry } from '../../../lib/patchesMeta'
   import type { PrototypeMatch } from '../../../lib/prototypes'
   import { pickedValue } from '../../../lib/patchesMeta'
@@ -66,6 +67,8 @@
 
   const initialState = JSON.stringify([draft, valueStr])
   $: dirty = started && JSON.stringify([draft, valueStr]) !== initialState
+  $: setUnsaved('patch-entry', dirty ? 'Patch entry' : null)
+  onDestroy(() => setUnsaved('patch-entry', null))
 
   // ── Derived ────────────────────────────────────────────────────────────────
 
