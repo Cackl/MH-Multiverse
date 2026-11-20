@@ -303,7 +303,7 @@ fn load_disk_entries(path: &Path) -> Result<Vec<CatalogEntryDisk>, String> {
 /// first, then renames over the target. `fs::rename` is atomic on the same
 /// filesystem, so a crash mid-write leaves the original file intact instead
 /// of a truncated/corrupt one.
-fn write_atomic(path: &Path, contents: &str) -> Result<(), String> {
+pub(crate) fn write_atomic(path: &Path, contents: &str) -> Result<(), String> {
     let tmp_path = path.with_extension("json.tmp");
     fs::write(&tmp_path, contents).map_err(|e| format!("Write failed: {e}"))?;
     fs::rename(&tmp_path, path).map_err(|e| {

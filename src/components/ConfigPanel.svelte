@@ -9,7 +9,7 @@
   import { invoke } from '@tauri-apps/api/core'
   import { activeCaps, appConfig, setUnsaved, setConsolePresets, serverRunning, setShutdownConfig, logFilterThreshold, type ShutdownConfig } from '../lib/store'
   import { FALLBACK_COMMANDS } from '../lib/serverCommands'
-  import { CONFIG_SCHEMA, changedValues, fieldsFor, otherSettings, type Field, type NavSection } from '../lib/configMeta'
+  import { CONFIG_SCHEMA, changedValues, fieldError, fieldsFor, otherSettings, type Field, type NavSection } from '../lib/configMeta'
   import { tip } from '../lib/tooltip'
   import PanelSidebar from './PanelSidebar.svelte'
   import Dropdown from './Dropdown.svelte'
@@ -62,6 +62,12 @@
   $: changes = changedValues(values, savedValues)
   $: dirty = loaded && Object.keys(changes).length > 0
   $: pageDirty = allFields.some(f => changes[f.section]?.[f.key] !== undefined)
+  // Only edits are checked, so an odd value already in Config.ini doesn't block saving. Going back to the default is always allowed.
+  $: editError = (field: Field): string | null => {
+    const v = changes[field.section]?.[field.key]
+    return v === undefined || v === defaultOf(field) ? null : fieldError(field, v)
+  }
+  const schemaFields = CONFIG_SCHEMA.flatMap(p => [...(p.fields ?? []), ...(p.subsections ?? []).flatMap(s => s.fields)])
   $: presets = [...($appConfig.console_presets ?? [])]
   $: setUnsaved('config', dirty ? 'Config' : null)
   onDestroy(() => setUnsaved('config', null))
@@ -88,6 +94,11 @@
   async function save() {
     saveError = ''
     saveSuccess = false
+    const bad = [...new Set(schemaFields.filter(f => editError(f)).map(f => f.label))]
+    if (bad.length) {
+      saveError = `Fix these fields first: ${bad.join(', ')}`
+      return
+    }
     try {
       await invoke('write_config', { serverExe: $appConfig.server_exe, updates: changes })
       await load()
@@ -130,8 +141,9 @@
 
   // -- Console presets --
 
-  function syncPresets() {
-    setConsolePresets(presets)
+  let multiverseError = ''
+  async function syncPresets() {
+    multiverseError = await setConsolePresets(presets)
   }
 
   function removePreset(i: number) {
@@ -418,6 +430,7 @@
           <div class="multiverse-note">
             These settings are stored in MH Multiverse, not in ConfigOverride.ini.
           </div>
+          {#if multiverseError}<div class="feedback-error">{multiverseError}</div>{/if}
 
           <div class="subsection-title">Shutdown</div>
           <div class="config-grid">
@@ -430,7 +443,7 @@
                 class="config-input"
                 min="0"
                 value={$appConfig.shutdown.delay_minutes}
-                on:change={(e) => setShutdownConfig({
+                on:change={async (e) => multiverseError = await setShutdownConfig({
                   ...$appConfig.shutdown,
                   delay_minutes: Math.max(0, parseInt(e.currentTarget.value) || 0)
                 })}
@@ -446,7 +459,7 @@
                 class="config-input"
                 value={$appConfig.shutdown.broadcast_message}
                 placeholder="Server is shutting down in {'{minutes}'} minute(s)."
-                on:change={(e) => setShutdownConfig({
+                on:change={async (e) => multiverseError = await setShutdownConfig({
                   ...$appConfig.shutdown,
                   broadcast_message: e.currentTarget.value
                 })}
@@ -616,6 +629,7 @@
             {#each section.fields as field (field.section + '.' + field.key)}
               {@const value = getValue(field)}
               {@const def = defaultOf(field)}
+              {@const err = editError(field)}
               <div class="cfg-row">
                 <span class="cfg-name" class:raw={activeSection === 'all'}>
                   {field.label}
@@ -646,8 +660,6 @@
                   {:else if field.type === 'select'}
                     <Dropdown label={field.label} {value} --dd-min-width="160px" onChange={v => setValue(field, v)}
                       options={[...(field.options?.some(o => o.value === value) ? [] : [{ value, label: value }]), ...(field.options ?? [])]} />
-                  {:else if field.type === 'textarea'}
-                    <textarea class="config-input" aria-label={field.label} rows="3" value={value} on:change={(e) => setValue(field, e.currentTarget.value)}></textarea>
                   {:else if field.type === 'number'}
                     <input type="number" class="config-input num" aria-label={field.label} min={field.min} max={field.max} step="any" value={value} on:change={(e) => setValue(field, e.currentTarget.value)}>
                   {:else}
@@ -670,6 +682,7 @@
                     </button>
                   {/if}
                 </span>
+                {#if err}<span class="cfg-error">{err}</span>{/if}
               </div>
             {/each}
           {/each}
@@ -839,6 +852,7 @@
     gap: 10px;
     min-width: 0;
   }
+  .cfg-error { grid-column: 2; justify-self: end; font-size: var(--fs-min); color: var(--text-error); }
   .cfg-onoff { order: -1; font-size: 12px; color: var(--text-1); }
 
   .config-tooltip {
@@ -863,7 +877,6 @@
     gap: 2px;
   }
 
-  textarea.config-input { resize: vertical; }
 
   /* -- Notices -- */
   .config-notice {

@@ -82,6 +82,7 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             config::get_config,
+            config::take_config_notice,
             config::cmd_save_config,
             config::upsert_server,
             config::delete_server,

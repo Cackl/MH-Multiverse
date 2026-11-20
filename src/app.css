@@ -166,8 +166,8 @@
   --z-panel:    1;
   --z-dropdown: 10;
   --z-modal:    200;
-  --z-tooltip:  250;
   --z-titlebar: 300;
+  --z-tooltip:  350;
 
   /* Panel background gradient */
   --panel-grad-top: rgba(16, 195, 255, 0.07);

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { serverFolder, withExes } from '../../src/lib/linkedVersions'
+import { newLinked, serverFolder, withExes } from '../../src/lib/linkedVersions'
 import type { LinkedInstall } from '../../src/lib/store'
 
 const entry = (name: string, version: string): LinkedInstall =>
@@ -27,5 +27,12 @@ describe('serverFolder', () => {
   it('is the folder holding the exe', () => {
     expect(serverFolder('D:\\Games\\MHServerEmu-v48\\MHServerEmu.exe')).toBe('MHServerEmu-v48')
     expect(serverFolder('')).toBe('')
+  })
+})
+
+describe('newLinked', () => {
+  it('keeps the current Steam setting instead of turning Steam mode on', () => {
+    expect(newLinked('x', true).no_steam).toBe(true)
+    expect(newLinked('x', false).no_steam).toBe(false)
   })
 })

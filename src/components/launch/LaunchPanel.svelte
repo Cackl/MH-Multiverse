@@ -4,7 +4,7 @@
   import { openUrl } from '@tauri-apps/plugin-opener'
   import {
     appConfig, activeServerId,
-    selectServer, deleteServer,
+    selectServer, deleteServer, guideRequested,
     gameRunning, overlayStatus, type OverlayStatus, activeTab, settingsSection,
     type Server
   } from '../../lib/store'
@@ -17,8 +17,7 @@
   $: activeServer = $appConfig.servers.find(s => s.id === $activeServerId) ?? null
 
   // The guide shows on its own with no servers; the sidebar button brings it back afterwards.
-  let guideRequested = false
-  $: showGuide = $appConfig.servers.length === 0 || guideRequested
+  $: showGuide = $appConfig.servers.length === 0 || $guideRequested
 
   let showModal = false
   let editingServer: Server | null = null
@@ -49,7 +48,13 @@
 
   async function executeDelete(server: Server) {
     cancelDelete()
-    await deleteServer(server.id)
+    serverError = await deleteServer(server.id)
+  }
+
+  let serverError = ''
+  async function pickServer(id: string) {
+    guideRequested.set(false)
+    serverError = await selectServer(id)
   }
 
   // Only check the overlay folder when injection is on (the indicator is the only consumer).
@@ -152,7 +157,7 @@
     <PanelSidebar width="var(--sidebar-wide)">
       <svelte:fragment slot="header">
         <div class="section-title">Servers</div>
-        <button class="btn-icon" aria-label="Get started guide" use:tip={'Get started guide'} on:click={() => guideRequested = !guideRequested} style="margin-left:auto;">
+        <button class="btn-icon" aria-label="Get started guide" use:tip={'Get started guide'} on:click={() => guideRequested.update(v => !v)} style="margin-left:auto;">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <circle cx="12" cy="12" r="10"/>
             <path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3"/>
@@ -172,10 +177,10 @@
           <div
             class="server-card"
             class:selected={server.id === $activeServerId}
-            on:click={() => { guideRequested = false; selectServer(server.id) }}
+            on:click={() => pickServer(server.id)}
             role="button"
             tabindex="0"
-            on:keydown={(e) => e.key === 'Enter' && (guideRequested = false, selectServer(server.id))}
+            on:keydown={(e) => e.key === 'Enter' && pickServer(server.id)}
           >
             <div class="server-card-name">{server.name}</div>
             <div class="server-card-url">
@@ -187,6 +192,7 @@
         {#if $appConfig.servers.length === 0}
           <div class="empty-list">No servers</div>
         {/if}
+        {#if serverError}<div class="launch-error">{serverError}</div>{/if}
       </div>
     </PanelSidebar>
 

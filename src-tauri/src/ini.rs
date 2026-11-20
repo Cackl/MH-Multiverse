@@ -27,7 +27,7 @@ fn parse_ini(content: &str) -> IniData {
     let mut data: IniData = HashMap::new();
     let mut current_section = String::new();
 
-    for line in content.lines() {
+    for line in content.strip_prefix('\u{FEFF}').unwrap_or(content).lines() {
         let line = line.trim();
         if line.is_empty() || line.starts_with(';') {
             continue;
@@ -55,7 +55,7 @@ fn parse_descriptions(content: &str) -> IniData {
     let mut section = String::new();
     let mut last_key: Option<String> = None;
 
-    for line in content.lines() {
+    for line in content.strip_prefix('\u{FEFF}').unwrap_or(content).lines() {
         let line = line.trim();
         if line.starts_with('[') && line.ends_with(']') {
             section = line[1..line.len() - 1].to_string();
@@ -204,6 +204,15 @@ pub fn write_config(server_exe: String, updates: IniData) -> Result<(), String> 
         .ok_or("Could not determine server directory")?;
     let override_path = override_ini_path(&server_exe)
         .ok_or("Could not determine server directory")?;
+
+    // The server's INI parser fails on a value split across lines.
+    for (section, keys) in &updates {
+        for (key, val) in keys {
+            if val.contains(['\n', '\r']) {
+                return Err(format!("{section}.{key} can't contain a line break"));
+            }
+        }
+    }
 
     // Read defaults so we can diff
     let defaults = if config_path.exists() {
