@@ -175,7 +175,7 @@
   }
 
   async function save() {
-    if (!selectedFile) return
+    if (!selectedFile || loadError) return
     saving     = true
     saveError  = ''
     saveSuccess = ''
@@ -241,6 +241,7 @@
   // ── Modal handlers ─────────────────────────────────────────────────────────
 
   function openAddModal() {
+    if (loadError) return
     modalEntry = null
     modalIndex = null
     modalOpen  = true
@@ -418,7 +419,8 @@
               bind:value={searchQuery}
             />
           </div>
-          <button class="btn btn-sm btn-outline" disabled={!selectedFile} on:click={openAddModal}>New Entry</button>
+          <!-- A file that failed to load can't be added to or saved: the save would replace it. -->
+          <button class="btn btn-sm btn-outline" disabled={!selectedFile || !!loadError} on:click={openAddModal}>New Entry</button>
           </div>
         </header>
 
@@ -552,7 +554,7 @@
             class="btn btn-sm btn-accent"
             class:btn-pulse={isDirty}
             style="margin-left:auto;"
-            disabled={!isDirty || saving}
+            disabled={!isDirty || saving || !!loadError}
             on:click={save}
           >
             {saving ? 'Saving...' : 'Save File'}
