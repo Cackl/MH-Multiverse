@@ -155,9 +155,9 @@
       {#if confirmAction !== null}
         <div class="confirm-box">
           {#if confirmAction === 'kick'}
-            <p>Kick<strong>{player.username}</strong>?</p>
+            <p>Kick <strong>{player.username}</strong>?</p>
           {:else if confirmAction === 'ban'}
-            <p>Ban<strong>{player.username}</strong>?
+            <p>Ban <strong>{player.username}</strong>?
               <span class="confirm-sub">This will prevent them from logging in.</span>
             </p>
           {/if}
@@ -476,11 +476,8 @@
     font-size: 12px;
     color: var(--text-1);
     line-height: 1.5;
-    display: flex;
-    flex-direction: column;
-    gap: 3px;
   }
 
   .confirm-box strong { color: var(--text-0); font-weight: 600; }
-  .confirm-sub { font-size: 11px; color: var(--text-3); }
+  .confirm-sub { display: block; margin-top: 3px; font-size: 11px; color: var(--text-3); }
 </style>
