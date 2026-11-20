@@ -455,6 +455,20 @@ pub fn server_process_is_running(state: &ServerState) -> bool {
     state.0.lock().map(|proc| proc.child.is_some()).unwrap_or(false)
 }
 
+/// Writes an empty console line, which lets a server waiting in `Console.ReadLine` exit.
+fn release_console_wait(state: &Mutex<ServerProcess>) {
+    use std::io::Write;
+    if let Ok(mut proc) = state.lock() {
+        if let Some(stdin) = proc.child.as_mut().and_then(|c| c.stdin.as_mut()) {
+            let _ = stdin.write_all(b"\n");
+            let _ = stdin.flush();
+        }
+    }
+}
+
+/// How long Stop waits for the server to exit before it kills the process.
+const STOP_TIMEOUT_SECS: u64 = 60;
+
 // -- Commands --
 
 #[tauri::command]
@@ -544,6 +558,7 @@ pub async fn start_server(
         let app_for_players = app.clone();
         let player_state_for_thread = player_state.clone();
         let db_path_for_thread = db_path.clone();
+        let state_for_reader = state.0.clone();
 
         std::thread::Builder::new()
             .name("mhserver-stdout-reader".into())
@@ -552,6 +567,11 @@ pub async fn start_server(
                 for line in reader.lines() {
                     match line {
                         Ok(raw) => {
+                            // After shutdown the server still waits on a console line before it
+                            // exits (ServerApp.cs), so give it one.
+                            if raw.contains("All services shut down") {
+                                release_console_wait(&state_for_reader);
+                            }
                             let _ = tx.send(parse_log_line(&raw));
 
                             if let Some(event) = parse_player_log_event(&raw) {
@@ -713,14 +733,15 @@ pub async fn stop_server(app: AppHandle) -> Result<(), String> {
     // The watcher thread (spawned by start_server) will detect exit via
     // try_wait, clear proc.child, and emit server-stopped.
 
-    // Safety net: if the process hasn't exited after 10 seconds,
-    // hard-kill it. This thread does NOT poll or emit — it just
-    // sleeps and then checks once.
+    // Safety net: the stdout reader releases the server once its services are
+    // down, so it normally exits in a second or two. If it is still running
+    // after STOP_TIMEOUT_SECS, hard-kill it. This thread does NOT poll, it
+    // just sleeps and then checks once.
     let app_clone = app.clone();
     std::thread::Builder::new()
         .name("mhserver-stop-timeout".into())
         .spawn(move || {
-            std::thread::sleep(std::time::Duration::from_secs(10));
+            std::thread::sleep(std::time::Duration::from_secs(STOP_TIMEOUT_SECS));
 
             let mut proc = match state_arc.lock() {
                 Ok(g) => g,
@@ -732,7 +753,7 @@ pub async fn stop_server(app: AppHandle) -> Result<(), String> {
                 return;
             }
 
-            // Still running after 10s — hard kill.
+            // Still running: hard kill.
             if let Some(ref mut c) = proc.child {
                 let _ = c.kill();
                 let _ = c.wait();
@@ -750,6 +771,11 @@ pub async fn stop_server(app: AppHandle) -> Result<(), String> {
 
             clear_player_state(&app_clone, &player_state);
 
+            let _ = app_clone.emit("server-log", vec![LogLinePayload {
+                time: log_timestamp(),
+                level: "warn".into(),
+                msg: format!("[MH Multiverse] The server didn't stop within {STOP_TIMEOUT_SECS} s and was force-closed"),
+            }]);
             let _ = app_clone.emit("server-stopped", ServerStatusPayload {
                 running: false,
                 exit_code: None,
