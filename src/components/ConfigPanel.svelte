@@ -9,7 +9,7 @@
   import { invoke } from '@tauri-apps/api/core'
   import { activeCaps, appConfig, setUnsaved, setConsolePresets, serverRunning, setShutdownConfig, logFilterThreshold, type ShutdownConfig } from '../lib/store'
   import { FALLBACK_COMMANDS } from '../lib/serverCommands'
-  import { CONFIG_SCHEMA, fieldsFor, otherSettings, type Field, type NavSection } from '../lib/configMeta'
+  import { CONFIG_SCHEMA, changedValues, fieldsFor, otherSettings, type Field, type NavSection } from '../lib/configMeta'
   import { tip } from '../lib/tooltip'
   import PanelSidebar from './PanelSidebar.svelte'
   import Dropdown from './Dropdown.svelte'
@@ -58,9 +58,10 @@
   $: sections = activeSchema.subsections
     ? activeSchema.subsections.map(s => ({ title: s.title, fields: fieldsFor(s.fields, $activeCaps.infinity) }))
     : [{ title: activeSchema.label, fields: fieldsFor(activeSchema.fields ?? [], $activeCaps.infinity) }]
-  $: dirty = loaded && allFields.some(f =>
-    (values[f.section]?.[f.key] ?? '') !== (savedValues[f.section]?.[f.key] ?? '')
-  )
+  // Every page counts, so switching section keeps the guard and Save keeps the other pages' edits.
+  $: changes = changedValues(values, savedValues)
+  $: dirty = loaded && Object.keys(changes).length > 0
+  $: pageDirty = allFields.some(f => changes[f.section]?.[f.key] !== undefined)
   $: presets = [...($appConfig.console_presets ?? [])]
   $: setUnsaved('config', dirty ? 'Config' : null)
   onDestroy(() => setUnsaved('config', null))
@@ -87,16 +88,8 @@
   async function save() {
     saveError = ''
     saveSuccess = false
-    const updates: IniData = {}
-    for (const field of allFields) {
-      const val = values[field.section]?.[field.key]
-      if (val !== undefined) {
-        if (!updates[field.section]) updates[field.section] = {}
-        updates[field.section][field.key] = val
-      }
-    }
     try {
-      await invoke('write_config', { serverExe: $appConfig.server_exe, updates })
+      await invoke('write_config', { serverExe: $appConfig.server_exe, updates: changes })
       await load()
       saveSuccess = true
       setTimeout(() => saveSuccess = false, 3000)
@@ -105,7 +98,7 @@
     }
   }
 
-  // Reset and Revert only edit this page's fields on screen. Save writes them.
+  // Reset and Revert only edit this page's fields on screen. Save writes every page's edits.
   function fillPage(src: IniData) {
     saveError = ''
     for (const field of allFields) setValue(field, src[field.section]?.[field.key] ?? '')
@@ -696,8 +689,8 @@
           <span class="feedback-ok">Saved</span>
         {/if}
         <button class="btn btn-sm btn-outline" style="margin-left:auto;" on:click={() => fillPage(defaults)} disabled={!loaded}>Reset to Defaults</button>
-        <button class="btn btn-sm btn-outline" on:click={() => fillPage(savedValues)} disabled={!dirty}>Revert</button>
-        <button class="btn btn-sm btn-accent" class:btn-pulse={dirty} on:click={save} disabled={!loaded}>Save</button>
+        <button class="btn btn-sm btn-outline" on:click={() => fillPage(savedValues)} disabled={!pageDirty}>Revert</button>
+        <button class="btn btn-sm btn-accent" class:btn-pulse={dirty} on:click={save} disabled={!dirty}>Save</button>
       </div>
 
     {/if}
