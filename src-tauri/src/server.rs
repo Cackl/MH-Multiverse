@@ -458,6 +458,54 @@ pub fn server_process_is_running(state: &ServerState) -> bool {
     state.0.lock().map(|proc| proc.child.is_some()).unwrap_or(false)
 }
 
+// The server runs without a console (CREATE_NO_WINDOW), so .NET reads and writes its
+// console in the OEM code page (437 on an English Windows), not UTF-8.
+
+/// Text in the OEM code page, for the server's stdin. Characters it lacks become "?".
+#[cfg(target_os = "windows")]
+fn oem_encode(s: &str) -> Vec<u8> {
+    use windows::Win32::Globalization::{WideCharToMultiByte, CP_OEMCP};
+    if s.is_ascii() {
+        return s.as_bytes().to_vec();
+    }
+    let wide: Vec<u16> = s.encode_utf16().collect();
+    unsafe {
+        let len = WideCharToMultiByte(CP_OEMCP, 0, &wide, None, windows::core::PCSTR::null(), None);
+        let mut out = vec![0u8; len.max(0) as usize];
+        WideCharToMultiByte(CP_OEMCP, 0, &wide, Some(&mut out), windows::core::PCSTR::null(), None);
+        out
+    }
+}
+
+/// A line of the server's output, from the OEM code page.
+#[cfg(target_os = "windows")]
+fn oem_decode(bytes: &[u8]) -> String {
+    use windows::Win32::Globalization::{MultiByteToWideChar, MULTI_BYTE_TO_WIDE_CHAR_FLAGS, CP_OEMCP};
+    if bytes.is_ascii() {
+        return String::from_utf8_lossy(bytes).into_owned();
+    }
+    unsafe {
+        let len = MultiByteToWideChar(CP_OEMCP, MULTI_BYTE_TO_WIDE_CHAR_FLAGS(0), bytes, None);
+        let mut wide = vec![0u16; len.max(0) as usize];
+        MultiByteToWideChar(CP_OEMCP, MULTI_BYTE_TO_WIDE_CHAR_FLAGS(0), bytes, Some(&mut wide));
+        String::from_utf16_lossy(&wide)
+    }
+}
+
+#[cfg(not(target_os = "windows"))]
+fn oem_encode(s: &str) -> Vec<u8> { s.as_bytes().to_vec() }
+
+#[cfg(not(target_os = "windows"))]
+fn oem_decode(bytes: &[u8]) -> String { String::from_utf8_lossy(bytes).into_owned() }
+
+/// The server's output, line by line. Unlike `lines()`, a byte that isn't UTF-8 doesn't end it.
+fn console_lines(r: impl std::io::Read) -> impl Iterator<Item = String> {
+    BufReader::new(r).split(b'\n').map_while(Result::ok).map(|mut b| {
+        if b.last() == Some(&b'\r') { b.pop(); }
+        oem_decode(&b)
+    })
+}
+
 /// Writes an empty console line, which lets a server waiting in `Console.ReadLine` exit.
 fn release_console_wait(state: &Mutex<ServerProcess>) {
     use std::io::Write;
@@ -572,29 +620,23 @@ pub async fn start_server(
         std::thread::Builder::new()
             .name("mhserver-stdout-reader".into())
             .spawn(move || {
-                let reader = BufReader::new(stdout);
-                for line in reader.lines() {
-                    match line {
-                        Ok(raw) => {
-                            // After shutdown, and after a Fatal error or crash, the server still
-                            // waits on a console line before it exits (ServerApp.cs), so give it one.
-                            // Every Fatal it logs is terminal, and an empty line does nothing otherwise.
-                            let parsed = parse_log_line(&raw);
-                            if parsed.level == "fatal" || raw.contains("All services shut down") {
-                                release_console_wait(&state_for_reader);
-                            }
-                            let _ = tx.send(parsed);
+                for raw in console_lines(stdout) {
+                    // After shutdown, and after a Fatal error or crash, the server still
+                    // waits on a console line before it exits (ServerApp.cs), so give it one.
+                    // Every Fatal it logs is terminal, and an empty line does nothing otherwise.
+                    let parsed = parse_log_line(&raw);
+                    if parsed.level == "fatal" || raw.contains("All services shut down") {
+                        release_console_wait(&state_for_reader);
+                    }
+                    let _ = tx.send(parsed);
 
-                            if let Some(event) = parse_player_log_event(&raw) {
-                                handle_player_log_event(
-                                    &app_for_players,
-                                    &player_state_for_thread,
-                                    &db_path_for_thread,
-                                    event,
-                                );
-                            }
-                        }
-                        Err(_) => break,
+                    if let Some(event) = parse_player_log_event(&raw) {
+                        handle_player_log_event(
+                            &app_for_players,
+                            &player_state_for_thread,
+                            &db_path_for_thread,
+                            event,
+                        );
                     }
                 }
             })
@@ -606,18 +648,13 @@ pub async fn start_server(
         std::thread::Builder::new()
             .name("mhserver-stderr-reader".into())
             .spawn(move || {
-                let reader = BufReader::new(stderr);
-                for line in reader.lines() {
-                    match line {
-                        Ok(raw) if !raw.trim().is_empty() => {
-                            let _ = tx.send(LogLinePayload {
-                                time: String::new(),
-                                level: "err".into(),
-                                msg: raw.trim().to_string(),
-                            });
-                        }
-                        _ => break,
-                    }
+                for raw in console_lines(stderr) {
+                    if raw.trim().is_empty() { continue; }
+                    let _ = tx.send(LogLinePayload {
+                        time: String::new(),
+                        level: "err".into(),
+                        msg: raw.trim().to_string(),
+                    });
                 }
             })
             .expect("failed to spawn stderr reader thread");
@@ -977,7 +1014,7 @@ pub fn send_command(app: AppHandle, cmd: String) -> Result<(), String> {
     let stdin = child.stdin.as_mut().ok_or("Server stdin is not available.")?;
 
     let line = format!("{}\n", cmd.trim());
-    stdin.write_all(line.as_bytes())
+    stdin.write_all(&oem_encode(&line))
         .map_err(|e| format!("Failed to send command: {e}"))?;
     stdin.flush()
         .map_err(|e| format!("Failed to flush stdin: {e}"))?;
@@ -1042,7 +1079,16 @@ pub fn get_players(app: AppHandle) -> Result<Vec<PlayerSession>, String> {
 
 #[cfg(test)]
 mod tests {
-    use super::apache_port_in_use;
+    use super::{apache_port_in_use, console_lines, oem_encode};
+
+    #[test]
+    fn console_text_round_trips_through_the_oem_code_page() {
+        let sent = oem_encode("!server broadcast Café\n");
+        assert!(sent.starts_with(b"!server broadcast Caf"));
+        // A byte that isn't UTF-8 (é in the OEM code page) must not end the output.
+        let read: Vec<String> = console_lines(&[sent.as_slice(), b"next\r\n"].concat()[..]).collect();
+        assert_eq!(read, ["!server broadcast Café", "next"]);
+    }
 
     #[test]
     fn apache_port_in_use_reads_the_port() {
