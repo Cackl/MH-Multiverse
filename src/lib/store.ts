@@ -174,6 +174,21 @@ export function startGameRunningPoll() {
 
 export const shutdownCountdownSec = writable<number>(0)
 export const shutdownCountdownActive = writable<boolean>(false)
+// True from a Stop until the server exits. Lives here so a remount doesn't re-enable Stop.
+export const serverStopping = writable<boolean>(false)
+
+/** Asks the server to shut down now, once. */
+export async function stopServerNow() {
+  if (get(serverStopping)) return
+  serverStopping.set(true)
+  clearServerError()
+  try {
+    await invoke('stop_server')
+  } catch (e) {
+    setServerError(String(e))
+    serverStopping.set(false)
+  }
+}
 
 let _shutdownCountdownInterval: ReturnType<typeof setInterval> | null = null
 
@@ -187,7 +202,10 @@ export function clearShutdownCountdown() {
 // Auto-cancel if the server stops running for any other reason (crash, manual
 // stop elsewhere), even while ServerPanel isn't mounted to observe it itself.
 serverRunning.subscribe(running => {
-  if (!running) clearShutdownCountdown()
+  if (!running) {
+    clearShutdownCountdown()
+    serverStopping.set(false)
+  }
 })
 
 export function startShutdownCountdown(delayMinutes: number, broadcastMessage: string) {
@@ -209,12 +227,7 @@ export function startShutdownCountdown(delayMinutes: number, broadcastMessage: s
 
     if (remaining <= 0) {
       clearShutdownCountdown()
-      clearServerError()
-      try {
-        await invoke('stop_server')
-      } catch (e) {
-        setServerError(String(e))
-      }
+      await stopServerNow()
     }
   }, 1000)
 }
