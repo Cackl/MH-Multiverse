@@ -15,6 +15,9 @@
     { id: 'store',   label: 'Store'        },
     { id: 'patches', label: 'Patches'      }
   ]
+
+  let modeError = ''
+  const toggleMode = async () => { modeError = await setAdvancedData(!$appConfig.advanced_data) }
 </script>
 
 <div class="data-panel">
@@ -33,6 +36,7 @@
       </button>
     {/each}
     <div class="mode-switch">
+      {#if modeError}<span class="feedback-error">{modeError}</span>{/if}
       <span>Advanced</span>
       <div
         class="toggle-switch"
@@ -41,8 +45,8 @@
         aria-checked={$appConfig.advanced_data}
         aria-label="Advanced"
         tabindex="0"
-        on:click={() => setAdvancedData(!$appConfig.advanced_data)}
-        on:keydown={(e) => e.key === 'Enter' && setAdvancedData(!$appConfig.advanced_data)}
+        on:click={toggleMode}
+        on:keydown={(e) => e.key === 'Enter' && toggleMode()}
       ></div>
     </div>
   </div>

@@ -206,6 +206,7 @@
 
   // ── Helpers ────────────────────────────────────────────────────────────────
 
+  let targetsError = ''
   async function toggleTarget(id: string) {
     const updated = new Set(selectedTargets)
     if (updated.has(id)) {
@@ -216,7 +217,7 @@
         for (const t of DATA_TARGETS) updated.delete(t.id)
       }
     }
-    await setBackupTargets([...updated])
+    targetsError = await setBackupTargets([...updated])
   }
 
   function formatBytes(bytes: number): string {
@@ -515,6 +516,7 @@
                 </label>
               {/each}
             </div>
+            {#if targetsError}<div class="feedback-error">{targetsError}</div>{/if}
           </div>
         </div>
 

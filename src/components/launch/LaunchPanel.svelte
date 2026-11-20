@@ -49,7 +49,13 @@
 
   async function executeDelete(server: Server) {
     cancelDelete()
-    await deleteServer(server.id)
+    serverError = await deleteServer(server.id)
+  }
+
+  let serverError = ''
+  async function pickServer(id: string) {
+    guideRequested = false
+    serverError = await selectServer(id)
   }
 
   // Only check the overlay folder when injection is on (the indicator is the only consumer).
@@ -172,10 +178,10 @@
           <div
             class="server-card"
             class:selected={server.id === $activeServerId}
-            on:click={() => { guideRequested = false; selectServer(server.id) }}
+            on:click={() => pickServer(server.id)}
             role="button"
             tabindex="0"
-            on:keydown={(e) => e.key === 'Enter' && (guideRequested = false, selectServer(server.id))}
+            on:keydown={(e) => e.key === 'Enter' && pickServer(server.id)}
           >
             <div class="server-card-name">{server.name}</div>
             <div class="server-card-url">
@@ -187,6 +193,7 @@
         {#if $appConfig.servers.length === 0}
           <div class="empty-list">No servers</div>
         {/if}
+        {#if serverError}<div class="launch-error">{serverError}</div>{/if}
       </div>
     </PanelSidebar>
 

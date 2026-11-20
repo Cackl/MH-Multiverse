@@ -141,8 +141,9 @@
 
   // -- Console presets --
 
-  function syncPresets() {
-    setConsolePresets(presets)
+  let multiverseError = ''
+  async function syncPresets() {
+    multiverseError = await setConsolePresets(presets)
   }
 
   function removePreset(i: number) {
@@ -429,6 +430,7 @@
           <div class="multiverse-note">
             These settings are stored in MH Multiverse, not in ConfigOverride.ini.
           </div>
+          {#if multiverseError}<div class="feedback-error">{multiverseError}</div>{/if}
 
           <div class="subsection-title">Shutdown</div>
           <div class="config-grid">
@@ -441,7 +443,7 @@
                 class="config-input"
                 min="0"
                 value={$appConfig.shutdown.delay_minutes}
-                on:change={(e) => setShutdownConfig({
+                on:change={async (e) => multiverseError = await setShutdownConfig({
                   ...$appConfig.shutdown,
                   delay_minutes: Math.max(0, parseInt(e.currentTarget.value) || 0)
                 })}
@@ -457,7 +459,7 @@
                 class="config-input"
                 value={$appConfig.shutdown.broadcast_message}
                 placeholder="Server is shutting down in {'{minutes}'} minute(s)."
-                on:change={(e) => setShutdownConfig({
+                on:change={async (e) => multiverseError = await setShutdownConfig({
                   ...$appConfig.shutdown,
                   broadcast_message: e.currentTarget.value
                 })}

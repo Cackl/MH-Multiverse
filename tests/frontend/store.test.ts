@@ -26,6 +26,13 @@ import {
   upsertServer,
   setAdvancedData,
   setTextSize,
+  setTheme,
+  setBackupTargets,
+  setConsolePresets,
+  selectServer,
+  deleteServer,
+  setServerExe,
+  activeTheme,
   activateLinked,
   switchBlocked,
   updateRunning,
@@ -279,5 +286,66 @@ describe('setTextSize', () => {
     await setTextSize(1.1)
     expect(get(appConfig).text_size).toBe(1)
     expect(zoomMock).toHaveBeenLastCalledWith(1)
+  })
+})
+
+describe('failed settings saves', () => {
+  it('leaves the server exe alone until the save succeeds, so a refusal does not remount the tab', async () => {
+    appConfig.set({ ...get(appConfig), server_exe: 'old.exe' })
+    let seen = ''
+    invokeMock.mockReset().mockImplementation(async () => {
+      seen = get(appConfig).server_exe
+      throw 'Stop the server and the game first'
+    })
+    expect(await setServerExe('new.exe')).toBe('Stop the server and the game first')
+    expect(seen).toBe('old.exe')
+    expect(get(appConfig).server_exe).toBe('old.exe')
+  })
+
+  it('returns the error and shows the config on disk, not the snapshot', async () => {
+    vi.stubGlobal('document', { documentElement: { setAttribute() {}, removeAttribute() {} } })
+    invokeMock.mockReset().mockResolvedValue(undefined)
+    await setTheme('old')
+    const disk = { ...get(appConfig), theme: 'disk' }
+    invokeMock.mockReset().mockImplementation(async (cmd: string) => {
+      if (cmd === 'get_config') return disk
+      throw 'disk full'
+    })
+    expect(await setTheme('new')).toBe('disk full')
+    expect(get(appConfig).theme).toBe('disk')
+    expect(get(activeTheme)).toBe('disk')
+    vi.unstubAllGlobals()
+  })
+
+  it('keeps a later change that saved when an earlier one fails', async () => {
+    invokeMock.mockReset()
+    appConfig.set({ ...get(appConfig), backup_targets: ['old'], console_presets: ['old'] })
+    let rejectTargets: (e: unknown) => void = () => {}
+    invokeMock.mockImplementation((cmd: string) => {
+      if (cmd === 'set_backup_targets') return new Promise((_, reject) => { rejectTargets = reject })
+      if (cmd === 'get_config') return Promise.resolve({ ...get(appConfig), backup_targets: ['old'], console_presets: ['B'] })
+      return Promise.resolve(undefined)
+    })
+    const targets = setBackupTargets(['A'])
+    expect(await setConsolePresets(['B'])).toBe('')
+    rejectTargets('locked')
+    expect(await targets).toBe('locked')
+    expect(get(appConfig).console_presets).toEqual(['B'])
+    expect(get(appConfig).backup_targets).toEqual(['old'])
+  })
+
+  it('selectServer puts the saved selection back and returns the error', async () => {
+    invokeMock.mockReset().mockImplementation(async (cmd: string) => {
+      if (cmd === 'get_config') return { ...get(appConfig), active_server_id: 'a' }
+      throw 'no write'
+    })
+    activeServerId.set('a')
+    expect(await selectServer('b')).toBe('no write')
+    expect(get(activeServerId)).toBe('a')
+  })
+
+  it('deleteServer returns the error instead of throwing', async () => {
+    invokeMock.mockReset().mockRejectedValue('no write')
+    expect(await deleteServer('a')).toBe('no write')
   })
 })

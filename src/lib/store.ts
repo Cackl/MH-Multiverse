@@ -497,47 +497,85 @@ export async function upsertServer(server: Server, password: string): Promise<vo
   if (isNew) await selectServer(server.id)
 }
 
-export async function deleteServer(serverId: string): Promise<void> {
-  const updated = await invoke<AppConfig>('delete_server', { serverId })
-  appConfig.set(updated)
-  activeServerId.update(id => {
-    if (id === serverId) {
-      return updated.servers[0]?.id ?? ''
-    }
-    return id
-  })
+/** Returns the error, or '' when deleted. */
+export async function deleteServer(serverId: string): Promise<string> {
+  try {
+    const updated = await invoke<AppConfig>('delete_server', { serverId })
+    appConfig.set(updated)
+    activeServerId.update(id => {
+      if (id === serverId) {
+        return updated.servers[0]?.id ?? ''
+      }
+      return id
+    })
+    return ''
+  } catch (e) {
+    return String(e)
+  }
 }
 
-export async function selectServer(serverId: string): Promise<void> {
+/** The config on disk after a failed save, or `fallback` if that can't be read either. */
+async function reloadAfterFailure(fallback: AppConfig): Promise<AppConfig> {
+  try {
+    return await invoke<AppConfig>('get_config')
+  } catch {
+    return fallback
+  }
+}
+
+/** Returns the error, or '' when saved. A failure puts back the saved selection. */
+export async function selectServer(serverId: string): Promise<string> {
+  const previousId = get(activeServerId)
+  const previous = get(appConfig)
   activeServerId.set(serverId)
-  await invoke('set_active_server', { serverId })
+  try {
+    await invoke('set_active_server', { serverId })
+    return ''
+  } catch (e) {
+    const disk = await reloadAfterFailure(previous)
+    appConfig.set(disk)
+    activeServerId.set(disk.active_server_id || previousId)
+    return String(e)
+  }
 }
 
 /// Optimistically applies `updater` to `appConfig`, then invokes `invokeName`.
-/// On failure, reverts `appConfig` to its pre-update value instead of
-/// leaving the store showing a value the backend never actually persisted.
+/// On failure, sets `appConfig` from the config on disk (not a snapshot, which
+/// could undo a later change that did save) and returns the error. '' means saved.
 async function updateConfigOptimistic(
   updater: (c: AppConfig) => AppConfig,
   invokeName: string,
   invokeArgs: Record<string, unknown>,
-): Promise<void> {
+): Promise<string> {
   const previous = get(appConfig)
   appConfig.update(updater)
   try {
     const saved = await invoke<AppConfig | null>(invokeName, invokeArgs)
     if (saved) appConfig.set(saved)
-  } catch {
-    appConfig.set(previous)
+    return ''
+  } catch (e) {
+    appConfig.set(await reloadAfterFailure(previous))
+    return String(e)
   }
 }
 
-// These return the saved config, since new exes detect the active entry's version again.
-export async function setGameExe(path: string): Promise<void> {
-  await updateConfigOptimistic(c => syncActiveLinked({ ...c, game_exe: path }), 'set_game_exe', { path })
+// Not optimistic: a new server exe remounts the tab, which would drop the caller's error.
+// They return the saved config, since new exes detect the active entry's version again.
+async function saveExe(command: string, path: string): Promise<string> {
+  try {
+    appConfig.set(await invoke<AppConfig>(command, { path }))
+    return ''
+  } catch (e) {
+    return String(e)
+  }
 }
 
-export async function setServerExe(path: string): Promise<void> {
-  await updateConfigOptimistic(c => syncActiveLinked({ ...c, server_exe: path }), 'set_server_exe', { path })
+export function setGameExe(path: string): Promise<string> {
+  return saveExe('set_game_exe', path)
+}
+
+export function setServerExe(path: string): Promise<string> {
+  return saveExe('set_server_exe', path)
 }
 
 // True while a nightly update runs. Set by OpsPanel and kept here so leaving the tab doesn't lose it.
@@ -567,48 +605,51 @@ export async function deleteLinked(id: string): Promise<void> {
   appConfig.set(await invoke<AppConfig>('delete_linked', { id }))
 }
 
-export async function setTheme(theme: string): Promise<void> {
-  const previousTheme = get(activeTheme)
+export async function setTheme(theme: string): Promise<string> {
   const previous = get(appConfig)
   activeTheme.set(theme)
   applyTheme(theme)
   appConfig.update(c => ({ ...c, theme }))
   try {
     await invoke('set_theme', { theme })
-  } catch {
-    activeTheme.set(previousTheme)
-    applyTheme(previousTheme)
-    appConfig.set(previous)
+    return ''
+  } catch (e) {
+    const disk = await reloadAfterFailure(previous)
+    appConfig.set(disk)
+    activeTheme.set(disk.theme ?? '')
+    applyTheme(disk.theme ?? '')
+    return String(e)
   }
 }
 
-export async function setTextSize(size: number): Promise<void> {
+export async function setTextSize(size: number): Promise<string> {
   applyTextSize(size)
-  await updateConfigOptimistic(c => ({ ...c, text_size: size }), 'set_text_size', { size })
-  // A failed save restored the previous config, so this puts its zoom back.
+  const error = await updateConfigOptimistic(c => ({ ...c, text_size: size }), 'set_text_size', { size })
+  // A failed save reloaded the config, so this puts its zoom back.
   applyTextSize(get(appConfig).text_size)
+  return error
 }
 
-export async function setLaunchOptions(options: LaunchOptions): Promise<void> {
-  await updateConfigOptimistic(c => syncActiveLinked({ ...c, launch_options: options }), 'set_launch_options', { options })
+export function setLaunchOptions(options: LaunchOptions): Promise<string> {
+  return updateConfigOptimistic(c => syncActiveLinked({ ...c, launch_options: options }), 'set_launch_options', { options })
 }
 
-export async function setShutdownConfig(shutdown: ShutdownConfig): Promise<void> {
-  await updateConfigOptimistic(c => ({ ...c, shutdown }), 'set_shutdown_config', { shutdown })
+export function setShutdownConfig(shutdown: ShutdownConfig): Promise<string> {
+  return updateConfigOptimistic(c => ({ ...c, shutdown }), 'set_shutdown_config', { shutdown })
 }
 
-export async function setBackupTargets(targets: string[]): Promise<void> {
-  await updateConfigOptimistic(c => ({ ...c, backup_targets: targets }), 'set_backup_targets', { targets })
+export function setBackupTargets(targets: string[]): Promise<string> {
+  return updateConfigOptimistic(c => ({ ...c, backup_targets: targets }), 'set_backup_targets', { targets })
 }
 
-export async function setConsolePresets(presets: string[]): Promise<void> {
-  await updateConfigOptimistic(c => ({ ...c, console_presets: presets }), 'set_console_presets', { presets })
+export function setConsolePresets(presets: string[]): Promise<string> {
+  return updateConfigOptimistic(c => ({ ...c, console_presets: presets }), 'set_console_presets', { presets })
 }
 
-export async function setAdvancedData(advanced: boolean): Promise<void> {
+export async function setAdvancedData(advanced: boolean): Promise<string> {
   // Switching view unmounts the open editor, so it asks like a tab change.
-  if (!(await confirmLeave())) return
-  await updateConfigOptimistic(c => ({ ...c, advanced_data: advanced }), 'set_advanced_data', { advanced })
+  if (!(await confirmLeave())) return ''
+  return updateConfigOptimistic(c => ({ ...c, advanced_data: advanced }), 'set_advanced_data', { advanced })
 }
 
 export function setSchedulerNow(dt: Date) {

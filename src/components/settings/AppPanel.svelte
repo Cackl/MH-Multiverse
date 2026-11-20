@@ -74,8 +74,10 @@
 
   async function updateOpt<K extends keyof LaunchOptions>(key: K, value: LaunchOptions[K]) {
     const updated = { ...$appConfig.launch_options, [key]: value }
-    await setLaunchOptions(updated)
+    saveError = await setLaunchOptions(updated)
   }
+
+  let saveError = ''
 
   type BoolKey = { [K in keyof LaunchOptions]: LaunchOptions[K] extends boolean ? K : never }[keyof LaunchOptions]
   // Ordered by how often / how much they matter. `invert`: toggle shows the opposite of the stored flag.
@@ -149,6 +151,7 @@
             <LinkedVersions />
 
             <div class="section-divider"><span>Launch Options</span></div>
+            {#if saveError}<div class="update-error">{saveError}</div>{/if}
 
             {#each launchToggles.filter(t => t.key !== 'no_steam' || $activeCaps.steamMode) as t (t.key)}
               {@const on = t.invert ? !$appConfig.launch_options[t.key] : $appConfig.launch_options[t.key]}
@@ -212,6 +215,7 @@
             <h3 class="page-title">Display</h3>
           </div>
           <div class="detail-body content-col">
+            {#if saveError}<div class="update-error">{saveError}</div>{/if}
             <div class="subsection-title">Text size</div>
             <div class="size-row">
               <div class="seg" role="radiogroup" aria-label="Text size">
@@ -220,7 +224,7 @@
                     role="radio"
                     aria-checked={$appConfig.text_size === s}
                     class:on={$appConfig.text_size === s}
-                    on:click={() => setTextSize(s)}
+                    on:click={async () => saveError = await setTextSize(s)}
                   >{Math.round(s * 100)}%</button>
                 {/each}
               </div>
@@ -231,7 +235,7 @@
             <div class="theme-grid">
               {#each themes as theme}
                 {@const active = $activeTheme === theme.id}
-                <button class="theme-card" class:active aria-pressed={active} on:click={() => setTheme(theme.id)}>
+                <button class="theme-card" class:active aria-pressed={active} on:click={async () => saveError = await setTheme(theme.id)}>
                   <!-- Each preview resets to the default palette, then its own theme on top -->
                   <div class="theme-preview" data-theme-preview data-theme={theme.id || undefined} aria-hidden="true">
                     <span class="pv-side"><span class="pv-item"></span><span class="pv-item"></span><span class="pv-item"></span></span>

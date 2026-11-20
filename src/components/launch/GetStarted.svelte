@@ -33,6 +33,9 @@
   $: detectServer($appConfig.server_exe)
   $: match = versionMatch(clientVersion, serverVersion)
 
+  let gameExeError = ''
+  let serverExeError = ''
+
   let missingData: string[] = []
   let copying = false
   let copyError = ''
@@ -69,8 +72,9 @@
     <div class="gs-text">
       <div class="gs-title">Game executable</div>
       <div class="gs-detail" use:tip={$appConfig.game_exe}>{$appConfig.game_exe || 'Not set. Needed to play on any server.'}</div>
+      {#if gameExeError}<div class="gs-detail warn">{gameExeError}</div>{/if}
     </div>
-    <button class="btn btn-sm btn-outline" on:click={browseGameExe}>Browse</button>
+    <button class="btn btn-sm btn-outline" on:click={async () => gameExeError = await browseGameExe()}>Browse</button>
   </div>
 
   <div class="gs-row">
@@ -102,8 +106,9 @@
     <div class="gs-text">
       <div class="gs-title">MHServerEmu executable</div>
       <div class="gs-detail" use:tip={$appConfig.server_exe}>{$appConfig.server_exe || 'Not set'}</div>
+      {#if serverExeError}<div class="gs-detail warn">{serverExeError}</div>{/if}
     </div>
-    <button class="btn btn-sm btn-outline" on:click={browseServerExe}>Browse</button>
+    <button class="btn btn-sm btn-outline" on:click={async () => serverExeError = await browseServerExe()}>Browse</button>
   </div>
 
   {#if hasServerExe}
