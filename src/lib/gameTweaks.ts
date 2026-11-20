@@ -28,6 +28,7 @@ export const SUMMON_MIN = 1
 // The shared summon inventory holds 128 (AgentSummonedEntities Capacity).
 export const SUMMON_MAX = 128
 export const SUMMON_DEFAULT = 4
+export { SUMMON_TIP } from './patchEntryEdit'
 const SUMMON_TAG = '[MV:summons'
 
 /** How many a summon power can keep out at once. `path` is the power's prototype path. */

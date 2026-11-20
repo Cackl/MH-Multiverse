@@ -11,8 +11,9 @@
   import type { PrototypeMatch } from '../../../lib/prototypes'
   import {
     PLAYER_POWERS, COOLDOWN_MIN, COOLDOWN_MAX, COOLDOWN_STEP, COOLDOWN_DEFAULT, clampCooldown,
-    SUMMON_MIN, SUMMON_MAX, SUMMON_DEFAULT, clampSummon,
+    SUMMON_MIN, SUMMON_MAX, SUMMON_DEFAULT, SUMMON_TIP, clampSummon,
   } from '../../../lib/gameTweaks'
+  import { tip } from '../../../lib/tooltip'
 
   export let serverExe: string
   export let onAdd: (tweak: NewTweak) => void
@@ -104,7 +105,7 @@
       {:else}
         <div class="field-group field-group-center">
           <label class="field-label" for="tweak-max">Max at once</label>
-          <input id="tweak-max" class="field-input num" type="number" min={SUMMON_MIN} max={SUMMON_MAX} step="1" bind:value={max}>
+          <input id="tweak-max" class="field-input num" type="number" min={SUMMON_MIN} max={SUMMON_MAX} step="1" bind:value={max} use:tip={SUMMON_TIP}>
         </div>
       {/if}
     </div>

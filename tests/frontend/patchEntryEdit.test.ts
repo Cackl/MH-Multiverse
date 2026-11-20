@@ -90,6 +90,7 @@ describe('CHOICE_FIELDS', () => {
 describe('pathHint', () => {
   it('explains appends, Properties and whole formulas', () => {
     expect(pathHint(entry({ Path: 'Keywords[]' }))).toMatch(/adds to the list/)
+    expect(pathHint(entry({ Path: 'SummonMaxSimultaneous' }))).toMatch(/per cast/)
     expect(pathHint(entry({ Path: 'Keywords[0]' }))).toBe('')
     expect(pathHint(entry({ Path: 'ActionsTriggeredOnPowerEvent[]' }))).toMatch(/ComboEffect/)
     expect(pathHint(entry({ Path: 'ActionsTriggeredOnPowerEvent[2]' }))).toMatch(/ComboEffect/)

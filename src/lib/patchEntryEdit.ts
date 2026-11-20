@@ -143,9 +143,13 @@ export function withParent(pairs: Pair[], parent: string): Pair[] {
 
 // ── Hints and checks ─────────────────────────────────────────────────────────
 
+// The server refuses a cast that summons more than the cap (SummonPower.cs SummonPayloadEntity).
+export const SUMMON_TIP = 'Must be at least the number the power summons per cast, or it summons nothing'
+
 /** A note under Path for paths that behave differently from a plain field. */
 export function pathHint(e: Pick<PatchEntry, 'Path' | 'ValueType' | 'Value'>): string {
   if (/(^|\.)ActionsTriggeredOnPowerEvent\[/.test(e.Path.trim())) return "The power it triggers must be a ComboEffect power that isn't passive and isn't already on the hero. The server refuses anything else."
+  if (/(^|\.)SummonMaxSimultaneous$/.test(e.Path.trim())) return `${SUMMON_TIP}.`
   if (e.Path.trim().endsWith('[]')) return 'Ends in [], so this adds to the list. [n] would replace element n.'
   if (e.ValueType === 'Properties') return 'Only the first Properties entry for a hero counts, across all files.'
   if (e.ValueType === 'Prototype' && typeof e.Value === 'string' && /"Op"\s*:/.test(e.Value)) return 'Replaces the whole formula, so powers that inherit it keep theirs.'

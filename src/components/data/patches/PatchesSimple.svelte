@@ -11,7 +11,7 @@
   import {
     AVATAR_FOLDER, COOLDOWN_MIN, COOLDOWN_MAX, COOLDOWN_STEP, COOLDOWN_DEFAULT,
     clampCooldown, readCooldowns, withCooldowns, type PowerCooldown,
-    SUMMON_MIN, SUMMON_MAX, clampSummon, readSummonCaps, withSummonCaps, type SummonCap,
+    SUMMON_MIN, SUMMON_MAX, SUMMON_TIP, clampSummon, readSummonCaps, withSummonCaps, type SummonCap,
   } from '../../../lib/gameTweaks'
 
   // Patches by where they come from: the launcher's own tweaks, the server's stock packs, your files.
@@ -373,6 +373,7 @@
                     max={SUMMON_MAX}
                     step="1"
                     value={s.max}
+                    use:tip={SUMMON_TIP}
                     on:change={(e) => {
                       const max = clampSummon(e.currentTarget.valueAsNumber)
                       e.currentTarget.value = String(max)
