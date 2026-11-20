@@ -352,9 +352,9 @@ fn restore_json_honours_the_filename_override() {
 }
 
 #[test]
-fn restore_json_copies_the_previous_save_and_keeps_max_backup_number_copies() {
+fn restore_json_copies_the_previous_save_and_keeps_the_oldest_and_max_backup_number_copies() {
     // (older copies already there, MaxBackupNumber, copies left afterwards)
-    let cases = [(0, None, 1), (6, None, 5), (3, Some("2"), 2), (2, Some("0"), 1), (2, Some("x"), 3)];
+    let cases = [(0, None, 1), (6, None, 6), (3, Some("2"), 3), (2, Some("0"), 2), (2, Some("x"), 3)];
     for (older, max, left) in cases {
         let (tmp, server_exe, backup_path, _) = json_server();
         let data = tmp.path().join("Data");
@@ -371,6 +371,9 @@ fn restore_json_copies_the_previous_save_and_keeps_max_backup_number_copies() {
         let copies = multiverse_copies(&tmp);
         assert_eq!(copies.len(), left, "{older} older, max {max:?}: {copies:?}");
         assert_eq!(copies.last(), Some(&copy), "the new copy must be kept");
+        if older > 0 {
+            assert_eq!(copies[0], "DefaultAccount.json.multiverse-20200101-000000.bak", "the oldest copy must be kept");
+        }
         assert_eq!(fs::read_to_string(data.join(&copy)).unwrap(), "old save");
         assert!(data.join("DefaultAccount.json.bak0").exists(), "server backups are not ours to prune");
     }

@@ -502,7 +502,8 @@ fn restore_json_save(server_exe: &str, json_path: &str) -> Result<Option<String>
 }
 
 /// Copy the current save to `<FileName>.multiverse-<timestamp>.bak`, then keep
-/// only the newest [JsonDBManager] MaxBackupNumber of those copies (at least one).
+/// the oldest copy and the newest [JsonDBManager] MaxBackupNumber (at least one).
+/// The oldest is the save from before the first restore.
 /// Separate from the server's own rotating backups, which would push this copy
 /// out after a few saves.
 fn copy_json_save(server_exe: &str, save: &Path) -> Result<String, String> {
@@ -531,8 +532,10 @@ fn copy_json_save(server_exe: &str, save: &Path) -> Result<String, String> {
         })
         .collect();
     copies.sort();
-    for old in &copies[..copies.len().saturating_sub(keep)] {
-        let _ = fs::remove_file(old);
+    if copies.len() > keep + 1 {
+        for old in &copies[1..copies.len() - keep] {
+            let _ = fs::remove_file(old);
+        }
     }
     Ok(name)
 }
