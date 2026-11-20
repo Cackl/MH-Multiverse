@@ -470,3 +470,32 @@ fn move_aside_never_overwrites_an_earlier_copy() {
     let name = file_name_of(&a);
     assert!(name.starts_with("X.json.") && name.ends_with(".bak"), "{name}");
 }
+
+#[test]
+fn a_read_only_file_never_leaves_a_read_only_bak_or_a_tmp() {
+    let tmp = tempfile::tempdir().unwrap();
+    let path = tmp.path().join("X.json");
+    let bak = tmp.path().join("X.json.bak");
+    let set_readonly = |p: &Path, on: bool| {
+        let mut perms = fs::metadata(p).unwrap().permissions();
+        #[allow(clippy::permissions_set_readonly_false)]
+        perms.set_readonly(on);
+        fs::set_permissions(p, perms).unwrap();
+    };
+
+    // Saving over a read-only file may fail (it does on Windows), but the .bak stays writable
+    // and no .tmp is left behind.
+    fs::write(&path, "one").unwrap();
+    set_readonly(&path, true);
+    let _ = write_with_backup(&path, "two");
+    assert!(!fs::metadata(&bak).unwrap().permissions().readonly());
+    assert!(!tmp.path().join("X.json.tmp").exists());
+
+    // An older read-only .bak doesn't block the next save.
+    set_readonly(&path, false);
+    fs::write(&path, "three").unwrap();
+    set_readonly(&bak, true);
+    write_with_backup(&path, "four").unwrap();
+    assert_eq!(fs::read_to_string(&bak).unwrap(), "three");
+    assert_eq!(fs::read_to_string(&path).unwrap(), "four");
+}

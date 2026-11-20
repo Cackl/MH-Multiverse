@@ -306,8 +306,23 @@ fn load_disk_entries(path: &Path) -> Result<Vec<CatalogEntryDisk>, String> {
 fn write_atomic(path: &Path, contents: &str) -> Result<(), String> {
     let tmp_path = path.with_extension("json.tmp");
     fs::write(&tmp_path, contents).map_err(|e| format!("Write failed: {e}"))?;
-    fs::rename(&tmp_path, path).map_err(|e| format!("Write failed: {e}"))?;
+    fs::rename(&tmp_path, path).map_err(|e| {
+        let _ = fs::remove_file(&tmp_path);
+        format!("Write failed: {e}")
+    })?;
     Ok(())
+}
+
+/// Clears the read-only flag, which `fs::copy` carries over from the file it copies.
+fn make_writable(path: &Path) {
+    if let Ok(meta) = fs::metadata(path) {
+        let mut perms = meta.permissions();
+        if perms.readonly() {
+            #[allow(clippy::permissions_set_readonly_false)]
+            perms.set_readonly(false);
+            let _ = fs::set_permissions(path, perms);
+        }
+    }
 }
 
 /// Like `write_atomic`, but first snapshots an existing file to `<path>.bak`
@@ -315,7 +330,10 @@ fn write_atomic(path: &Path, contents: &str) -> Result<(), String> {
 pub(crate) fn write_with_backup(path: &Path, contents: &str) -> Result<(), String> {
     if path.exists() {
         let bak = path.with_extension("json.bak");
+        // A read-only .bak, copied from a file that was once read-only, would block every save.
+        make_writable(&bak);
         fs::copy(path, &bak).map_err(|e| format!("Backup failed: {e}"))?;
+        make_writable(&bak);
     }
     write_atomic(path, contents)
 }
