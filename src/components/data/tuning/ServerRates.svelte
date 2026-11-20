@@ -1,7 +1,8 @@
 <script lang="ts">
+  import { onDestroy } from 'svelte'
   import { invoke } from '@tauri-apps/api/core'
   import { openPath } from '@tauri-apps/plugin-opener'
-  import { activeCaps, appConfig, serverRunning } from '../../../lib/store'
+  import { activeCaps, appConfig, serverRunning, setUnsaved } from '../../../lib/store'
   import { tip } from '../../../lib/tooltip'
   import { reloadLiveTuning } from '../../../lib/serverReload'
   import PanelSidebar from '../../PanelSidebar.svelte'
@@ -38,6 +39,8 @@
   $: ownedError = tuning?.files.find(f => f.file === SERVER_RATES_FILE)?.error ?? null
   $: current = (setting: string): number => edits[setting] ?? states[setting]?.value ?? 1
   $: dirty = Object.keys(edits).filter(s => edits[s] !== states[s]?.value)
+  $: setUnsaved('rates', dirty.length ? 'Server Rates' : null)
+  onDestroy(() => setUnsaved('rates', null))
   /** Base files (in load order) that set any shown row, plus the file this form saves to. */
   $: sourceFiles = (tuning?.files ?? []).flatMap((f, i) =>
     f.file === SERVER_RATES_FILE || f.values.some(v => rows.some(r => r.setting === v.setting))

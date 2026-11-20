@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { onMount } from 'svelte'
+  import { onDestroy, onMount } from 'svelte'
+  import { setUnsaved } from '../../../lib/store'
   import { invoke } from '@tauri-apps/api/core'
   import { tip } from '../../../lib/tooltip'
   import Dropdown from '../../Dropdown.svelte'
@@ -483,7 +484,10 @@
     additionalGuidItems: formAdditionalGuidItems,
     modifiers: [...selectedModifiers].sort(),
   })
-  $: dirty = isNew || currentStateSerialized !== initialStateSerialized
+  $: edited = currentStateSerialized !== initialStateSerialized
+  $: dirty = isNew || edited
+  $: setUnsaved('store-entry', edited ? 'Store entry' : null)
+  onDestroy(() => setUnsaved('store-entry', null))
 
   // ── Save ──────────────────────────────────────────────────────────────────
 
@@ -675,7 +679,7 @@
   let closeBlocked = false
 
   function tryClose() {
-    if (dirty && !isNew) closeBlocked = true
+    if (edited) closeBlocked = true
     else onClose()
   }
 

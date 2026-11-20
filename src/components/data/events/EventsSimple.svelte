@@ -1,7 +1,8 @@
 <script lang="ts">
+  import { onDestroy } from 'svelte'
   import { invoke } from '@tauri-apps/api/core'
   import { openPath } from '@tauri-apps/plugin-opener'
-  import { appConfig, serverRunning, eventTimezoneOffset } from '../../../lib/store'
+  import { appConfig, serverRunning, eventTimezoneOffset, setUnsaved } from '../../../lib/store'
   import { tip } from '../../../lib/tooltip'
   import PanelSidebar from '../../PanelSidebar.svelte'
   import Dropdown from '../../Dropdown.svelte'
@@ -134,6 +135,8 @@
     }
   })
   $: dirty = rows.filter(r => r.changed).length + removedSlugs.length
+  $: setUnsaved('events', dirty ? 'Events' : null)
+  onDestroy(() => setUnsaved('events', null))
 
   function setMode(id: string, mode: EventMode) {
     rules = setEventMode(rules, stock.rules, id, mode)
