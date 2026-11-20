@@ -136,6 +136,24 @@ fn write_config_removes_default_match() {
 }
 
 #[test]
+fn write_config_rejects_line_break() {
+    let (_tmp, server_exe) = empty_server();
+    let dir = std::path::Path::new(&server_exe).parent().unwrap().to_path_buf();
+    copy_config_fixtures(&dir, true);
+    let before = fs::read_to_string(dir.join("ConfigOverride.ini")).unwrap();
+
+    let mut updates: IniData = HashMap::new();
+    updates.insert(
+        "GroupingManager".to_string(),
+        HashMap::from([("MotdText".to_string(), "Hello\nWorld".to_string())]),
+    );
+    let err = write_config(server_exe, updates).unwrap_err();
+
+    assert!(err.contains("GroupingManager.MotdText"));
+    assert_eq!(fs::read_to_string(dir.join("ConfigOverride.ini")).unwrap(), before);
+}
+
+#[test]
 fn write_config_keeps_first_section_after_bom() {
     let (_tmp, server_exe) = empty_server();
     let dir = std::path::Path::new(&server_exe).parent().unwrap().to_path_buf();

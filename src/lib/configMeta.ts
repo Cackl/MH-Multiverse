@@ -1,6 +1,6 @@
 // ─── Types ───────────────────────────────────────────────────────────────────
 
-export type FieldType = 'bool' | 'number' | 'string' | 'textarea' | 'select'
+export type FieldType = 'bool' | 'number' | 'string' | 'select'
 
 export interface Field {
   key: string
@@ -76,7 +76,7 @@ export const CONFIG_SCHEMA: NavSection[] = [
         fields: [
           { key: 'ServerName',          section: 'GroupingManager', type: 'string',   label: 'Server name',        description: 'Name shown in chat for messages the server sends.' },
           { key: 'ServerPrestigeLevel', section: 'GroupingManager', type: 'select',   label: 'Server name colour', description: 'Colour of the server name in chat.', options: NAME_COLOURS },
-          { key: 'MotdText',            section: 'GroupingManager', type: 'textarea', label: 'Message of the day', description: 'Message shown to players when they log in.' },
+          { key: 'MotdText',            section: 'GroupingManager', type: 'string',   label: 'Message of the day', description: 'Message shown to players when they log in.' },
         ],
       },
       {

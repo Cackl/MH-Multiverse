@@ -646,8 +646,6 @@
                   {:else if field.type === 'select'}
                     <Dropdown label={field.label} {value} --dd-min-width="160px" onChange={v => setValue(field, v)}
                       options={[...(field.options?.some(o => o.value === value) ? [] : [{ value, label: value }]), ...(field.options ?? [])]} />
-                  {:else if field.type === 'textarea'}
-                    <textarea class="config-input" aria-label={field.label} rows="3" value={value} on:change={(e) => setValue(field, e.currentTarget.value)}></textarea>
                   {:else if field.type === 'number'}
                     <input type="number" class="config-input num" aria-label={field.label} min={field.min} max={field.max} step="any" value={value} on:change={(e) => setValue(field, e.currentTarget.value)}>
                   {:else}
@@ -863,7 +861,6 @@
     gap: 2px;
   }
 
-  textarea.config-input { resize: vertical; }
 
   /* -- Notices -- */
   .config-notice {

@@ -205,6 +205,15 @@ pub fn write_config(server_exe: String, updates: IniData) -> Result<(), String> 
     let override_path = override_ini_path(&server_exe)
         .ok_or("Could not determine server directory")?;
 
+    // The server's INI parser fails on a value split across lines.
+    for (section, keys) in &updates {
+        for (key, val) in keys {
+            if val.contains(['\n', '\r']) {
+                return Err(format!("{section}.{key} can't contain a line break"));
+            }
+        }
+    }
+
     // Read defaults so we can diff
     let defaults = if config_path.exists() {
         let content = std::fs::read_to_string(&config_path)
