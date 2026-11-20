@@ -2,9 +2,10 @@ import { describe, it, expect } from 'vitest'
 import { isBanned, isWhitelisted, userLevelLabel, formatLastSeen } from '../../src/lib/playerMeta'
 
 describe('account flags', () => {
-  it('isBanned reads bit 2, also when combined with other flags', () => {
-    expect(isBanned(2)).toBe(true)
-    expect(isBanned(18)).toBe(true)
+  it('isBanned reads bit 1 (IsBanned), also when combined with other flags', () => {
+    expect(isBanned(1)).toBe(true)
+    expect(isBanned(17)).toBe(true)
+    expect(isBanned(2)).toBe(false) // IsArchived
     expect(isBanned(16)).toBe(false)
     expect(isBanned(undefined)).toBe(false)
   })
