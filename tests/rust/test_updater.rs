@@ -60,6 +60,19 @@ fn create_backup_skips_blacklisted() {
 }
 
 #[test]
+fn a_failed_backup_leaves_no_folder() {
+    use std::os::windows::fs::OpenOptionsExt;
+    let (_tmp, server_exe) = empty_server();
+    let dir = crate::paths::server_dir(&server_exe).unwrap();
+    fs::write(dir.join("Config.ini"), "x").unwrap();
+    // No sharing, so the copy can't read it.
+    let _lock = fs::OpenOptions::new().read(true).share_mode(0).open(dir.join("Config.ini")).unwrap();
+
+    assert!(backup(&server_exe, vec!["Config.ini".to_string()], "manual").is_err());
+    assert_eq!(fs::read_dir(dir.join("Backups")).unwrap().count(), 0);
+}
+
+#[test]
 fn restore_backup_overwrites_files() {
     let (_tmp, server_exe) = empty_server();
     let dir = crate::paths::server_dir(&server_exe).unwrap();

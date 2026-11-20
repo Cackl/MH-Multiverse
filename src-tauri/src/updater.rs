@@ -340,36 +340,43 @@ fn create_backup_inner(
     let created_at = now.to_rfc3339();
 
     let backup_dir = server_dir.join("Backups").join(&id);
-    std::fs::create_dir_all(&backup_dir)
+    std::fs::create_dir_all(server_dir.join("Backups"))
         .map_err(|e| format!("Cannot create backup directory: {e}"))?;
+    // Not create_dir_all: a failed backup removes its folder, which must never be another backup's.
+    std::fs::create_dir(&backup_dir).map_err(|e| match e.kind() {
+        std::io::ErrorKind::AlreadyExists => format!("Backup {id} already exists. Try again in a moment."),
+        _ => format!("Cannot create backup directory: {e}"),
+    })?;
 
-    let mut backed_up = Vec::new();
-    for target in &targets {
-        let src = server_dir.join(target);
-        if !src.exists() {
-            continue;
+    // A backup without its manifest never shows in the list, so a failed one is removed.
+    let result = (|| {
+        let mut backed_up = Vec::new();
+        for target in &targets {
+            let src = server_dir.join(target);
+            if !src.exists() {
+                continue;
+            }
+            copy_path(&src, &backup_dir.join(target))?;
+            backed_up.push(target.clone());
         }
-        let dst = backup_dir.join(target);
-        copy_path(&src, &dst)?;
-        backed_up.push(target.clone());
+
+        let manifest = BackupManifest {
+            id: id.clone(),
+            created_at,
+            label: label.to_string(),
+            targets: backed_up,
+            size_bytes: dir_size(&backup_dir),
+        };
+        let json = serde_json::to_string_pretty(&manifest)
+            .map_err(|e| format!("Cannot serialise manifest: {e}"))?;
+        std::fs::write(backup_dir.join("manifest.json"), json)
+            .map_err(|e| format!("Cannot write manifest: {e}"))?;
+        Ok(manifest)
+    })();
+    if result.is_err() {
+        let _ = std::fs::remove_dir_all(&backup_dir);
     }
-
-    let size_bytes = dir_size(&backup_dir);
-
-    let manifest = BackupManifest {
-        id: id.clone(),
-        created_at,
-        label: label.to_string(),
-        targets: backed_up,
-        size_bytes,
-    };
-
-    let json = serde_json::to_string_pretty(&manifest)
-        .map_err(|e| format!("Cannot serialise manifest: {e}"))?;
-    std::fs::write(backup_dir.join("manifest.json"), json)
-        .map_err(|e| format!("Cannot write manifest: {e}"))?;
-
-    Ok(manifest)
+    result
 }
 
 // ── Update internals ──────────────────────────────────────────────────────────
