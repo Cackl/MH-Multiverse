@@ -81,7 +81,8 @@ pub(crate) fn seed_account_db(path: &std::path::Path) {
             StartTarget INTEGER NOT NULL,
             AOIVolume INTEGER NOT NULL,
             GazillioniteBalance INTEGER NOT NULL,
-            LastLogoutTime INTEGER NOT NULL
+            LastLogoutTime INTEGER NOT NULL,
+            Flags INTEGER NOT NULL DEFAULT 0
         );
         CREATE TABLE Avatar (
             DbGuid INTEGER PRIMARY KEY,
