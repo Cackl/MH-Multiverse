@@ -395,10 +395,21 @@ fn update_keeps_switched_stock_files_as_the_user_had_them() {
 
         let got = keep_switched_files(server.path(), source.path(), &restored).unwrap();
 
-        let want: Vec<KeptFile> = kept.into_iter().map(|(file, enabled)| KeptFile { file: file.into(), enabled }).collect();
-        assert_eq!(got, want, "{case}: kept");
+        let got_pairs: Vec<(String, bool)> = got.iter().map(|k| (k.file.clone(), k.enabled)).collect();
+        let want: Vec<(String, bool)> = kept.into_iter().map(|(file, enabled)| (file.into(), enabled)).collect();
+        assert_eq!(got_pairs, want, "{case}: kept");
+        // `X.json.bak` in a case stands for the timestamped copy `move_aside` made of X.json.
         for (rel, text) in after {
-            assert_eq!(fs::read_to_string(server.path().join(&rel)).ok().as_deref(), text, "{case}: {rel}");
+            let path = match rel.strip_suffix(".bak") {
+                Some(orig) => crate::test_helpers::moved_aside(&server.path().join(orig)),
+                None => Some(server.path().join(&rel)),
+            };
+            if let (Some(p), Some(_)) = (&path, text) {
+                if rel.ends_with(".bak") {
+                    assert!(got.iter().any(|k| k.kept_as == crate::store::file_name_of(p)), "{case}: kept_as names {rel}");
+                }
+            }
+            assert_eq!(path.and_then(|p| fs::read_to_string(p).ok()).as_deref(), text, "{case}: {rel}");
         }
     }
 }

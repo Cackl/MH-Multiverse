@@ -14,6 +14,8 @@
   let files: PatchFileInfo[] = []
   let scanning = false
   let scanError = ''
+  /** Names the copy a switch moved aside when both folders had the file. */
+  let keptNote = ''
   let openDirError = ''
 
   let selectedFile: PatchFileInfo | null = null
@@ -173,18 +175,20 @@
   }
 
   async function save() {
-    if (!selectedFile) return
+    if (!selectedFile || loadError) return
     saving     = true
     saveError  = ''
     saveSuccess = ''
+    // What is written is what counts as saved: an edit made during the save stays unsaved.
+    const written = dirtyEntries.map(e => ({ ...e }))
     try {
       await invoke('save_patch_file', {
         serverExe: $appConfig.server_exe,
         fileName:  selectedFile.file_name,
         enabled:   selectedFile.enabled,
-        entries:   dirtyEntries,
+        entries:   written,
       })
-      entries     = dirtyEntries.map(e => ({ ...e }))
+      entries     = written
       saveSuccess = 'Saved.'
       setTimeout(() => saveSuccess = '', 3000)
     } catch (e) {
@@ -197,12 +201,13 @@
   async function toggleFileEnabled(f: PatchFileInfo) {
     togglingFile = f.file_name
     try {
-      const newEnabled = await invoke<boolean>('set_patch_file_enabled', {
+      const { enabled: newEnabled, kept_as } = await invoke<{ enabled: boolean; kept_as: string | null }>('set_patch_file_enabled', {
         serverExe:        $appConfig.server_exe,
         fileName:         f.file_name,
         currentlyEnabled: f.enabled,
       })
-      // With a copy in both folders, the switched one replaced the other (kept as .json.bak).
+      keptNote = kept_as ? `The other copy was kept as ${kept_as}` : ''
+      // With a copy in both folders, the switched one replaced the other.
       files = files
         .filter(x => x.file_name !== f.file_name || x.enabled === f.enabled)
         .map(x => x.file_name === f.file_name ? { ...x, enabled: newEnabled } : x)
@@ -238,6 +243,7 @@
   // ── Modal handlers ─────────────────────────────────────────────────────────
 
   function openAddModal() {
+    if (loadError) return
     modalEntry = null
     modalIndex = null
     modalOpen  = true
@@ -316,6 +322,7 @@
 
       <!-- File list -->
       <div class="file-list">
+        {#if keptNote}<div class="file-notice kept">{keptNote}</div>{/if}
         {#if !$appConfig.server_exe}
           <div class="file-notice">Set server exe in Settings to load patch files.</div>
         {:else if scanning}
@@ -414,7 +421,8 @@
               bind:value={searchQuery}
             />
           </div>
-          <button class="btn btn-sm btn-outline" disabled={!selectedFile} on:click={openAddModal}>New Entry</button>
+          <!-- A file that failed to load can't be added to or saved: the save would replace it. -->
+          <button class="btn btn-sm btn-outline" disabled={!selectedFile || !!loadError} on:click={openAddModal}>New Entry</button>
           </div>
         </header>
 
@@ -548,7 +556,7 @@
             class="btn btn-sm btn-accent"
             class:btn-pulse={isDirty}
             style="margin-left:auto;"
-            disabled={!isDirty || saving}
+            disabled={!isDirty || saving || !!loadError}
             on:click={save}
           >
             {saving ? 'Saving...' : 'Save File'}
@@ -622,6 +630,7 @@
     color: var(--text-2);
   }
   .file-notice.error { color: var(--text-error); text-transform: none; font-family: var(--font-body); letter-spacing: 0; }
+  .file-notice.kept { color: var(--text-2); text-transform: none; font-family: var(--font-body); letter-spacing: 0; overflow-wrap: anywhere; }
 
   .file-list > .side-label:first-child { margin-top: 0; border-top: none; }
 

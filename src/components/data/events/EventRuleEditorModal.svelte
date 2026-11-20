@@ -10,7 +10,8 @@
   export let rule: ScheduleRule | null
   export let allEvents: EventDefinition[]
   export let activeEventIds: string[] = []
-  export let onSave: (rule: ScheduleRule) => void
+  /** Resolves true once the rule is written. */
+  export let onSave: (rule: ScheduleRule) => Promise<boolean>
   export let onDiscard: () => void
   export let saving = false
   export let onEditDefinition: ((def: EventDefinition) => void) | null = null
@@ -117,14 +118,14 @@
     nameError     = ''
   }
 
-  function handleSave() {
+  async function handleSave() {
     nameError = ''
     if (!name.trim()) {
       nameError = 'Name is required.'
       return
     }
     if (dateError) return
-    onSave({
+    const saved = await onSave({
       name:             name.trim(),
       is_enabled,
       rule_type,
@@ -136,7 +137,8 @@
       duration_days:     needsDate ? duration_days : rule?.duration_days     ?? null,
       events,
     })
-    // Advance the snapshot so isDirty resets immediately
+    // A failed save keeps the edits unsaved, so leaving still asks.
+    if (!saved) return
     _orig.name          = name.trim()
     _orig.is_enabled    = is_enabled
     _orig.rule_type     = rule_type

@@ -125,11 +125,17 @@
 
   async function finishSale() {
     if (!state.sale) return
-    const { edited, kept } = endSale(saved, state.sale)
+    const { edited, kept, remaining } = endSale(saved, state.sale)
     const { sale: _, ...rest } = state
-    if (await write(planWrites(edited), rest) && kept.length) {
-      saleNote = `${kept.length} ${kept.length === 1 ? 'price was' : 'prices were'} changed during the sale and kept.`
+    // Prices in a switched-off file stay on sale, with their record, until it is switched back on.
+    if (!(await write(planWrites(edited), remaining ? { ...rest, sale: remaining } : rest))) return
+    const notes: string[] = []
+    if (kept.length) notes.push(`${kept.length} ${kept.length === 1 ? 'price was' : 'prices were'} changed during the sale and kept.`)
+    if (remaining) {
+      const n = Object.keys(remaining.prices).length
+      notes.push(`${n} ${n === 1 ? 'price is' : 'prices are'} in a switched-off file. Switch it on and end the sale again.`)
     }
+    saleNote = notes.join(' ')
   }
 
   /** Creates the Multiverse catalog file on first use, then saves the item under the next free SKU. */

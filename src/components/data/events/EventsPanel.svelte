@@ -7,6 +7,7 @@
   import { eventTimezoneOffset } from '../../../lib/store'
   import { serverNow, ruleIsValid, ruleActiveIds, activeEventIds as eventsActiveAt } from '../../../lib/eventSchedule'
   import type { TuningFileInfo, EventDefinition, EventsData, ScheduleRule, ScheduleData } from '../../../lib/tuningMeta'
+  import { replaceRuleAt } from '../../../lib/tuningMeta'
   import PanelSidebar from '../../PanelSidebar.svelte'
   import EventRuleEditorModal from './EventRuleEditorModal.svelte'
   import EventDefinitionEditorModal from './EventDefinitionEditorModal.svelte'
@@ -33,6 +34,8 @@
   let opSuccess = ''
 
   let selectedRule:       ScheduleRule | null  = null
+  /** Where the open rule sits in scheduleData.rules, which is the order saved to the file. */
+  let selectedIndex = -1
   let creatingRule        = false
   let editingDefinition:  EventDefinition | null = null
   let creatingDefinition  = false
@@ -127,6 +130,13 @@
     }
   }
 
+  // Reloading replaces every rule, so an open rule asks first and then closes: it can't be found again.
+  async function reload() {
+    if (!(await confirmLeave())) return
+    discardEditor()
+    await loadData()
+  }
+
   let openDirError = ''
 
   async function openLiveTuningDir() {
@@ -142,25 +152,27 @@
 
   // ── Rule operations ──────────────────────────────────────────────────────────
 
-  async function saveRule(updated: ScheduleRule) {
-    if (!scheduleData) return
+  async function saveRule(updated: ScheduleRule): Promise<boolean> {
+    if (!scheduleData) return false
     saving  = true
     opError = ''
     try {
-      const newRules = creatingRule
-        ? [...rules, updated]
-        : rules.map(r => r === selectedRule ? updated : r)
+      const all = scheduleData.rules
+      const newRules = creatingRule ? [...all, updated] : replaceRuleAt(all, selectedIndex, updated)
       await invoke('save_schedule_override', {
         serverExe: $appConfig.server_exe,
         rules: newRules,
       })
       scheduleData = { rules: newRules, using_override: true }
+      if (creatingRule) selectedIndex = newRules.length - 1
       selectedRule = updated
       creatingRule = false
       opSuccess    = 'Saved'
       setTimeout(() => opSuccess = '', 3000)
+      return true
     } catch (e) {
       opError = String(e)
+      return false
     } finally {
       saving = false
     }
@@ -176,6 +188,7 @@
   async function selectRule(rule: ScheduleRule) {
     if ((selectedRule === rule && !creatingRule) || !(await confirmLeave())) return
     selectedRule = rule
+    selectedIndex = scheduleData?.rules.indexOf(rule) ?? -1
     creatingRule = false
   }
 
@@ -185,13 +198,15 @@
 
   function discardEditor() {
     selectedRule = null
+    selectedIndex = -1
     creatingRule = false
   }
 
   // ── Definition operations ────────────────────────────────────────────────────
 
-  async function saveDefinition(updated: EventDefinition) {
-    if (!eventsData) return
+  // The modal covers the page header, so a failed save returns its error for the modal to show.
+  async function saveDefinition(updated: EventDefinition): Promise<string> {
+    if (!eventsData) return 'Events are not loaded.'
     saving  = true
     opError = ''
     try {
@@ -207,8 +222,9 @@
       creatingDefinition = false
       opSuccess = 'Saved'
       setTimeout(() => opSuccess = '', 3000)
+      return ''
     } catch (e) {
-      opError = String(e)
+      return String(e)
     } finally {
       saving = false
     }
@@ -309,7 +325,7 @@
           aria-label="Reload events and schedule"
           use:tip={'Reload events and schedule'}
           disabled={loading}
-          on:click={loadData}
+          on:click={reload}
         >
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <polyline points="23 4 23 10 17 10"/>
@@ -543,6 +559,7 @@
   <EventDefinitionEditorModal
     definition={creatingDefinition ? null : editingDefinition}
     {tuningFiles}
+    takenIds={definitions.map(d => d.id).filter(i => i !== editingDefinition?.id)}
     onSave={(def) => saveDefinition(def)}
     serverExe={$appConfig.server_exe}
     onClose={() => { editingDefinition = null; creatingDefinition = false }}

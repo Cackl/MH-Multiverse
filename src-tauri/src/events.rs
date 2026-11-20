@@ -168,7 +168,17 @@ fn read_schedule_from_path(path: &Path) -> Result<Vec<ScheduleRule>, String> {
         .collect())
 }
 
+/// The events file is keyed by id, so a second definition with the same id would replace the first.
+fn check_unique_ids(definitions: &[EventDefinition]) -> Result<(), String> {
+    let mut seen = HashSet::new();
+    match definitions.iter().find(|d| !seen.insert(d.id.as_str())) {
+        Some(dup) => Err(format!("Two events use the ID '{}'", dup.id)),
+        None => Ok(()),
+    }
+}
+
 fn write_events_to_path(path: &Path, definitions: &[EventDefinition]) -> Result<(), String> {
+    check_unique_ids(definitions)?;
     // BTreeMap keeps keys in sorted order, so re-saving the same definitions
     // produces a stable diff instead of reshuffling on every save.
     let map: BTreeMap<&str, RawEventDefOut> = definitions
@@ -330,6 +340,7 @@ fn check_bundle(
             return Err(format!("Invalid event file name '{slug}': use 1 to 60 letters and digits"));
         }
     }
+    check_unique_ids(definitions)?;
     let ids: HashSet<&str> = definitions.iter().map(|d| d.id.as_str()).collect();
     for r in rules {
         if let Some(id) = r.events.iter().find(|id| !id.trim().is_empty() && !ids.contains(id.as_str())) {
@@ -341,7 +352,7 @@ fn check_bundle(
 
 /// Saves custom events in one go: their tuning files first, then both override files, which
 /// must always be written together (a schedule naming an id missing from the events list loses
-/// that rule), then the files of deleted events, which are kept as `.json.bak`.
+/// that rule), then the files of deleted events, which are moved aside to `<name>.<timestamp>.bak`.
 #[tauri::command]
 pub fn save_event_bundle(
     server_exe: String,
@@ -368,8 +379,7 @@ pub fn save_event_bundle(
     for slug in removed_slugs {
         let path = owned_dir.join(format!("LiveTuningData{slug}.json"));
         if path.exists() {
-            std::fs::rename(&path, path.with_extension("json.bak"))
-                .map_err(|e| format!("Cannot remove {}: {e}", path.display()))?;
+            crate::store::move_aside(&path)?;
         }
     }
     Ok(())

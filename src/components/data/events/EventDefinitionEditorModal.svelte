@@ -11,8 +11,11 @@
   export let definition: EventDefinition | null
   export let tuningFiles: TuningFileInfo[]
   export let serverExe: string
-  export let onSave: (def: EventDefinition) => void | Promise<void>
+  /** Resolves to the error, or '' once the definition is written. */
+  export let onSave: (def: EventDefinition) => Promise<string>
   export let onClose: () => void
+  /** IDs of the other definitions, which this one can't reuse. */
+  export let takenIds: string[] = []
 
   // ── Local state ─────────────────────────────────────────────────────────────
 
@@ -55,14 +58,20 @@
     missions = missions.filter(x => x !== m)
   }
 
-  function handleSave() {
+  let saving = false
+  let saveError = ''
+
+  async function handleSave() {
     idError   = ''
     nameError = ''
+    saveError = ''
 
     if (!id.trim())           { idError   = 'ID is required.';           return }
+    if (takenIds.includes(id.trim())) { idError = 'Another event already uses this ID.'; return }
     if (!display_name.trim()) { nameError = 'Display name is required.'; return }
 
-    onSave({
+    saving = true
+    saveError = await onSave({
       id:                  id.trim(),
       display_name:        display_name.trim(),
       file_path,
@@ -70,6 +79,7 @@
       instanced_missions:  missions.length > 0 ? missions : null,
       is_hidden:           is_hidden || null,
     })
+    saving = false
   }
 
   // ── Close guard ────────────────────────────────────────────────────────────
@@ -244,9 +254,10 @@
 
     <!-- Footer -->
     <div class="modal-footer">
+      {#if saveError}<span class="feedback-error save-error">{saveError}</span>{/if}
       <button class="btn btn-sm btn-outline" on:click={tryClose}>Cancel</button>
-      <button class="btn btn-sm btn-accent" on:click={handleSave}>
-        {isNew ? 'Create Event' : 'Save'}
+      <button class="btn btn-sm btn-accent" on:click={handleSave} disabled={saving}>
+        {saving ? 'Saving...' : isNew ? 'Create Event' : 'Save'}
       </button>
     </div>
 
@@ -254,6 +265,7 @@
 </div>
 
 <style>
+  .save-error { margin-right: auto; }
   .modal {
     width: min(560px, 90vw);
     max-height: 85vh;

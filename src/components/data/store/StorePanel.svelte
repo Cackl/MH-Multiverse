@@ -279,12 +279,16 @@
     entries = entries.filter(e => e.SkuId !== skuId)
     selectedSkus.delete(skuId)
     selectedSkus = selectedSkus
-    if (editingEntry?.SkuId === skuId) editingEntry = null
+    if (editingEntry?.SkuId === skuId) { editingEntry = null; editOpenError = '' }
   }
 
-  function handleCreated(created: CatalogEntryWithMeta) {
+  /** Shown by the edit modal that opens after a new entry is saved. */
+  let editOpenError = ''
+
+  function handleCreated(created: CatalogEntryWithMeta, pageError = '') {
     entries = [...entries, created]
     creatingNew = false
+    editOpenError = pageError
     editingEntry = created
   }
 
@@ -879,7 +883,8 @@
     serverExe={$appConfig.server_exe}
     catalogFiles={catalogFiles}
     allEntries={entries}
-    onClose={() => editingEntry = null}
+    initialError={editOpenError}
+    onClose={() => { editingEntry = null; editOpenError = '' }}
     onSaved={handleSaved}
     onDeleted={handleDeleted}
   />

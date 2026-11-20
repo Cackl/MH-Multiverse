@@ -253,14 +253,21 @@ pub fn create_patch_file(server_exe: String, suffix: String) -> Result<String, S
     Ok(file_name)
 }
 
+/// The result of a Patches switch.
+#[derive(Debug, Serialize)]
+pub struct PatchSwitch {
+    pub enabled: bool,
+    /// Where the replaced copy went, relative to Patches/, when both copies existed.
+    pub kept_as: Option<String>,
+}
+
 /// Move a patch file between Patches/ and Patches/Off/ to toggle its enabled state.
-/// Returns the new enabled state.
 #[tauri::command]
 pub fn set_patch_file_enabled(
     server_exe: String,
     file_name: String,
     currently_enabled: bool,
-) -> Result<bool, String> {
+) -> Result<PatchSwitch, String> {
     let patches = patches_dir(&server_exe)?;
     let off = off_dir(&patches);
 
@@ -270,11 +277,13 @@ pub fn set_patch_file_enabled(
     let dst = dst_dir.join(&file_name);
 
     // Both copies exist when an older server update added one back. The copy being switched
-    // wins, and the one it replaces is kept as .json.bak (fs::rename would delete it).
-    if src.exists() && dst.exists() {
-        fs::rename(&dst, dst.with_extension("json.bak"))
-            .map_err(|e| format!("Cannot keep a copy of {}: {e}", dst.display()))?;
-    }
+    // wins, and the one it replaces is moved aside (fs::rename would delete it).
+    let kept_as = if src.exists() && dst.exists() {
+        let bak = crate::store::move_aside(&dst)?;
+        Some(bak.strip_prefix(&patches).unwrap_or(&bak).to_string_lossy().replace('\\', "/"))
+    } else {
+        None
+    };
 
     fs::create_dir_all(&dst_dir)
         .map_err(|e| format!("Cannot create target directory: {e}"))?;
@@ -282,7 +291,7 @@ pub fn set_patch_file_enabled(
     fs::rename(&src, &dst)
         .map_err(|e| format!("Cannot move {file_name}: {e}"))?;
 
-    Ok(new_enabled)
+    Ok(PatchSwitch { enabled: new_enabled, kept_as })
 }
 
 /// Return the absolute path to the Patches directory (for open-in-explorer).
