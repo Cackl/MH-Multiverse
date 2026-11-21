@@ -55,3 +55,29 @@ fn steam_mode_is_off_for_the_1_48_and_1_53_clients() {
         assert_eq!(use_steam(&config_for(no_steam, version, active)), want, "no_steam={no_steam} {version} active={active:?}");
     }
 }
+
+#[test]
+fn scrub_launch_logs_masks_every_password_and_leaves_other_files() {
+    let tmp = tempfile::tempdir().unwrap();
+    let line = |pw: &str| format!("Init: Command line: -steam -emailaddress=a@b.c -password={pw}\r\n");
+    let two = format!("{}Log: other\r\n{}", line("hunter2"), line("with space\""));
+    std::fs::write(tmp.path().join("Launch.log"), &two).unwrap();
+    // Non-UTF-8 byte must survive untouched.
+    let mut backup = line("p@ss").into_bytes();
+    backup.extend_from_slice(b"Log: \xE9t\xE9\r\n");
+    std::fs::write(tmp.path().join("Launch-backup-2026.11.21-22.07.29.log"), &backup).unwrap();
+    std::fs::write(tmp.path().join("Other.log"), line("keep")).unwrap();
+
+    scrub_launch_logs(tmp.path());
+
+    let read = |n: &str| std::fs::read(tmp.path().join(n)).unwrap();
+    assert_eq!(read("Launch.log"), format!("{}Log: other\r\n{}", line("***"), line("***")).into_bytes());
+    let mut want = line("***").into_bytes();
+    want.extend_from_slice(b"Log: \xE9t\xE9\r\n");
+    assert_eq!(read("Launch-backup-2026.11.21-22.07.29.log"), want);
+    assert_eq!(read("Other.log"), line("keep").into_bytes());
+
+    // Running again changes nothing.
+    scrub_launch_logs(tmp.path());
+    assert_eq!(read("Launch.log"), format!("{}Log: other\r\n{}", line("***"), line("***")).into_bytes());
+}

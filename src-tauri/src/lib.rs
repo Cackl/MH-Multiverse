@@ -100,6 +100,8 @@ pub fn run() {
                 let _ = window.restore_state(WINDOW_STATE_FLAGS);
             }
             std::thread::spawn(app_update::cleanup_leftovers);
+            let handle = app.handle().clone();
+            std::thread::spawn(move || launcher::scrub_launch_logs_for(&handle));
             if cfg!(debug_assertions) {
                 app.handle().plugin(
                     tauri_plugin_log::Builder::default()

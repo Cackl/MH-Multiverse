@@ -47,6 +47,37 @@ impl LaunchedGame {
     }
 }
 
+/// The client writes its launch arguments, auto-login password included, to `Launch.log` and keeps
+/// a `Launch-backup-*.log` per launch. Masks every `-password=` value in them. A file the game
+/// still holds open is skipped and caught at game exit or the next start.
+pub(crate) fn scrub_launch_logs(dir: &std::path::Path) {
+    // Bytes, not str: a log with non-UTF-8 text must come back unchanged apart from the mask.
+    // Masks to the end of the line, so a password with spaces or quotes is covered. The client logs
+    // the command line in one line and `launch_game` passes `-password=` last.
+    let re = regex::bytes::Regex::new(r"(?i)(-password=)[^\r\n]+").unwrap();
+    let Ok(entries) = std::fs::read_dir(dir) else { return };
+    for path in entries.flatten().map(|e| e.path()) {
+        let is_launch_log = path.file_name().and_then(|n| n.to_str())
+            .is_some_and(|n| n.starts_with("Launch") && n.ends_with(".log"));
+        if !is_launch_log { continue }
+        let Ok(bytes) = std::fs::read(&path) else { continue };
+        let scrubbed = re.replace_all(&bytes, &b"${1}***"[..]);
+        if *scrubbed != *bytes {
+            let _ = std::fs::write(&path, &scrubbed);
+        }
+    }
+}
+
+/// Run at startup and when `game_is_running` sees the game exit.
+pub(crate) fn scrub_launch_logs_for(app: &tauri::AppHandle) {
+    if let Ok(docs) = app.path().document_dir() {
+        scrub_launch_logs(&docs.join(r"My Games\Marvel Heroes\MarvelGame\Logs"));
+    }
+}
+
+/// Last `game_is_running` result, to spot the game exiting.
+static GAME_WAS_RUNNING: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
 /// A process is the game when it has the linked exe's file name, whatever that is
 /// (`MarvelHeroesOmega.exe` for 1.52, `MarvelHeroes2016.exe` for 1.48, or a renamed copy).
 fn is_game_process(process_name: &std::ffi::OsStr, game_exe: &str) -> bool {
@@ -68,6 +99,11 @@ pub fn game_is_running(app: tauri::AppHandle, state: tauri::State<GameProcessSta
     // below keeps finding the stale entry forever.
     sys.refresh_processes(sysinfo::ProcessesToUpdate::All, true);
     let running = sys.processes().values().any(|p| is_game_process(p.name(), &game_exe));
+    drop(sys);
+    // The frontend polls this every few seconds app-wide, so it doubles as the game-exit hook.
+    if GAME_WAS_RUNNING.swap(running, std::sync::atomic::Ordering::SeqCst) && !running {
+        scrub_launch_logs_for(&app);
+    }
     running
 }
 
