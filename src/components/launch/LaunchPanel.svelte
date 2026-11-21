@@ -1,3 +1,12 @@
+<script context="module" lang="ts">
+  import { writable, get } from 'svelte/store'
+  // Shared by every instance: a version switch remounts the panel mid-launch (App's {#key}),
+  // and the new panel must show the launch the old one is still running.
+  const launching = writable(false)
+  const startingServer = writable(false)
+  const launchError = writable('')
+</script>
+
 <script lang="ts">
   import { onDestroy } from 'svelte'
   import { invoke } from '@tauri-apps/api/core'
@@ -15,6 +24,9 @@
   import PanelSidebar from '../PanelSidebar.svelte'
   import GetStarted from './GetStarted.svelte'
 
+  // An old error clears when the tab opens again, but not during a launch that remounted it.
+  if (!get(launching)) launchError.set('')
+
   $: activeServer = $appConfig.servers.find(s => s.id === $activeServerId) ?? null
   const linkedName = (id: string | undefined) => $appConfig.linked.find(l => l.id === id)?.name ?? ''
   // The version Launch switches to first, when the profile is paired with one that isn't active.
@@ -29,9 +41,6 @@
   let showModal = false
   let editingServer: Server | null = null
   let addTab: 'remote' | 'local' | null = null
-  let launchError = ''
-  let launching = false
-  let startingServer = false
 
   let dashboardPort = 8080
   let dashboardPath = `/Dashboard/`
@@ -111,31 +120,32 @@
   async function launch() {
     if (!activeServer) return
     const profile = activeServer
-    launching = true
-    launchError = ''
+    const target = switchTo
+    launching.set(true)
+    launchError.set('')
     overlayInject.set(null)
+    // A switch remounts this panel, so from here on read stores with get(), not $.
     try {
-      if (switchTo) {
-        if ($serverRunning) throw `Stop the server to play on ${switchTo.name}`
-        await activateLinked(switchTo.id)
+      if (target) {
+        await activateLinked(target.id)
         // Unsaved edits were kept.
-        if ($appConfig.active_linked_id !== switchTo.id) return
+        if (get(appConfig).active_linked_id !== target.id) return
       }
-      if (profile.is_local && profile.start_server && $appConfig.server_exe && !$serverRunning) {
-        startingServer = true
+      if (profile.is_local && profile.start_server && get(appConfig).server_exe && !get(serverRunning)) {
+        startingServer.set(true)
         const ready = await ensureServerReady()
-        startingServer = false
+        startingServer.set(false)
         if ('error' in ready) throw ready.error
       }
-      if (autoInject) await refreshOverlay()
+      if (get(appConfig).overlay?.auto_inject) await refreshOverlay()
       await invoke('launch_game', { serverId: profile.id })
       // Don't wait for the next poll to disable Launch.
       gameRunning.set(true)
     } catch (e) {
-      launchError = String(e)
+      launchError.set(String(e))
     } finally {
-      launching = false
-      startingServer = false
+      launching.set(false)
+      startingServer.set(false)
     }
   }
 
@@ -279,8 +289,8 @@
 
       <!-- Launch bar -->
       <div class="launch-bar">
-        {#if launchError}
-          <div class="launch-error">{launchError}</div>
+        {#if $launchError}
+          <div class="launch-error">{$launchError}</div>
         {:else if $overlayInject && !$overlayInject.ok}
           <div class="launch-error">{$overlayInject.message}</div>
         {/if}
@@ -288,8 +298,10 @@
           <button class="btn btn-secondary" on:click={openHome}>Home</button>
         {/if}
         <button class="btn btn-secondary" on:click={openDashboard}>Dashboard</button>
-        {#if switchTo && !launchError}
-          <span class="switch-note" use:tip={switchTo.name}>Launch switches to {switchTo.name}</span>
+        {#if switchTo && !$launchError}
+          <span class="switch-note" class:warn={$serverRunning} use:tip={switchTo.name}>
+            {$serverRunning ? `Stop the server to switch to ${switchTo.name}` : `Launch switches to ${switchTo.name}`}
+          </span>
         {/if}
         {#if $overlayStatus?.auto_inject}
           <button
@@ -304,10 +316,10 @@
         <button
           class="btn btn-launch"
           use:tip={!launchExe ? 'Set the game executable in Settings' : ''}
-          disabled={!launchExe || !activeServer || launching || $gameRunning}
+          disabled={!launchExe || !activeServer || $launching || $gameRunning || (!!switchTo && $serverRunning)}
           on:click={launch}
         >
-          {$gameRunning ? 'Game Running' : startingServer ? 'Starting Server...' : launching ? 'Launching...' : 'Launch Game'}
+          {$gameRunning ? 'Game Running' : $startingServer ? 'Starting Server...' : $launching ? 'Launching...' : 'Launch Game'}
         </button>
       </div>
 
@@ -544,6 +556,7 @@
     font-size: 12px;
     color: var(--text-2);
   }
+  .switch-note.warn { color: var(--amber); }
   .switch-note + .overlay-note, .switch-note + .btn-launch { margin-left: 0; }
   .overlay-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
   .overlay-note.warn { color: var(--amber); }
