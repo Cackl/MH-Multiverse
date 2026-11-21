@@ -2,6 +2,22 @@
 ---
 <br>
 
+# Version 1.7.2 Release
+
+## Breaking Changes
+- The Overlay needs to be trusted again once. Until you press Trust in `Settings > Integrations`, Inject on Launch and Inject now are refused.
+
+## What's Changed
+
+### Overlay
+- The Overlay is now loaded by its own injector, `MhInject.exe`, instead of by MH Multiverse. This stops Windows Defender from flagging MH Multiverse when it injects (1.7.1 was quarantined as `Behavior:Win32/DefenseEvasion.A!ml`).
+- Trust now also covers `MhInject.exe` and the files it runs from.
+- The injector needs the .NET 8 Runtime, which the Overlay's own launcher also uses.
+- Injection is refused while a second game client with the same name is running, since the injector picks the game by name.
+
+<br>
+
+---
 # Version 1.7.1 Release
 
 ## Breaking Changes
