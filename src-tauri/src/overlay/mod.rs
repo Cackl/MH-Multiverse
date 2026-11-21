@@ -23,13 +23,21 @@ const LOOT_CONFIG: &str = "MarvelHeroesOmega.LootFilter/loot-filter-config.json"
 /// Stands in for the hash of a symlink or subfolder found inside a code folder.
 const UNHASHABLE: &str = "!not-a-regular-file";
 
-/// Code and static assets the hook loads. Everything else in the overlay
-/// folder (legacy exes, updater, flags, panel layouts) is never hashed or copied.
+/// The overlay's own injector, run to load the hook.
+const INJECTOR: &str = "MhInject.exe";
+
+/// Code and static assets the hook loads, plus the injector and the .NET files it runs from.
+/// Everything else in the overlay folder (its launcher, updater, flags, panel layouts) is never hashed.
 const CODE_FILES: &[&str] = &[
     DLL_NAME,
     "MhClientHook.terminals.bin",
     "MhClientHook.enum-names.bin",
     "LootFilter/loot-filter-config.default.json",
+    INJECTOR,
+    "MhInject.dll",
+    "MhInject.deps.json",
+    "MhInject.runtimeconfig.json",
+    "MarvelHeroes.Injection.Core.dll",
 ];
 const CODE_DIRS: &[&str] = &[
     "MhClientHook.dps-portraits",
