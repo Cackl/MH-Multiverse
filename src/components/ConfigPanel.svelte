@@ -7,7 +7,7 @@
   import { onMount, onDestroy, tick } from 'svelte'
   import { openPath } from '@tauri-apps/plugin-opener'
   import { invoke } from '@tauri-apps/api/core'
-  import { activeCaps, appConfig, setUnsaved, setConsolePresets, serverRunning, setShutdownConfig, logFilterThreshold, type ShutdownConfig } from '../lib/store'
+  import { activeCaps, appConfig, setUnsaved, setConsolePresets, serverRunning, setShutdownConfig, setApacheAutoStart, logFilterThreshold, type ShutdownConfig } from '../lib/store'
   import { FALLBACK_COMMANDS } from '../lib/serverCommands'
   import { CONFIG_SCHEMA, changedValues, fieldError, fieldsFor, otherSettings, type Field, type NavSection } from '../lib/configMeta'
   import { tip } from '../lib/tooltip'
@@ -431,6 +431,28 @@
             These settings are stored in MH Multiverse, not in ConfigOverride.ini.
           </div>
           {#if multiverseError}<div class="feedback-error">{multiverseError}</div>{/if}
+
+          <div class="subsection-title">Server start</div>
+          <div class="config-grid">
+            <div class="config-field full">
+              <div class="toggle-row">
+                <div class="toggle-info">
+                  <span class="config-field-label">Start Apache with the server</span>
+                  <span class="config-tooltip">Starting the server also starts the bundled Apache, which a local login needs. Turn it off if you host the web side another way.</span>
+                </div>
+                <div
+                  class="toggle-switch"
+                  class:on={$appConfig.apache_auto_start}
+                  role="switch"
+                  aria-checked={$appConfig.apache_auto_start}
+                  aria-label="Start Apache with the server"
+                  tabindex="0"
+                  on:click={async () => multiverseError = await setApacheAutoStart(!$appConfig.apache_auto_start)}
+                  on:keydown={async (e) => { if (e.key === 'Enter') multiverseError = await setApacheAutoStart(!$appConfig.apache_auto_start) }}
+                ></div>
+              </div>
+            </div>
+          </div>
 
           <div class="subsection-title">Shutdown</div>
           <div class="config-grid">

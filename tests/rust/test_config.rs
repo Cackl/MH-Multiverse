@@ -64,6 +64,15 @@ fn fresh_install_starts_simple_and_the_choice_survives_a_save() {
     }
 }
 
+#[test]
+fn apache_auto_start_is_on_for_old_and_new_configs_and_off_survives_a_save() {
+    let old: AppConfig = serde_json::from_str(CONFIG_1_6_1).unwrap();
+    assert!(old.apache_auto_start);
+    assert!(AppConfig::default().apache_auto_start);
+    let saved = serde_json::to_string(&AppConfig { apache_auto_start: false, ..AppConfig::default() }).unwrap();
+    assert!(!serde_json::from_str::<AppConfig>(&saved).unwrap().apache_auto_start);
+}
+
 fn install(id: &str, game_exe: &str, server_exe: &str, no_steam: bool) -> LinkedInstall {
     LinkedInstall {
         id: id.into(), name: id.into(), version: "1.48".into(),

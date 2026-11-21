@@ -321,7 +321,10 @@ export async function startServer() {
     setServerError(String(e))
     serverStartError.set(String(e))
     startingServer.set(false)
+    return
   }
+  // A failed Apache start shows on its Rail dot and doesn't stop the server.
+  if (get(appConfig).apache_auto_start && !get(apacheRunning) && !get(startingApache)) await startApache()
 }
 
 export async function startApache() {
@@ -417,6 +420,7 @@ export interface AppConfig {
   backup_targets: string[]
   /** Data tab view: true = Advanced, false = Simple (fresh installs start in Simple). */
   advanced_data: boolean
+  apache_auto_start: boolean
 }
 
 /** A client and server pair. The active one is copied into game_exe, server_exe and launch_options.no_steam. */
@@ -476,6 +480,7 @@ export const appConfig = writable<AppConfig>({
   backup_targets: ['Config.ini', 'ConfigOverride.ini', 'Data/Game/LiveTuning', 'Data/Account.db'],
   // Until the real config loads, show the existing editors rather than flash Simple.
   advanced_data: true,
+  apache_auto_start: true,
 })
 
 export const activeLinked = derived(appConfig, c => c.linked.find(l => l.id === c.active_linked_id))
@@ -753,6 +758,10 @@ export function setBackupTargets(targets: string[]): Promise<string> {
 
 export function setConsolePresets(presets: string[]): Promise<string> {
   return updateConfigOptimistic(c => ({ ...c, console_presets: presets }), 'set_console_presets', { presets })
+}
+
+export function setApacheAutoStart(on: boolean): Promise<string> {
+  return updateConfigOptimistic(c => ({ ...c, apache_auto_start: on }), 'set_apache_auto_start', { on })
 }
 
 export async function setAdvancedData(advanced: boolean): Promise<string> {
