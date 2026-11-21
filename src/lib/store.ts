@@ -394,6 +394,10 @@ export interface Server {
   email: string
   is_local?: boolean
   use_https?: boolean
+  /** The linked version this profile plays on. Empty or missing follows the active version. */
+  linked_id?: string
+  /** Local profiles: Launch starts the server first when it isn't running. */
+  start_server?: boolean
 }
 
 export interface AppConfig {

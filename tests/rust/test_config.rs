@@ -183,6 +183,21 @@ fn the_active_entry_cannot_be_removed() {
 }
 
 #[test]
+fn removing_a_version_unpairs_its_profiles() {
+    let mut config = AppConfig::default();
+    config.linked = vec![install("a", "A.exe", "", true), install("b", "B.exe", "", true)];
+    activate_linked_in(&mut config, "a").unwrap();
+    let profile = |id: &str, linked_id: &str| Server {
+        id: id.into(), name: id.into(), host: String::new(), email: String::new(), is_local: true, use_https: false,
+        password_enc: String::new(), password_nonce: String::new(), linked_id: linked_id.into(), start_server: false,
+    };
+    config.servers = vec![profile("p1", "a"), profile("p2", "b")];
+    delete_linked_in(&mut config, "b").unwrap();
+    let paired: Vec<&str> = config.servers.iter().map(|s| s.linked_id.as_str()).collect();
+    assert_eq!(paired, ["a", ""]);
+}
+
+#[test]
 fn a_new_app_version_backs_the_config_up_first() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("multiverse.json");

@@ -127,6 +127,12 @@ pub struct Server {
     pub password_enc: String,
     #[serde(default)]
     pub password_nonce: String,
+    /// The linked version this profile plays on. Empty follows the active version.
+    #[serde(default)]
+    pub linked_id: String,
+    /// Local profiles: Launch starts the server first when it isn't running.
+    #[serde(default)]
+    pub start_server: bool,
 }
 
 /// A client and server pair the user can switch to. The active one is copied into
@@ -456,6 +462,9 @@ fn delete_linked_in(config: &mut AppConfig, id: &str) -> Result<(), String> {
         return Err("Switch to another version before removing this one".into());
     }
     config.linked.retain(|l| l.id != id);
+    for server in config.servers.iter_mut().filter(|s| s.linked_id == id) {
+        server.linked_id.clear();
+    }
     Ok(())
 }
 
