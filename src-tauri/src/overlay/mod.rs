@@ -1,6 +1,6 @@
-//! Third-party overlay integration. Nothing here runs overlay executables: the
-//! user links a folder and trusts it (TOFU), and the DLL is injected only if
-//! the folder still matches the trusted hashes at the moment of injection.
+//! Third-party overlay integration. The user links a folder and trusts it (TOFU).
+//! The only overlay executable run is its injector, MhInject.exe, and only while
+//! the folder still matches the trusted hashes.
 
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -376,18 +376,24 @@ fn inject_into(cfg: &OverlayConfig, pid: u32, fresh_launch: bool, mut alive: imp
     // '0' on a fresh launch so the hook arms its loading gate (a stale '1' would skip it)
     write_flag(&dir, "MhClientHook.skip-boot-loading-gate.flag", !fresh_launch)?;
     let dll = dir.join(DLL_NAME);
+    let injector = dir.join(INJECTOR);
+    if !is_plain_file(&injector) {
+        return Err(format!("{INJECTOR} not found in the overlay folder."));
+    }
 
-    let _ = inject::wait_input_idle(pid);
+    inject::wait_input_idle(pid);
     for attempt in 1..=5 {
         if !alive() {
             return Err("The game exited before the overlay could be injected.".into());
         }
-        // verify right before loading; anything changed since Trust is refused
+        // verify right before running; anything changed since Trust is refused
         if status_of(cfg).state != "trusted" {
             return Err("The overlay files changed since you trusted them, so they weren't injected.".into());
         }
-        match inject::inject(pid, &dll) {
-            Ok(()) => return Ok(()),
+        match inject::inject(pid, &injector, &dll) {
+            // MhInject picks the game by name: confirm it landed in ours
+            Ok(()) if inject::wait_module(pid, DLL_NAME, 2) => return Ok(()),
+            Ok(()) => return Err("The overlay injector did not load the overlay into this game.".into()),
             // the remote LoadLibrary may still finish after our wait: give it a moment
             // before retrying (or giving up) and accept it if the module shows up
             Err(InjectError::Timeout) => {
