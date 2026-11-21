@@ -99,6 +99,11 @@ async function ensureReady(t: Required<Timing>): Promise<{ error: string } | { s
   return { started }
 }
 
+/** Starts the server if it isn't running and waits until it reads commands. Launch uses it too. */
+export function ensureServerReady(t: Timing = {}) {
+  return ensureReady(timing(t))
+}
+
 // The server's replies, from AccountCommands.cs. Each is logged as one line once the command ran.
 const REPLIES = {
   create: { ok: 'Created a new account: ', fail: 'Failed to create account: ' },
