@@ -37,7 +37,7 @@ zip = "9"
 chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
 lz4_flex = { version = "0.11", default-features = false, features = ["safe-decode"] }
 regex = "1"
-rusqlite = { version = "0.38", features = ["bundled"] }
+rusqlite = { version = "0.43", features = ["bundled"] }
 pbkdf2  = "0.12"
 sha2    = "0.10"
 rand    = "0.8"
