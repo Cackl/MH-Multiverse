@@ -141,6 +141,7 @@ pub fn run() {
             game_data::copy_game_data,
             config::set_console_presets,
             config::set_advanced_data,
+            config::set_apache_auto_start,
             launcher::launch_game,
             launcher::game_is_running,
             launcher::normalize_host,

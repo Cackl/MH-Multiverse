@@ -2,6 +2,22 @@
 ---
 <br>
 
+# Version 1.7.1 Release
+
+## Breaking Changes
+- Starting the server now also starts Apache. This is on by default, also for existing configs. Turn it off in `Config > Multiverse > Server start` if you host the web side another way.
+
+## What's Changed
+
+### Server profiles
+- Pair a server profile with a linked version in Add Server or Edit Server. New profiles pair with the active version. Profiles created prior to this update continue to use whichever version is active.
+- Launch on a paired profile switches to its version before starting the game, so moving between 1.48 and 1.52 profiles launches the right client automatically.
+- Tick "Start the server on Launch" on a local profile to automatically start the server before the game.
+- If a launch needs a version switch while the server is running, a note beside Launch asks you to stop the server first.
+
+<br>
+
+---
 # Version 1.7.0 Release
 
 ## What's Changed

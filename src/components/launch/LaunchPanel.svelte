@@ -1,3 +1,12 @@
+<script context="module" lang="ts">
+  import { writable, get } from 'svelte/store'
+  // Shared by every instance: a version switch remounts the panel mid-launch (App's {#key}),
+  // and the new panel must show the launch the old one is still running.
+  const launching = writable(false)
+  const startingServer = writable(false)
+  const launchError = writable('')
+</script>
+
 <script lang="ts">
   import { onDestroy } from 'svelte'
   import { invoke } from '@tauri-apps/api/core'
@@ -6,15 +15,25 @@
     appConfig, activeServerId,
     selectServer, deleteServer, guideRequested,
     gameRunning, overlayStatus, overlayInject, type OverlayStatus, activeTab, settingsSection,
-    type Server
+    serverRunning, activateLinked, type Server
   } from '../../lib/store'
+  import { ensureServerReady } from '../../lib/accountCommands'
   import { tip } from '../../lib/tooltip'
   import ServerModal from './ServerModal.svelte'
   import { openCard } from '../settings/integrations/IntegrationCard.svelte'
   import PanelSidebar from '../PanelSidebar.svelte'
   import GetStarted from './GetStarted.svelte'
 
+  // An old error clears when the tab opens again, but not during a launch that remounted it.
+  if (!get(launching)) launchError.set('')
+
   $: activeServer = $appConfig.servers.find(s => s.id === $activeServerId) ?? null
+  const linkedName = (id: string | undefined) => $appConfig.linked.find(l => l.id === id)?.name ?? ''
+  // The version Launch switches to first, when the profile is paired with one that isn't active.
+  $: switchTo = activeServer?.linked_id && activeServer.linked_id !== $appConfig.active_linked_id
+    ? $appConfig.linked.find(l => l.id === activeServer!.linked_id) ?? null
+    : null
+  $: launchExe = switchTo ? switchTo.game_exe : $appConfig.game_exe
 
   // The guide shows on its own with no servers; the sidebar button brings it back afterwards.
   $: showGuide = $appConfig.servers.length === 0 || $guideRequested
@@ -22,8 +41,6 @@
   let showModal = false
   let editingServer: Server | null = null
   let addTab: 'remote' | 'local' | null = null
-  let launchError = ''
-  let launching = false
 
   let dashboardPort = 8080
   let dashboardPath = `/Dashboard/`
@@ -102,18 +119,33 @@
 
   async function launch() {
     if (!activeServer) return
-    launching = true
-    launchError = ''
+    const profile = activeServer
+    const target = switchTo
+    launching.set(true)
+    launchError.set('')
     overlayInject.set(null)
-    if (autoInject) await refreshOverlay()
+    // A switch remounts this panel, so from here on read stores with get(), not $.
     try {
-      await invoke('launch_game', { serverId: activeServer.id })
+      if (target) {
+        await activateLinked(target.id)
+        // Unsaved edits were kept.
+        if (get(appConfig).active_linked_id !== target.id) return
+      }
+      if (profile.is_local && profile.start_server && get(appConfig).server_exe && !get(serverRunning)) {
+        startingServer.set(true)
+        const ready = await ensureServerReady()
+        startingServer.set(false)
+        if ('error' in ready) throw ready.error
+      }
+      if (get(appConfig).overlay?.auto_inject) await refreshOverlay()
+      await invoke('launch_game', { serverId: profile.id })
       // Don't wait for the next poll to disable Launch.
       gameRunning.set(true)
     } catch (e) {
-      launchError = String(e)
+      launchError.set(String(e))
     } finally {
-      launching = false
+      launching.set(false)
+      startingServer.set(false)
     }
   }
 
@@ -191,7 +223,7 @@
           >
             <div class="server-card-name">{server.name}</div>
             <div class="server-card-url">
-              {server.is_local ? 'Local Server' : server.host}
+              {#if server.linked_id && $appConfig.linked.length > 1}<span class="card-version" use:tip={linkedName(server.linked_id)}>{linkedName(server.linked_id)}</span><span class="card-sep">·</span>{/if}<span class="card-where">{server.is_local ? 'Local Server' : server.host}</span>
             </div>
           </div>
         {/each}
@@ -257,8 +289,8 @@
 
       <!-- Launch bar -->
       <div class="launch-bar">
-        {#if launchError}
-          <div class="launch-error">{launchError}</div>
+        {#if $launchError}
+          <div class="launch-error">{$launchError}</div>
         {:else if $overlayInject && !$overlayInject.ok}
           <div class="launch-error">{$overlayInject.message}</div>
         {/if}
@@ -266,6 +298,11 @@
           <button class="btn btn-secondary" on:click={openHome}>Home</button>
         {/if}
         <button class="btn btn-secondary" on:click={openDashboard}>Dashboard</button>
+        {#if switchTo && !$launchError}
+          <span class="switch-note" class:warn={$serverRunning} use:tip={switchTo.name}>
+            {$serverRunning ? `Stop the server to switch to ${switchTo.name}` : `Launch switches to ${switchTo.name}`}
+          </span>
+        {/if}
         {#if $overlayStatus?.auto_inject}
           <button
             class="overlay-note"
@@ -278,11 +315,11 @@
         {/if}
         <button
           class="btn btn-launch"
-          use:tip={!$appConfig.game_exe ? 'Set the game executable in Settings' : ''}
-          disabled={!$appConfig.game_exe || !activeServer || launching || $gameRunning}
+          use:tip={!launchExe ? 'Set the game executable in Settings' : ''}
+          disabled={!launchExe || !activeServer || $launching || $gameRunning || (!!switchTo && $serverRunning)}
           on:click={launch}
         >
-          {$gameRunning ? 'Game Running' : launching ? 'Launching...' : 'Launch Game'}
+          {$gameRunning ? 'Game Running' : $startingServer ? 'Starting Server...' : $launching ? 'Launching...' : 'Launch Game'}
         </button>
       </div>
 
@@ -361,10 +398,18 @@
   }
 
   .server-card-url {
+    display: flex;
+    min-width: 0;
     font-family: var(--font-mono);
     font-size: 11px;
     color: var(--text-2);
+    white-space: nowrap;
   }
+  /* A long version name gives way first, then a long host. */
+  .card-version, .card-where { overflow: hidden; text-overflow: ellipsis; }
+  .card-version { flex: 0 1000 auto; min-width: 3ch; }
+  .card-where { flex: 0 1 auto; }
+  .card-sep { flex-shrink: 0; padding: 0 0.5ch; }
 
   .empty-list {
     padding: 20px 12px;
@@ -502,6 +547,17 @@
   .overlay-note:hover { color: var(--text-1); }
   .overlay-note.warn:hover { color: var(--amber); }
   .overlay-note + .btn-launch { margin-left: 0; }
+  .switch-note {
+    margin-left: auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 12px;
+    color: var(--text-2);
+  }
+  .switch-note.warn { color: var(--amber); }
+  .switch-note + .overlay-note, .switch-note + .btn-launch { margin-left: 0; }
   .overlay-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
   .overlay-note.warn { color: var(--amber); }
   .overlay-note.warn .overlay-dot { background: var(--amber); }

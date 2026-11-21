@@ -18,7 +18,7 @@ The app is currently Windows-only and communicates with the server via stdin/std
 - Multi-server profile management with optional auto-login
 - Steam or standalone launch, plus common launch options and your own arguments
 - A Get Started checklist on the Launch page that walks through linking the game and MHServerEmu and adding your first server
-- Link several game versions (1.48, 1.52, 1.53 and Custom server builds) and switch between them from the title bar
+- Link several game versions (1.48, 1.52, 1.53 and Custom server builds) and switch between them from the title bar, or have your server profiles automatically switch
 - Account import and restore from in-game `!account download` backups
 
 ### Local Server Management
@@ -115,9 +115,8 @@ Neither method removes your settings (like server lists). To fully clean up, als
 ## Planned Updates
 
 Some items I'm looking at next:
-- Friendlier editors for the remaining advanced Data settings (patch authoring, event rules)
-- More plain-language help for MHServerEmu settings as their behaviour gets documented
 - A safer auto-login or other strategies that keep passwords out of the game client's log
+- More plain-language help for MHServerEmu settings and friendlier editors for the remaining Data settings
 - Further fixes and polish
 
 **Not yet planned: Linux support.** MH Multiverse depends on Windows-specific process handling (Job Objects, DLL injection for the Overlay integration) and I'm not yet set up to test it properly, so it isn't planned in the near term. If that changes, it'll be announced here.
