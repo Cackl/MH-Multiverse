@@ -127,7 +127,6 @@
     // A switch remounts this panel, so from here on read stores with get(), not $.
     try {
       if (target) {
-        if (get(serverRunning)) throw `Stop the server to play on ${target.name}`
         await activateLinked(target.id)
         // Unsaved edits were kept.
         if (get(appConfig).active_linked_id !== target.id) return
@@ -300,7 +299,9 @@
         {/if}
         <button class="btn btn-secondary" on:click={openDashboard}>Dashboard</button>
         {#if switchTo && !$launchError}
-          <span class="switch-note" use:tip={switchTo.name}>Launch switches to {switchTo.name}</span>
+          <span class="switch-note" class:warn={$serverRunning} use:tip={switchTo.name}>
+            {$serverRunning ? `Stop the server to switch to ${switchTo.name}` : `Launch switches to ${switchTo.name}`}
+          </span>
         {/if}
         {#if $overlayStatus?.auto_inject}
           <button
@@ -315,7 +316,7 @@
         <button
           class="btn btn-launch"
           use:tip={!launchExe ? 'Set the game executable in Settings' : ''}
-          disabled={!launchExe || !activeServer || $launching || $gameRunning}
+          disabled={!launchExe || !activeServer || $launching || $gameRunning || (!!switchTo && $serverRunning)}
           on:click={launch}
         >
           {$gameRunning ? 'Game Running' : $startingServer ? 'Starting Server...' : $launching ? 'Launching...' : 'Launch Game'}
@@ -555,6 +556,7 @@
     font-size: 12px;
     color: var(--text-2);
   }
+  .switch-note.warn { color: var(--amber); }
   .switch-note + .overlay-note, .switch-note + .btn-launch { margin-left: 0; }
   .overlay-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
   .overlay-note.warn { color: var(--amber); }
