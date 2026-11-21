@@ -5,7 +5,7 @@ const invokeMock = vi.hoisted(() => vi.fn())
 vi.mock('@tauri-apps/api/core', () => ({ invoke: invokeMock }))
 
 import { appConfig, serverStartError, serverReady, serverRunning, appendLog, clearLog } from '../../src/lib/store'
-import { validateNewAccount, validatePassword, syncAccount } from '../../src/lib/accountCommands'
+import { validateNewAccount, validatePassword, syncAccount, sendAndWait } from '../../src/lib/accountCommands'
 
 const noWait = { sleep: async () => {}, pollMs: 1, startTimeoutMs: 5, replyTimeoutMs: 5 }
 const good = { email: 'a@b.co', playerName: 'Player', password: 'pw1' }
@@ -290,5 +290,15 @@ describe('syncAccount', () => {
       return base(cmd, args)
     })
     expect(await syncAccount(good, noWait)).toMatchObject({ ok: true, created: true })
+  })
+})
+
+describe('sendAndWait', () => {
+  it('returns a fail reply that is the whole line as the error', async () => {
+    invokeMock.mockImplementation(async () => {
+      appendLog({ time: '', level: 'info', msg: '[CommandManager] Player Bob not found.' })
+    })
+    const r = await sendAndWait('!client kick Bob', { ok: 'Kicked ', fail: 'Player Bob not found.' }, noWait)
+    expect(r).toEqual({ ok: false, error: 'Player Bob not found.' })
   })
 })

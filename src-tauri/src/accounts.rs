@@ -14,9 +14,7 @@ use regex::Regex;
 use rusqlite::{params, Connection, OpenFlags};
 use serde::{Deserialize, Serialize};
 use sha2::Sha512;
-use tauri::State;
-
-use crate::server::ServerState;
+use tauri::AppHandle;
 
 // ── JSON import types ──────────────────────────────────────────────────────
 
@@ -141,6 +139,48 @@ fn open_db(server_exe: &str) -> Result<Connection, String> {
     conn.execute_batch("PRAGMA foreign_keys = OFF;")
         .map_err(|e| format!("Failed to configure database: {e}"))?;
     Ok(conn)
+}
+
+fn read_varint(bytes: &[u8], pos: &mut usize) -> Option<u32> {
+    let mut value: u64 = 0;
+    for shift in (0..35).step_by(7) {
+        let byte = *bytes.get(*pos)?;
+        *pos += 1;
+        value |= u64::from(byte & 0x7f) << shift;
+        if byte & 0x80 == 0 {
+            return u32::try_from(value).ok();
+        }
+    }
+    None
+}
+
+/// The game build number in a persistent archive's header: u32 size, varint archive version,
+/// varint game build (MHServerEmu.Core/Serialization/Archive.cs WriteHeader).
+fn save_game_build(archive: &[u8]) -> Option<u32> {
+    let mut pos = 4;
+    read_varint(archive, &mut pos)?;
+    read_varint(archive, &mut pos)
+}
+
+/// A server reads saves in its own build's format and only warns on a mismatch, so a save from
+/// another game version is refused before anything is written. With no detected server version
+/// there is nothing to compare against, and the import goes ahead as before.
+fn check_export_build(data: &ImportJson, server_version: Option<&str>) -> Result<(), String> {
+    let Some(server_build) = server_version.and_then(crate::versions::game_build) else {
+        return Ok(());
+    };
+    let player = BASE64
+        .decode(&data.player.archive_data)
+        .map_err(|e| format!("Invalid Player.ArchiveData: {e}"))?;
+    match save_game_build(&player) {
+        Some(build) if build == server_build => Ok(()),
+        Some(build) => Err(format!(
+            "This export is from {} and this server runs {}. Saves can't move between game versions.",
+            crate::versions::build_label(build),
+            crate::versions::build_label(server_build)
+        )),
+        None => Err("This export's save data has no readable game version.".into()),
+    }
 }
 
 fn read_and_parse(json_path: &str) -> Result<ImportJson, String> {
@@ -366,15 +406,15 @@ pub fn import_account(
     mode: String,
     target_id: Option<String>,
     overrides: Option<ImportOverrides>,
-    server_state: State<'_, ServerState>,
+    app: AppHandle,
 ) -> Result<(), String> {
-    // Guard: importing while the server is running risks DB lock contention.
-    // See the note at the top of this file for the required server.rs addition.
-    if crate::server::server_process_is_running(&server_state) {
+    // A running server holds the account in memory and writes it back over the import.
+    if crate::server::server_running(&app, &server_exe) {
         return Err("Stop the server before importing an account.".into());
     }
 
     let data = read_and_parse(&json_path)?;
+    check_export_build(&data, crate::versions::server_version(&server_exe))?;
 
     let mut conn = open_db(&server_exe)?;
     let tx = conn.transaction().map_err(|e| e.to_string())?;
@@ -417,10 +457,10 @@ pub fn import_account(
 pub fn restore_json_account(
     server_exe: String,
     json_path: String,
-    server_state: State<'_, ServerState>,
+    app: AppHandle,
 ) -> Result<Option<String>, String> {
     // A running server rewrites the save from memory on every player save.
-    if crate::server::server_process_is_running(&server_state) {
+    if crate::server::server_running(&app, &server_exe) {
         return Err("Stop the server before restoring a backup.".into());
     }
     restore_json_save(&server_exe, &json_path)
@@ -438,6 +478,7 @@ fn json_save_path(server_exe: &str) -> Result<PathBuf, String> {
 
 fn restore_json_save(server_exe: &str, json_path: &str) -> Result<Option<String>, String> {
     let data = read_and_parse(json_path)?;
+    check_export_build(&data, crate::versions::server_version(server_exe))?;
     if data.player_name.chars().any(char::is_control) {
         return Err("The backup's player name contains control characters.".into());
     }
@@ -450,18 +491,24 @@ fn restore_json_save(server_exe: &str, json_path: &str) -> Result<Option<String>
     let content = serde_json::to_string(&account).map_err(|e| e.to_string())?;
 
     let copy = if save.exists() { Some(copy_json_save(server_exe, &save)?) } else { None };
-    fs::write(&save, content).map_err(|e| format!("Failed to write the save: {e}"))?;
+    let copy_note = copy.as_ref().map(|c| format!(" The previous save is in Data\\{c}.")).unwrap_or_default();
 
+    // The ini first, so a failure there leaves the save untouched.
     let updates = HashMap::from([(
         "JsonDBManager".to_string(),
         HashMap::from([("PlayerName".to_string(), data.player_name)]),
     )]);
-    crate::ini::write_config(server_exe.to_string(), updates)?;
+    crate::ini::write_config(server_exe.to_string(), updates)
+        .map_err(|e| format!("Couldn't set the player name: {e}. The save wasn't changed.{copy_note}"))?;
+    // Atomic: a write cut off halfway would leave a save the server resets to a new account.
+    crate::store::write_atomic(&save, &content)
+        .map_err(|e| format!("The save wasn't written ({e}).{copy_note}"))?;
     Ok(copy)
 }
 
 /// Copy the current save to `<FileName>.multiverse-<timestamp>.bak`, then keep
-/// only the newest [JsonDBManager] MaxBackupNumber of those copies (at least one).
+/// the oldest copy and the newest [JsonDBManager] MaxBackupNumber (at least one).
+/// The oldest is the save from before the first restore.
 /// Separate from the server's own rotating backups, which would push this copy
 /// out after a few saves.
 fn copy_json_save(server_exe: &str, save: &Path) -> Result<String, String> {
@@ -490,8 +537,10 @@ fn copy_json_save(server_exe: &str, save: &Path) -> Result<String, String> {
         })
         .collect();
     copies.sort();
-    for old in &copies[..copies.len().saturating_sub(keep)] {
-        let _ = fs::remove_file(old);
+    if copies.len() > keep + 1 {
+        for old in &copies[1..copies.len() - keep] {
+            let _ = fs::remove_file(old);
+        }
     }
     Ok(name)
 }
@@ -594,7 +643,19 @@ fn do_add(
     .map_err(|e| format!("Failed to insert account: {e}"))?;
 
     // Entity IDs begin one above the new account ID.
-    insert_player_data(conn, new_account_id, new_account_id + 1, data)
+    insert_player_data(conn, new_account_id, new_account_id + 1, data)?;
+
+    // Like the server's own importer: on first login the server clears the friend and ignore
+    // lists, whose ids point at the other server, then the flag. Schema 6 added the column.
+    let has_flags = conn
+        .query_row("SELECT COUNT(*) FROM pragma_table_info('Player') WHERE name = 'Flags'", [], |r| r.get::<_, i64>(0))
+        .map_err(|e| e.to_string())?
+        > 0;
+    if has_flags {
+        conn.execute("UPDATE Player SET Flags = Flags | 1 WHERE DbGuid = ?1", params![new_account_id])
+            .map_err(|e| format!("Failed to mark the player as imported: {e}"))?;
+    }
+    Ok(())
 }
 
 /// Overwrite an existing account's game data (Player, Avatar, TeamUp, Item,

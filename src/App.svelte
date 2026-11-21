@@ -2,17 +2,19 @@
   import { onMount } from 'svelte'
   import Titlebar from './components/TitleBar.svelte'
   import Rail from './components/Rail.svelte'
-  import LaunchPanel from './components/LaunchPanel.svelte'
-  import ServerPanel from './components/ServerPanel.svelte'
+  import LaunchPanel from './components/launch/LaunchPanel.svelte'
+  import ServerPanel from './components/server/ServerPanel.svelte'
   import ConfigPanel from './components/ConfigPanel.svelte'
   import OpsPanel from './components/OpsPanel.svelte'
-  import AppPanel from './components/AppPanel.svelte'
-  import { activeTab, loadConfig, startGameRunningPoll, checkAppUpdate } from './lib/store'
+  import AppPanel from './components/settings/AppPanel.svelte'
+  import { listen } from '@tauri-apps/api/event'
+  import { activeTab, appConfig, loadConfig, startGameRunningPoll, checkAppUpdate, handleCloseRequest } from './lib/store'
   import { initServerEventBridge } from './lib/serverEvents'
-  import DataPanel from './components/DataPanel.svelte'
+  import DataPanel from './components/data/DataPanel.svelte'
   import ConfirmDialog from './components/ConfirmDialog.svelte'
 
   onMount(async () => {
+    listen<number>('close-requested', e => handleCloseRequest(e.payload))
     startGameRunningPoll()
     checkAppUpdate()
     await Promise.all([
@@ -27,6 +29,8 @@
   <div class="main-area">
     <Rail />
     <div class="content">
+      <!-- A new server_exe remounts the tab, so no panel keeps the old version's data. -->
+      {#key $appConfig.server_exe}
       {#if $activeTab === 'launch'}
         <LaunchPanel />
       {:else if $activeTab === 'server'}
@@ -40,6 +44,7 @@
       {:else if $activeTab === 'settings'}
         <AppPanel />
       {/if}
+      {/key}
     </div>
   </div>
 </div>

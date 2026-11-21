@@ -3,9 +3,8 @@ use crate::test_helpers::{empty_server, fixture_path, seed_account_db};
 use rusqlite::Connection;
 use std::fs;
 
-// import_account itself takes `tauri::State<ServerState>`, which can't be
-// constructed outside a running Tauri app — tauri::State's inner field is
-// private with no public constructor. So these tests call the same
+// import_account itself takes an `AppHandle`, which can't be
+// constructed outside a running Tauri app. So these tests call the same
 // do_add_with_overrides/do_replace functions import_account delegates to,
 // directly against a real seeded Account.db, bypassing only the
 // server-running guard (which has no DB-logic risk of its own).
@@ -151,6 +150,33 @@ fn import_add_creates_account() {
         .unwrap();
     assert_eq!(email, "imported@test.local");
     assert_eq!(name, "ImportedPlayer");
+}
+
+fn player_flags(conn: &Connection, email: &str) -> i64 {
+    conn.query_row(
+        "SELECT p.Flags FROM Player p JOIN Account a ON a.Id = p.DbGuid WHERE a.Email = ?1",
+        [email],
+        |r| r.get(0),
+    )
+    .unwrap()
+}
+
+#[test]
+fn import_add_marks_the_player_imported_but_replace_does_not() {
+    let (_tmp, _server_exe, conn) = seeded_db();
+    let data = sample_data();
+    do_add_with_overrides(&conn, &no_overrides(), &data).unwrap();
+    assert_eq!(player_flags(&conn, "imported@test.local"), 1);
+
+    do_replace(&conn, 1, &data).unwrap();
+    assert_eq!(player_flags(&conn, "admin@test.local"), 0);
+}
+
+#[test]
+fn import_add_works_on_a_database_from_before_player_flags() {
+    let (_tmp, _server_exe, conn) = seeded_db();
+    conn.execute_batch("ALTER TABLE Player DROP COLUMN Flags").unwrap();
+    do_add_with_overrides(&conn, &no_overrides(), &sample_data()).unwrap();
 }
 
 #[test]
@@ -344,6 +370,20 @@ fn restore_json_writes_the_backup_as_admin_and_sets_the_player_name() {
 }
 
 #[test]
+fn restore_json_leaves_the_save_alone_when_the_ini_fails_and_names_the_copy() {
+    let (tmp, server_exe, backup_path, _) = json_server();
+    let save = tmp.path().join("Data/DefaultAccount.json");
+    fs::write(&save, "old save").unwrap();
+    // A folder where ConfigOverride.ini should be makes the ini write fail.
+    fs::create_dir(tmp.path().join("ConfigOverride.ini")).unwrap();
+
+    let err = restore_json_save(&server_exe, &backup_path).unwrap_err();
+    assert_eq!(fs::read_to_string(&save).unwrap(), "old save");
+    let copy = &multiverse_copies(&tmp)[0];
+    assert!(err.contains("wasn't changed") && err.contains(copy.as_str()), "{err}");
+}
+
+#[test]
 fn restore_json_honours_the_filename_override() {
     let (tmp, server_exe, backup_path, _) = json_server();
     fs::write(tmp.path().join("ConfigOverride.ini"), "[JsonDBManager]\nFileName=Mine.json\n").unwrap();
@@ -353,9 +393,9 @@ fn restore_json_honours_the_filename_override() {
 }
 
 #[test]
-fn restore_json_copies_the_previous_save_and_keeps_max_backup_number_copies() {
+fn restore_json_copies_the_previous_save_and_keeps_the_oldest_and_max_backup_number_copies() {
     // (older copies already there, MaxBackupNumber, copies left afterwards)
-    let cases = [(0, None, 1), (6, None, 5), (3, Some("2"), 2), (2, Some("0"), 1), (2, Some("x"), 3)];
+    let cases = [(0, None, 1), (6, None, 6), (3, Some("2"), 3), (2, Some("0"), 2), (2, Some("x"), 3)];
     for (older, max, left) in cases {
         let (tmp, server_exe, backup_path, _) = json_server();
         let data = tmp.path().join("Data");
@@ -372,6 +412,9 @@ fn restore_json_copies_the_previous_save_and_keeps_max_backup_number_copies() {
         let copies = multiverse_copies(&tmp);
         assert_eq!(copies.len(), left, "{older} older, max {max:?}: {copies:?}");
         assert_eq!(copies.last(), Some(&copy), "the new copy must be kept");
+        if older > 0 {
+            assert_eq!(copies[0], "DefaultAccount.json.multiverse-20200101-000000.bak", "the oldest copy must be kept");
+        }
         assert_eq!(fs::read_to_string(data.join(&copy)).unwrap(), "old save");
         assert!(data.join("DefaultAccount.json.bak0").exists(), "server backups are not ours to prune");
     }
@@ -489,4 +532,51 @@ fn open_db_missing_file_error_names_the_configured_file() {
     fs::create_dir_all(tmp.path().join("Data")).unwrap();
     let err = open_db(&server_exe).unwrap_err();
     assert!(err.contains("Custom.db not found."), "unexpected error: {err}");
+}
+
+// The first bytes of a real 1.52 Player save (local build\v52 Account.db): size 69460, archive
+// version 10, game build 479899.
+const REAL_1_52_HEADER: [u8; 7] = [0x54, 0x0f, 0x01, 0x00, 0x0a, 0x9b, 0xa5];
+fn header(build_varint: &[u8]) -> Vec<u8> {
+    let mut b = vec![0x54, 0x0f, 0x01, 0x00, 0x0a];
+    b.extend_from_slice(build_varint);
+    b.extend_from_slice(&[0x01, 0x02]);
+    b
+}
+
+#[test]
+fn save_game_build_reads_the_archive_header() {
+    let mut real = REAL_1_52_HEADER.to_vec();
+    real.extend_from_slice(&[0x1d, 0x4c, 0x0f]);
+    for (bytes, want) in [
+        (real, Some(479899)),
+        (header(&[0x8a, 0xf3, 0x17]), Some(391562)),
+        (header(&[0xc8, 0x90, 0x1e]), Some(493640)),
+        // Cut off inside the build number, or no header at all.
+        (REAL_1_52_HEADER.to_vec(), None),
+        (vec![0, 1, 2, 3], None),
+        (vec![0, 1], None),
+    ] {
+        assert_eq!(save_game_build(&bytes), want, "{bytes:02x?}");
+    }
+}
+
+#[test]
+fn an_export_from_another_game_version_is_refused() {
+    let with_save = |bytes: Vec<u8>| {
+        let mut data = sample_data();
+        data.player.archive_data = BASE64.encode(bytes);
+        data
+    };
+    let from_148 = with_save(header(&[0x8a, 0xf3, 0x17]));
+    let from_152 = with_save(header(&[0x9b, 0xa5, 0x1d]));
+
+    assert!(check_export_build(&from_152, Some("1.52")).is_ok());
+    assert!(check_export_build(&from_148, Some("1.48")).is_ok());
+    let err = check_export_build(&from_148, Some("1.52")).unwrap_err();
+    assert!(err.contains("from 1.48") && err.contains("runs 1.52"), "{err}");
+    assert!(check_export_build(&from_152, Some("1.53")).is_err());
+    assert!(check_export_build(&with_save(vec![0, 1, 2, 3]), Some("1.52")).is_err());
+    // No detected server version: nothing to compare, as before.
+    assert!(check_export_build(&from_148, None).is_ok());
 }

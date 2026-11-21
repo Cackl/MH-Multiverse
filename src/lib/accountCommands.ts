@@ -48,7 +48,7 @@ export function validatePassword(password: string): string {
 
 // Mirrors AccountManager.ValidateEmail: at most 320 characters, an "@", and a final "." after it
 // followed by at least two characters. The server lowercases before checking.
-function validateEmail(email: string): string {
+export function validateEmail(email: string): string {
   const unsafe = checkArg('Email', email)
   if (unsafe) return unsafe
   const at = email.indexOf('@')
@@ -61,7 +61,7 @@ function validateEmail(email: string): string {
 
 // PlayerNameValidator allows 1 to 16 letters or digits. The blocked-name list is checked
 // separately (blocked_player_names), since it lives in the server's Data folder.
-function validatePlayerName(name: string): string {
+export function validatePlayerName(name: string): string {
   if (!name) return 'Player name is required.'
   return /^[a-zA-Z0-9]{1,16}$/.test(name) ? '' : 'Player name must be 1 to 16 letters or numbers.'
 }
@@ -106,7 +106,12 @@ const REPLIES = {
   userlevel: { ok: 'Successfully set user level for account ', fail: 'Failed to set user level: ' },
 }
 
-type Reply = { ok: true } | { ok: false; error: string } | { sendError: string } | null
+export type Reply = { ok: true } | { ok: false; error: string } | { sendError: string } | null
+
+/** Sends one console command and waits for the line that starts its ok or fail reply. */
+export function sendAndWait(cmd: string, reply: { ok: string; fail: string }, t: Timing = {}): Promise<Reply> {
+  return send(cmd, reply, timing(t))
+}
 
 // Sends one console command and waits for the server's reply. null = no reply in time.
 async function send(cmd: string, reply: { ok: string; fail: string }, t: Required<Timing>): Promise<Reply> {
@@ -122,7 +127,8 @@ async function send(cmd: string, reply: { ok: string; fail: string }, t: Require
       if (id <= from) continue
       if (msg.includes(reply.ok)) return { ok: true }
       const i = msg.indexOf(reply.fail)
-      if (i >= 0) return { ok: false, error: msg.slice(i + reply.fail.length) }
+      // A fail text that is the whole reply, like "Player X not found.", is its own error.
+      if (i >= 0) return { ok: false, error: msg.slice(i + reply.fail.length).trim() || msg.slice(i) }
     }
     await t.sleep(t.pollMs)
   }

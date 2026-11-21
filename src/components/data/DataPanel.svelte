@@ -1,0 +1,156 @@
+<script lang="ts">
+  import { activeDataTab, goDataTab, appConfig, setAdvancedData, type DataTab } from '../../lib/store'
+  import TuningPanel from './tuning/TuningPanel.svelte'
+  import ServerRates from './tuning/ServerRates.svelte'
+  import StorePanel  from './store/StorePanel.svelte'
+  import PatchesPanel from './patches/PatchesPanel.svelte'
+  import EventsPanel from './events/EventsPanel.svelte';
+  import EventsSimple from './events/EventsSimple.svelte'
+  import StoreSimple from './store/StoreSimple.svelte'
+  import PatchesSimple from './patches/PatchesSimple.svelte'
+
+  const TABS: { id: DataTab; label: string }[] = [
+    { id: 'events',  label: 'Events'       },
+    { id: 'tuning',  label: 'Live Tuning'  },
+    { id: 'store',   label: 'Store'        },
+    { id: 'patches', label: 'Patches'      }
+  ]
+
+  let modeError = ''
+  const toggleMode = async () => { modeError = await setAdvancedData(!$appConfig.advanced_data) }
+</script>
+
+<div class="data-panel">
+
+  <!-- ── Inner tab bar ── -->
+  <div class="data-tabs" role="tablist">
+    {#each TABS as tab (tab.id)}
+      <button
+        class="data-tab"
+        class:active={$activeDataTab === tab.id}
+        role="tab"
+        aria-selected={$activeDataTab === tab.id}
+        on:click={() => goDataTab(tab.id)}
+      >
+        {tab.label}
+      </button>
+    {/each}
+    <div class="mode-switch">
+      {#if modeError}<span class="feedback-error">{modeError}</span>{/if}
+      <span>Advanced</span>
+      <div
+        class="toggle-switch"
+        class:on={$appConfig.advanced_data}
+        role="switch"
+        aria-checked={$appConfig.advanced_data}
+        aria-label="Advanced"
+        tabindex="0"
+        on:click={toggleMode}
+        on:keydown={(e) => e.key === 'Enter' && toggleMode()}
+      ></div>
+    </div>
+  </div>
+
+  <!-- ── Active panel ── -->
+  <div class="data-content">
+    {#if $activeDataTab === 'events'}
+      {#if $appConfig.advanced_data}
+        <EventsPanel />
+      {:else}
+        <EventsSimple />
+      {/if}
+    {:else if $activeDataTab === 'tuning'}
+      {#if $appConfig.advanced_data}
+        <TuningPanel />
+      {:else}
+        <ServerRates />
+      {/if}
+    {:else if $activeDataTab === 'store'}
+      {#if $appConfig.advanced_data}
+        <StorePanel />
+      {:else}
+        <StoreSimple />
+      {/if}
+    {:else if $activeDataTab === 'patches'}
+      {#if $appConfig.advanced_data}
+        <PatchesPanel />
+      {:else}
+        <PatchesSimple />
+      {/if}
+    {/if}
+  </div>
+
+</div>
+
+<style>
+  .data-panel {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    overflow: hidden;
+    min-height: 0;
+  }
+
+  /* ── Tab bar ── */
+  .data-tabs {
+    display: flex;
+    align-items: stretch;
+    gap: 0;
+    background: var(--bg-0);
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+    padding: 0 8px;
+  }
+
+  .data-tab {
+    font-family: var(--font-head);
+    font-size: var(--fs-min);
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    padding: 0 14px;
+    height: 36px;
+    background: none;
+    border: none;
+    border-bottom: 2px solid transparent;
+    color: var(--text-3);
+    cursor: pointer;
+    transition: color 0.14s, border-color 0.14s;
+    position: relative;
+    white-space: nowrap;
+    /* Pull the bottom border flush with the tab bar border */
+    margin-bottom: -1px;
+  }
+
+  .data-tab:hover {
+    color: var(--text-1);
+  }
+
+  .data-tab.active {
+    color: var(--accent-bright);
+    border-bottom-color: var(--accent);
+  }
+
+  .mode-switch {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-left: auto;
+    padding: 0 6px;
+    font-family: var(--font-head);
+    font-size: var(--fs-min);
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--text-3);
+  }
+
+  /* ── Panel area ── */
+  .data-content {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+    min-height: 0;
+  }
+
+</style>

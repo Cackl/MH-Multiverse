@@ -1,7 +1,7 @@
 import { open } from '@tauri-apps/plugin-dialog'
 import { setGameExe, setServerExe } from './store'
 
-async function pickExe(): Promise<string | null> {
+export async function pickExe(): Promise<string | null> {
   const selected = await open({
     filters: [{ name: 'Executable', extensions: ['exe'] }],
     multiple: false,
@@ -9,12 +9,13 @@ async function pickExe(): Promise<string | null> {
   return typeof selected === 'string' ? selected : null
 }
 
-export async function browseGameExe() {
+/** These return the save error, or '' when saved or cancelled. */
+export async function browseGameExe(): Promise<string> {
   const path = await pickExe()
-  if (path) await setGameExe(path)
+  return path ? setGameExe(path) : ''
 }
 
-export async function browseServerExe() {
+export async function browseServerExe(): Promise<string> {
   const path = await pickExe()
-  if (path) await setServerExe(path)
+  return path ? setServerExe(path) : ''
 }

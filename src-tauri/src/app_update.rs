@@ -350,6 +350,14 @@ async fn install_inner(app: &AppHandle, target: &Version, exe: &Path, dest: &Pat
         }
     }
 
+    // The download takes a while, so check again: the install ends in shutdown, which
+    // would kill a server started meanwhile.
+    if crate::server::server_process_is_running(&app.state::<crate::server::ServerState>()) {
+        return Err("Stop the server to finish the update".into());
+    }
+    if crate::updater::update_running() {
+        return Err("Wait for the server update to finish".into());
+    }
     emit_progress(app, "installing", 100.0);
     if msi {
         std::process::Command::new("msiexec")
@@ -426,6 +434,9 @@ pub async fn install_app_update(app: AppHandle, version: String) -> Result<(), S
     }
     if crate::server::server_process_is_running(&app.state::<crate::server::ServerState>()) {
         return Err("Stop the server before updating".into());
+    }
+    if crate::updater::update_running() {
+        return Err("Wait for the server update to finish".into());
     }
     let current = Version::parse(APP_VERSION).map_err(|e| e.to_string())?;
     let target = parse_tag(&version).ok_or("Invalid version")?;

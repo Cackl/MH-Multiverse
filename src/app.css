@@ -82,7 +82,13 @@
   padding: 0;
 }
 
-:root {
+/* [data-theme-preview] resets an element to the default palette, so a Display card can preview
+   a theme other than the active one (the theme blocks below then apply on top). */
+:root,
+[data-theme-preview] {
+  /* Native controls (unchecked checkboxes, scrollbars, select popups) follow the theme. */
+  color-scheme: dark;
+
   /* Surface layers */
   --bg-0: #08090c;
   --bg-1: #0e1015;
@@ -96,6 +102,9 @@
   --accent-dim:         #0f78cc;
   --accent-glow:        rgba(16, 195, 255, 0.14);
   --accent-glow-strong: rgba(98, 226, 255, 0.28);
+
+  /* Text on the Launch button's accent fill */
+  --on-accent:          #fff;
 
   /* Semantic */
   --red:           #c0392b;
@@ -145,9 +154,6 @@
   --purple:       #a080d0;
   --purple-dim:   rgba(160, 128, 208, 0.12);
 
-  /* Favourite highlight */
-  --colour-favourite: var(--amber-bright);
-
   /* Off/disabled rows that still carry readable text (kept high enough for the contrast test) */
   --dimmed-opacity: 0.65;
 
@@ -160,8 +166,8 @@
   --z-panel:    1;
   --z-dropdown: 10;
   --z-modal:    200;
-  --z-tooltip:  250;
   --z-titlebar: 300;
+  --z-tooltip:  350;
 
   /* Panel background gradient */
   --panel-grad-top: rgba(16, 195, 255, 0.07);
@@ -251,21 +257,6 @@ html, body {
   border-color: var(--accent-dim);
   background: var(--accent-glow-strong);
 }
-
-/* Shared dropdown. Some modals still carry their own scoped copy of this. */
-.field-select {
-  background: var(--bg-0);
-  border: 1px solid var(--border-mid);
-  border-radius: var(--radius-sm);
-  color: var(--text-0);
-  font-family: var(--font-body);
-  font-size: 12px;
-  padding: 6px 10px;
-  outline: none;
-  cursor: pointer;
-}
-.field-select:focus    { border-color: var(--accent-dim); }
-.field-select:disabled { opacity: 0.5; cursor: not-allowed; }
 
 .btn-outline {
   border-color: var(--border-lit);
@@ -417,10 +408,28 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
   flex-shrink: 0;
 }
 .badge-enc {
-  background: var(--blue-dim);
-  color: #5dade2;
-  border: 1px solid rgba(46, 134, 193, 0.25);
+  color: var(--text-2);
+  border: 1px solid var(--border-mid);
 }
+
+/* ── Info button ("?" with a tooltip) ── */
+.info-btn {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 1px solid var(--border-lit);
+  background: var(--bg-3);
+  color: var(--text-3);
+  font-size: var(--fs-min);
+  cursor: help;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: all 0.12s;
+  padding: 0;
+}
+.info-btn:hover { border-color: var(--accent-dim); color: var(--accent-bright); }
 
 /* ── Toggle switch ── */
 .toggle-switch {
@@ -453,6 +462,55 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
   left: 18px;
   background: var(--accent-bright);
 }
+
+/* ── Range slider ──
+   Wrap the input: <span class="range-track" style="--mark:40"><input type="range" style="--fill:60%"></span>.
+   --fill is the filled share of the track; --mark (0 to 100) places a reference line, such as the
+   value without your change. */
+.range-track {
+  position: relative;
+  flex: 1;
+  min-width: 80px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+}
+.range-track::before {
+  content: '';
+  position: absolute;
+  left: calc(7px + (100% - 14px) * var(--mark) / 100);
+  top: 4px;
+  bottom: 4px;
+  width: 2px;
+  margin-left: -1px;
+  border-radius: 1px;
+  background: var(--text-3);
+  pointer-events: none;
+}
+.range-track input {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  margin: 0;
+  height: 4px;
+  border-radius: 2px;
+  -webkit-appearance: none;
+  appearance: none;
+  background: linear-gradient(90deg, var(--accent-dim) var(--fill), var(--bg-4) var(--fill));
+  cursor: pointer;
+}
+.range-track input::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--accent-bright);
+  border: 2px solid var(--bg-1);
+  box-shadow: 0 0 0 1px var(--accent-dim);
+}
+.range-track input:disabled { cursor: not-allowed; }
+.range-track input:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; }
 
 /* ── Checkbox row ── */
 .check-row {
@@ -548,6 +606,8 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 
 /* Light theme */
 [data-theme="light"] {
+  color-scheme: light;
+
   /* Surface layers */
   --bg-0: #f7fafc;
   --bg-1: #f0f5f9;
@@ -595,9 +655,6 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
   /* Purple (debug log, custom tags) */
   --purple:       #6f58a8;
   --purple-dim:   rgba(111, 88, 168, 0.12);
-
-  /* Favourite highlight */
-  --colour-favourite: var(--amber-bright);
 
   /* Panel background gradient */
   --panel-grad-top: rgba(15, 111, 141, 0.05);
@@ -665,9 +722,6 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
   --purple:       #a080d0;
   --purple-dim:   rgba(160, 128, 208, 0.12);
 
-  /* Favourite highlight */
-  --colour-favourite: var(--amber-bright);
-
   /* Panel background gradient */
   --panel-grad-top: rgba(214, 106, 31, 0.07);
 
@@ -730,9 +784,6 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
   --purple:       #a080d0;
   --purple-dim:   rgba(160, 128, 208, 0.12);
 
-  /* Favourite highlight */
-  --colour-favourite: var(--amber-bright);
-
   /* Panel background gradient */
   --panel-grad-top: rgba(227, 70, 72, 0.07);
 
@@ -794,9 +845,6 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
   /* Purple */
   --purple:       #c586c0;
   --purple-dim:   rgba(197, 134, 192, 0.14);
-
-  /* Favourite highlight */
-  --colour-favourite: var(--amber-bright);
 
   /* Panel background gradient */
   --panel-grad-top: rgba(55, 148, 255, 0.08);
@@ -864,9 +912,6 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
   --purple:       #c586c0;
   --purple-dim:   rgba(197, 134, 192, 0.14);
 
-  /* Favourite */
-  --colour-favourite: var(--amber-bright);
-
   /* Z-index */
 
   /* Panel gradient */
@@ -884,6 +929,61 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
   --console-cmd-bg:   #1a2030;
   --console-text:     #d6deeb;
   --console-text-dim: #aab4c5;
+}
+
+/* High Contrast: every text token is at least 7:1 (WCAG AAA) */
+[data-theme="high-contrast"] {
+  /* Surface layers */
+  --bg-0: #000000;
+  --bg-1: #0a0a0a;
+  --bg-2: #141414;
+  --bg-3: #1f1f1f;
+  --bg-4: #2a2a2a;
+
+  /* Accent */
+  --accent:             #00e5ff;
+  --accent-bright:      #66efff;
+  --accent-dim:         #00b3c9;
+  --accent-glow:        rgba(0, 229, 255, 0.16);
+  --accent-glow-strong: rgba(102, 239, 255, 0.30);
+  --on-accent:          #000;
+
+  /* Semantic */
+  --red:           #ff5c5c;
+  --red-dim:       rgba(255, 92, 92, 0.16);
+  --green:         #3ddc84;
+  --green-bright:  #5cff9d;
+  --green-dim:     rgba(61, 220, 132, 0.16);
+  --blue:          #7cc4ff;
+  --blue-dim:      rgba(124, 196, 255, 0.16);
+
+  /* Borders */
+  --border:     #5c5c5c;
+  --border-mid: #8a8a8a;
+  --border-lit: #b3b3b3;
+
+  /* Text */
+  --text-0: #ffffff;
+  --text-1: #e6e6e6;
+  --text-2: #cccccc;
+  --text-3: #b3b3b3;
+
+  /* Semantic text */
+  --text-error:   #ff9a9a;
+  --text-success: var(--green-bright);
+  --text-warning: #ffb84d;
+
+  /* Amber */
+  --amber:        #ffb000;
+  --amber-bright: #ffc94d;
+  --amber-dim:    rgba(255, 176, 0, 0.16);
+
+  /* Purple */
+  --purple:       #d0b0ff;
+  --purple-dim:   rgba(208, 176, 255, 0.16);
+
+  /* No panel gradient */
+  --panel-grad-top: transparent;
 }
 
 /* ══════════════════════════════════════════════════════════════════════════════
@@ -975,6 +1075,17 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 }
 .close-btn:hover { color: var(--text-0); background: var(--bg-3); border-color: var(--border-mid); }
 .close-btn svg { width: 14px; height: 14px; }
+
+/* Row remove button in editor tables. */
+.del-btn {
+  width: 22px; height: 22px;
+  display: flex; align-items: center; justify-content: center;
+  background: none; border: 1px solid transparent;
+  border-radius: var(--radius-sm); color: var(--text-3);
+  cursor: pointer; transition: all 0.1s;
+}
+.del-btn:hover { border-color: color-mix(in srgb, var(--red) 40%, transparent); color: var(--text-error); background: var(--red-dim); }
+.del-btn svg { width: 10px; height: 10px; }
 
 /* ── Panel footer ── */
 .panel-footer {
@@ -1068,6 +1179,162 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
   text-align: center;
   max-width: 280px;
   line-height: 1.5;
+}
+
+/* ── Data pages (plan 2.28) ──
+   Sidebar on the left, main panel on the right. The main panel is solid, so the panel
+   background and grid only show through the see-through sidebar. */
+.panel-bg {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, var(--panel-grad-top) 0%, transparent var(--panel-grad-mid));
+  pointer-events: none;
+}
+.grid-overlay {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(var(--border) 1px, transparent 1px),
+    linear-gradient(90deg, var(--border) 1px, transparent 1px);
+  background-size: 32px 32px;
+  opacity: 0.18;
+  pointer-events: none;
+}
+.data-main {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-1);
+}
+.page-head {
+  min-height: 53px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 16px 0 20px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.page-title {
+  margin: 0;
+  font-family: var(--font-head);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  /* A step below --text-0, which glares at this size, but brighter than --text-1 */
+  color: color-mix(in srgb, var(--text-0) 70%, var(--text-1));
+  white-space: nowrap;
+}
+.page-acts {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+/* Sidebar groups and rows: [mark] name [end]. Rows match the Config nav buttons. */
+.side-label {
+  margin-top: 6px;
+  border-top: 1px solid var(--border);
+  padding: 12px 12px 6px;
+  font-family: var(--font-head);
+  font-size: var(--fs-min);
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-3);
+}
+.side-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  margin-bottom: 2px;
+  padding: 10px 12px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--text-1);
+  font-family: var(--font-head);
+  font-size: 13px;
+  font-weight: 600;
+  text-align: left;
+}
+/* role="button" rows hold their own controls (a switch), which a <button> can't contain. */
+button.side-item, .side-item[role="button"] { cursor: pointer; transition: all 0.12s; }
+button.side-item:hover, .side-item[role="button"]:hover { color: var(--text-0); background: var(--bg-3); border-color: var(--border-mid); }
+.side-item.active,
+button.side-item.active:hover, .side-item[role="button"].active:hover { color: var(--accent-bright); background: var(--accent-glow); border-color: var(--accent-dim); }
+.side-mark {
+  flex-shrink: 0;
+  font-family: var(--font-body);
+  font-size: 11px;
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-3);
+}
+.side-name {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Label pill (Core, Custom, Chest, Hidden...). Grey on purpose: colour marks state only. */
+.tag {
+  display: inline-flex;
+  align-items: center;
+  height: 18px;
+  padding: 0 6px;
+  border: 1px solid var(--border-mid);
+  border-radius: 2px;
+  font-family: var(--font-head);
+  font-size: var(--fs-min);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-2);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* Event state dot: hollow, filled with a glow while running. */
+.event-dot {
+  flex-shrink: 0;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  border: 1px solid var(--border-mid);
+}
+.event-dot.active { border-color: var(--accent-bright); background: var(--accent-bright); box-shadow: 0 0 0 3px var(--accent-glow); }
+
+/* ── Content column: free-floating lists stay readable on wide windows ── */
+.content-col {
+  width: 100%;
+  max-width: 880px;
+  margin: 0 auto;
+}
+/* Rows with a reset or remove button: the row keeps the 880px width and the
+   button hangs just outside it, in the column's side padding.
+   The row needs position: relative. */
+.content-col.hang {
+  max-width: calc(880px + 72px);
+  padding-inline: 36px;
+}
+.row-hang {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: calc(100% + 4px);
+  width: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 /* ── Subsection title ── */

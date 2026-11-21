@@ -15,6 +15,10 @@ pub struct ConfigState {
     pub values: IniData,
     /// Keys that exist in ConfigOverride.ini (section -> set of keys)
     pub overridden: HashMap<String, Vec<String>>,
+    /// Config.ini values alone, so the UI can reset a field to its default
+    pub defaults: IniData,
+    /// Descriptions read from Config.ini's comments (section -> key -> text)
+    pub descriptions: IniData,
 }
 
 // ── INI parser ────────────────────────────────────────────────────────────────
@@ -23,7 +27,7 @@ fn parse_ini(content: &str) -> IniData {
     let mut data: IniData = HashMap::new();
     let mut current_section = String::new();
 
-    for line in content.lines() {
+    for line in content.strip_prefix('\u{FEFF}').unwrap_or(content).lines() {
         let line = line.trim();
         if line.is_empty() || line.starts_with(';') {
             continue;
@@ -38,6 +42,41 @@ fn parse_ini(content: &str) -> IniData {
                 data.entry(current_section.clone())
                     .or_default()
                     .insert(key, value);
+            }
+        }
+    }
+    data
+}
+
+/// Key descriptions from Config.ini's own comments. Each section is documented by
+/// `; Key: text` lines inside it, and an indented `;` line continues the one above.
+fn parse_descriptions(content: &str) -> IniData {
+    let mut data: IniData = HashMap::new();
+    let mut section = String::new();
+    let mut last_key: Option<String> = None;
+
+    for line in content.strip_prefix('\u{FEFF}').unwrap_or(content).lines() {
+        let line = line.trim();
+        if line.starts_with('[') && line.ends_with(']') {
+            section = line[1..line.len() - 1].to_string();
+            last_key = None;
+            continue;
+        }
+        let Some(text) = line.strip_prefix(';').map(str::trim) else { continue };
+        if section.is_empty() || text.is_empty() {
+            continue;
+        }
+        let entry = data.entry(section.clone()).or_default();
+        match text.split_once(": ") {
+            Some((key, desc)) if key != "NOTE" && !key.is_empty() && key.chars().all(|c| c.is_ascii_alphanumeric()) => {
+                entry.insert(key.to_string(), desc.trim().to_string());
+                last_key = Some(key.to_string());
+            }
+            _ => {
+                if let Some(desc) = last_key.as_ref().and_then(|k| entry.get_mut(k)) {
+                    desc.push(' ');
+                    desc.push_str(text);
+                }
             }
         }
     }
@@ -127,6 +166,7 @@ pub fn read_config(server_exe: String) -> Result<ConfigState, String> {
     let config_content = std::fs::read_to_string(&config_path)
         .map_err(|e| format!("Could not read Config.ini: {e}"))?;
     let defaults = parse_ini(&config_content);
+    let descriptions = parse_descriptions(&config_content);
 
     // Read ConfigOverride.ini (may not exist yet)
     let overrides = if override_path.exists() {
@@ -155,7 +195,7 @@ pub fn read_config(server_exe: String) -> Result<ConfigState, String> {
         }
     }
 
-    Ok(ConfigState { values, overridden })
+    Ok(ConfigState { values, overridden, defaults, descriptions })
 }
 
 #[tauri::command]
@@ -164,6 +204,15 @@ pub fn write_config(server_exe: String, updates: IniData) -> Result<(), String> 
         .ok_or("Could not determine server directory")?;
     let override_path = override_ini_path(&server_exe)
         .ok_or("Could not determine server directory")?;
+
+    // The server's INI parser fails on a value split across lines.
+    for (section, keys) in &updates {
+        for (key, val) in keys {
+            if val.contains(['\n', '\r']) {
+                return Err(format!("{section}.{key} can't contain a line break"));
+            }
+        }
+    }
 
     // Read defaults so we can diff
     let defaults = if config_path.exists() {
@@ -213,28 +262,6 @@ pub fn write_config(server_exe: String, updates: IniData) -> Result<(), String> 
 
     let content = serialize_ini(&existing_overrides);
     std::fs::write(&override_path, content)
-        .map_err(|e| format!("Could not write ConfigOverride.ini: {e}"))?;
-
-    Ok(())
-}
-
-/// Reset all overrides for a specific section (restores defaults).
-#[tauri::command]
-pub fn reset_config_section(server_exe: String, section: String) -> Result<(), String> {
-    let override_path = override_ini_path(&server_exe)
-        .ok_or("Could not determine server directory")?;
-
-    if !override_path.exists() {
-        return Ok(()); // Nothing to reset
-    }
-
-    let content = std::fs::read_to_string(&override_path)
-        .map_err(|e| format!("Could not read ConfigOverride.ini: {e}"))?;
-    let mut overrides = parse_ini(&content);
-    overrides.remove(&section);
-
-    let new_content = serialize_ini(&overrides);
-    std::fs::write(&override_path, new_content)
         .map_err(|e| format!("Could not write ConfigOverride.ini: {e}"))?;
 
     Ok(())

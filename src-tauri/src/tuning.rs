@@ -29,11 +29,13 @@ pub struct TuningEntry {
     pub value: f64,
 }
 
-// Raw serde shapes matching MHServerEmu JSON format
+// Raw serde shapes matching MHServerEmu JSON format. All three keys are required, and
+// Prototype may not be null: the server looks a null Prototype up by name and the
+// unhandled exception takes it down, at start-up and on `!server reloadlivetuning`.
 #[derive(Debug, Deserialize)]
 struct RawEntryIn {
-    #[serde(rename = "Prototype", default)]
-    prototype: Option<String>,
+    #[serde(rename = "Prototype")]
+    prototype: String,
     #[serde(rename = "Setting")]
     setting: String,
     #[serde(rename = "Value")]
@@ -48,6 +50,19 @@ struct RawEntryOut {
     setting: String,
     #[serde(rename = "Value")]
     value: f64,
+}
+
+/// A tuning file's JSON: every entry with all three keys, as the server needs.
+pub(crate) fn entries_json(entries: Vec<TuningEntry>) -> Result<String, String> {
+    let raw: Vec<RawEntryOut> = entries
+        .into_iter()
+        .map(|e| RawEntryOut {
+            prototype: e.prototype,
+            setting: e.setting,
+            value: e.value,
+        })
+        .collect();
+    serde_json::to_string_pretty(&raw).map_err(|e| format!("JSON serialisation error: {e}"))
 }
 
 // ── Path helpers ──────────────────────────────────────────────────────────────
@@ -99,7 +114,7 @@ fn load_events_file_map(live_tuning_dir: &Path) -> HashMap<String, String> {
         Err(_) => return HashMap::new(),
     };
 
-    let raw: HashMap<String, serde_json::Value> = match serde_json::from_str(&contents) {
+    let raw: HashMap<String, serde_json::Value> = match serde_json::from_str(contents.trim_start_matches('\u{FEFF}')) {
         Ok(m) => m,
         Err(_) => return HashMap::new(),
     };
@@ -256,12 +271,9 @@ pub fn scan_tuning_files(
         });
     }
 
-    // Toggleable (root, non-event) files first, then alphabetical by relative_path.
-    files.sort_by(|a, b| {
-        b.toggleable
-            .cmp(&a.toggleable)
-            .then(a.relative_path.cmp(&b.relative_path))
-    });
+    // Toggleable (root, non-event) files first, then in the order the server loads them, so
+    // the list reads top to bottom as "later files win".
+    files.sort_by_cached_key(|f| (!f.toggleable, server_sort_key(&f.relative_path)));
 
     Ok(files)
 }
@@ -298,7 +310,7 @@ pub fn read_tuning_file(
     Ok(raw
         .into_iter()
         .map(|r| TuningEntry {
-            prototype: r.prototype.unwrap_or_default(),
+            prototype: r.prototype,
             setting: r.setting,
             value: r.value,
         })
@@ -325,17 +337,7 @@ pub fn write_tuning_file(
         return Err(format!("File not found: {relative_path}"));
     };
 
-    let raw: Vec<RawEntryOut> = entries
-        .into_iter()
-        .map(|e| RawEntryOut {
-            prototype: e.prototype,
-            setting: e.setting,
-            value: e.value,
-        })
-        .collect();
-
-    let contents = serde_json::to_string_pretty(&raw)
-        .map_err(|e| format!("JSON serialisation error: {e}"))?;
+    let contents = entries_json(entries)?;
 
     crate::store::write_with_backup(&path, &contents)
         .map_err(|e| format!("Cannot write {}: {e}", path.display()))?;
@@ -384,17 +386,7 @@ pub fn create_tuning_file(
         return Err(format!("File already exists: {relative_path}"));
     }
 
-    let raw: Vec<RawEntryOut> = entries
-        .into_iter()
-        .map(|e| RawEntryOut {
-            prototype: e.prototype,
-            setting: e.setting,
-            value: e.value,
-        })
-        .collect();
-
-    let contents = serde_json::to_string_pretty(&raw)
-        .map_err(|e| format!("JSON serialisation error: {e}"))?;
+    let contents = entries_json(entries)?;
 
     std::fs::write(&active_path, contents)
         .map_err(|e| format!("Cannot write {}: {e}", active_path.display()))?;
@@ -402,12 +394,14 @@ pub fn create_tuning_file(
     Ok(())
 }
 
+/// Switches a root tuning file on or off. Returns the name the replaced copy was moved to, when
+/// both copies existed.
 #[tauri::command]
 pub fn toggle_tuning_file(
     server_exe: String,
     relative_path: String,
     enabled: bool,
-) -> Result<(), String> {
+) -> Result<Option<String>, String> {
     // Guard: subdirectory files cannot be toggled.
     if relative_path.contains('/') || relative_path.contains('\\') {
         return Err(format!(
@@ -427,6 +421,15 @@ pub fn toggle_tuning_file(
     let active_path = dir.join(&relative_path);
     let inactive_path = dir.join(format!("OFF_{relative_path}"));
 
+    // Both copies exist when an older server update added one back. The copy being switched
+    // wins, and the one it replaces is moved aside (fs::rename would delete it).
+    let kept_as = if active_path.exists() && inactive_path.exists() {
+        let replaced = if enabled { &active_path } else { &inactive_path };
+        Some(crate::store::file_name_of(&crate::store::move_aside(replaced)?))
+    } else {
+        None
+    };
+
     if enabled {
         if inactive_path.exists() {
             std::fs::rename(&inactive_path, &active_path)
@@ -445,7 +448,115 @@ pub fn toggle_tuning_file(
         // Already inactive — no-op.
     }
 
-    Ok(())
+    Ok(kept_as)
+}
+
+// ── Global settings across files (effective values) ──────────────────────────
+
+/// One global (`eGTV_`, empty `Prototype`) setting as a file sets it.
+#[derive(Debug, Clone, Serialize, PartialEq)]
+pub struct GlobalValue {
+    pub setting: String,
+    pub value: f64,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct GlobalTuningFile {
+    pub file: String,
+    pub values: Vec<GlobalValue>,
+    /// Set when the server would skip the whole file (unreadable or invalid JSON).
+    pub error: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct GlobalTuning {
+    /// Base files in the order the server loads them; for a setting, the last file wins.
+    pub files: Vec<GlobalTuningFile>,
+    /// `[GameOptions] InfinitySystemEnabled`: true means Infinity XP is live, false Omega XP.
+    pub infinity_system: bool,
+    /// The Server Rates file exists only as OFF_, so the server doesn't load it.
+    pub rates_off: bool,
+}
+
+/// The file the Server Rates form owns. It loads after `LiveTuningDataGlobal.json`, and user
+/// files that sort after it (such as `LiveTuningDataUser...`) win over it.
+pub(crate) const SERVER_RATES_FILE: &str = "LiveTuningDataMultiverse.json";
+
+/// Sort key matching the server's `Array.Sort` of file names, which is culture-sensitive
+/// (ICU) rather than ordinal: `_` < `-` < `.` < other punctuation < digits < letters, letters
+/// ignoring case first. This is why `LiveTuningData_X.json` loads before
+/// `LiveTuningDataGlobal.json`.
+// ponytail: covers the characters that appear in tuning file names, not full ICU collation.
+pub(crate) fn server_sort_key(name: &str) -> (Vec<(u8, u32)>, String) {
+    let primary = name
+        .chars()
+        .map(|c| match c {
+            '_' => (0, 0),
+            '-' => (1, 0),
+            '.' => (2, 0),
+            c if c.is_ascii_digit() => (4, c as u32),
+            c if c.is_alphabetic() => (5, c.to_lowercase().next().unwrap_or(c) as u32),
+            c => (3, c as u32),
+        })
+        .collect();
+    (primary, name.to_string())
+}
+
+pub(crate) fn sort_like_server(names: &mut [String]) {
+    names.sort_by_cached_key(|n| server_sort_key(n));
+}
+
+fn globals_in(path: &Path) -> Result<Vec<GlobalValue>, String> {
+    let contents = std::fs::read_to_string(path).map_err(|e| e.to_string())?;
+    let raw: Vec<RawEntryIn> = serde_json::from_str(contents.trim_start_matches('\u{FEFF}'))
+        .map_err(|e| e.to_string())?;
+    Ok(raw
+        .into_iter()
+        .filter(|e| e.prototype.is_empty() && e.setting.starts_with("eGTV_"))
+        .map(|e| GlobalValue { setting: e.setting, value: e.value })
+        .collect())
+}
+
+/// What the server would load for global settings: the base files in its own order.
+#[tauri::command]
+pub fn read_global_tuning(server_exe: String) -> Result<GlobalTuning, String> {
+    let dir = live_tuning_dir(&server_exe)?;
+    let infinity_system = crate::ini::read_merged_value(&server_exe, "GameOptions", "InfinitySystemEnabled", "true")
+        .trim()
+        .eq_ignore_ascii_case("true");
+    if !dir.exists() {
+        let files = vec![GlobalTuningFile { file: SERVER_RATES_FILE.into(), values: vec![], error: None }];
+        return Ok(GlobalTuning { files, infinity_system, rates_off: false });
+    }
+
+    let rates_off = !dir.join(SERVER_RATES_FILE).exists() && inactive_path_for(&dir, SERVER_RATES_FILE).exists();
+
+    // The server reads only top-level LiveTuningData*.json (FileHelper.GetFilesWithPrefix),
+    // so OFF_ files and subfolders are not part of the base chain.
+    let mut names: Vec<String> = std::fs::read_dir(&dir)
+        .map_err(|e| format!("Cannot read {}: {e}", dir.display()))?
+        .flatten()
+        .filter(|e| e.path().is_file())
+        .map(|e| e.file_name().to_string_lossy().to_string())
+        .filter(|n| n.starts_with("LiveTuningData") && n.ends_with(".json"))
+        .collect();
+    // Listed even before it exists, so callers can tell which files load after it; a missing
+    // file loads the same nothing as an empty one.
+    if !names.iter().any(|n| n == SERVER_RATES_FILE) {
+        names.push(SERVER_RATES_FILE.to_string());
+    }
+    sort_like_server(&mut names);
+
+    let files = names
+        .into_iter()
+        .map(|file| match globals_in(&dir.join(&file)) {
+            _ if !dir.join(&file).exists() => GlobalTuningFile { file, values: vec![], error: None },
+            Ok(values) => GlobalTuningFile { file, values, error: None },
+            Err(e) => GlobalTuningFile { file, values: vec![], error: Some(e) },
+        })
+        .collect();
+
+    Ok(GlobalTuning { files, infinity_system, rates_off })
 }
 
 #[cfg(test)]

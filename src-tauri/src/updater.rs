@@ -2,7 +2,7 @@ use chrono::{DateTime, Duration, Local, Utc};
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
-use tauri::{AppHandle, Emitter, Manager};
+use tauri::{AppHandle, Emitter};
 use tokio::io::AsyncWriteExt;
 
 // ── App Version ───────────────────────────────────────────────────────────────
@@ -22,6 +22,10 @@ pub struct UpdateInfo {
     /// The installed build is at least as new as `build_date`, so updating would change nothing.
     #[serde(default)]
     pub up_to_date: bool,
+    /// Why no nightly is offered for this server (Custom, or its game version wasn't detected).
+    /// When set, `build_date` and `download_url` are empty.
+    #[serde(default)]
+    pub unavailable_reason: Option<String>,
 }
 
 
@@ -32,6 +36,30 @@ pub struct BackupManifest {
     pub label: String,
     pub targets: Vec<String>,
     pub size_bytes: u64,
+    /// Files a nightly update replaced, saved for its rollback. Restore leaves them out, because
+    /// putting them back would put the old server back.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub replaced: Vec<String>,
+    /// A pre-update backup's versions. Not shown in the app yet.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub update: Option<UpdateVersions>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UpdateVersions {
+    /// The active linked version's name.
+    pub linked_name: Option<String>,
+    /// The server exe's ProductVersion before and after, e.g. "1.0.3+build20261027131155".
+    pub from: Option<String>,
+    pub to: Option<String>,
+}
+
+/// What `run_update` did besides installing.
+#[derive(Debug, Serialize)]
+pub struct UpdateResult {
+    pub kept: Vec<KeptFile>,
+    /// Files the app had edited that the update replaced. The edited copies are in the backup.
+    pub edited: Vec<String>,
 }
 
 #[derive(Clone, Serialize)]
@@ -55,40 +83,76 @@ fn candidate_dates(now: DateTime<Utc>) -> [String; 2] {
     [fmt(now), fmt(now - Duration::days(1))]
 }
 
-fn build_download_url(build_date: &str) -> String {
+/// Upstream builds one nightly per game version. The server's own dll says which one it is, so
+/// updating never swaps a 1.48 or 1.53 server for a 1.52 build. A fork reads as its base version,
+/// which is why Custom servers get no nightlies at all.
+fn nightly_flavour(server_version: Option<&str>, custom: bool) -> Result<&'static str, String> {
+    if custom {
+        return Err("Nightly updates are off for Custom servers.".into());
+    }
+    match server_version {
+        Some("1.48") => Ok("v48"),
+        Some("1.52") => Ok("v52"),
+        Some("1.53") => Ok("v53"),
+        _ => Err("Couldn't tell which game version this server is for, so no nightly is offered.".into()),
+    }
+}
+
+/// The flavour for this server, from its dll and the active linked version's Custom flag.
+fn server_flavour(app: &AppHandle, server_exe: &str) -> Result<&'static str, String> {
+    if server_exe.trim().is_empty() {
+        return Err("Set the MHServerEmu executable in Settings first.".into());
+    }
+    let custom = crate::config::load_config(app).active_linked().is_some_and(|l| l.custom);
+    nightly_flavour(crate::versions::server_version(server_exe), custom)
+}
+
+fn build_download_url(flavour: &str, build_date: &str) -> String {
     format!(
-        "https://nightly.link/Crypto137/MHServerEmu/workflows/nightly-release-windows-x64/master/MHServerEmu-nightly-{build_date}-Release-windows-x64.zip"
+        "https://nightly.link/Crypto137/MHServerEmu/workflows/nightly-release-windows-{flavour}/master/MHServerEmu-nightly-{build_date}-Release-windows-{flavour}.zip"
     )
 }
 
 fn client() -> Result<reqwest::Client, String> {
     reqwest::Client::builder()
         .user_agent(format!("mh-multiverse/{APP_VERSION}"))
+        .connect_timeout(std::time::Duration::from_secs(15))
+        .read_timeout(std::time::Duration::from_secs(30))
         .build()
         .map_err(|e| format!("Cannot create HTTP client: {e}"))
 }
 
-/// The newest nightly that exists, as (build date, download url).
-async fn newest_build(client: &reqwest::Client) -> Option<(String, String)> {
+/// The newest nightly that exists, as (build date, download url). Err when the site can't be reached.
+async fn newest_build(client: &reqwest::Client, flavour: &str) -> Result<Option<(String, String)>, String> {
     for build_date in candidate_dates(Utc::now()) {
-        let url = build_download_url(&build_date);
-        let exists = client
+        let url = build_download_url(flavour, &build_date);
+        let status = client
             .get(&url)
             .header("Range", "bytes=0-0")
             .send()
             .await
-            .map(|r| r.status().is_success() || r.status().as_u16() == 206)
-            .unwrap_or(false);
-        if exists {
-            return Some((build_date, url));
+            .map_err(|e| format!("Couldn't reach nightly.link: {e}"))?
+            .status();
+        if status.is_success() {
+            return Ok(Some((build_date, url)));
         }
     }
-    None
+    Ok(None)
+}
+
+static CANCEL_REQUESTED: AtomicBool = AtomicBool::new(false);
+
+/// Err once Cancel was pressed. Checked until the install starts, never during it.
+fn check_cancelled() -> Result<(), String> {
+    if CANCEL_REQUESTED.load(Ordering::SeqCst) {
+        return Err("Update cancelled.".into());
+    }
+    Ok(())
 }
 
 /// The exe's ProductVersion string, e.g. "1.0.3+build20261027131155". The numeric file version
 /// drops the "+build" stamp that identifies a nightly.
-fn product_version(path: &Path) -> Option<String> {
+pub(crate) fn product_version(path: &Path) -> Option<String> {
     use windows::core::{w, HSTRING};
     use windows::Win32::Storage::FileSystem::{GetFileVersionInfoSizeW, GetFileVersionInfoW, VerQueryValueW};
     let p = HSTRING::from(path.as_os_str());
@@ -234,59 +298,174 @@ fn detect_source_dir(staging: &Path) -> Result<PathBuf, String> {
     }
 }
 
+// ── Switched stock files ──────────────────────────────────────────────────────
+
+/// A stock file the update shipped in the other state, kept as the user had switched it.
+#[derive(Debug, Clone, Serialize, PartialEq)]
+pub struct KeptFile {
+    pub file: String,
+    pub enabled: bool,
+    /// The name the replaced copy was moved to, in the same folder.
+    pub kept_as: String,
+}
+
+/// Each `.json` file the update ships where the app can switch it: its name, where it ships, where
+/// its copy switched the other way lives, and whether that copy is the switched-on one. Live
+/// Tuning switches a root file off with an `OFF_` prefix, Patches and the Store with an Off folder.
+fn switchable_files(source: &Path) -> Vec<(String, String, String, bool)> {
+    const TUNING: &str = "Data/Game/LiveTuning";
+    let folders = [
+        (TUNING, TUNING, false),
+        ("Data/Game/Patches", "Data/Game/Patches/Off", false),
+        ("Data/Game/Patches/Off", "Data/Game/Patches", true),
+        ("Data/Game/MTXStore", "Data/Game/MTXStore/Off", false),
+        ("Data/Game/MTXStore/Off", "Data/Game/MTXStore", true),
+    ];
+    let mut out = Vec::new();
+    for (dir, other_dir, other_on) in folders {
+        let Ok(entries) = std::fs::read_dir(source.join(dir)) else { continue };
+        for entry in entries.flatten().filter(|e| e.path().is_file()) {
+            let name = entry.file_name().to_string_lossy().into_owned();
+            if !name.ends_with(".json") || (dir == TUNING && !name.starts_with("LiveTuningData")) {
+                continue;
+            }
+            let other = if dir == TUNING { format!("OFF_{name}") } else { name.clone() };
+            out.push((name.clone(), format!("{dir}/{name}"), format!("{other_dir}/{other}"), other_on));
+        }
+    }
+    out
+}
+
+/// Puts back the user's on/off choice for stock files the update shipped in the other state.
+/// Only a switch moves a stock file out of the place it ships in, so when both copies exist, the
+/// other one is the user's choice. The update's copy replaces it and the replaced copy is moved
+/// aside to `<name>.<timestamp>.bak`. Where the backup was just restored, the restored copy stays
+/// and the update's copy is the one moved aside.
+fn keep_switched_files(server_dir: &Path, source: &Path, restored: &[String]) -> Result<Vec<KeptFile>, String> {
+    let is_restored = |rel: &str| under_target(rel, restored);
+    let rename = |from: &Path, to: &Path| {
+        std::fs::rename(from, to).map_err(|e| format!("Cannot move {}: {e}", from.display()))
+    };
+    let mut kept = Vec::new();
+    for (name, shipped, other, other_on) in switchable_files(source) {
+        let (shipped_path, other_path) = (server_dir.join(&shipped), server_dir.join(&other));
+        if !shipped_path.is_file() || !other_path.is_file() {
+            continue;
+        }
+        let bak = if is_restored(&other) {
+            crate::store::move_aside(&shipped_path)?
+        } else {
+            let bak = crate::store::move_aside(&other_path)?;
+            rename(&shipped_path, &other_path)?;
+            bak
+        };
+        kept.push(KeptFile { file: name, enabled: other_on, kept_as: crate::store::file_name_of(&bak) });
+    }
+    Ok(kept)
+}
+
 // ── Backup internals ──────────────────────────────────────────────────────────
+
+/// Files under `source` whose installed copy in `server_dir` differs, as paths relative to both.
+/// These are what an install overwrites. Blacklisted game data is left out, as in every backup.
+fn changed_files(source: &Path, server_dir: &Path) -> Result<Vec<String>, String> {
+    let same = |a: &Path, b: &Path| {
+        let len = |p: &Path| std::fs::metadata(p).map(|m| m.len()).ok();
+        len(a) == len(b) && matches!((std::fs::read(a), std::fs::read(b)), (Ok(x), Ok(y)) if x == y)
+    };
+    let mut out = Vec::new();
+    let mut dirs = vec![PathBuf::new()];
+    while let Some(rel) = dirs.pop() {
+        let dir = source.join(&rel);
+        for entry in std::fs::read_dir(&dir)
+            .map_err(|e| format!("Cannot read {}: {e}", dir.display()))?
+            .flatten()
+        {
+            let (path, rel) = (entry.path(), rel.join(entry.file_name()));
+            if path.is_dir() {
+                dirs.push(rel);
+            } else if !is_blacklisted(&path) && server_dir.join(&rel).is_file() && !same(&path, &server_dir.join(&rel)) {
+                out.push(rel.to_string_lossy().replace('\\', "/"));
+            }
+        }
+    }
+    out.sort();
+    Ok(out)
+}
+
+/// `rel` is one of `targets` or inside one.
+fn under_target(rel: &str, targets: &[String]) -> bool {
+    targets.iter().any(|t| rel == t || rel.starts_with(&format!("{t}/")))
+}
 
 fn create_backup_inner(
     server_dir: &Path,
     targets: Vec<String>,
+    replaced: Vec<String>,
+    update: Option<UpdateVersions>,
     label: &str,
 ) -> Result<BackupManifest, String> {
     let now = Local::now();
-    let id = now.format("%Y%m%d-%H%M%S").to_string();
+    let stamp = now.format("%Y%m%d-%H%M%S").to_string();
     let created_at = now.to_rfc3339();
 
-    let backup_dir = server_dir.join("Backups").join(&id);
-    std::fs::create_dir_all(&backup_dir)
+    std::fs::create_dir_all(server_dir.join("Backups"))
         .map_err(|e| format!("Cannot create backup directory: {e}"))?;
-
-    let mut backed_up = Vec::new();
-    for target in &targets {
-        let src = server_dir.join(target);
-        if !src.exists() {
-            continue;
+    // Not create_dir_all: a failed backup removes its folder, which must never be another backup's.
+    let (mut id, mut n) = (stamp.clone(), 1);
+    let backup_dir = loop {
+        let dir = server_dir.join("Backups").join(&id);
+        match std::fs::create_dir(&dir) {
+            Ok(()) => break dir,
+            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
+                id = format!("{stamp}-{n}");
+                n += 1;
+            }
+            Err(e) => return Err(format!("Cannot create backup directory: {e}")),
         }
-        let dst = backup_dir.join(target);
-        copy_path(&src, &dst)?;
-        backed_up.push(target.clone());
-    }
-
-    let size_bytes = dir_size(&backup_dir);
-
-    let manifest = BackupManifest {
-        id: id.clone(),
-        created_at,
-        label: label.to_string(),
-        targets: backed_up,
-        size_bytes,
     };
 
-    let json = serde_json::to_string_pretty(&manifest)
-        .map_err(|e| format!("Cannot serialise manifest: {e}"))?;
-    std::fs::write(backup_dir.join("manifest.json"), json)
-        .map_err(|e| format!("Cannot write manifest: {e}"))?;
+    // A backup without its manifest never shows in the list, so a failed one is removed.
+    let result = (|| {
+        let mut backed_up = Vec::new();
+        for target in &targets {
+            let src = server_dir.join(target);
+            if !src.exists() {
+                continue;
+            }
+            copy_path(&src, &backup_dir.join(target))?;
+            backed_up.push(target.clone());
+        }
+        // Files under a target are already in the backup.
+        for file in replaced.iter().filter(|f| !under_target(f, &targets)) {
+            copy_path(&server_dir.join(file), &backup_dir.join(file))?;
+        }
 
-    Ok(manifest)
+        let manifest = BackupManifest {
+            id: id.clone(),
+            created_at,
+            label: label.to_string(),
+            targets: backed_up,
+            size_bytes: dir_size(&backup_dir),
+            replaced,
+            update,
+        };
+        let json = serde_json::to_string_pretty(&manifest)
+            .map_err(|e| format!("Cannot serialise manifest: {e}"))?;
+        std::fs::write(backup_dir.join("manifest.json"), json)
+            .map_err(|e| format!("Cannot write manifest: {e}"))?;
+        Ok(manifest)
+    })();
+    if result.is_err() {
+        let _ = std::fs::remove_dir_all(&backup_dir);
+    }
+    result
 }
 
 // ── Update internals ──────────────────────────────────────────────────────────
 
 async fn download_with_progress(app: &AppHandle, url: &str, dest: &Path) -> Result<(), String> {
-    let client = reqwest::Client::builder()
-        .user_agent(format!("mh-multiverse/{APP_VERSION}"))
-        .build()
-        .map_err(|e| format!("Cannot create HTTP client: {e}"))?;
-
-    let mut response = client.get(url).send().await
+    let mut response = client()?.get(url).send().await
         .map_err(|e| format!("Download request failed: {e}"))?;
 
     if !response.status().is_success() {
@@ -302,6 +481,7 @@ async fn download_with_progress(app: &AppHandle, url: &str, dest: &Path) -> Resu
     while let Some(chunk) = response.chunk().await
         .map_err(|e| format!("Download stream error: {e}"))?
     {
+        check_cancelled()?;
         downloaded += chunk.len() as u64;
 
         file.write_all(&chunk).await
@@ -372,36 +552,18 @@ async fn run_update_inner(
     zip_path: &Path,
     staging_dir: &Path,
     backup_targets: Vec<String>,
-) -> Result<(), String> {
-    if crate::server::server_process_is_running(&app.state::<crate::server::ServerState>()) {
+) -> Result<UpdateResult, String> {
+    if crate::server::server_running(app, server_exe) {
         return Err("Cannot update while the server is running. Stop the server first.".into());
     }
 
-    // Resolve the build before backing up, so a missing build leaves nothing behind
-    let (build_date, url) = newest_build(&client()?)
-        .await
+    let flavour = server_flavour(app, server_exe)?;
+    let (build_date, url) = newest_build(&client()?, flavour)
+        .await?
         .ok_or("No nightly build is available yet. Try again later.")?;
     if is_up_to_date(installed_build_date(server_exe).as_deref(), &build_date) {
         return Err(format!("This server already has the {build_date} build or a newer one."));
     }
-
-    // Pre-update backup
-    let backup_manifest: Option<BackupManifest> = {
-        let targets = backup_targets;
-
-        if !targets.is_empty() {
-            emit_progress(app, "backing_up", 0.0, None);
-            let dir = server_dir.to_path_buf();
-            let manifest = tokio::task::spawn_blocking(move || {
-                create_backup_inner(&dir, targets, "pre-update")
-            })
-            .await
-            .map_err(|e| format!("Backup task failed: {e}"))??;
-            Some(manifest)
-        } else {
-            None
-        }
-    };
 
     // Download
     emit_progress(app, "downloading", 0.0, None);
@@ -417,67 +579,146 @@ async fn run_update_inner(
             .await
             .map_err(|e| format!("Extraction task failed: {e}"))??;
     }
+    check_cancelled()?;
+
+    // Pre-update backup: the chosen targets, and every file the install will replace. After the
+    // download, so a failed download leaves nothing behind.
+    emit_progress(app, "backing_up", 0.0, None);
+    let linked_name = crate::config::load_config(app).active_linked().map(|l| l.name.clone());
+    let manifest = {
+        let (dir, staging, exe) = (server_dir.to_path_buf(), staging_dir.to_path_buf(), PathBuf::from(server_exe));
+        tokio::task::spawn_blocking(move || {
+            let source = detect_source_dir(&staging)?;
+            let replaced = changed_files(&source, &dir)?;
+            let update = UpdateVersions {
+                linked_name,
+                from: product_version(&exe),
+                to: exe.file_name().and_then(|name| product_version(&source.join(name))),
+            };
+            create_backup_inner(&dir, backup_targets, replaced, Some(update), "pre-update")
+        })
+        .await
+        .map_err(|e| format!("Backup task failed: {e}"))??
+    };
+    if let Err(e) = check_cancelled() {
+        let _ = std::fs::remove_dir_all(server_dir.join("Backups").join(&manifest.id));
+        return Err(e);
+    }
 
     // Copy staged files into server dir
     emit_progress(app, "installing", 0.0, None);
     {
         let staging = staging_dir.to_path_buf();
         let dst = server_dir.to_path_buf();
+        let m = manifest.clone();
         tokio::task::spawn_blocking(move || -> Result<(), String> {
             let source = detect_source_dir(&staging)?;
-            copy_dir_contents(&source, &dst)
+            copy_dir_contents(&source, &dst).map_err(|e| roll_back(&dst, &m, e))
         })
         .await
         .map_err(|e| format!("Install task failed: {e}"))??;
     }
 
     // Restore user files that the update overwrote
-    if let Some(manifest) = backup_manifest {
-        emit_progress(app, "restoring", 0.0, None);
-        let backup_dir = server_dir.join("Backups").join(&manifest.id);
-        for (i, target) in manifest.targets.iter().enumerate() {
-            let src = backup_dir.join(target);
-            let dst = server_dir.join(target);
-            copy_path(&src, &dst)?;
-            emit_progress(
-                app,
-                "restoring",
-                (i + 1) as f32 / manifest.targets.len() as f32 * 100.0,
-                Some(target.clone()),
-            );
-        }
+    emit_progress(app, "restoring", 0.0, None);
+    let backup_dir = server_dir.join("Backups").join(&manifest.id);
+    for (i, target) in manifest.targets.iter().enumerate() {
+        copy_path(&backup_dir.join(target), &server_dir.join(target))
+            .map_err(|e| format!("{e}. Restore the Pre-update backup {} to put your files back.", manifest.id))?;
+        emit_progress(
+            app,
+            "restoring",
+            (i + 1) as f32 / manifest.targets.len() as f32 * 100.0,
+            Some(target.clone()),
+        );
     }
 
-    Ok(())
+    Ok(UpdateResult {
+        edited: edited_files(server_dir, &manifest),
+        kept: keep_switched_files(server_dir, &detect_source_dir(staging_dir)?, &manifest.targets)?,
+    })
+}
+
+/// After a failed install, copies the replaced files and then the targets back from the pre-update
+/// backup, carrying on past errors. Returns the install error with what happened to the rollback.
+/// ponytail: files new in the build and the blacklisted .sip files stay as the update left them.
+fn roll_back(server_dir: &Path, manifest: &BackupManifest, error: String) -> String {
+    let backup_dir = server_dir.join("Backups").join(&manifest.id);
+    let mut failed = None;
+    for rel in manifest.replaced.iter().chain(&manifest.targets) {
+        if let Err(e) = copy_path(&backup_dir.join(rel), &server_dir.join(rel)) {
+            failed.get_or_insert(e);
+        }
+    }
+    let id = &manifest.id;
+    match failed {
+        None => format!("Install failed: {error}. The replaced files were put back from the Pre-update backup {id}."),
+        Some(e) => format!("Install failed: {error}. Some files couldn't be put back ({e}). Copy them from Backups\\{id} in the server folder."),
+    }
+}
+
+/// Replaced files the app had saved over (`write_with_backup` leaves a `.json.bak` beside them),
+/// except the ones a backup target put back.
+fn edited_files(server_dir: &Path, manifest: &BackupManifest) -> Vec<String> {
+    manifest
+        .replaced
+        .iter()
+        .filter(|rel| {
+            rel.ends_with(".json")
+                && !under_target(rel, &manifest.targets)
+                && server_dir.join(rel).with_extension("json.bak").is_file()
+        })
+        .map(|rel| crate::store::file_name_of(Path::new(rel)))
+        .collect()
 }
 
 // ── Tauri commands ────────────────────────────────────────────────────────────
 
 #[tauri::command]
-pub async fn check_update_available(server_exe: Option<String>) -> Result<UpdateInfo, String> {
+pub async fn check_update_available(app: AppHandle, server_exe: Option<String>) -> Result<UpdateInfo, String> {
     let installed_build_date = server_exe.as_deref().and_then(installed_build_date);
-    Ok(match newest_build(&client()?).await {
+    let flavour = match server_flavour(&app, server_exe.as_deref().unwrap_or_default()) {
+        Ok(flavour) => flavour,
+        Err(reason) => {
+            return Ok(UpdateInfo {
+                build_date: String::new(),
+                download_url: String::new(),
+                available: false,
+                installed_build_date,
+                up_to_date: false,
+                unavailable_reason: Some(reason),
+            })
+        }
+    };
+    Ok(match newest_build(&client()?, flavour).await? {
         Some((build_date, download_url)) => UpdateInfo {
             up_to_date: is_up_to_date(installed_build_date.as_deref(), &build_date),
             installed_build_date,
             build_date,
             download_url,
             available: true,
+            unavailable_reason: None,
         },
         None => {
             let [build_date, _] = candidate_dates(Utc::now());
             UpdateInfo {
-                download_url: build_download_url(&build_date),
+                download_url: build_download_url(flavour, &build_date),
                 build_date,
                 available: false,
                 installed_build_date,
                 up_to_date: false,
+                unavailable_reason: None,
             }
         }
     })
 }
 
 static UPDATE_RUNNING: AtomicBool = AtomicBool::new(false);
+
+/// True while `run_update` holds the lock.
+pub(crate) fn update_running() -> bool {
+    UPDATE_RUNNING.load(Ordering::SeqCst)
+}
 
 /// Held while an update runs. Two runs would share `_update.zip` and the staging folder, and the
 /// UI can't prevent it: leaving the tab resets its own "updating" flag while the run continues.
@@ -488,8 +729,17 @@ impl UpdateLock {
         UPDATE_RUNNING
             .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
             .ok()
-            .map(|_| Self)
+            .map(|_| {
+                CANCEL_REQUESTED.store(false, Ordering::SeqCst);
+                Self
+            })
     }
+}
+
+/// Stops the running update at its next check. The install itself can't be cancelled.
+#[tauri::command]
+pub fn cancel_update() {
+    CANCEL_REQUESTED.store(true, Ordering::SeqCst);
 }
 
 impl Drop for UpdateLock {
@@ -503,7 +753,7 @@ pub async fn run_update(
     app: AppHandle,
     server_exe: String,
     backup_targets: Vec<String>,
-) -> Result<(), String> {
+) -> Result<UpdateResult, String> {
     // Before anything else: the cleanup below would delete the running update's files
     let _lock = UpdateLock::acquire().ok_or("An update is already running.")?;
     let server_dir = server_dir_from_exe(&server_exe)?;
@@ -523,14 +773,32 @@ pub async fn run_update(
     result
 }
 
+fn ensure_server_stopped(app: &AppHandle, server_exe: &str) -> Result<(), String> {
+    if crate::server::server_running(app, server_exe) {
+        return Err("Stop the server first".into());
+    }
+    Ok(())
+}
+
+/// Runs file copies off the main thread, so the window doesn't freeze while they run.
+async fn off_main<T: Send + 'static>(f: impl FnOnce() -> Result<T, String> + Send + 'static) -> Result<T, String> {
+    tauri::async_runtime::spawn_blocking(f).await.map_err(|e| e.to_string())?
+}
+
 #[tauri::command]
-pub fn create_backup(
+pub async fn create_backup(
+    app: AppHandle,
     server_exe: String,
     targets: Vec<String>,
     label: String,
 ) -> Result<BackupManifest, String> {
-    let server_dir = server_dir_from_exe(&server_exe)?;
-    create_backup_inner(&server_dir, targets, &label)
+    // A copy of Account.db taken mid-write is torn.
+    ensure_server_stopped(&app, &server_exe)?;
+    off_main(move || backup(&server_exe, targets, &label)).await
+}
+
+fn backup(server_exe: &str, targets: Vec<String>, label: &str) -> Result<BackupManifest, String> {
+    create_backup_inner(&server_dir_from_exe(server_exe)?, targets, vec![], None, label)
 }
 
 #[tauri::command]
@@ -571,8 +839,16 @@ pub fn list_backups(server_exe: String) -> Result<Vec<BackupManifest>, String> {
 }
 
 #[tauri::command]
-pub fn restore_backup(server_exe: String, backup_id: String) -> Result<(), String> {
-    let server_dir = server_dir_from_exe(&server_exe)?;
+pub async fn restore_backup(app: AppHandle, server_exe: String, backup_id: String) -> Result<Vec<String>, String> {
+    // A running server writes its players back over the restored files.
+    ensure_server_stopped(&app, &server_exe)?;
+    off_main(move || restore(&server_exe, &backup_id)).await
+}
+
+/// Copies the backup's targets back, after backing up what they replace. Returns the names that
+/// copies switched the other way were moved aside to.
+fn restore(server_exe: &str, backup_id: &str) -> Result<Vec<String>, String> {
+    let server_dir = server_dir_from_exe(server_exe)?;
     let backup_dir = server_dir.join("Backups").join(&backup_id);
 
     if !backup_dir.exists() {
@@ -584,18 +860,34 @@ pub fn restore_backup(server_exe: String, backup_id: String) -> Result<(), Strin
     let manifest: BackupManifest = serde_json::from_str(&contents)
         .map_err(|e| format!("Cannot parse backup manifest: {e}"))?;
 
+    // So a restore can be undone, a partial one included.
+    let before = create_backup_inner(&server_dir, manifest.targets.clone(), vec![], None, "pre-restore")?;
+    let failed = |e: String| format!("{e}. The files from before the restore are in backup {}.", before.id);
+
     for target in &manifest.targets {
-        let src = backup_dir.join(target);
-        let dst = server_dir.join(target);
-        copy_path(&src, &dst)?;
+        copy_path(&backup_dir.join(target), &server_dir.join(target)).map_err(failed)?;
     }
 
-    Ok(())
+    // Copying merges, so a file switched the other way since the backup would now be in both
+    // places, and the next update would take that copy as the user's choice. Move it aside.
+    let mut moved = Vec::new();
+    for (_, _, other, _) in switchable_files(&backup_dir) {
+        let other_path = server_dir.join(&other);
+        if !backup_dir.join(&other).is_file() && other_path.is_file() {
+            let bak = crate::store::move_aside(&other_path).map_err(failed)?;
+            moved.push(crate::store::file_name_of(&bak));
+        }
+    }
+    Ok(moved)
 }
 
 #[tauri::command]
-pub fn delete_backup(server_exe: String, backup_id: String) -> Result<(), String> {
-    let server_dir = server_dir_from_exe(&server_exe)?;
+pub async fn delete_backup(server_exe: String, backup_id: String) -> Result<(), String> {
+    off_main(move || remove_backup(&server_exe, &backup_id)).await
+}
+
+fn remove_backup(server_exe: &str, backup_id: &str) -> Result<(), String> {
+    let server_dir = server_dir_from_exe(server_exe)?;
     let backup_dir = server_dir.join("Backups").join(&backup_id);
 
     if !backup_dir.exists() {

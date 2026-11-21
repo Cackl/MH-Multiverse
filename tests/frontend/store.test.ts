@@ -3,6 +3,8 @@ import { get } from 'svelte/store'
 
 const invokeMock = vi.hoisted(() => vi.fn())
 vi.mock('@tauri-apps/api/core', () => ({ invoke: invokeMock }))
+const zoomMock = vi.hoisted(() => vi.fn(() => Promise.resolve()))
+vi.mock('@tauri-apps/api/webview', () => ({ getCurrentWebview: () => ({ setZoom: zoomMock }) }))
 
 import {
   appendLog,
@@ -22,6 +24,24 @@ import {
   appConfig,
   activeServerId,
   upsertServer,
+  setAdvancedData,
+  setTextSize,
+  setTheme,
+  setBackupTargets,
+  setConsolePresets,
+  selectServer,
+  deleteServer,
+  setServerExe,
+  activeTheme,
+  activateLinked,
+  switchBlocked,
+  updateRunning,
+  updateOutcome,
+  runServerUpdate,
+  serverRunning,
+  eventsRestartPending,
+  markEventsSaved,
+  gameRunning,
   type AppConfig,
   type Server,
 } from '../../src/lib/store'
@@ -118,6 +138,27 @@ describe('unsaved-changes guard', () => {
     expect(await second).toBe(true)
   })
 
+  it('switching Simple/Advanced with unsaved edits asks, and staying keeps the view', async () => {
+    invokeMock.mockReset().mockResolvedValue(undefined)
+    setUnsaved('tuning', 'Live Tuning')
+    const stay = setAdvancedData(false)
+    expect(answerNext(false)).toContain('Live Tuning')
+    await stay
+    expect(invokeMock).not.toHaveBeenCalled()
+
+    const leave = setAdvancedData(false)
+    answerNext(true)
+    await leave
+    expect(invokeMock).toHaveBeenCalledWith('set_advanced_data', { advanced: false })
+  })
+
+  it('switching Simple/Advanced with nothing unsaved never asks', async () => {
+    invokeMock.mockReset().mockResolvedValue(undefined)
+    await setAdvancedData(true)
+    expect(asked()).toBe(false)
+    expect(invokeMock).toHaveBeenCalledWith('set_advanced_data', { advanced: true })
+  })
+
   it('goTab to the current tab never asks', async () => {
     setUnsaved('patches', 'Patches')
     await goTab('launch')
@@ -147,6 +188,52 @@ describe('unsaved-changes guard', () => {
     answerNext(false)
     await nav
     expect(get(activeDataTab)).toBe('events')
+  })
+
+  it('switching version with unsaved edits asks, and staying keeps the version', async () => {
+    invokeMock.mockReset().mockResolvedValue({ ...get(appConfig), active_linked_id: 'b' })
+    appConfig.update(c => ({ ...c, active_linked_id: 'a' }))
+    setUnsaved('events', 'Events')
+    const stay = activateLinked('b')
+    expect(answerNext(false)).toContain('Events')
+    await stay
+    expect(invokeMock).not.toHaveBeenCalled()
+    expect(get(appConfig).active_linked_id).toBe('a')
+
+    const leave = activateLinked('b')
+    answerNext(true)
+    await leave
+    expect(invokeMock).toHaveBeenCalledWith('activate_linked', { id: 'b' })
+    expect(get(appConfig).active_linked_id).toBe('b')
+  })
+
+  it('a switch while the server, the game or an update runs is refused before asking', async () => {
+    invokeMock.mockReset()
+    appConfig.update(c => ({ ...c, active_linked_id: 'a' }))
+    setUnsaved('events', 'Events')
+    for (const [flag, reason] of [
+      [updateRunning, 'Wait for the update to finish'],
+      [serverRunning, 'Stop the server and the game first'],
+      [gameRunning, 'Stop the server and the game first'],
+    ] as const) {
+      flag.set(true)
+      expect(get(switchBlocked)).toBe(reason)
+      await expect(activateLinked('b')).rejects.toBe(reason)
+      expect(asked()).toBe(false)
+      flag.set(false)
+    }
+    expect(get(switchBlocked)).toBeNull()
+    expect(invokeMock).not.toHaveBeenCalled()
+    expect(get(unsavedSources)).toEqual({ events: 'Events' })
+  })
+
+  it('picking the active version again never asks', async () => {
+    invokeMock.mockReset()
+    appConfig.update(c => ({ ...c, active_linked_id: 'a' }))
+    setUnsaved('events', 'Events')
+    await activateLinked('a')
+    expect(asked()).toBe(false)
+    expect(invokeMock).not.toHaveBeenCalled()
   })
 })
 
@@ -182,5 +269,121 @@ describe('upsertServer selection', () => {
     await upsertServer(srv(id), 'pw')
     const calls = invokeMock.mock.calls.filter(([cmd]) => cmd === 'set_active_server')
     expect(calls).toEqual(persisted ? [['set_active_server', { serverId: id }]] : [])
+  })
+})
+
+describe('setTextSize', () => {
+  it('zooms the window and saves the size', async () => {
+    invokeMock.mockReset().mockResolvedValue(undefined)
+    zoomMock.mockClear()
+    await setTextSize(1.25)
+    expect(invokeMock).toHaveBeenCalledWith('set_text_size', { size: 1.25 })
+    expect(get(appConfig).text_size).toBe(1.25)
+    expect(zoomMock).toHaveBeenLastCalledWith(1.25)
+  })
+
+  it('puts the previous zoom back when the save fails', async () => {
+    invokeMock.mockReset().mockResolvedValue(undefined)
+    await setTextSize(1)
+    invokeMock.mockReset().mockRejectedValue('disk full')
+    zoomMock.mockClear()
+    await setTextSize(1.1)
+    expect(get(appConfig).text_size).toBe(1)
+    expect(zoomMock).toHaveBeenLastCalledWith(1)
+  })
+})
+
+describe('failed settings saves', () => {
+  it('leaves the server exe alone until the save succeeds, so a refusal does not remount the tab', async () => {
+    appConfig.set({ ...get(appConfig), server_exe: 'old.exe' })
+    let seen = ''
+    invokeMock.mockReset().mockImplementation(async () => {
+      seen = get(appConfig).server_exe
+      throw 'Stop the server and the game first'
+    })
+    expect(await setServerExe('new.exe')).toBe('Stop the server and the game first')
+    expect(seen).toBe('old.exe')
+    expect(get(appConfig).server_exe).toBe('old.exe')
+  })
+
+  it('returns the error and shows the config on disk, not the snapshot', async () => {
+    vi.stubGlobal('document', { documentElement: { setAttribute() {}, removeAttribute() {} } })
+    invokeMock.mockReset().mockResolvedValue(undefined)
+    await setTheme('old')
+    const disk = { ...get(appConfig), theme: 'disk' }
+    invokeMock.mockReset().mockImplementation(async (cmd: string) => {
+      if (cmd === 'get_config') return disk
+      throw 'disk full'
+    })
+    expect(await setTheme('new')).toBe('disk full')
+    expect(get(appConfig).theme).toBe('disk')
+    expect(get(activeTheme)).toBe('disk')
+    vi.unstubAllGlobals()
+  })
+
+  it('keeps a later change that saved when an earlier one fails', async () => {
+    invokeMock.mockReset()
+    appConfig.set({ ...get(appConfig), backup_targets: ['old'], console_presets: ['old'] })
+    let rejectTargets: (e: unknown) => void = () => {}
+    invokeMock.mockImplementation((cmd: string) => {
+      if (cmd === 'set_backup_targets') return new Promise((_, reject) => { rejectTargets = reject })
+      if (cmd === 'get_config') return Promise.resolve({ ...get(appConfig), backup_targets: ['old'], console_presets: ['B'] })
+      return Promise.resolve(undefined)
+    })
+    const targets = setBackupTargets(['A'])
+    expect(await setConsolePresets(['B'])).toBe('')
+    rejectTargets('locked')
+    expect(await targets).toBe('locked')
+    expect(get(appConfig).console_presets).toEqual(['B'])
+    expect(get(appConfig).backup_targets).toEqual(['old'])
+  })
+
+  it('selectServer puts the saved selection back and returns the error', async () => {
+    invokeMock.mockReset().mockImplementation(async (cmd: string) => {
+      if (cmd === 'get_config') return { ...get(appConfig), active_server_id: 'a' }
+      throw 'no write'
+    })
+    activeServerId.set('a')
+    expect(await selectServer('b')).toBe('no write')
+    expect(get(activeServerId)).toBe('a')
+  })
+
+  it('deleteServer returns the error instead of throwing', async () => {
+    invokeMock.mockReset().mockRejectedValue('no write')
+    expect(await deleteServer('a')).toBe('no write')
+  })
+})
+
+describe('eventsRestartPending', () => {
+  it('stays until the server starts after the save', () => {
+    serverRunning.set(true)
+    markEventsSaved()
+    expect(get(eventsRestartPending)).toBe(true)
+    serverRunning.set(true)
+    expect(get(eventsRestartPending)).toBe(true)
+    serverRunning.set(false)
+    expect(get(eventsRestartPending)).toBe(true)
+    serverRunning.set(true)
+    expect(get(eventsRestartPending)).toBe(false)
+  })
+  it('clears on the next start when saved while stopped', () => {
+    serverRunning.set(false)
+    markEventsSaved()
+    expect(get(eventsRestartPending)).toBe(true)
+    serverRunning.set(true)
+    expect(get(eventsRestartPending)).toBe(false)
+  })
+})
+
+describe('runServerUpdate', () => {
+  it('keeps the outcome with the server it ran against and clears the running flag', async () => {
+    invokeMock.mockResolvedValueOnce({ kept: [], edited: ['LiveTuningData.json'] })
+    await runServerUpdate('C:/a/MHServerEmu.exe', [])
+    expect(get(updateRunning)).toBe(false)
+    expect(get(updateOutcome)).toEqual({ serverExe: 'C:/a/MHServerEmu.exe', error: '', kept: [], edited: ['LiveTuningData.json'] })
+
+    invokeMock.mockRejectedValueOnce('Update cancelled.')
+    await runServerUpdate('C:/a/MHServerEmu.exe', [])
+    expect(get(updateOutcome)?.error).toBe('Update cancelled.')
   })
 })

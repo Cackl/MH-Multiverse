@@ -37,6 +37,41 @@ fn parse_ini_no_section() {
 }
 
 #[test]
+fn parse_ini_skips_bom() {
+    let data = parse_ini("\u{FEFF}[PlayerManager]\nUseJsonDBManager=true\n\n[Frontend]\nPort=4306\n");
+    assert_eq!(data["PlayerManager"]["UseJsonDBManager"], "true");
+    assert_eq!(data["Frontend"]["Port"], "4306");
+}
+
+#[test]
+fn parse_descriptions_from_comments() {
+    let content = "\
+; Before any section: ignored
+[Frontend]
+;           BindIP: IP address to bind to.
+;                   Set to 0.0.0.0 to listen on all interfaces.
+; ReceiveTimeoutMS: Wait time in ms.
+BindIP=127.0.0.1
+
+[GameOptions]
+; NOTE: These options are sent to the client.
+;
+; TeamUpSystemEnabled: Enables team-ups.
+[PlayerManager]
+; UseJsonDBManager: Switches to JSON.
+;                   NOTE: JSON supports one account.
+[Empty]
+";
+    let d = parse_descriptions(content);
+    assert_eq!(d["Frontend"]["BindIP"], "IP address to bind to. Set to 0.0.0.0 to listen on all interfaces.");
+    assert_eq!(d["Frontend"]["ReceiveTimeoutMS"], "Wait time in ms.");
+    assert_eq!(d["GameOptions"]["TeamUpSystemEnabled"], "Enables team-ups.");
+    assert!(!d["GameOptions"].contains_key("NOTE"));
+    assert_eq!(d["PlayerManager"]["UseJsonDBManager"], "Switches to JSON. NOTE: JSON supports one account.");
+    assert_eq!(d.len(), 3);
+}
+
+#[test]
 fn serialize_ini_round_trip() {
     let content = "[A]\nX=1\nY=2\n\n[B]\nZ=3\n";
     let data = parse_ini(content);
@@ -79,6 +114,7 @@ fn merge_override_wins() {
     assert_eq!(state.values["WebFrontend"]["Port"], "9090");
     assert_eq!(state.values["Frontend"]["Port"], "8888");
     assert_eq!(state.overridden["WebFrontend"], vec!["Port".to_string()]);
+    assert_eq!(state.defaults["WebFrontend"]["Port"], "8080");
 }
 
 #[test]
@@ -100,6 +136,43 @@ fn write_config_removes_default_match() {
 }
 
 #[test]
+fn write_config_rejects_line_break() {
+    let (_tmp, server_exe) = empty_server();
+    let dir = std::path::Path::new(&server_exe).parent().unwrap().to_path_buf();
+    copy_config_fixtures(&dir, true);
+    let before = fs::read_to_string(dir.join("ConfigOverride.ini")).unwrap();
+
+    let mut updates: IniData = HashMap::new();
+    updates.insert(
+        "GroupingManager".to_string(),
+        HashMap::from([("MotdText".to_string(), "Hello\nWorld".to_string())]),
+    );
+    let err = write_config(server_exe, updates).unwrap_err();
+
+    assert!(err.contains("GroupingManager.MotdText"));
+    assert_eq!(fs::read_to_string(dir.join("ConfigOverride.ini")).unwrap(), before);
+}
+
+#[test]
+fn write_config_keeps_first_section_after_bom() {
+    let (_tmp, server_exe) = empty_server();
+    let dir = std::path::Path::new(&server_exe).parent().unwrap().to_path_buf();
+    copy_config_fixtures(&dir, false);
+    fs::write(dir.join("ConfigOverride.ini"), "\u{FEFF}[Frontend]\nPort=7777\n\n[WebFrontend]\nPort=9090\n").unwrap();
+
+    let mut updates: IniData = HashMap::new();
+    updates.insert(
+        "WebFrontend".to_string(),
+        HashMap::from([("Port".to_string(), "9191".to_string())]),
+    );
+    write_config(server_exe, updates).unwrap();
+
+    let content = fs::read_to_string(dir.join("ConfigOverride.ini")).unwrap();
+    assert!(content.contains("[Frontend]\nPort=7777\n"));
+    assert!(content.contains("Port=9191"));
+}
+
+#[test]
 fn write_config_adds_non_default() {
     let (_tmp, server_exe) = empty_server();
     let dir = std::path::Path::new(&server_exe).parent().unwrap().to_path_buf();
@@ -117,15 +190,27 @@ fn write_config_adds_non_default() {
 }
 
 #[test]
-fn reset_section_removes_from_override() {
-    let (_tmp, server_exe) = empty_server();
-    let dir = std::path::Path::new(&server_exe).parent().unwrap().to_path_buf();
-    copy_config_fixtures(&dir, true);
+fn write_config_round_trips_each_value_kind() {
+    let (tmp, server_exe) = empty_server();
+    let defaults = [("Bool", "false"), ("Int", "10"), ("Float", "1.5"), ("Text", "abc"), ("Url", "http://a/")];
+    let saved = [("Bool", "true"), ("Int", "20"), ("Float", "1.0"), ("Text", ""), ("Url", "http://h/p?a=1&b=2")];
+    let ini: String = defaults.iter().map(|(k, v)| format!("{k}={v}\n")).collect();
+    fs::write(tmp.path().join("Config.ini"), format!("[S]\n{ini}")).unwrap();
+    let to_update = |pairs: &[(&str, &str)]| -> IniData {
+        HashMap::from([("S".to_string(), pairs.iter().map(|(k, v)| (k.to_string(), v.to_string())).collect())])
+    };
 
-    reset_config_section(server_exe, "WebFrontend".to_string()).unwrap();
+    write_config(server_exe.clone(), to_update(&saved)).unwrap();
+    let written = fs::read_to_string(tmp.path().join("ConfigOverride.ini")).unwrap();
+    assert_eq!(written, "[S]\nBool=true\nFloat=1.0\nInt=20\nText=\nUrl=http://h/p?a=1&b=2\n\n");
+    let state = read_config(server_exe.clone()).unwrap();
+    for (k, v) in saved {
+        assert_eq!(state.values["S"][k], v, "{k} read back");
+    }
 
-    let content = fs::read_to_string(dir.join("ConfigOverride.ini")).unwrap();
-    assert!(!content.contains("WebFrontend"));
+    // Saving each default back removes its override
+    write_config(server_exe, to_update(&defaults)).unwrap();
+    assert_eq!(fs::read_to_string(tmp.path().join("ConfigOverride.ini")).unwrap(), "");
 }
 
 #[test]

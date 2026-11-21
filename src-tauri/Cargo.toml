@@ -1,6 +1,6 @@
 [package]
 name = "mh-multiverse"
-version = "1.6.1"
+version = "1.7.0"
 description = "A desktop launcher and server management tool built for MHServerEmu"
 authors = ["cackl"]
 license = ""
@@ -18,7 +18,7 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 tauri-build = { version = "2.5.6", features = [] }
 
 [dependencies]
-serde_json = "1.0"
+serde_json = { version = "1.0", features = ["raw_value"] }
 serde = { version = "1.0", features = ["derive"] }
 log = "0.4"
 tauri = { version = "2.10.3", features = [] }
@@ -28,7 +28,7 @@ base64 = "0.22"
 keyring = "2"
 tauri-plugin-dialog = "2.6.0"
 tokio = { version = "1", features = ["process", "io-util", "rt", "fs"] }
-windows = { version = "0.61", features = ["Win32_System_JobObjects", "Win32_Foundation", "Win32_Security", "Win32_Storage_FileSystem", "Win32_System_Threading", "Win32_System_Memory", "Win32_System_Diagnostics_Debug", "Win32_System_LibraryLoader", "Win32_System_Diagnostics_ToolHelp"] }
+windows = { version = "0.61", features = ["Win32_System_JobObjects", "Win32_Foundation", "Win32_Security", "Win32_Storage_FileSystem", "Win32_System_Threading", "Win32_System_Memory", "Win32_System_Diagnostics_Debug", "Win32_System_LibraryLoader", "Win32_System_Diagnostics_ToolHelp", "Win32_Globalization"] }
 tauri-plugin-opener = "2.5.3"
 tauri-plugin-window-state = "2"
 sysinfo = "0.36.1"
@@ -37,7 +37,7 @@ zip = "9"
 chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
 lz4_flex = { version = "0.11", default-features = false, features = ["safe-decode"] }
 regex = "1"
-rusqlite = { version = "0.38", features = ["bundled"] }
+rusqlite = { version = "0.43", features = ["bundled"] }
 pbkdf2  = "0.12"
 sha2    = "0.10"
 rand    = "0.8"

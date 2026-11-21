@@ -1,12 +1,18 @@
+<script context="module" lang="ts">
+  // Survives switching tabs on the rail, resets when the app restarts
+  let lastSection = 'network'
+</script>
+
 <script lang="ts">
   import { onMount, onDestroy, tick } from 'svelte'
   import { openPath } from '@tauri-apps/plugin-opener'
   import { invoke } from '@tauri-apps/api/core'
-  import { appConfig, setUnsaved, setConsolePresets, serverRunning, setShutdownConfig, logFilterThreshold, type ShutdownConfig } from '../lib/store'
+  import { activeCaps, appConfig, setUnsaved, setConsolePresets, serverRunning, setShutdownConfig, logFilterThreshold, type ShutdownConfig } from '../lib/store'
   import { FALLBACK_COMMANDS } from '../lib/serverCommands'
-  import { CONFIG_SCHEMA, type Field } from '../lib/configMeta'
+  import { CONFIG_SCHEMA, changedValues, fieldError, fieldsFor, otherSettings, type Field, type NavSection } from '../lib/configMeta'
   import { tip } from '../lib/tooltip'
   import PanelSidebar from './PanelSidebar.svelte'
+  import Dropdown from './Dropdown.svelte'
 
   export let embedded = false
   export let onBack: (() => void) | null = null
@@ -30,9 +36,11 @@
 
   // -- State --
 
-  let activeSection = CONFIG_SCHEMA[0].id
+  let activeSection = lastSection
   let values: IniData = {}
   let savedValues: IniData = {}
+  let defaults: IniData = {}
+  let descriptions: IniData = {}
   let overridden: Record<string, string[]> = {}
   let loaded = false
   let loadError = ''
@@ -41,16 +49,25 @@
   let presets: string[] = []
 
   $: canLoad = !!$appConfig.server_exe
-  $: activeSchema = CONFIG_SCHEMA.find(s => s.id === activeSection)!
+  $: activeSchema = activeSection === 'all'
+    ? { id: 'all', label: 'All settings', subsections: otherSettings(values, defaults, descriptions) } as NavSection
+    : CONFIG_SCHEMA.find(s => s.id === activeSection)!
   $: allFields = activeSchema.fields
     ?? activeSchema.subsections?.flatMap(s => s.fields)
     ?? []
   $: sections = activeSchema.subsections
-    ? activeSchema.subsections.map(s => ({ title: s.title, fields: s.fields }))
-    : [{ title: activeSchema.label, fields: activeSchema.fields ?? [] }]
-  $: dirty = loaded && allFields.some(f =>
-    (values[f.section]?.[f.key] ?? '') !== (savedValues[f.section]?.[f.key] ?? '')
-  )
+    ? activeSchema.subsections.map(s => ({ title: s.title, fields: fieldsFor(s.fields, $activeCaps.infinity) }))
+    : [{ title: activeSchema.label, fields: fieldsFor(activeSchema.fields ?? [], $activeCaps.infinity) }]
+  // Every page counts, so switching section keeps the guard and Save keeps the other pages' edits.
+  $: changes = changedValues(values, savedValues)
+  $: dirty = loaded && Object.keys(changes).length > 0
+  $: pageDirty = allFields.some(f => changes[f.section]?.[f.key] !== undefined)
+  // Only edits are checked, so an odd value already in Config.ini doesn't block saving. Going back to the default is always allowed.
+  $: editError = (field: Field): string | null => {
+    const v = changes[field.section]?.[field.key]
+    return v === undefined || v === defaultOf(field) ? null : fieldError(field, v)
+  }
+  const schemaFields = CONFIG_SCHEMA.flatMap(p => [...(p.fields ?? []), ...(p.subsections ?? []).flatMap(s => s.fields)])
   $: presets = [...($appConfig.console_presets ?? [])]
   $: setUnsaved('config', dirty ? 'Config' : null)
   onDestroy(() => setUnsaved('config', null))
@@ -60,11 +77,13 @@
   async function load() {
     loadError = ''
     try {
-      const state = await invoke<{ values: IniData; overridden: Record<string, string[]> }>(
+      const state = await invoke<{ values: IniData; overridden: Record<string, string[]>; defaults: IniData; descriptions: IniData }>(
         'read_config', { serverExe: $appConfig.server_exe }
       )
       values = state.values
       savedValues = JSON.parse(JSON.stringify(state.values))
+      defaults = state.defaults
+      descriptions = state.descriptions
       overridden = state.overridden
       loaded = true
     } catch (e) {
@@ -75,16 +94,13 @@
   async function save() {
     saveError = ''
     saveSuccess = false
-    const updates: IniData = {}
-    for (const field of allFields) {
-      const val = values[field.section]?.[field.key]
-      if (val !== undefined) {
-        if (!updates[field.section]) updates[field.section] = {}
-        updates[field.section][field.key] = val
-      }
+    const bad = [...new Set(schemaFields.filter(f => editError(f)).map(f => f.label))]
+    if (bad.length) {
+      saveError = `Fix these fields first: ${bad.join(', ')}`
+      return
     }
     try {
-      await invoke('write_config', { serverExe: $appConfig.server_exe, updates })
+      await invoke('write_config', { serverExe: $appConfig.server_exe, updates: changes })
       await load()
       saveSuccess = true
       setTimeout(() => saveSuccess = false, 3000)
@@ -93,22 +109,14 @@
     }
   }
 
-  async function resetSection() {
+  // Reset and Revert only edit this page's fields on screen. Save writes every page's edits.
+  function fillPage(src: IniData) {
     saveError = ''
-    const iniSections = [...new Set(allFields.map(f => f.section))]
-    try {
-      for (const section of iniSections) {
-        await invoke('reset_config_section', { serverExe: $appConfig.server_exe, section })
-      }
-      await load()
-    } catch (e) {
-      saveError = String(e)
-    }
+    for (const field of allFields) setValue(field, src[field.section]?.[field.key] ?? '')
   }
 
-  function getValue(field: Field): string {
-    return values[field.section]?.[field.key] ?? ''
-  }
+  // Reactive so the fields re-render when values change from code (Reset, Revert, Save)
+  $: getValue = (field: Field): string => values[field.section]?.[field.key] ?? ''
 
   function setValue(field: Field, val: string) {
     if (!values[field.section]) values[field.section] = {}
@@ -116,18 +124,26 @@
     values = { ...values }
   }
 
-  function isOverridden(field: Field): boolean {
-    return (overridden[field.section] ?? []).includes(field.key)
-  }
+  $: isOverridden = (field: Field): boolean => (overridden[field.section] ?? []).includes(field.key)
 
-  function isModified(field: Field): boolean {
-    return (values[field.section]?.[field.key] ?? '') !== (savedValues[field.section]?.[field.key] ?? '')
+  $: isModified = (field: Field): boolean =>
+    (values[field.section]?.[field.key] ?? '') !== (savedValues[field.section]?.[field.key] ?? '')
+
+  $: defaultOf = (field: Field): string => defaults[field.section]?.[field.key] ?? ''
+
+  const isOn = (v: string) => v.toLowerCase() === 'true'
+
+  function shown(field: Field, v: string): string {
+    if (field.type === 'bool') return isOn(v) ? 'On' : 'Off'
+    if (field.type === 'select') return field.options?.find(o => o.value === v)?.label ?? v
+    return v === '' ? 'empty' : v
   }
 
   // -- Console presets --
 
-  function syncPresets() {
-    setConsolePresets(presets)
+  let multiverseError = ''
+  async function syncPresets() {
+    multiverseError = await setConsolePresets(presets)
   }
 
   function removePreset(i: number) {
@@ -379,12 +395,13 @@
     </svelte:fragment>
     <div class="config-nav-list">
       {#each CONFIG_SCHEMA as section}
+        {#if section.id === 'all'}<div class="nav-divider"></div>{/if}
         <button
-          class="config-nav-item"
+          class="side-item"
           class:active={activeSection === section.id}
-          on:click={() => activeSection = section.id}
+          on:click={() => activeSection = lastSection = section.id}
         >
-          {section.label}
+          <span class="side-name">{section.label}</span>
         </button>
       {/each}
     </div>
@@ -405,13 +422,15 @@
       </div>
     {:else if activeSection === 'multiverse'}
       <div class="config-content">
-        <div class="config-section-head">
-          <div class="section-title">MH Multiverse</div>
-        </div>
+        <header class="page-head">
+          <h3 class="page-title">Multiverse</h3>
+        </header>
         <div class="config-body">
+          <div class="content-col">
           <div class="multiverse-note">
             These settings are stored in MH Multiverse, not in ConfigOverride.ini.
           </div>
+          {#if multiverseError}<div class="feedback-error">{multiverseError}</div>{/if}
 
           <div class="subsection-title">Shutdown</div>
           <div class="config-grid">
@@ -424,7 +443,7 @@
                 class="config-input"
                 min="0"
                 value={$appConfig.shutdown.delay_minutes}
-                on:change={(e) => setShutdownConfig({
+                on:change={async (e) => multiverseError = await setShutdownConfig({
                   ...$appConfig.shutdown,
                   delay_minutes: Math.max(0, parseInt(e.currentTarget.value) || 0)
                 })}
@@ -440,12 +459,29 @@
                 class="config-input"
                 value={$appConfig.shutdown.broadcast_message}
                 placeholder="Server is shutting down in {'{minutes}'} minute(s)."
-                on:change={(e) => setShutdownConfig({
+                on:change={async (e) => multiverseError = await setShutdownConfig({
                   ...$appConfig.shutdown,
                   broadcast_message: e.currentTarget.value
                 })}
               >
               <span class="config-field-hint">Use {'{minutes}'} as a placeholder for the remaining time.</span>
+            </div>
+            <div class="config-field full">
+              <div class="toggle-row">
+                <div class="toggle-info">
+                  <span class="config-field-label">Ask before closing</span>
+                  <span class="config-tooltip">Closing MH Multiverse with the server running asks first. When off, it stops the server and closes.</span>
+                </div>
+                <div
+                  class="toggle-switch"
+                  class:on={$appConfig.shutdown.ask_before_close}
+                  role="switch"
+                  aria-checked={$appConfig.shutdown.ask_before_close}
+                  tabindex="0"
+                  on:click={async () => multiverseError = await setShutdownConfig({ ...$appConfig.shutdown, ask_before_close: !$appConfig.shutdown.ask_before_close })}
+                  on:keydown={async (e) => { if (e.key === 'Enter') multiverseError = await setShutdownConfig({ ...$appConfig.shutdown, ask_before_close: !$appConfig.shutdown.ask_before_close }) }}
+                ></div>
+              </div>
             </div>
           </div>
 
@@ -575,6 +611,7 @@
             </div>
         </div>
 
+          </div>
         </div>
       </div>
 
@@ -595,95 +632,78 @@
           </div>
         {/if}
 
-        <div class="config-section-head">
-          <div class="section-title">{activeSchema.label}</div>
-        </div>
+        <header class="page-head">
+          <h3 class="page-title">{activeSchema.label}</h3>
+        </header>
 
         <div class="config-body">
+          <div class="content-col hang">
           {#each sections as section}
             {#if activeSchema.subsections}
               <div class="subsection-title">{section.title}</div>
             {/if}
 
-            <div class="config-grid">
-              {#each section.fields as field}
-                {#if field.type === 'bool'}
-                  <div class="config-field full">
-                    <div class="toggle-row">
-                      <div class="toggle-info">
-                        <span class="config-field-label">{field.label}</span>
-                        <span class="config-tooltip">{field.description}</span>
-                      </div>
-                      <div
-                        class="toggle-switch"
-                        class:on={getValue(field).toLowerCase() === 'true'}
-                        on:click={() => setValue(field, getValue(field).toLowerCase() === 'true' ? 'false' : 'true')}
-                        role="switch"
-                        aria-checked={getValue(field).toLowerCase() === 'true'}
-                        tabindex="0"
-                        on:keydown={(e) => e.key === 'Enter' && setValue(field, getValue(field).toLowerCase() === 'true' ? 'false' : 'true')}
-                      ></div>
-                    </div>
-                  </div>
-                {:else if field.type === 'textarea'}
-                  <div class="config-field full">
-                    <div class="config-field-head">
-                      <span class="config-field-label">{field.label}</span>
-                      {#if isOverridden(field)}
-                        <span class="override-dot" use:tip={'Overridden from default'}></span>
-                      {/if}
-                      <span class="config-field-default">
-                        <button
-                          class="info-btn"
-                          use:tip={field.description}
-                        >?</button>
-                      </span>
-                    </div>
-                    <textarea
-                      value={getValue(field)}
-                      on:change={(e) => setValue(field, e.currentTarget.value)}
-                      rows="3"
-                      class:modified={isModified(field)}
-                    ></textarea>
-                  </div>
+            {#each section.fields as field (field.section + '.' + field.key)}
+              {@const value = getValue(field)}
+              {@const def = defaultOf(field)}
+              {@const err = editError(field)}
+              <div class="cfg-row">
+                <span class="cfg-name" class:raw={activeSection === 'all'}>
+                  {field.label}
+                  {#if field.description}<button class="info-btn" aria-label="About {field.label}" use:tip={field.description}>?</button>{/if}
+                </span>
+
+                {#if isModified(field)}
+                  <span class="cfg-state changed">Changed</span>
+                {:else if isOverridden(field)}
+                  <span class="cfg-state yours">Yours</span>
                 {:else}
-                  <div class="config-field">
-                    <div class="config-field-head">
-                      <span class="config-field-label">{field.label}</span>
-                      {#if isOverridden(field)}
-                        <span class="override-dot" use:tip={'Overridden from default'}></span>
-                      {/if}
-                      <span class="config-field-default">
-                        <button
-                          class="info-btn"
-                          use:tip={field.description}
-                        >?</button>
-                      </span>
-                    </div>
-                    {#if field.type === 'number'}
-                      <input
-                        type="number"
-                        class="config-input"
-                        class:modified={isModified(field)}
-                        value={getValue(field)}
-                        min={field.min}
-                        max={field.max}
-                        on:change={(e) => setValue(field, e.currentTarget.value)}
-                      >
-                    {:else}
-                      <input
-                        type="text"
-                        class="config-input"
-                        class:modified={isModified(field)}
-                        value={getValue(field)}
-                        on:change={(e) => setValue(field, e.currentTarget.value)}
-                      >
-                    {/if}
-                  </div>
+                  <span class="cfg-state">Default</span>
                 {/if}
-              {/each}
-            </div>
+
+                <div class="cfg-control">
+                  {#if field.type === 'bool'}
+                    <div
+                      class="toggle-switch"
+                      class:on={isOn(value)}
+                      role="switch"
+                      aria-checked={isOn(value)}
+                      aria-label={field.label}
+                      tabindex="0"
+                      on:click={() => setValue(field, isOn(value) ? 'false' : 'true')}
+                      on:keydown={(e) => e.key === 'Enter' && setValue(field, isOn(value) ? 'false' : 'true')}
+                    ></div>
+                    <span class="cfg-onoff">{isOn(value) ? 'On' : 'Off'}</span>
+                  {:else if field.type === 'select'}
+                    <Dropdown label={field.label} {value} --dd-min-width="160px" onChange={v => setValue(field, v)}
+                      options={[...(field.options?.some(o => o.value === value) ? [] : [{ value, label: value }]), ...(field.options ?? [])]} />
+                  {:else if field.type === 'number'}
+                    <input type="number" class="config-input num" aria-label={field.label} min={field.min} max={field.max} step="any" value={value} on:change={(e) => setValue(field, e.currentTarget.value)}>
+                  {:else}
+                    <input type="text" class="config-input" class:raw={activeSection === 'all'} aria-label={field.label} value={value} on:change={(e) => setValue(field, e.currentTarget.value)}>
+                  {/if}
+                </div>
+
+                <span class="row-hang">
+                  {#if value !== def}
+                    <button
+                      class="btn-icon"
+                      on:click={() => setValue(field, def)}
+                      aria-label="Reset {field.label}"
+                      use:tip={def === '' && !(field.key in (defaults[field.section] ?? {})) ? 'Remove from ConfigOverride.ini' : `Reset to ${shown(field, def)}`}
+                    >
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M3 12a9 9 0 1 0 3-6.7"/>
+                        <polyline points="3 3 3 9 9 9"/>
+                      </svg>
+                    </button>
+                  {/if}
+                </span>
+                {#if err}<span class="cfg-error">{err}</span>{/if}
+              </div>
+            {/each}
           {/each}
+          </div>
         </div>
       </div>
 
@@ -698,8 +718,9 @@
         {#if saveSuccess}
           <span class="feedback-ok">Saved</span>
         {/if}
-        <button class="btn btn-sm btn-outline" style="margin-left:auto;" on:click={resetSection} disabled={!loaded}>Reset to Defaults</button>
-        <button class="btn btn-sm btn-accent" class:btn-pulse={dirty} on:click={save} disabled={!loaded}>Save</button>
+        <button class="btn btn-sm btn-outline" style="margin-left:auto;" on:click={() => fillPage(defaults)} disabled={!loaded}>Reset to Defaults</button>
+        <button class="btn btn-sm btn-outline" on:click={() => fillPage(savedValues)} disabled={!pageDirty}>Revert</button>
+        <button class="btn btn-sm btn-accent" class:btn-pulse={dirty} on:click={save} disabled={!dirty}>Save</button>
       </div>
 
     {/if}
@@ -730,24 +751,10 @@
     padding: 6px;
   }
 
-  .config-nav-item {
-    display: block;
-    width: 100%;
-    text-align: left;
-    padding: 10px 12px;
-    font-family: var(--font-head);
-    font-size: 13px;
-    font-weight: 600;
-    color: var(--text-1);
-    background: none;
-    border: 1px solid transparent;
-    cursor: pointer;
-    border-radius: var(--radius-sm);
-    transition: all 0.12s;
-    margin-bottom: 2px;
+  .nav-divider {
+    border-top: 1px solid var(--border);
+    margin: 6px 0 8px;
   }
-  .config-nav-item:hover { color: var(--text-0); background: var(--bg-3); border-color: var(--border-mid); }
-  .config-nav-item.active { color: var(--accent-bright); background: var(--accent-glow); border-color: var(--accent-dim); }
 
   /* -- Main area -- */
   .config-main {
@@ -764,15 +771,6 @@
     display: flex;
     flex-direction: column;
     overflow: hidden;
-  }
-
-  .config-section-head {
-    display: flex;
-    align-items: center;
-    padding: 12px 20px;
-    border-bottom: 1px solid var(--border);
-    flex-shrink: 0;
-    min-height: 53px;
   }
 
   .config-body {
@@ -810,16 +808,13 @@
     color: var(--text-1);
   }
 
-  .config-field-default {
-    margin-left: auto;
-  }
-
   .config-input {
     background: var(--bg-0);
     border: 1px solid var(--border-mid);
     color: var(--text-0);
-    font-family: var(--font-mono);
+    font-family: var(--font-body);
     font-size: 12px;
+    font-variant-numeric: tabular-nums;
     padding: 7px 10px;
     outline: none;
     border-radius: var(--radius-sm);
@@ -827,10 +822,55 @@
     width: 100%;
   }
   .config-input:focus { border-color: var(--accent-dim); }
-  .config-input.modified {
-    border-color: var(--accent-dim);
-    background: var(--accent-glow);
+  .config-input.num { width: 120px; }
+  .config-input.raw { font-family: var(--font-mono); }
+
+  /* -- Setting rows: name and state on the left, control on the right, reset hanging outside -- */
+  .cfg-row {
+    position: relative;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr);
+    column-gap: 18px;
+    row-gap: 3px;
+    align-items: center;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--border);
   }
+  .cfg-name {
+    grid-column: 1;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    min-width: 0;
+    font-family: var(--font-head);
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-0);
+    overflow-wrap: anywhere;
+  }
+  .cfg-name.raw { font-family: var(--font-mono); font-weight: 400; }
+  .cfg-state {
+    grid-column: 1;
+    font-family: var(--font-head);
+    font-size: var(--fs-min);
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text-3);
+  }
+  .cfg-state.yours { color: var(--accent-bright); }
+  .cfg-state.changed { color: var(--amber-bright); }
+  .cfg-control {
+    grid-column: 2;
+    grid-row: 1 / span 2;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 10px;
+    min-width: 0;
+  }
+  .cfg-error { grid-column: 2; justify-self: end; font-size: var(--fs-min); color: var(--text-error); }
+  .cfg-onoff { order: -1; font-size: 12px; color: var(--text-1); }
 
   .config-tooltip {
     font-size: 11px;
@@ -854,53 +894,6 @@
     gap: 2px;
   }
 
-  /* -- Override dot -- */
-  .override-dot {
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-    background: var(--accent);
-    flex-shrink: 0;
-  }
-
-  /* -- Info button -- */
-  .info-btn {
-    width: 14px;
-    height: 14px;
-    border-radius: 50%;
-    border: 1px solid var(--border-lit);
-    background: var(--bg-3);
-    color: var(--text-3);
-    font-size: var(--fs-min);
-    cursor: help;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    flex-shrink: 0;
-    transition: all 0.12s;
-    padding: 0;
-  }
-  .info-btn:hover { border-color: var(--accent-dim); color: var(--accent-bright); }
-
-  /* -- Textarea -- */
-  textarea {
-    background: var(--bg-0);
-    border: 1px solid var(--border-mid);
-    color: var(--text-0);
-    font-family: var(--font-body);
-    font-size: 12px;
-    padding: 7px 10px;
-    outline: none;
-    width: 100%;
-    resize: vertical;
-    border-radius: var(--radius-sm);
-    transition: border-color 0.15s;
-  }
-  textarea:focus { border-color: var(--accent-dim); }
-  textarea.modified {
-    border-color: var(--accent-dim);
-    background: var(--accent-glow);
-  }
 
   /* -- Notices -- */
   .config-notice {

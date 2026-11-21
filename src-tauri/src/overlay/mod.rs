@@ -237,11 +237,12 @@ pub fn overlay_set_omega_gear(app: tauri::AppHandle, enabled: bool) -> Result<Ov
     if status_of(&config.overlay).state != "trusted" {
         return Err("Trust the overlay before changing Omega gear.".into());
     }
-    config.overlay.omega_gear = enabled;
-    save_config(&app, &config)?;
+    // The file first, so a failed write leaves the setting as it was.
     if let Some(path) = loot_config_path() {
         set_show_omega_at(&path, enabled)?;
     }
+    config.overlay.omega_gear = enabled;
+    save_config(&app, &config)?;
     Ok(status_of(&config.overlay))
 }
 
@@ -263,15 +264,24 @@ pub(crate) fn on_game_spawned(app: &tauri::AppHandle, cfg: OverlayConfig, sips: 
     }
 }
 
+/// The hook is built for the 1.52 client: its codes and indices come from 1.52 data, so it is
+/// never loaded into a 1.48 or 1.53 client.
+pub(crate) fn supported(config: &crate::config::AppConfig) -> bool {
+    !config.client_is_1_48_or_1_53()
+}
+
 /// Injects into the game this app launched, for when "Inject on Launch" is off. Same trust
 /// checks as a launch; the outcome arrives as `overlay-inject`.
 #[tauri::command]
 pub fn overlay_inject_now(app: tauri::AppHandle) -> Result<(), String> {
+    let config = load_config(&app);
+    if !supported(&config) {
+        return Err(format!("The overlay isn't available for the {} client.", config.active_version()));
+    }
     let game = app.state::<LaunchedGame>().get().ok_or("Launch the game from MH Multiverse first.")?;
     if !game.is_running() {
         return Err("The game is not running.".into());
     }
-    let config = load_config(&app);
     let sips = sip_candidates(&config.game_exe, &config.server_exe);
     run_inject(&app, config.overlay.clone(), sips, game, false);
     Ok(())
@@ -352,7 +362,7 @@ fn sync_show_omega(app: &tauri::AppHandle, cfg: &OverlayConfig) {
 fn inject_into(cfg: &OverlayConfig, pid: u32, fresh_launch: bool, mut alive: impl FnMut() -> bool) -> Result<(), String> {
     use inject::InjectError;
     if status_of(cfg).state != "trusted" {
-        return Err("The overlay files changed since they were trusted; not injecting. Re-trust it in Settings.".into());
+        return Err("The overlay files changed since you trusted them. Re-trust them in Settings to inject.".into());
     }
     let dir = PathBuf::from(&cfg.dir);
     // '0' on a fresh launch so the hook arms its loading gate (a stale '1' would skip it)
@@ -366,7 +376,7 @@ fn inject_into(cfg: &OverlayConfig, pid: u32, fresh_launch: bool, mut alive: imp
         }
         // verify right before loading; anything changed since Trust is refused
         if status_of(cfg).state != "trusted" {
-            return Err("Overlay files changed since they were trusted; not injecting.".into());
+            return Err("The overlay files changed since you trusted them, so they weren't injected.".into());
         }
         match inject::inject(pid, &dll) {
             Ok(()) => return Ok(()),

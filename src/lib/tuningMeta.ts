@@ -1,3 +1,5 @@
+import { FLOAT_MAX } from './patchEntryEdit'
+
 // ── Prefix-ordering safety net ───────────────────────────────────────────────
 // Both maps below do a first-match scan over a prefix list. If a prefix is
 // itself a prefix of a later, more specific one in the same list, the later
@@ -68,15 +70,46 @@ const BLUEPRINT_HINT_PREFIXES: [string, string | null][] = [
 
 assertPrefixOrder(BLUEPRINT_HINT_PREFIXES, 'BLUEPRINT_HINT_PREFIXES')
 
+// The server picks a setting's table by the prototype's class, testing an avatar first
+// (LiveTuningData.UpdateLiveTuningVar). A prototype of another class turns the value into a
+// different setting, so the picker only offers the class each prefix needs.
+const TUNING_CLASSES: [string, string][] = [
+  ['eAETV_', 'AvatarPrototype'],
+  ['eWETV_', 'WorldEntityPrototype'],
+  ['ePTV_',  'PowerPrototype'],
+  ['eATV_',  'AreaPrototype'],
+  ['eRTV_',  'RegionPrototype'],
+  ['eRT_',   'RegionPrototype'],
+  ['ePOTV_', 'PopulationObjectPrototype'],
+  ['eMTV_',  'MissionPrototype'],
+  ['eLTTV_', 'LootTablePrototype'],
+  ['eCTV_',  'ConditionPrototype'],
+  ['ePETV_', 'PublicEventPrototype'],
+  ['eMFTV_', 'MetricsFrequencyPrototype'],
+]
+
+assertPrefixOrder(TUNING_CLASSES, 'TUNING_CLASSES')
+
+/** The prototype class a setting needs, or null when any will do. */
+export function tuningClassForSetting(setting: string): string | null {
+  return TUNING_CLASSES.find(([prefix]) => setting.startsWith(prefix))?.[1] ?? null
+}
+
+/** Avatars are world entities too, but the server reads eWETV_ on an avatar as an avatar setting. */
+export function tuningPickAllowed(setting: string, match: { class: string }): boolean {
+  return !(setting.startsWith('eWETV_') && match.class === 'AvatarPrototype')
+}
+
 // Parses a tuning value from an <input type="number"> (a number, or null/''
-// when empty) or a plain string. Returns null for blank or non-numeric input,
+// when empty) or a plain string. Returns null for blank, non-numeric or out-of-float-range input,
 // so a real 0 is never confused with "no value".
 export function parseTuningValue(raw: string | number | null | undefined): number | null {
   if (raw === null || raw === undefined) return null
   const text = String(raw).trim()
   if (text === '') return null
   const n = Number(text)
-  return Number.isFinite(n) ? n : null
+  // The server reads values as floats and skips the whole file on one it can't read.
+  return Math.abs(n) <= FLOAT_MAX ? n : null
 }
 
 export function blueprintHintForSetting(setting: string): string | null {
@@ -125,9 +158,54 @@ export interface ScheduleRule {
   events: string[]
 }
 
+/**
+ * `rules` with the rule at `index` replaced. Rules have no id, so the editor keeps the index of the
+ * rule it opened. An index that no longer exists throws, so a save never writes the old rules back.
+ */
+export function replaceRuleAt(rules: ScheduleRule[], index: number, updated: ScheduleRule): ScheduleRule[] {
+  if (index < 0 || index >= rules.length) throw new Error('The rule being edited is no longer in the schedule. Reload and open it again.')
+  return rules.map((r, i) => i === index ? updated : r)
+}
+
+/**
+ * Why a dated rule can't be saved, or '' if it can. The server builds a SpecialDate rule's
+ * start with `new DateTime(year, month, day)` and no guard, so an impossible date (31 Apr,
+ * or 29 Feb in a non-leap year) takes it down. Lunar dates are converted inside a try, so
+ * only their duration is checked; a missing duration makes the server drop the rule.
+ */
+export function ruleDateError(
+  ruleType: string, month: number | null, day: number | null, durationDays: number | null,
+): string {
+  if (ruleType !== 'SpecialDate' && ruleType !== 'SpecialDateLunar') return ''
+  if (ruleType === 'SpecialDate') {
+    if (!Number.isInteger(month) || month! < 1 || month! > 12) return 'Month must be 1 to 12.'
+    const max = new Date(Date.UTC(2023, month!, 0)).getUTCDate() // 2023: not a leap year
+    if (!Number.isInteger(day) || day! < 1 || day! > max) return `Day must be 1 to ${max} for this month.`
+  }
+  // A huge duration overflows the server's AddDays and crashes it at start. A rule ends at year end anyway.
+  if (!Number.isInteger(durationDays) || durationDays! < 1 || durationDays! > 366) return 'Duration must be 1 to 366 days.'
+  return ''
+}
+
 export interface ScheduleData {
   rules: ScheduleRule[]
   using_override: boolean
+}
+
+// ── File names ─────────────────────────────────────────────────────────────────
+
+// The server loads LiveTuningData*.json in culture-sensitive sorted order and the last value
+// wins. "_" sorts before every letter, so a "LiveTuningData_" file loads before
+// LiveTuningDataGlobal.json, which then resets every global it sets. "User" sorts after "Global".
+export const NEW_TUNING_FILE_PREFIX = 'LiveTuningDataUser'
+
+export function newTuningFileName(suffix: string): string {
+  return `${NEW_TUNING_FILE_PREFIX}${suffix.trim()}.json`
+}
+
+/** Short label for a file: the name without "LiveTuningData", "_" or "User", and ".json". */
+export function tuningDisplayName(fileName: string): string {
+  return fileName.replace(/^LiveTuningData(?:_|User(?=.+\.json$))?/, '').replace(/\.json$/, '') || 'LiveTuningData'
 }
 
 // ── Known file sets ────────────────────────────────────────────────────────────
@@ -153,10 +231,23 @@ export const KNOWN_EVENTS = new Set([
   'LiveTuningData_PandemoniumProtocol.json',
 ])
 
+/** Sidebar groups of the Advanced Live Tuning page, in display order. */
+export const TUNING_GROUPS = ['Your files', 'Core', 'Events', 'Other'] as const
+export type TuningGroup = typeof TUNING_GROUPS[number]
+
+/**
+ * Which sidebar group a file belongs to. `eventFiles` names the event-owned files (from
+ * Events.json, else KNOWN_EVENTS on older servers). Other is the files in subfolders.
+ */
+export function tuningGroup(f: Pick<TuningFileInfo, 'canonical_name' | 'toggleable' | 'event_id'>, eventFiles: Set<string>): TuningGroup {
+  if (f.event_id !== null || eventFiles.has(f.canonical_name)) return 'Events'
+  if (!f.toggleable) return 'Other'
+  return KNOWN_CORE.has(f.canonical_name) ? 'Core' : 'Your files'
+}
+
 // ── Known settings ─────────────────────────────────────────────────────────────
-// Source: MHServerEmu LiveTuning documentation (game version 1.52.0.1700).
-// requiresPrototype: false only for Global (eGTV_) — all other categories
-// target a specific game prototype.
+// Source: MHServerEmu docs/Game/LiveTuning.md and SimpleView-LiveTuning.md, checked against the
+// server source (v52). requiresPrototype: false only for Global (eGTV_).
 
 export interface KnownSetting {
   setting: string
@@ -165,98 +256,319 @@ export interface KnownSetting {
   requiresPrototype: boolean
 }
 
+const STOCK = 'No effect on the stock server.'
+const UNKNOWN = 'Unknown. The server never reads it.'
+
+const g = (setting: string, description: string): KnownSetting =>
+  ({ setting, category: 'Global', description, requiresPrototype: false })
+const p = (category: string) => (setting: string, description: string): KnownSetting =>
+  ({ setting, category, description, requiresPrototype: true })
+
+const area = p('Area'), we = p('World Entity'), av = p('Avatar Entity'), po = p('Population Object')
+const pw = p('Powers'), rg = p('Regions'), lt = p('Loot'), ms = p('Mission'), cd = p('Condition')
+const pe = p('Public Events'), mf = p('Metrics Frequency')
+
 export const KNOWN_SETTINGS: KnownSetting[] = [
-  // ── Global ──
-  { setting: 'eGTV_VendorBuyPrice',                 category: 'Global',            description: 'Multiplier for prices when buying items from vendors.',                                                                                                                requiresPrototype: false },
-  { setting: 'eGTV_VendorSellPrice',                category: 'Global',            description: 'Multiplier for prices when selling items to vendors.',                                                                                                               requiresPrototype: false },
-  { setting: 'eGTV_VendorXPGain',                   category: 'Global',            description: 'Multiplier for vendor experience when donating items.',                                                                                                              requiresPrototype: false },
-  { setting: 'eGTV_PVPEnabled',                     category: 'Global',            description: 'Disables PvP game modes when set to 0.',                                                                                                                            requiresPrototype: false },
-  { setting: 'eGTV_XPGain',                         category: 'Global',            description: 'Multiplier for experience.',                                                                                                                                         requiresPrototype: false },
-  { setting: 'eGTV_LootDropRate',                   category: 'Global',            description: 'Multiplier for the chance of loot rolling.',                                                                                                                         requiresPrototype: false },
-  { setting: 'eGTV_LootSpecialDropRate',            category: 'Global',            description: 'Multiplier for special item find (SIF).',                                                                                                                            requiresPrototype: false },
-  { setting: 'eGTV_LootRarity',                     category: 'Global',            description: 'Multiplier for rare item find (RIF).',                                                                                                                               requiresPrototype: false },
-  { setting: 'eGTV_PartyXPBonusPct',                category: 'Global',            description: '',                                                                                                                                                                  requiresPrototype: false },
-  { setting: 'eGTV_PlayerTradeEnabled',             category: 'Global',            description: 'Disables player trade window when set to 0.',                                                                                                                        requiresPrototype: false },
-  { setting: 'eGTV_CosmicPrestigeXPPct',            category: 'Global',            description: 'Override for the cosmic prestige XP multiplier. Uses the game data multiplier when set to 1 (0.04 by default).',                                                   requiresPrototype: false },
-  { setting: 'eGTV_LootVaporizationEnabled',        category: 'Global',            description: 'Disables loot vaporization when set to 0.',                                                                                                                         requiresPrototype: false },
-  { setting: 'eGTV_XPBuffDisplay',                  category: 'Global',            description: '',                                                                                                                                                                  requiresPrototype: false },
-  { setting: 'eGTV_SIFBuffDisplay',                 category: 'Global',            description: '',                                                                                                                                                                  requiresPrototype: false },
-  { setting: 'eGTV_RIFBuffDisplay',                 category: 'Global',            description: '',                                                                                                                                                                  requiresPrototype: false },
-  { setting: 'eGTV_OmegaXPPct',                     category: 'Global',            description: 'Multiplier for Omega experience.',                                                                                                                                   requiresPrototype: false },
-  { setting: 'eGTV_RespectLevelForGlobalXP',        category: 'Global',            description: 'Disables minimum level requirement for global XP multipliers when set to 0.',                                                                                       requiresPrototype: false },
-  { setting: 'eGTV_RespectLevelForGlobalRIF',       category: 'Global',            description: 'Disables minimum level requirement for global rare item find multipliers when set to 0.',                                                                            requiresPrototype: false },
-  { setting: 'eGTV_RespectLevelForGlobalSIF',       category: 'Global',            description: 'Disables minimum level requirement for global special item find multipliers when set to 0.',                                                                         requiresPrototype: false },
-  { setting: 'eGTV_RespectLevelForOmegaXP',         category: 'Global',            description: 'Disables minimum level requirement for Omega XP multipliers when set to 0.',                                                                                        requiresPrototype: false },
-  { setting: 'eGTV_RespectLevelForAvatarXP',        category: 'Global',            description: 'Disables minimum level requirement for avatar XP multipliers when set to 0.',                                                                                       requiresPrototype: false },
-  { setting: 'eGTV_RespectLevelForRegionXP',        category: 'Global',            description: 'Disables minimum level requirement for region XP multipliers when set to 0.',                                                                                       requiresPrototype: false },
-  { setting: 'eGTV_ServerBonusUnlockLevelOverride', category: 'Global',            description: 'Override for the minimum level required for live tuning multipliers to apply. Uses game data value when set to 1 (60 by default).',                                 requiresPrototype: false },
-  { setting: 'eGTV_BoostTimersRunning',             category: 'Global',            description: 'Pauses boost timers even outside of hubs when set to 0.',                                                                                                           requiresPrototype: false },
-  { setting: 'eGTV_InfinityXPPct',                  category: 'Global',            description: 'Multiplier for Infinity experience.',                                                                                                                                requiresPrototype: false },
-  { setting: 'eGTV_RespectLevelForInfinityXP',      category: 'Global',            description: 'Disables minimum level requirement for Infinity XP multipliers when set to 0.',                                                                                     requiresPrototype: false },
-  { setting: 'eGTV_SuperVerboseMetricsEnabled',     category: 'Global',            description: '',                                                                                                                                                                  requiresPrototype: false },
-  { setting: 'eGTV_HighVolumeMetricsEnabled',       category: 'Global',            description: '',                                                                                                                                                                  requiresPrototype: false },
-  { setting: 'eGTV_MediumVolumeMetricsEnabled',     category: 'Global',            description: '',                                                                                                                                                                  requiresPrototype: false },
-  { setting: 'eGTV_LowVolumeMetricsEnabled',        category: 'Global',            description: '',                                                                                                                                                                  requiresPrototype: false },
+  g('eGTV_VendorBuyPrice',                 'Multiplier for vendor buy prices. 0 is free.'),
+  g('eGTV_VendorSellPrice',                'Multiplier for vendor sell prices and donation XP.'),
+  g('eGTV_VendorXPGain',                   'Multiplier for vendor XP from donations.'),
+  g('eGTV_PVPEnabled',                     'Blocks PvP when 0.'),
+  g('eGTV_XPGain',                         'Multiplier for kill and orb XP. Not mission rewards.'),
+  g('eGTV_LootDropRate',                   'Multiplier for drop chance from mobs and chests.'),
+  g('eGTV_LootSpecialDropRate',            'Multiplier for special item find. Mostly event and bonus tables.'),
+  g('eGTV_LootRarity',                     'Multiplier for rare item find. Levels off around 10.'),
+  g('eGTV_PartyXPBonusPct',                'Adds (value - 1) to party XP. Below 1 does nothing.'),
+  g('eGTV_PlayerTradeEnabled',             'Blocks player trading when 0.'),
+  g('eGTV_CosmicPrestigeXPPct',            'XP factor at max prestige. 1 uses the game data (0.04).'),
+  g('eGTV_LootVaporizationEnabled',        'Blocks loot vaporising when 0.'),
+  g('eGTV_XPBuffDisplay',                  'Shows an XP bonus buff icon. Visual only.'),
+  g('eGTV_SIFBuffDisplay',                 'Shows a special item find buff icon. Visual only.'),
+  g('eGTV_RIFBuffDisplay',                 'Shows a rare item find buff icon. Visual only.'),
+  g('eGTV_OmegaXPPct',                     'Multiplier for Omega XP. Infinity system off only.'),
+  g('eGTV_RespectLevelForGlobalXP',        `0 skips the level gate for global XP. ${STOCK}`),
+  g('eGTV_RespectLevelForGlobalRIF',       `0 skips the level gate for global rare item find. ${STOCK}`),
+  g('eGTV_RespectLevelForGlobalSIF',       `0 skips the level gate for global special item find. ${STOCK}`),
+  g('eGTV_RespectLevelForOmegaXP',         `0 skips the level gate for Omega XP. ${STOCK}`),
+  g('eGTV_RespectLevelForAvatarXP',        `0 skips the level gate for hero XP. ${STOCK}`),
+  g('eGTV_RespectLevelForRegionXP',        `0 skips the level gate for region XP. ${STOCK}`),
+  g('eGTV_ServerBonusUnlockLevelOverride', 'Minimum level for bonuses. 1 uses the game data (60). Stock sets 0.'),
+  g('eGTV_BoostTimersRunning',             'Pauses boost timers everywhere when 0.'),
+  g('eGTV_InfinityXPPct',                  'Multiplier for Infinity XP. Infinity system on only.'),
+  g('eGTV_RespectLevelForInfinityXP',      `0 skips the level gate for Infinity XP. ${STOCK}`),
+  g('eGTV_SuperVerboseMetricsEnabled',     UNKNOWN),
+  g('eGTV_HighVolumeMetricsEnabled',       UNKNOWN),
+  g('eGTV_MediumVolumeMetricsEnabled',     UNKNOWN),
+  g('eGTV_LowVolumeMetricsEnabled',        UNKNOWN),
 
-  // ── Area ──
-  { setting: 'eATV_AreaMobSpawnHeat',               category: 'Area',              description: '',                                                                                                                                                                  requiresPrototype: true },
-  { setting: 'eATV_AreaMobSpawnHeatReturn',         category: 'Area',              description: '',                                                                                                                                                                  requiresPrototype: true },
+  area('eATV_AreaMobSpawnHeat',            'Multiplier for spawn heat. Capped at the area\'s maximum.'),
+  area('eATV_AreaMobSpawnHeatReturn',      'Multiplier for spawn heat return. Capped at the area\'s maximum.'),
 
-  // ── World Entity ──
-  { setting: 'eWETV_MobPowerDamage',                category: 'World Entity',      description: 'Multiplier for mob damage.',                                                                                                                                         requiresPrototype: true },
-  { setting: 'eWETV_MobHealth',                     category: 'World Entity',      description: 'Multiplier for mob health.',                                                                                                                                         requiresPrototype: true },
-  { setting: 'eWETV_MobXP',                         category: 'World Entity',      description: 'Multiplier for mob kill experience reward.',                                                                                                                         requiresPrototype: true },
-  { setting: 'eWETV_MobDropRate',                   category: 'World Entity',      description: 'Multiplier for the chance of loot rolling from a specific mob.',                                                                                                    requiresPrototype: true },
-  { setting: 'eWETV_MobSpecialDropRate',            category: 'World Entity',      description: 'Multiplier for special item find (SIF) from a specific mob.',                                                                                                       requiresPrototype: true },
-  { setting: 'eWETV_Enabled',                       category: 'World Entity',      description: 'Disables this world entity when set to 0.',                                                                                                                         requiresPrototype: true },
-  { setting: 'eWETV_MobDropRarity',                 category: 'World Entity',      description: 'Multiplier for rare item find (RIF) from a specific mob.',                                                                                                          requiresPrototype: true },
-  { setting: 'eWETV_VendorEnabled',                 category: 'World Entity',      description: 'Disables vendor functionality of a specific NPC.',                                                                                                                  requiresPrototype: true },
-  { setting: 'eWETV_Unused1',                       category: 'World Entity',      description: '',                                                                                                                                                                  requiresPrototype: true },
-  { setting: 'eWETV_EternitySplinterPrice',         category: 'World Entity',      description: 'Override for the Eternity Splinter price when buying this item from a vendor.',                                                                                     requiresPrototype: true },
-  { setting: 'eWETV_LootGroupNum',                  category: 'World Entity',      description: 'Specifies loot group number for this item to add it to a loot table.',                                                                                              requiresPrototype: true },
-  { setting: 'eWETV_LootNoDropPercent',             category: 'World Entity',      description: 'Specifies the no drop chance for an item. Use in combination with eWETV_LootGroupNum.',                                                                             requiresPrototype: true },
-  { setting: 'eWETV_Visible',                       category: 'World Entity',      description: 'Makes this world entity invisible when set to 0.',                                                                                                                  requiresPrototype: true },
+  we('eWETV_MobPowerDamage',               'Multiplier for damage from this entity and its summons.'),
+  we('eWETV_MobHealth',                    'Multiplier for health. New spawns only.'),
+  we('eWETV_MobXP',                        'Multiplier for kill XP.'),
+  we('eWETV_MobDropRate',                  'Multiplier for drop chance.'),
+  we('eWETV_MobSpecialDropRate',           'Multiplier for special item find.'),
+  we('eWETV_Enabled',                      '0 off, 1 default, 2 force on.'),
+  we('eWETV_MobDropRarity',                'Multiplier for rare item find.'),
+  we('eWETV_VendorEnabled',                'This item can\'t be bought from vendors when 0.'),
+  we('eWETV_Unused1',                      'No effect.'),
+  we('eWETV_EternitySplinterPrice',        'Eternity Splinter price. 1 uses the game data.'),
+  we('eWETV_LootGroupNum',                 'Loot group number. Whole numbers. 1 means none.'),
+  we('eWETV_LootNoDropPercent',            'No-drop chance as a loot group member. 1 skips the check.'),
+  we('eWETV_Visible',                      'Hides this entity when 0. Ignored on heroes.'),
 
-  // ── Avatar Entity ──
-  { setting: 'eAETV_BonusXPPct',                    category: 'Avatar Entity',     description: 'Avatar-specific experience multiplier.',                                                                                                                             requiresPrototype: true },
-  { setting: 'eAETV_XPBuffDisplay',                 category: 'Avatar Entity',     description: '',                                                                                                                                                                  requiresPrototype: true },
-  { setting: 'eAETV_EternitySplinterPrice',         category: 'Avatar Entity',     description: 'Override for Eternity Splinter price when buying this avatar. NOTE: Broken client-side when buying from the roster panel.',                                         requiresPrototype: true },
-  { setting: 'eAETV_Enabled',                       category: 'Avatar Entity',     description: 'Disables this avatar when set to 0.',                                                                                                                               requiresPrototype: true },
+  av('eAETV_BonusXPPct',                   'Multiplier for this hero\'s XP, missions included.'),
+  av('eAETV_XPBuffDisplay',                'Shows a hero XP buff icon. Visual only.'),
+  av('eAETV_EternitySplinterPrice',        'Eternity Splinter price. Client only, and the roster panel ignores it.'),
+  av('eAETV_Enabled',                      'Disables this hero in the client only. The server does not block it.'),
 
-  // ── Population Object ──
-  { setting: 'ePOTV_PopulationObjectWeight',        category: 'Population Object', description: '',                                                                                                                                                                  requiresPrototype: true },
+  po('ePOTV_PopulationObjectWeight',       'Multiplier for spawn group weight, rounded down. 0 or less excludes it.'),
 
-  // ── Powers ──
-  { setting: 'ePTV_PowerCost',                      category: 'Powers',            description: 'Multiplier for power cost.',                                                                                                                                         requiresPrototype: true },
-  { setting: 'ePTV_PowerDamagePVE',                 category: 'Powers',            description: 'Multiplier for power PvE damage.',                                                                                                                                  requiresPrototype: true },
-  { setting: 'ePTV_PowerDamagePVP',                 category: 'Powers',            description: 'Multiplier for power PvP damage.',                                                                                                                                  requiresPrototype: true },
-  { setting: 'ePTV_PowerEnabled',                   category: 'Powers',            description: 'Disables this power when set to 0.',                                                                                                                                requiresPrototype: true },
+  pw('ePTV_PowerCost',                     'Multiplier for power cost.'),
+  pw('ePTV_PowerDamagePVE',                'Multiplier for PvE damage.'),
+  pw('ePTV_PowerDamagePVP',                'Multiplier for PvP damage.'),
+  pw('ePTV_PowerEnabled',                  'Disables this power when 0.'),
 
-  // ── Regions ──
-  { setting: 'eRTV_PlayerLimit',                    category: 'Regions',           description: '',                                                                                                                                                                  requiresPrototype: true },
-  { setting: 'eRTV_Enabled',                        category: 'Regions',           description: 'Disables this region when set to 0.',                                                                                                                               requiresPrototype: true },
-  { setting: 'eRT_BonusXPPct',                      category: 'Regions',           description: 'Region-specific experience multiplier.',                                                                                                                             requiresPrototype: true },
-  { setting: 'eRT_XPBuffDisplay',                   category: 'Regions',           description: '',                                                                                                                                                                  requiresPrototype: true },
-  { setting: 'eRT_BonusItemFindMultiplier',         category: 'Regions',           description: 'Multiplier for bonus item find (BIF) in this region.',                                                                                                              requiresPrototype: true },
+  rg('eRTV_PlayerLimit',                   'Multiplier for the player cap and spawn density. Never 0.'),
+  rg('eRTV_Enabled',                       'Blocks teleporting here when 0.'),
+  rg('eRT_BonusXPPct',                     'Multiplier for XP here, missions included.'),
+  rg('eRT_XPBuffDisplay',                  'Shows a region XP buff icon. Visual only.'),
+  rg('eRT_BonusItemFindMultiplier',        'Multiplier for bonus item find. Whole numbers only.'),
 
-  // ── Loot ──
-  { setting: 'eLTTV_Enabled',                       category: 'Loot',              description: 'Disables this loot table when set to 0.',                                                                                                                           requiresPrototype: true },
-  { setting: 'eLTTV_Weight',                        category: 'Loot',              description: 'Multiplier for the weight value of this loot table.',                                                                                                               requiresPrototype: true },
-  { setting: 'eLTTV_Rolls',                         category: 'Loot',              description: 'Override for the number of rolls for this loot table.',                                                                                                             requiresPrototype: true },
-  { setting: 'eLTTV_NoDropPercent',                 category: 'Loot',              description: 'Override for the no drop chance for this loot table.',                                                                                                              requiresPrototype: true },
-  { setting: 'eLTTV_GroupNum',                      category: 'Loot',              description: 'When this loot table is rolled, world entities with the same loot group number are also included.',                                                                  requiresPrototype: true },
+  lt('eLTTV_Enabled',                      '0 off, 1 default, 2 force on.'),
+  lt('eLTTV_Weight',                       'Multiplier for pick weight, rounded down. 0 or less excludes it.'),
+  lt('eLTTV_Rolls',                        'Number of rolls. Minimum 1.'),
+  lt('eLTTV_NoDropPercent',                'No-drop chance. 1 uses the table\'s own.'),
+  lt('eLTTV_GroupNum',                     'Also rolls this loot group. Whole numbers. 1 means none.'),
 
-  // ── Mission ──
-  { setting: 'eMTV_Enabled',                        category: 'Mission',           description: 'Disables this mission when set to 0.',                                                                                                                               requiresPrototype: true },
-  { setting: 'eMTV_EventInstance',                  category: 'Mission',           description: '',                                                                                                                                                                  requiresPrototype: true },
+  ms('eMTV_Enabled',                       'Suspends this mission when 0.'),
+  ms('eMTV_EventInstance',                 'Changing it resets event mission progress.'),
 
-  // ── Condition ──
-  { setting: 'eCTV_Enabled',                        category: 'Condition',         description: 'Disables this condition when set to 0.',                                                                                                                             requiresPrototype: true },
+  cd('eCTV_Enabled',                       'Blocks this condition when 0. Other values force it on if the globals list it.'),
 
-  // ── Public Events ──
-  { setting: 'ePETV_Enabled',                       category: 'Public Events',     description: '',                                                                                                                                                                  requiresPrototype: true },
-  { setting: 'ePETV_EventInstance',                 category: 'Public Events',     description: '',                                                                                                                                                                  requiresPrototype: true },
+  pe('ePETV_Enabled',                      'Disables this public event in the client only. The server does not stop it.'),
+  pe('ePETV_EventInstance',                'Keys team assignment. Whole numbers only.'),
 
-  // ── Metrics Frequency ──
-  { setting: 'eMFTV_SampleRate',                    category: 'Metrics Frequency', description: '',                                                                                                                                                                  requiresPrototype: true },
+  mf('eMFTV_SampleRate',                   'No effect.'),
 ]
+
+/** Known settings that 1.48's tuning enums don't have (upstream Gazillion/1.48.0.1712/CommonMessages.cs). */
+const MISSING_IN_1_48 = new Set([
+  'eGTV_InfinityXPPct', 'eGTV_RespectLevelForInfinityXP',
+  'eGTV_SuperVerboseMetricsEnabled', 'eGTV_HighVolumeMetricsEnabled',
+  'eGTV_MediumVolumeMetricsEnabled', 'eGTV_LowVolumeMetricsEnabled',
+  'eMFTV_SampleRate', 'eRT_BonusItemFindMultiplier',
+])
+
+/** The settings to offer for a game version. */
+export function knownSettingsFor(version: string): KnownSetting[] {
+  return version === '1.48' ? KNOWN_SETTINGS.filter(s => !MISSING_IN_1_48.has(s.setting)) : KNOWN_SETTINGS
+}
+
+const KNOWN_BY_ID = new Map(KNOWN_SETTINGS.map(s => [s.setting, s]))
+
+/** Hover text for a setting: its description, or nothing when it isn't known. */
+export function settingTip(setting: string): string {
+  return KNOWN_BY_ID.get(setting)?.description ?? ''
+}
+
+// ── Server Rates (the Simple view of Live Tuning) ───────────────────────────────
+
+/** The file the Server Rates form owns; mirrors SERVER_RATES_FILE in tuning.rs. */
+export const SERVER_RATES_FILE = 'LiveTuningDataMultiverse.json'
+const GLOBAL_FILE = 'LiveTuningDataGlobal.json'
+
+export interface TuningEntry {
+  prototype: string
+  setting: string
+  value: number
+}
+
+/** True when the rows differ from the saved ones in count, order or any field. */
+export function tuningEntriesChanged(entries: TuningEntry[], saved: TuningEntry[]): boolean {
+  return entries.length !== saved.length || entries.some((e, i) =>
+    e.prototype !== saved[i].prototype || e.setting !== saved[i].setting || e.value !== saved[i].value)
+}
+
+// Mirror read_global_tuning in tuning.rs.
+export interface GlobalValue { setting: string; value: number }
+export interface GlobalTuningFile { file: string; values: GlobalValue[]; error: string | null }
+export interface GlobalTuning {
+  files: GlobalTuningFile[]
+  infinity_system: boolean
+  /** The Server Rates file exists only as OFF_, so the server doesn't load it. */
+  rates_off: boolean
+}
+
+export type RateGroup = 'XP' | 'Loot' | 'Vendors' | 'Rules'
+
+export interface RateRow {
+  setting: string
+  label: string
+  group: RateGroup
+  /** times: 2×; bonus: +50% (1 = +0%); pct: 8%; toggle: 0 is Off, anything else On. */
+  format: 'times' | 'bonus' | 'pct' | 'toggle'
+  /** The slider's range and step. */
+  min: number
+  max: number
+  step: number
+  /** The highest value the number box takes; it can go past the slider. */
+  limit: number
+  /** Shown as a ? tooltip beside the label. */
+  tip?: string
+  /** A value that means "use the game data", shown as Game default. */
+  gameDefault?: number
+  /** Only one of Infinity XP and Omega XP is live, set by [GameOptions] InfinitySystemEnabled. */
+  infinity?: boolean
+}
+
+// Slider ranges from SimpleView-LiveTuning.md §5.3, with higher limits for the number box. The
+// limits stop runaway values: 1e39 becomes Infinity, which the server turns into a huge negative
+// number, and drop rates in the hundreds load the server heavily. Stock Global sets all of these.
+export const RATE_ROWS: RateRow[] = [
+  { setting: 'eGTV_XPGain',                  label: 'XP from kills and orbs', group: 'XP',      format: 'times',  min: 0.25, max: 10, step: 0.25, limit: 1000, tip: 'Mission reward XP is not affected.' },
+  { setting: 'eGTV_InfinityXPPct',           label: 'Infinity XP',            group: 'XP',      format: 'times',  min: 0,    max: 10, step: 0.5,  limit: 1000, infinity: true },
+  { setting: 'eGTV_OmegaXPPct',              label: 'Omega XP',               group: 'XP',      format: 'times',  min: 0,    max: 10, step: 0.5,  limit: 1000, infinity: false },
+  { setting: 'eGTV_PartyXPBonusPct',         label: 'Party XP bonus',         group: 'XP',      format: 'bonus',  min: 1,    max: 5,  step: 0.5,  limit: 11 },
+  { setting: 'eGTV_CosmicPrestigeXPPct',     label: 'XP at max prestige',     group: 'XP',      format: 'pct',    min: 0.01, max: 2,  step: 0.01, limit: 10, gameDefault: 1 },
+  { setting: 'eGTV_LootDropRate',            label: 'Drop rate',              group: 'Loot',    format: 'times',  min: 0.25, max: 10, step: 0.25, limit: 1000 },
+  { setting: 'eGTV_LootRarity',              label: 'Rare item find',         group: 'Loot',    format: 'times',  min: 0.5,  max: 10, step: 0.5,  limit: 1000 },
+  { setting: 'eGTV_LootSpecialDropRate',     label: 'Special item find',      group: 'Loot',    format: 'times',  min: 0.5,  max: 10, step: 0.5,  limit: 1000 },
+  { setting: 'eGTV_LootVaporizationEnabled', label: 'Enable Loot Vaporising', group: 'Loot',    format: 'toggle', min: 0,    max: 1,  step: 1,    limit: 1 },
+  { setting: 'eGTV_VendorBuyPrice',          label: 'Buy prices',             group: 'Vendors', format: 'times',  min: 0,    max: 3,  step: 0.25, limit: 1000 },
+  { setting: 'eGTV_VendorSellPrice',         label: 'Sell prices',            group: 'Vendors', format: 'times',  min: 0,    max: 3,  step: 0.25, limit: 1000 },
+  { setting: 'eGTV_VendorXPGain',            label: 'Vendor XP',              group: 'Vendors', format: 'times',  min: 0,    max: 10, step: 0.5,  limit: 1000 },
+  { setting: 'eGTV_PVPEnabled',              label: 'PvP',                    group: 'Rules',   format: 'toggle', min: 0,    max: 1,  step: 1,    limit: 1 },
+  { setting: 'eGTV_PlayerTradeEnabled',      label: 'Player trading',         group: 'Rules',   format: 'toggle', min: 0,    max: 1,  step: 1,    limit: 1 },
+  { setting: 'eGTV_BoostTimersRunning',      label: 'Boost timers run',       group: 'Rules',   format: 'toggle', min: 0,    max: 1,  step: 1,    limit: 1, tip: 'Off pauses all boost timers everywhere.' },
+]
+
+/** The rows to show: all but the dead one of Infinity XP and Omega XP. A version without the
+ *  Infinity system (1.48) ignores the switch, so Omega XP is the live one there. */
+export function rateRows(infinitySystem: boolean, hasInfinity = true): RateRow[] {
+  const infinity = infinitySystem && hasInfinity
+  return RATE_ROWS.filter(r => r.infinity === undefined || r.infinity === infinity)
+}
+
+const trim = (n: number) => String(+n.toFixed(2))
+
+export function formatRate(row: RateRow, value: number): string {
+  switch (row.format) {
+    case 'toggle': return value !== 0 ? 'On' : 'Off'
+    case 'bonus':  return `+${trim((value - 1) * 100)}%`
+    case 'pct':    return value === row.gameDefault ? 'Game default' : `${trim(value * 100)}%`
+    default:       return `${trim(value)}×`
+  }
+}
+
+const round = (n: number) => Math.round(n * 1e6) / 1e6
+
+/** The value as the number box shows it: 2 for 2×, 50 for a +50% bonus, 8 for 8%. */
+export function toShown(row: RateRow, value: number): number {
+  if (row.format === 'bonus') return round((value - 1) * 100)
+  if (row.format === 'pct') return round(value * 100)
+  return value
+}
+
+/** The value for a number typed in the box, kept between the row's min and limit. */
+export function fromShown(row: RateRow, shown: number): number {
+  const value = row.format === 'bonus' ? shown / 100 + 1 : row.format === 'pct' ? shown / 100 : shown
+  return round(Math.min(row.limit, Math.max(row.min, value)))
+}
+
+export type RateBadge =
+  | { kind: 'stock' }
+  | { kind: 'yours' }
+  | { kind: 'setIn'; file: string }
+  | { kind: 'overriddenBy'; file: string }
+
+export interface RateState {
+  /** What the server uses now: the last base file that sets it, else the engine default 1. */
+  value: number
+  /** What it would be without the Server Rates file. */
+  below: number
+  badge: RateBadge
+  notes: string[]
+}
+
+const lastValue = (values: GlobalValue[], setting: string) =>
+  values.filter(v => v.setting === setting).at(-1)?.value
+
+/** Where a global's value comes from. Base files apply in load order and the last one wins. */
+export function resolveRate(tuning: GlobalTuning, row: RateRow): RateState {
+  const { setting } = row
+  const ownedAt = tuning.files.findIndex(f => f.file === SERVER_RATES_FILE)
+  const globalAt = tuning.files.findIndex(f => f.file === GLOBAL_FILE)
+  const globalSets = globalAt >= 0 && lastValue(tuning.files[globalAt].values, setting) !== undefined
+  let below = 1
+  let belowFile: string | null = null
+  let owned: number | undefined
+  let after: { file: string; value: number } | null = null
+  const noEffect: string[] = []
+
+  tuning.files.forEach((f, i) => {
+    const v = lastValue(f.values, setting)
+    if (v === undefined) return
+    if (i === ownedAt) owned = v
+    else if (i < ownedAt) { below = v; belowFile = f.file }
+    else after = { file: f.file, value: v }
+    if (globalSets && i < globalAt) {
+      noEffect.push(`${f.file} (${formatRate(row, v)}) is ignored. Global loads after it.`)
+    }
+  })
+
+  const last = after as { file: string; value: number } | null
+  const badge: RateBadge =
+    last ? { kind: 'overriddenBy', file: last.file }
+    : owned !== undefined ? { kind: 'yours' }
+    : belowFile !== null && belowFile !== GLOBAL_FILE ? { kind: 'setIn', file: belowFile }
+    : { kind: 'stock' }
+
+  return { value: last ? last.value : owned ?? below, below, badge, notes: noEffect }
+}
+
+const sameValue = (a: number, b: number) => Math.abs(a - b) < 1e-9
+
+/**
+ * The Server Rates file after saving `changes` (each with the value the setting would have
+ * without the file). A value equal to that is removed, anything else is upserted in place.
+ * Every other entry, including per-prototype ones, is kept as it was.
+ */
+export function planServerRatesWrite(
+  existing: TuningEntry[],
+  changes: { setting: string; value: number; below: number }[],
+): TuningEntry[] {
+  let out = existing
+  for (const { setting, value, below } of changes) {
+    const isIt = (e: TuningEntry) => e.prototype === '' && e.setting === setting
+    const at = out.findIndex(isIt)
+    out = out.filter((e, i) => !isIt(e) || i === at)
+    if (sameValue(value, below)) out = out.filter(e => !isIt(e))
+    else if (at >= 0) out[at] = { prototype: '', setting, value }
+    else out.push({ prototype: '', setting, value })
+  }
+  return out
+}
+
+export interface ReloadResult {
+  count: number
+  /** How many entries or files the server rejected while loading (its `Verify failed:` lines). */
+  rejected: number
+}
+
+/**
+ * The outcome of `!server reloadlivetuning` from the log lines printed after it was sent, or
+ * null while the load hasn't finished. The command prints nothing itself; the load ends with
+ * `Loaded N Live Tuning settings`, even when a file in it was skipped. A file that won't parse
+ * logs `Failed to deserialize` and then `Verify failed: Failed to parse <file>`, so the Verify
+ * lines alone cover both.
+ */
+export function reloadResult(lines: string[]): ReloadResult | null {
+  let rejected = 0
+  for (const line of lines) {
+    const loaded = /Loaded (\d+) Live Tuning settings/.exec(line)
+    if (loaded) return { count: Number(loaded[1]), rejected }
+    if (line.includes('Verify failed:')) rejected++
+  }
+  return null
+}

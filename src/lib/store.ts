@@ -1,12 +1,15 @@
 import { writable, derived, get } from 'svelte/store'
 import { invoke } from '@tauri-apps/api/core'
+import { listen } from '@tauri-apps/api/event'
+import { getCurrentWebview } from '@tauri-apps/api/webview'
+import { versionCaps } from './versionCaps'
 
 export type DataTab = 'events' | 'tuning' | 'store' | 'patches'
 export type Tab = 'launch' | 'server' | 'config' | 'data' | 'ops' | 'settings'
 export type LogLevel = 'all' | 'trace' | 'debug' | 'info' | 'ok' | 'warn' | 'err' | 'fatal'
 
 export const activeTab = writable<Tab>('launch')
-export type SettingsSection = 'client' | 'theme' | 'integrations' | 'about'
+export type SettingsSection = 'client' | 'display' | 'integrations' | 'about'
 export const settingsSection = writable<SettingsSection>('client')
 export const activeDataTab = writable<DataTab>('events')
 
@@ -56,10 +59,10 @@ export async function confirmLeave(): Promise<boolean> {
   const labels = Object.values(get(unsavedSources))
   if (labels.length === 0) return true
   const ok = await askConfirm({
-    title: 'Unsaved changes',
-    message: `You have unsaved changes in ${labels.join(', ')}. Leave and discard them?`,
+    title: 'Discard changes?',
+    message: `You have unsaved changes in ${labels.join(', ')}. Discard them?`,
     okLabel: 'Discard',
-    cancelLabel: 'Stay',
+    cancelLabel: 'Keep editing',
   })
   if (ok) unsavedSources.set({})
   return ok
@@ -78,6 +81,19 @@ export async function goDataTab(sub: DataTab) {
   activeDataTab.set(sub)
 }
 export const serverRunning = writable<boolean>(false)
+
+// Events saved since the running server started. The server reads Events and EventSchedule
+// only at startup, so both Events views show a restart notice until it starts again.
+export const eventsRestartPending = writable<boolean>(false)
+let eventsSawStop = false
+export function markEventsSaved() {
+  eventsRestartPending.set(true)
+  eventsSawStop = !get(serverRunning)
+}
+serverRunning.subscribe(running => {
+  if (!running) eventsSawStop = true
+  else if (eventsSawStop) eventsRestartPending.set(false)
+})
 // True once the server has finished starting and reads console commands (see serverEvents.ts).
 export const serverReady = writable<boolean>(false)
 serverRunning.subscribe(running => { if (!running) serverReady.set(false) })
@@ -117,7 +133,9 @@ export const overlayStatus = writable<OverlayStatus | null>(null)
 export const overlayInject = writable<{ ok: boolean; message: string } | null>(null)
 export const tuningFocusFile = writable<string | null>(null)
 export const schedulerNow = writable<Date | null>(null)
-export const eventTimezoneOffset = writable<number>(0)
+// The server's event clock is UTC + GlobalsPrototype.TimeZone, which the v52 game data sets to -10.
+// setSchedulerNow corrects it from the server log.
+export const eventTimezoneOffset = writable<number>(-10)
 
 
 let _uptimeTimer: ReturnType<typeof setInterval> | null = null
@@ -157,6 +175,21 @@ export function startGameRunningPoll() {
 
 export const shutdownCountdownSec = writable<number>(0)
 export const shutdownCountdownActive = writable<boolean>(false)
+// True from a Stop until the server exits. Lives here so a remount doesn't re-enable Stop.
+export const serverStopping = writable<boolean>(false)
+
+/** Asks the server to shut down now, once. */
+export async function stopServerNow() {
+  if (get(serverStopping)) return
+  serverStopping.set(true)
+  clearServerError()
+  try {
+    await invoke('stop_server')
+  } catch (e) {
+    setServerError(String(e))
+    serverStopping.set(false)
+  }
+}
 
 let _shutdownCountdownInterval: ReturnType<typeof setInterval> | null = null
 
@@ -170,7 +203,10 @@ export function clearShutdownCountdown() {
 // Auto-cancel if the server stops running for any other reason (crash, manual
 // stop elsewhere), even while ServerPanel isn't mounted to observe it itself.
 serverRunning.subscribe(running => {
-  if (!running) clearShutdownCountdown()
+  if (!running) {
+    clearShutdownCountdown()
+    serverStopping.set(false)
+  }
 })
 
 export function startShutdownCountdown(delayMinutes: number, broadcastMessage: string) {
@@ -192,12 +228,7 @@ export function startShutdownCountdown(delayMinutes: number, broadcastMessage: s
 
     if (remaining <= 0) {
       clearShutdownCountdown()
-      clearServerError()
-      try {
-        await invoke('stop_server')
-      } catch (e) {
-        setServerError(String(e))
-      }
+      await stopServerNow()
     }
   }, 1000)
 }
@@ -353,6 +384,7 @@ export interface LaunchOptions {
 export interface ShutdownConfig {
   delay_minutes: number
   broadcast_message: string
+  ask_before_close: boolean
 }
 
 export interface Server {
@@ -367,17 +399,41 @@ export interface Server {
 export interface AppConfig {
   game_exe: string
   server_exe: string
+  linked: LinkedInstall[]
+  active_linked_id: string
   active_server_id: string
   servers: Server[]
   theme: string
+  /** Whole-window zoom (1 = 100%). */
+  text_size: number
   launch_options: LaunchOptions
   shutdown: ShutdownConfig
   console_presets: string[]
   overlay?: { dir: string; auto_inject?: boolean }
-  tuning_tags: Record<string, string>
-  tuning_favourites: string[]
   backup_targets: string[]
-  store_html_output_dir: string
+  /** Data tab view: true = Advanced, false = Simple (fresh installs start in Simple). */
+  advanced_data: boolean
+}
+
+/** A client and server pair. The active one is copied into game_exe, server_exe and launch_options.no_steam. */
+export interface LinkedInstall {
+  id: string
+  name: string
+  /** '1.48', '1.52', '1.53', or '' when not detected and not picked. */
+  version: string
+  game_exe: string
+  server_exe: string
+  custom: boolean
+  no_steam: boolean
+}
+
+/** Settings edits the active copy, so the active entry follows it (as sync_active_linked does). */
+function syncActiveLinked(c: AppConfig): AppConfig {
+  return {
+    ...c,
+    linked: c.linked.map(l => l.id !== c.active_linked_id ? l
+      : { ...l, game_exe: c.game_exe, server_exe: c.server_exe, no_steam: c.launch_options.no_steam }),
+  }
 }
 
 const defaultLaunchOptions: LaunchOptions = {
@@ -398,26 +454,39 @@ const defaultLaunchOptions: LaunchOptions = {
 const defaultShutdownConfig: ShutdownConfig = {
   delay_minutes: 0,
   broadcast_message: 'Server is shutting down in {minutes} minute(s).',
+  ask_before_close: false,
 }
 
 export const appConfig = writable<AppConfig>({
   game_exe: '',
   server_exe: '',
+  linked: [],
+  active_linked_id: '',
   active_server_id: '',
   servers: [],
   theme: '',
+  text_size: 1,
   launch_options: defaultLaunchOptions,
   shutdown: defaultShutdownConfig,
   console_presets: ["!commands","!account userlevel","!server status","!server broadcast","!server shutdown","!server reloadcatalog","!server reloadlivetuning"],
-  tuning_tags: {},
-  tuning_favourites: [],
   backup_targets: ['Config.ini', 'ConfigOverride.ini', 'Data/Game/LiveTuning', 'Data/Account.db'],
-  store_html_output_dir: ''
+  // Until the real config loads, show the existing editors rather than flash Simple.
+  advanced_data: true,
 })
+
+export const activeLinked = derived(appConfig, c => c.linked.find(l => l.id === c.active_linked_id))
+
+/** What the active linked version supports. With none linked, today's 1.52 behaviour. */
+export const activeCaps = derived(activeLinked, l => versionCaps(l?.version ?? '', l?.custom ?? false))
 
 export const activeTheme = writable<string>('')
 
 export const activeServerId = writable<string>('')
+
+// The Launch page's Get Started guide, opened by hand. Kept here so a remount on a new server exe keeps it open.
+export const guideRequested = writable<boolean>(false)
+// Get Started's game data copy. Kept here so closing and reopening the guide can't start a second copy.
+export const gameDataCopying = writable<boolean>(false)
 
 // -- Tauri invoke helpers --
 
@@ -429,16 +498,30 @@ function applyTheme(theme: string) {
   }
 }
 
+function applyTextSize(size: number) {
+  // Zoom scales text and layout together, so nothing wraps that would not at 100%.
+  try { getCurrentWebview().setZoom(size).catch(() => {}) } catch { /* outside Tauri (tests) */ }
+}
+
 export async function loadConfig(): Promise<void> {
   const config = await invoke<AppConfig>('get_config')
   appConfig.set(config)
   activeTheme.set(config.theme ?? '')
   applyTheme(config.theme ?? '')
+  applyTextSize(config.text_size ?? 1)
   if (config.active_server_id) {
     activeServerId.set(config.active_server_id)
   } else if (config.servers.length > 0) {
     activeServerId.set(config.servers[0].id)
   }
+  // Not awaited, so callers don't wait on the dialog.
+  try {
+    Promise.resolve(invoke<string | null>('take_config_notice'))
+      .then(notice => {
+        if (notice) askConfirm({ title: "Settings file couldn't be read", message: notice, okLabel: 'OK', cancelLabel: 'Close' })
+      })
+      .catch(() => {})
+  } catch {}
 }
 
 export async function upsertServer(server: Server, password: string): Promise<void> {
@@ -448,88 +531,230 @@ export async function upsertServer(server: Server, password: string): Promise<vo
   if (isNew) await selectServer(server.id)
 }
 
-export async function deleteServer(serverId: string): Promise<void> {
-  const updated = await invoke<AppConfig>('delete_server', { serverId })
-  appConfig.set(updated)
-  activeServerId.update(id => {
-    if (id === serverId) {
-      return updated.servers[0]?.id ?? ''
-    }
-    return id
-  })
+/** Returns the error, or '' when deleted. */
+export async function deleteServer(serverId: string): Promise<string> {
+  try {
+    const updated = await invoke<AppConfig>('delete_server', { serverId })
+    appConfig.set(updated)
+    activeServerId.update(id => {
+      if (id === serverId) {
+        return updated.servers[0]?.id ?? ''
+      }
+      return id
+    })
+    return ''
+  } catch (e) {
+    return String(e)
+  }
 }
 
-export async function selectServer(serverId: string): Promise<void> {
+/** The config on disk after a failed save, or `fallback` if that can't be read either. */
+async function reloadAfterFailure(fallback: AppConfig): Promise<AppConfig> {
+  try {
+    return await invoke<AppConfig>('get_config')
+  } catch {
+    return fallback
+  }
+}
+
+/** Returns the error, or '' when saved. A failure puts back the saved selection. */
+export async function selectServer(serverId: string): Promise<string> {
+  const previousId = get(activeServerId)
+  const previous = get(appConfig)
   activeServerId.set(serverId)
-  await invoke('set_active_server', { serverId })
+  try {
+    await invoke('set_active_server', { serverId })
+    return ''
+  } catch (e) {
+    const disk = await reloadAfterFailure(previous)
+    appConfig.set(disk)
+    activeServerId.set(disk.active_server_id || previousId)
+    return String(e)
+  }
 }
 
 /// Optimistically applies `updater` to `appConfig`, then invokes `invokeName`.
-/// On failure, reverts `appConfig` to its pre-update value instead of
-/// leaving the store showing a value the backend never actually persisted.
+/// On failure, sets `appConfig` from the config on disk (not a snapshot, which
+/// could undo a later change that did save) and returns the error. '' means saved.
 async function updateConfigOptimistic(
   updater: (c: AppConfig) => AppConfig,
   invokeName: string,
   invokeArgs: Record<string, unknown>,
-): Promise<void> {
+): Promise<string> {
   const previous = get(appConfig)
   appConfig.update(updater)
   try {
-    await invoke(invokeName, invokeArgs)
-  } catch {
-    appConfig.set(previous)
+    const saved = await invoke<AppConfig | null>(invokeName, invokeArgs)
+    if (saved) appConfig.set(saved)
+    return ''
+  } catch (e) {
+    appConfig.set(await reloadAfterFailure(previous))
+    return String(e)
   }
 }
 
-export async function setGameExe(path: string): Promise<void> {
-  await updateConfigOptimistic(c => ({ ...c, game_exe: path }), 'set_game_exe', { path })
+// Not optimistic: a new server exe remounts the tab, which would drop the caller's error.
+// They return the saved config, since new exes detect the active entry's version again.
+async function saveExe(command: string, path: string): Promise<string> {
+  try {
+    appConfig.set(await invoke<AppConfig>(command, { path }))
+    return ''
+  } catch (e) {
+    return String(e)
+  }
 }
 
-export async function setServerExe(path: string): Promise<void> {
-  await updateConfigOptimistic(c => ({ ...c, server_exe: path }), 'set_server_exe', { path })
+export function setGameExe(path: string): Promise<string> {
+  return saveExe('set_game_exe', path)
 }
 
-export async function setTheme(theme: string): Promise<void> {
-  const previousTheme = get(activeTheme)
+export function setServerExe(path: string): Promise<string> {
+  return saveExe('set_server_exe', path)
+}
+
+// -- Nightly update (kept here so leaving the Ops tab doesn't lose it) --
+
+export interface UpdateProgress {
+  stage: 'backing_up' | 'downloading' | 'extracting' | 'installing' | 'restoring' | 'done'
+  pct: number
+  message?: string
+}
+
+export interface UpdateOutcome {
+  /** The server it ran against. The outcome only shows for that server. */
+  serverExe: string
+  error: string
+  /** Stock files the update shipped switched the other way, kept as the user had them. */
+  kept: { file: string; enabled: boolean; kept_as: string }[]
+  /** Files saved in the app that the update replaced. Their edited copies are in the backup. */
+  edited: string[]
+}
+
+export const updateRunning = writable<boolean>(false)
+export const updateProgress = writable<UpdateProgress | null>(null)
+export const updateOutcome = writable<UpdateOutcome | null>(null)
+
+/** Runs a nightly update on `serverExe`. Resolves once it ends, whatever the outcome. */
+export async function runServerUpdate(serverExe: string, backupTargets: string[]) {
+  if (get(updateRunning)) return
+  updateRunning.set(true)
+  updateOutcome.set(null)
+  updateProgress.set(null)
+  const unlisten = await listen<UpdateProgress>('update-progress', e => updateProgress.set(e.payload))
+  try {
+    const result = await invoke<{ kept: UpdateOutcome['kept']; edited: string[] }>('run_update', { serverExe, backupTargets })
+    updateOutcome.set({ serverExe, error: '', ...result })
+  } catch (e) {
+    updateOutcome.set({ serverExe, error: String(e), kept: [], edited: [] })
+  } finally {
+    unlisten()
+    updateProgress.set(null)
+    updateRunning.set(false)
+  }
+}
+
+let closing = false
+
+/** Answers the window's close button: unsaved edits, a running update and the server come first. */
+export async function handleCloseRequest(id: number) {
+  invoke('close_ack', { id }).catch(() => {})
+  if (closing) return
+  closing = true
+  let exiting = false
+  try {
+    if (get(updateRunning)) {
+      await askConfirm({ title: 'Update running', message: 'Close MH Multiverse after the update finishes.', okLabel: '', cancelLabel: 'OK' })
+      return
+    }
+    if (!(await confirmLeave())) return
+    if (get(serverRunning) && get(appConfig).shutdown.ask_before_close) {
+      const ok = await askConfirm({
+        title: 'Stop the server?',
+        message: 'The server is running. Closing stops it and saves player progress first.',
+        okLabel: 'Stop and close',
+        cancelLabel: 'Cancel',
+      })
+      if (!ok) return
+    }
+    await invoke('exit_app')
+    exiting = true
+    if (get(serverRunning)) serverStopping.set(true)
+  } catch (e) {
+    setServerError(String(e))
+  } finally {
+    if (!exiting) closing = false
+  }
+}
+
+/** Why the active version can't change right now, or null when it can. */
+export const switchBlocked = derived([serverRunning, gameRunning, updateRunning], ([server, game, update]) =>
+  update ? 'Wait for the update to finish'
+  : server || game ? 'Stop the server and the game first'
+  : null)
+
+/** Switching is refused while the server, the game or an update runs. Throws the reason.
+ *  Open editors hold the old version's data, so unsaved edits are confirmed first. */
+export async function activateLinked(id: string): Promise<void> {
+  if (id === get(appConfig).active_linked_id) return
+  const blocked = get(switchBlocked)
+  if (blocked) throw blocked
+  if (!(await confirmLeave())) return
+  appConfig.set(await invoke<AppConfig>('activate_linked', { id }))
+}
+
+export async function upsertLinked(install: LinkedInstall): Promise<void> {
+  appConfig.set(await invoke<AppConfig>('upsert_linked', { install }))
+}
+
+export async function deleteLinked(id: string): Promise<void> {
+  appConfig.set(await invoke<AppConfig>('delete_linked', { id }))
+}
+
+export async function setTheme(theme: string): Promise<string> {
   const previous = get(appConfig)
   activeTheme.set(theme)
   applyTheme(theme)
   appConfig.update(c => ({ ...c, theme }))
   try {
     await invoke('set_theme', { theme })
-  } catch {
-    activeTheme.set(previousTheme)
-    applyTheme(previousTheme)
-    appConfig.set(previous)
+    return ''
+  } catch (e) {
+    const disk = await reloadAfterFailure(previous)
+    appConfig.set(disk)
+    activeTheme.set(disk.theme ?? '')
+    applyTheme(disk.theme ?? '')
+    return String(e)
   }
 }
 
-export async function setLaunchOptions(options: LaunchOptions): Promise<void> {
-  await updateConfigOptimistic(c => ({ ...c, launch_options: options }), 'set_launch_options', { options })
+export async function setTextSize(size: number): Promise<string> {
+  applyTextSize(size)
+  const error = await updateConfigOptimistic(c => ({ ...c, text_size: size }), 'set_text_size', { size })
+  // A failed save reloaded the config, so this puts its zoom back.
+  applyTextSize(get(appConfig).text_size)
+  return error
 }
 
-export async function setShutdownConfig(shutdown: ShutdownConfig): Promise<void> {
-  await updateConfigOptimistic(c => ({ ...c, shutdown }), 'set_shutdown_config', { shutdown })
+export function setLaunchOptions(options: LaunchOptions): Promise<string> {
+  return updateConfigOptimistic(c => syncActiveLinked({ ...c, launch_options: options }), 'set_launch_options', { options })
 }
 
-export async function setTuningTags(tags: Record<string, string>): Promise<void> {
-  await updateConfigOptimistic(c => ({ ...c, tuning_tags: tags }), 'set_tuning_tags', { tags })
+export function setShutdownConfig(shutdown: ShutdownConfig): Promise<string> {
+  return updateConfigOptimistic(c => ({ ...c, shutdown }), 'set_shutdown_config', { shutdown })
 }
 
-export async function setTuningFavourites(favourites: string[]): Promise<void> {
-  await updateConfigOptimistic(c => ({ ...c, tuning_favourites: favourites }), 'set_tuning_favourites', { favourites })
+export function setBackupTargets(targets: string[]): Promise<string> {
+  return updateConfigOptimistic(c => ({ ...c, backup_targets: targets }), 'set_backup_targets', { targets })
 }
 
-export async function setBackupTargets(targets: string[]): Promise<void> {
-  await updateConfigOptimistic(c => ({ ...c, backup_targets: targets }), 'set_backup_targets', { targets })
+export function setConsolePresets(presets: string[]): Promise<string> {
+  return updateConfigOptimistic(c => ({ ...c, console_presets: presets }), 'set_console_presets', { presets })
 }
 
-export async function setStoreHtmlOutputDir(dir: string): Promise<void> {
-  await updateConfigOptimistic(c => ({ ...c, store_html_output_dir: dir }), 'set_store_html_output_dir', { dir })
-}
-
-export async function setConsolePresets(presets: string[]): Promise<void> {
-  await updateConfigOptimistic(c => ({ ...c, console_presets: presets }), 'set_console_presets', { presets })
+export async function setAdvancedData(advanced: boolean): Promise<string> {
+  // Switching view unmounts the open editor, so it asks like a tab change.
+  if (!(await confirmLeave())) return ''
+  return updateConfigOptimistic(c => ({ ...c, advanced_data: advanced }), 'set_advanced_data', { advanced })
 }
 
 export function setSchedulerNow(dt: Date) {
