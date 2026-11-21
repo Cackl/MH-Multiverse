@@ -1,6 +1,6 @@
-//! Third-party overlay integration. Nothing here runs overlay executables: the
-//! user links a folder and trusts it (TOFU), and the DLL is injected only if
-//! the folder still matches the trusted hashes at the moment of injection.
+//! Third-party overlay integration. The user links a folder and trusts it (TOFU).
+//! The only overlay executable run is its injector, MhInject.exe, and only while
+//! the folder still matches the trusted hashes.
 
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -23,13 +23,21 @@ const LOOT_CONFIG: &str = "MarvelHeroesOmega.LootFilter/loot-filter-config.json"
 /// Stands in for the hash of a symlink or subfolder found inside a code folder.
 const UNHASHABLE: &str = "!not-a-regular-file";
 
-/// Code and static assets the hook loads. Everything else in the overlay
-/// folder (legacy exes, updater, flags, panel layouts) is never hashed or copied.
+/// The overlay's own injector, run to load the hook.
+const INJECTOR: &str = "MhInject.exe";
+
+/// Code and static assets the hook loads, plus the injector and the .NET files it runs from.
+/// Everything else in the overlay folder (its launcher, updater, flags, panel layouts) is never hashed.
 const CODE_FILES: &[&str] = &[
     DLL_NAME,
     "MhClientHook.terminals.bin",
     "MhClientHook.enum-names.bin",
     "LootFilter/loot-filter-config.default.json",
+    INJECTOR,
+    "MhInject.dll",
+    "MhInject.deps.json",
+    "MhInject.runtimeconfig.json",
+    "MarvelHeroes.Injection.Core.dll",
 ];
 const CODE_DIRS: &[&str] = &[
     "MhClientHook.dps-portraits",
@@ -252,6 +260,8 @@ pub fn overlay_set_omega_gear(app: tauri::AppHandle, enabled: bool) -> Result<Ov
 struct InjectPayload {
     ok: bool,
     message: String,
+    /// Set off by Launch (Inject on Launch), not Inject now. Only these show on the Launch page.
+    on_launch: bool,
 }
 
 /// Called right after the game is spawned. When injection is enabled, a background
@@ -308,9 +318,9 @@ fn run_inject(app: &tauri::AppHandle, cfg: OverlayConfig, sips: Vec<PathBuf>, ga
         let payload = match result {
             Ok(()) => {
                 pipe::spawn(app.clone(), PathBuf::from(&cfg.dir), sips, alive);
-                InjectPayload { ok: true, message: "Overlay injected.".into() }
+                InjectPayload { ok: true, message: "Overlay injected.".into(), on_launch: fresh_launch }
             }
-            Err(m) => InjectPayload { ok: false, message: m },
+            Err(m) => InjectPayload { ok: false, message: m, on_launch: fresh_launch },
         };
         let _ = app.emit("overlay-inject", payload);
     });
@@ -368,18 +378,24 @@ fn inject_into(cfg: &OverlayConfig, pid: u32, fresh_launch: bool, mut alive: imp
     // '0' on a fresh launch so the hook arms its loading gate (a stale '1' would skip it)
     write_flag(&dir, "MhClientHook.skip-boot-loading-gate.flag", !fresh_launch)?;
     let dll = dir.join(DLL_NAME);
+    let injector = dir.join(INJECTOR);
+    if !is_plain_file(&injector) {
+        return Err(format!("{INJECTOR} not found in the overlay folder."));
+    }
 
-    let _ = inject::wait_input_idle(pid);
+    inject::wait_input_idle(pid);
     for attempt in 1..=5 {
         if !alive() {
             return Err("The game exited before the overlay could be injected.".into());
         }
-        // verify right before loading; anything changed since Trust is refused
+        // verify right before running; anything changed since Trust is refused
         if status_of(cfg).state != "trusted" {
             return Err("The overlay files changed since you trusted them, so they weren't injected.".into());
         }
-        match inject::inject(pid, &dll) {
-            Ok(()) => return Ok(()),
+        match inject::inject(pid, &injector, &dll) {
+            // MhInject picks the game by name: confirm it landed in ours
+            Ok(()) if inject::wait_module(pid, DLL_NAME, 2) => return Ok(()),
+            Ok(()) => return Err("The overlay injector did not load the overlay into this game.".into()),
             // the remote LoadLibrary may still finish after our wait: give it a moment
             // before retrying (or giving up) and accept it if the module shows up
             Err(InjectError::Timeout) => {

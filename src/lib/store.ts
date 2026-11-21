@@ -130,7 +130,7 @@ export function appendOverlayLog(lines: Omit<OverlayLine, 'id'>[]) {
 }
 /** Latest overlay status seen by the UI (shared so the Launch page can show the inject indicator). */
 export const overlayStatus = writable<OverlayStatus | null>(null)
-export const overlayInject = writable<{ ok: boolean; message: string } | null>(null)
+export const overlayInject = writable<{ ok: boolean; message: string; on_launch: boolean } | null>(null)
 export const tuningFocusFile = writable<string | null>(null)
 export const schedulerNow = writable<Date | null>(null)
 // The server's event clock is UTC + GlobalsPrototype.TimeZone, which the v52 game data sets to -10.

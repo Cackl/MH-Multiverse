@@ -182,7 +182,7 @@ export async function initServerEventBridge(): Promise<void> {
     apacheStartError.set('Apache stopped unexpectedly. See the server log.')
   })
 
-  bridge.unlistenOverlay = await listen<{ ok: boolean; message: string }>('overlay-inject', (event) => {
+  bridge.unlistenOverlay = await listen<{ ok: boolean; message: string; on_launch: boolean }>('overlay-inject', (event) => {
     overlayInject.set(event.payload)
   })
 

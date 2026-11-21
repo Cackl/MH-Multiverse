@@ -18,7 +18,7 @@
   $: trustLabel = state === 'trusted' ? 'Untrust' : state === 'changed' ? 'Re-trust' : 'Trust'
 
   const HOW_TRUST_WORKS =
-    'Multiverse never runs the overlay programs. Trust records a hash of the overlay files, which are ' +
+    'Multiverse runs only the overlay injector, MhInject.exe, never its launcher or updater. Trust records a hash of the overlay files, which are ' +
     're-checked right before the overlay is loaded into the game. If anything changed, it is not loaded. ' +
     'The hash only detects changes: trusting the overlay is your decision.'
   const STATE_HELP: Record<OverlayStatus['state'], string> = {
