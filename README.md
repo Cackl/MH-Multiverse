@@ -15,50 +15,38 @@ The app is currently Windows-only and communicates with the server via stdin/std
 ## Features
 
 ### Game Launching
-- Multi-server profile management with encrypted, OS-keychain-backed credentials and optional auto-login (note: the game client writes the password in plain text to its own Launch.log). Local profiles support both patched and unpatched clients
-- Steam Mode for Steam copies (`-steam -nosolidstate`), otherwise standalone (`-robocopy -nosteam`)
-- Launch options: skip startup movies/motion comics, no sound, custom resolution, client log, 32-bit client, patched client, plus an Additional Arguments field
-- A Get Started checklist on the Launch page that walks through linking the game and MHServerEmu and adding a server
-- Add Server with Remote, Local and From Backup tabs. On a local server that uses SQLite persistence, saving a profile creates the account on the server in the same step
-- Account import and restore from `!account download` JSON backups, for servers that store data in either SQLite or the single JSON file
+- Multi-server profile management with optional auto-login
+- Steam or standalone launch, plus common launch options and your own arguments
+- A Get Started checklist on the Launch page that walks through linking the game and MHServerEmu and adding your first server
+- Link several game versions (1.48, 1.52, 1.53 and Custom server builds) and switch between them from the title bar
+- Account import and restore from in-game `!account download` backups
 
 ### Local Server Management
-- Start/stop MHServerEmu with live log streaming and an interactive, autocomplete-backed command console
-- View logged-in players with moderation shortcuts (user level, kick, ban, whitelist)
-- Apache start/stop independent of MHServerEmu to allow for the use of alternate web servers
+- Start and stop MHServerEmu with a live console and command autocomplete
+- Configure shutdown delays, Apache control, and a player list with kick, ban, whitelist and user level
 
-### Server Configuration (INI Editor)
+### Server Config
 - Visual editor for `Config.ini` / `ConfigOverride.ini` with grouped sections, tooltips, and type-appropriate controls
-- Diff-only saving (only non-default values are written) with per-section reset
 
-### Events & Live Tuning Editor
-- Scan, create, edit, and toggle Events and `LiveTuningData*.json` files, with settings autocomplete and prototype path search
-- Attach tuning files to event schedules to customise event rotations
-- Tag-based organisation (Core, Event, Custom) with favourites
+### Data Tab
+- Simple views for Events, Server Rates (Live Tuning), the Store and Patches with Game Tweaks
+- Advanced editors for Events, Live Tuning, Store and Data Patching
+  - MH Multiverse reads `Calligraphy.sip` to get the definitions for items, powers, regions, and other game data - so searches in these editors can find things by name instead of numeric IDs
+- Automatic `.bak` snapshots before every write
 
-### Store Catalog Editor
-- Load, create, edit, and delete `Catalog*.json` entries, with type/modifier assignment matching MHServerEmu's catalog system
-- Non-destructive editing to `*MODIFIED.json` sidecars, with automatic `.bak` snapshots before every write
-- Prototype item picker with display name resolution, and bundle HTML generation for the in-game store
+### Updates and Backups
+- One-click MHServerEmu nightly updates with backup and restore, and in-app updates for MH Multiverse
+- On-demand manual backups of the server's config and data
 
-### Data Patching Editor
-- Scan, create, edit, and toggle `PatchData*.json` files, enabled/disabled via moves to `Patches/` / `Patches/Off/`
-- Per-entry field path, value type, and value editing, with matching prototype and value-type pickers
+### Settings and Integrations
+- Eight themes, and adjustable text size/zoom
+- MarvelHeroes Overlay: link and trust your copy, optionally inject on launch, toggle its flags, and view the loot-filter log from within Multiverse
+- Import existing profiles from Bifrost and the Overlay
 
-### Server Updates & Backups
-- One-click updates from MHServerEmu nightly builds, with automatic backup before and restore of modified files after
-- Configurable backup targets, plus manual backup creation, restore, and deletion with manifest tracking
-
-### Application Settings
-- Game/server executable path configuration with file browser, and multiple app themes
-
-### Integrations
-- MarvelHeroes Overlay: link and trust your copy, optionally inject on launch, toggle its flags, and view the loot-filter log
-- Import Server Profiles from Bifrost and the overlay launcher, with a preview before saving
-- `Calligraphy.sip`: Reads the game's data file (`Calligraphy.sip`) to know the definitions for items, powers, regions, and other objects - powering searches in Live Tuning, Data Patching and Store Catalog editors to find things by name instead of numeric IDs
+---
 
 ![Theme Showcase](./docs/images/theme-showcase.png)
-![Server Showcase](./docs/images/server-showcase.png)
+![Server Showcase](./docs/images/readme-four.png)
 
 ---
 
@@ -68,7 +56,7 @@ The app is currently Windows-only and communicates with the server via stdin/std
 
 **Running the release (`.exe` / `.msi`)**
 - Windows 10 or 11
-- [Microsoft Edge WebView2 runtime](https://developer.microsoft.com/microsoft-edge/webview2/) (preinstalled on Windows 11 and most up-to-date Windows 10 installs; the `.msi`/installer will fetch it if missing)
+- [Microsoft Edge WebView2 runtime](https://developer.microsoft.com/microsoft-edge/webview2/) (preinstalled on Windows 11 and most up-to-date Windows 10 installs. The `.msi`/installer will fetch it if missing)
 
 **Building from source**
 - Everything above
@@ -116,9 +104,23 @@ Neither method removes your settings (like server lists). To fully clean up, als
 
 ---
 
+## Good to Know
+- While MH Multiverse encrypts has OS-keychain-backed encryption of passwords, with auto-login on the game client still writes your password in plain text to its own Launch.log
+- 1.48 and 1.53 clients always launch standalone, and MH Multiverse only injects the Overlay to 1.52 clients
+- Custom server builds don't get nightly updates
+- A backup target always wins over the nightly's copy, so upstream fixes to those files don't arrive until you remove the target
+
+---
+
 ## Planned Updates
 
-Next up for 1.7.0: continuing the streamlining and abstraction principles from the Get Started checklist taken to the Data tab. I'm aiming to make configuring Events, Live Tuning, Store Catalogs, and Data Patching accessible to more users.
+Some items I'm looking at next:
+- Friendlier editors for the remaining advanced Data settings (patch authoring, event rules)
+- More plain-language help for MHServerEmu settings as their behaviour gets documented
+- A safer auto-login or other strategies that keep passwords out of the game client's log
+- Further fixes and polish
+
+**Not yet planned: Linux support.** MH Multiverse depends on Windows-specific process handling (Job Objects, DLL injection for the Overlay integration) and I'm not yet set up to test it properly, so it isn't planned in the near term. If that changes, it'll be announced here.
 
 ---
 
