@@ -2,6 +2,56 @@
 ---
 <br>
 
+# Version 1.7.0 Release
+
+## What's Changed
+
+### Linked versions
+- Link 1.48, 1.52 and 1.53 clients and servers in Settings and switch from the new dropdown in the title bar. The switch is locked while the server, game or an update runs, and asks about unsaved edits first.
+- Get Started shows whether the client and server versions match and can copy missing game data (`Calligraphy.sip`, `mu_cdata.sip`) from the client.
+- Each version shows only the settings it supports. 1.48 and 1.53 clients always launch without Steam and never load the Overlay.
+- Nightly Update picks the build for the server's version, using upstream's new per-version builds.
+
+### Data tab Simple views
+- Each Data tab opens in a Simple view. Turn on Advanced for the full editors.
+- Server Rates (Live Tuning): sliders for XP, loot, vendors and rules.
+- Events: set each event to On schedule, Off or Always on, or make your own.
+- Store: change prices, hide items, run sales and add items.
+- Patches: a switch per patch pack, plus Multiverse tweaks for hero cooldowns, and summon caps (experimental).
+- Every prototype picker shows names from the game client, with ranked search.
+
+### Advanced editors
+- Live Tuning: on/off switches in a grouped sidebar replace the card grid, files open in the page, and settings explain themselves on hover.
+- Store: on/off switches per catalog file, New catalog file, Revert to stock and Reload Store.
+- Patches: a rebuilt New Entry editor with Start from recipes, and names for prototype paths and IDs.
+- Events now match the other Data tabs.
+- Stock files you switched on or off stay that way through server updates.
+
+### Config
+- Regrouped pages, an All settings page, descriptions from Config.ini and a reset per setting.
+- Reset to Defaults resets only the open page and can be reverted.
+- Ports, IPs and numbers the server can't read are refused.
+
+### Server and updates
+- Closing the window stops the server gracefully. Stop waits for the server to exit and shows a fatal error instead of a clean stop.
+- Apache failures and exits show on the Rail.
+- Updates make a backup first, put the server's files back if an install fails, and can be cancelled. Backups and restores are refused while the server runs.
+- The player card shows the server's reply and reads bans correctly.
+
+### Display and themes
+- New High Contrast theme. HC Blue is now Slate.
+- The Theme page is now Display, and has a new text size setting and theme previews.
+- Addressed some Light theme colours.
+
+### Bug fixes
+- Editors won't save over files they couldn't read, and keep edits unsaved when a save fails.
+- Values the server would reject or skip are caught on save, such as huge event durations, negative store prices and out-of-range tuning or patch values.
+- A second launch is refused while the game runs, and the Overlay is rechecked before each launch.
+- Adding an account from a backup checks the server's email, player name and password rules.
+
+<br>
+
+---
 # Version 1.6.1 Release
 
 ## What's Changed
