@@ -285,6 +285,8 @@ pub fn import_profiles(
             use_https: c.use_https,
             password_enc,
             password_nonce,
+            linked_id: String::new(),
+            start_server: false,
         });
         added += 1;
     }

@@ -42,6 +42,9 @@ import {
   eventsRestartPending,
   markEventsSaved,
   gameRunning,
+  startServer,
+  apacheRunning,
+  apacheStartError,
   type AppConfig,
   type Server,
 } from '../../src/lib/store'
@@ -385,5 +388,36 @@ describe('runServerUpdate', () => {
     invokeMock.mockRejectedValueOnce('Update cancelled.')
     await runServerUpdate('C:/a/MHServerEmu.exe', [])
     expect(get(updateOutcome)?.error).toBe('Update cancelled.')
+  })
+})
+
+describe('startServer', () => {
+  const cases = [
+    { name: 'starts Apache after the server', auto: true, apache: false, serverFails: false, startsApache: true },
+    { name: 'leaves Apache alone when the setting is off', auto: false, apache: false, serverFails: false, startsApache: false },
+    { name: 'skips Apache that already runs', auto: true, apache: true, serverFails: false, startsApache: false },
+    { name: 'skips Apache when the server fails to start', auto: true, apache: false, serverFails: true, startsApache: false },
+  ]
+  for (const c of cases) {
+    it(c.name, async () => {
+      appConfig.update(cfg => ({ ...cfg, server_exe: 'S.exe', apache_auto_start: c.auto }))
+      apacheRunning.set(c.apache)
+      invokeMock.mockReset()
+      invokeMock.mockImplementation(async (cmd: string) => {
+        if (cmd === 'start_server' && c.serverFails) throw 'no exe'
+        if (cmd === 'apache_is_running') return true
+      })
+      await startServer()
+      expect(invokeMock.mock.calls.some(([cmd]) => cmd === 'start_apache')).toBe(c.startsApache)
+    })
+  }
+
+  it('keeps an Apache failure on its own dot', async () => {
+    appConfig.update(cfg => ({ ...cfg, server_exe: 'S.exe', apache_auto_start: true }))
+    apacheRunning.set(false)
+    invokeMock.mockReset()
+    invokeMock.mockImplementation(async (cmd: string) => { if (cmd === 'start_apache') throw 'port 80 in use' })
+    await startServer()
+    expect(get(apacheStartError)).toBe('port 80 in use')
   })
 })

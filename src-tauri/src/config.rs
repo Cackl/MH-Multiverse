@@ -127,6 +127,12 @@ pub struct Server {
     pub password_enc: String,
     #[serde(default)]
     pub password_nonce: String,
+    /// The linked version this profile plays on. Empty follows the active version.
+    #[serde(default)]
+    pub linked_id: String,
+    /// Local profiles: Launch starts the server first when it isn't running.
+    #[serde(default)]
+    pub start_server: bool,
 }
 
 /// A client and server pair the user can switch to. The active one is copied into
@@ -180,6 +186,10 @@ pub struct AppConfig {
     /// (`AppConfig::default()`) starts in Simple.
     #[serde(default = "default_true")]
     pub advanced_data: bool,
+    /// Starting the server also starts the bundled Apache. On by default, also for configs
+    /// from before the field, since a local login needs Apache for SiteConfig.
+    #[serde(default = "default_true")]
+    pub apache_auto_start: bool,
     /// The app version that last loaded this file. A different one makes a .bak first.
     #[serde(default)]
     pub app_version: String,
@@ -202,6 +212,7 @@ impl Default for AppConfig {
             backup_targets: default_backup_targets(),
             overlay: OverlayConfig::default(),
             advanced_data: false,
+            apache_auto_start: true,
             app_version: String::new(),
         }
     }
@@ -456,6 +467,9 @@ fn delete_linked_in(config: &mut AppConfig, id: &str) -> Result<(), String> {
         return Err("Switch to another version before removing this one".into());
     }
     config.linked.retain(|l| l.id != id);
+    for server in config.servers.iter_mut().filter(|s| s.linked_id == id) {
+        server.linked_id.clear();
+    }
     Ok(())
 }
 
@@ -657,6 +671,13 @@ pub fn set_shutdown_config(app: tauri::AppHandle, shutdown: ShutdownConfig) -> R
 pub fn set_backup_targets(app: tauri::AppHandle, targets: Vec<String>) -> Result<(), String> {
     let mut config = load_config(&app);
     config.backup_targets = targets;
+    save_config(&app, &config)
+}
+
+#[tauri::command]
+pub fn set_apache_auto_start(app: tauri::AppHandle, on: bool) -> Result<(), String> {
+    let mut config = load_config(&app);
+    config.apache_auto_start = on;
     save_config(&app, &config)
 }
 

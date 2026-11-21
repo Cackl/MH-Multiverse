@@ -64,6 +64,15 @@ fn fresh_install_starts_simple_and_the_choice_survives_a_save() {
     }
 }
 
+#[test]
+fn apache_auto_start_is_on_for_old_and_new_configs_and_off_survives_a_save() {
+    let old: AppConfig = serde_json::from_str(CONFIG_1_6_1).unwrap();
+    assert!(old.apache_auto_start);
+    assert!(AppConfig::default().apache_auto_start);
+    let saved = serde_json::to_string(&AppConfig { apache_auto_start: false, ..AppConfig::default() }).unwrap();
+    assert!(!serde_json::from_str::<AppConfig>(&saved).unwrap().apache_auto_start);
+}
+
 fn install(id: &str, game_exe: &str, server_exe: &str, no_steam: bool) -> LinkedInstall {
     LinkedInstall {
         id: id.into(), name: id.into(), version: "1.48".into(),
@@ -180,6 +189,21 @@ fn the_active_entry_cannot_be_removed() {
     assert!(delete_linked_in(&mut config, "a").is_err());
     delete_linked_in(&mut config, "b").unwrap();
     assert_eq!(config.linked.len(), 1);
+}
+
+#[test]
+fn removing_a_version_unpairs_its_profiles() {
+    let mut config = AppConfig::default();
+    config.linked = vec![install("a", "A.exe", "", true), install("b", "B.exe", "", true)];
+    activate_linked_in(&mut config, "a").unwrap();
+    let profile = |id: &str, linked_id: &str| Server {
+        id: id.into(), name: id.into(), host: String::new(), email: String::new(), is_local: true, use_https: false,
+        password_enc: String::new(), password_nonce: String::new(), linked_id: linked_id.into(), start_server: false,
+    };
+    config.servers = vec![profile("p1", "a"), profile("p2", "b")];
+    delete_linked_in(&mut config, "b").unwrap();
+    let paired: Vec<&str> = config.servers.iter().map(|s| s.linked_id.as_str()).collect();
+    assert_eq!(paired, ["a", ""]);
 }
 
 #[test]
