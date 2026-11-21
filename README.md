@@ -43,8 +43,10 @@ The app is currently Windows-only and communicates with the server via stdin/std
 - MarvelHeroes Overlay: link and trust your copy, optionally inject on launch, toggle its flags, and view the loot-filter log from within Multiverse
 - Import existing profiles from Bifrost and the Overlay
 
+---
+
 ![Theme Showcase](./docs/images/theme-showcase.png)
-![Server Showcase](./docs/images/server-showcase.png)
+![Server Showcase](./docs/images/readme-four.png)
 
 ---
 
