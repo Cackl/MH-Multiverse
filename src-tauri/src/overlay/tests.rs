@@ -17,6 +17,7 @@ fn fixture(name: &str) -> PathBuf {
     std::fs::write(d.join("MhClientHook.dps-enabled.flag"), b"1").unwrap();
     std::fs::write(d.join("MhClientHook.dps-panel.json"), b"{}").unwrap();
     std::fs::write(d.join("MhLauncher.exe"), b"exe").unwrap();
+    std::fs::write(d.join("MhInject.exe"), b"inject").unwrap();
     d
 }
 
@@ -33,7 +34,8 @@ fn hash_is_deterministic_and_ignores_mutable_files() {
     std::fs::write(d.join("MhClientHook.dps-panel.json"), b"{\"x\":1}").unwrap();
     std::fs::write(d.join("MhLauncher.exe"), b"other").unwrap();
     assert_eq!(a, record(&d));
-    assert_eq!(a.files.len(), 3);
+    assert_eq!(a.files.len(), 4);
+    assert!(a.files.contains_key("MhInject.exe"));
 }
 
 #[test]

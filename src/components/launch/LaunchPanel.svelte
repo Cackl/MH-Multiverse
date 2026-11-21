@@ -34,6 +34,8 @@
     ? $appConfig.linked.find(l => l.id === activeServer!.linked_id) ?? null
     : null
   $: launchExe = switchTo ? switchTo.game_exe : $appConfig.game_exe
+  // A failed Inject on Launch, shown on the Overlay chip until the game closes. Inject now results stay on the Overlay card.
+  $: launchInjectError = $gameRunning && $overlayInject?.on_launch && !$overlayInject.ok ? $overlayInject.message : ''
 
   // The guide shows on its own with no servers; the sidebar button brings it back afterwards.
   $: showGuide = $appConfig.servers.length === 0 || $guideRequested
@@ -291,8 +293,6 @@
       <div class="launch-bar">
         {#if $launchError}
           <div class="launch-error">{$launchError}</div>
-        {:else if $overlayInject && !$overlayInject.ok}
-          <div class="launch-error">{$overlayInject.message}</div>
         {/if}
         {#if !activeServer.is_local && !isLocalhost(activeServer.host)}
           <button class="btn btn-secondary" on:click={openHome}>Home</button>
@@ -306,9 +306,11 @@
         {#if $overlayStatus?.auto_inject}
           <button
             class="overlay-note"
-            class:warn={$overlayStatus.state !== 'trusted'}
+            class:warn={$overlayStatus.state !== 'trusted' || !!launchInjectError}
             on:click={openOverlaySettings}
-            use:tip={$overlayStatus.state === 'trusted'
+            use:tip={launchInjectError
+              ? `The overlay was not injected. ${launchInjectError}`
+              : $overlayStatus.state === 'trusted'
               ? 'The overlay will be injected when the game launches.'
               : 'Overlay injection is on, but the overlay files changed or are missing, so it will not be injected. Re-trust it in Settings → Integrations.'}
           ><span class="overlay-dot"></span>Overlay</button>

@@ -1,28 +1,20 @@
-//! Classic LoadLibraryW remote-thread injection, by PID, with the minimum
-//! process rights. Mirrors what the overlay's own launcher does.
+//! Loads the hook by running the overlay's own injector, MhInject.exe. Multiverse never writes
+//! into the game's memory itself: antivirus flags a launcher that does (Defender quarantined 1.7.1).
 
-use std::ffi::c_void;
-use std::os::windows::ffi::OsStrExt;
+use std::os::windows::process::CommandExt;
 use std::path::Path;
-use windows::core::{s, w};
-use windows::Win32::Foundation::{CloseHandle, HANDLE, WAIT_OBJECT_0};
-use windows::Win32::System::Diagnostics::Debug::WriteProcessMemory;
+use std::process::{Command, Stdio};
+use windows::Win32::Foundation::{CloseHandle, HANDLE};
 use windows::Win32::System::Diagnostics::ToolHelp::{
-    CreateToolhelp32Snapshot, Module32FirstW, Module32NextW, MODULEENTRY32W, TH32CS_SNAPMODULE,
-    TH32CS_SNAPMODULE32,
+    CreateToolhelp32Snapshot, Module32FirstW, Module32NextW, Process32FirstW, Process32NextW, MODULEENTRY32W,
+    PROCESSENTRY32W, TH32CS_SNAPMODULE, TH32CS_SNAPMODULE32, TH32CS_SNAPPROCESS,
 };
-use windows::Win32::System::LibraryLoader::{GetModuleHandleW, GetProcAddress};
-use windows::Win32::System::Memory::{
-    VirtualAllocEx, VirtualFreeEx, MEM_COMMIT, MEM_RELEASE, MEM_RESERVE, PAGE_READWRITE,
-};
-use windows::Win32::System::Threading::{
-    CreateRemoteThread, GetExitCodeThread, OpenProcess, WaitForInputIdle, WaitForSingleObject,
-    PROCESS_CREATE_THREAD, PROCESS_QUERY_INFORMATION, PROCESS_SYNCHRONIZE, PROCESS_VM_OPERATION,
-    PROCESS_VM_WRITE,
-};
+use windows::Win32::System::Threading::{OpenProcess, WaitForInputIdle, PROCESS_QUERY_INFORMATION, PROCESS_SYNCHRONIZE};
 
-const LOAD_WAIT_MS: u32 = 5000;
 const IDLE_WAIT_MS: u32 = 15000;
+const CREATE_NO_WINDOW: u32 = 0x08000000;
+/// Longest injector message shown in the app.
+const MAX_MESSAGE: usize = 300;
 
 #[derive(Debug)]
 pub enum InjectError {
@@ -38,22 +30,17 @@ impl Drop for Handle {
     }
 }
 
-fn open(pid: u32) -> Result<Handle, InjectError> {
-    let rights = PROCESS_CREATE_THREAD
-        | PROCESS_QUERY_INFORMATION
-        | PROCESS_VM_OPERATION
-        | PROCESS_VM_WRITE
-        | PROCESS_SYNCHRONIZE;
-    unsafe { OpenProcess(rights, false, pid) }
-        .map(Handle)
-        .map_err(|e| InjectError::Failed(format!("OpenProcess failed: {e}")))
+fn wide_str(s: &[u16]) -> String {
+    let len = s.iter().position(|&c| c == 0).unwrap_or(s.len());
+    String::from_utf16_lossy(&s[..len])
 }
 
 /// Block until the process is waiting for input (or the timeout elapses).
-pub fn wait_input_idle(pid: u32) -> Result<(), InjectError> {
-    let p = open(pid)?;
-    unsafe { WaitForInputIdle(p.0, IDLE_WAIT_MS) };
-    Ok(())
+pub fn wait_input_idle(pid: u32) {
+    if let Ok(p) = unsafe { OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_SYNCHRONIZE, false, pid) } {
+        let p = Handle(p);
+        unsafe { WaitForInputIdle(p.0, IDLE_WAIT_MS) };
+    }
 }
 
 /// True if a module with this file name is loaded in the process.
@@ -64,8 +51,7 @@ pub fn module_loaded(pid: u32, name: &str) -> bool {
         let mut me = MODULEENTRY32W { dwSize: std::mem::size_of::<MODULEENTRY32W>() as u32, ..Default::default() };
         let mut ok = Module32FirstW(snap.0, &mut me).is_ok();
         while ok {
-            let len = me.szModule.iter().position(|&c| c == 0).unwrap_or(me.szModule.len());
-            if String::from_utf16_lossy(&me.szModule[..len]).eq_ignore_ascii_case(name) {
+            if wide_str(&me.szModule).eq_ignore_ascii_case(name) {
                 return true;
             }
             ok = Module32NextW(snap.0, &mut me).is_ok();
@@ -85,61 +71,92 @@ pub fn wait_module(pid: u32, name: &str, secs: u64) -> bool {
     module_loaded(pid, name)
 }
 
-pub fn inject(pid: u32, dll: &Path) -> Result<(), InjectError> {
-    let fail = |m: &str| InjectError::Failed(m.to_string());
-    let process = open(pid)?;
-
-    let mut path: Vec<u16> = dll.as_os_str().encode_wide().collect();
-    path.push(0);
-    let bytes = path.len() * 2;
-
+/// The exe name of `pid` and how many running processes have that name.
+fn name_and_count(pid: u32) -> Option<(String, usize)> {
+    let mut names = Vec::new();
+    let mut ours = None;
     unsafe {
-        let load_library = GetModuleHandleW(w!("kernel32.dll"))
-            .ok()
-            .and_then(|k| GetProcAddress(k, s!("LoadLibraryW")))
-            .ok_or_else(|| fail("LoadLibraryW not found"))?;
-
-        let remote = VirtualAllocEx(process.0, None, bytes, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
-        if remote.is_null() {
-            return Err(fail("VirtualAllocEx failed"));
-        }
-        let free = || { let _ = VirtualFreeEx(process.0, remote, 0, MEM_RELEASE); };
-
-        if let Err(e) = WriteProcessMemory(process.0, remote, path.as_ptr() as *const c_void, bytes, None) {
-            free();
-            return Err(InjectError::Failed(format!("WriteProcessMemory failed: {e}")));
-        }
-
-        let thread = match CreateRemoteThread(
-            process.0,
-            None,
-            0,
-            Some(std::mem::transmute::<_, unsafe extern "system" fn(*mut c_void) -> u32>(load_library)),
-            Some(remote),
-            0,
-            None,
-        ) {
-            Ok(t) => Handle(t),
-            Err(e) => {
-                free();
-                return Err(InjectError::Failed(format!("CreateRemoteThread failed: {e}")));
+        let snap = Handle(CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0).ok()?);
+        let mut pe = PROCESSENTRY32W { dwSize: std::mem::size_of::<PROCESSENTRY32W>() as u32, ..Default::default() };
+        let mut ok = Process32FirstW(snap.0, &mut pe).is_ok();
+        while ok {
+            let name = wide_str(&pe.szExeFile);
+            if pe.th32ProcessID == pid {
+                ours = Some(name.clone());
             }
-        };
+            names.push(name);
+            ok = Process32NextW(snap.0, &mut pe).is_ok();
+        }
+    }
+    let ours = ours?;
+    let count = names.iter().filter(|n| n.eq_ignore_ascii_case(&ours)).count();
+    Some((ours, count))
+}
 
-        if WaitForSingleObject(thread.0, LOAD_WAIT_MS) != WAIT_OBJECT_0 {
-            // thread may still be reading `remote`; leak the few bytes rather than free under it
-            return Err(InjectError::Timeout);
+/// Runs `injector` to load `dll` into the game `pid`. MhInject finds the game by process name and
+/// takes the first match, so this refuses when another process has the same name.
+pub fn inject(pid: u32, injector: &Path, dll: &Path) -> Result<(), InjectError> {
+    let fail = |m: String| InjectError::Failed(m);
+    let (name, count) = name_and_count(pid).ok_or_else(|| fail("The game process was not found.".into()))?;
+    if count > 1 {
+        return Err(fail(format!(
+            "Close the other {name} first. The overlay injector finds the game by name and could pick the wrong one."
+        )));
+    }
+    let stem = Path::new(&name).file_stem().unwrap_or_default();
+    let out = Command::new(injector)
+        .arg(dll)
+        .arg(stem)
+        .current_dir(injector.parent().unwrap_or(Path::new(".")))
+        .stdin(Stdio::null())
+        .creation_flags(CREATE_NO_WINDOW)
+        .output()
+        .map_err(|e| fail(format!("Cannot run MhInject.exe: {e}")))?;
+    let code = out.status.code();
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    outcome(code, &stderr)
+}
+
+/// Maps MhInject's exit code and stderr to a result.
+fn outcome(code: Option<i32>, stderr: &str) -> Result<(), InjectError> {
+    // The .NET app host fails with an 0x8000_80xx code when the runtime is missing.
+    let host_error = code.is_some_and(|c| (c as u32) & 0xFFFF_FF00 == 0x8000_8000);
+    match code {
+        Some(0) => Ok(()),
+        _ if stderr.trim_start().starts_with("TIMEOUT") => Err(InjectError::Timeout),
+        _ if host_error || stderr.contains("install or update .NET") => Err(InjectError::Failed(
+            "The overlay injector needs the .NET 8 Runtime. Install it from Microsoft and launch again.".into(),
+        )),
+        _ => {
+            let first = stderr.lines().map(str::trim).find(|l| !l.is_empty()).unwrap_or("no message");
+            let clean: String = first.chars().filter(|c| !c.is_control()).take(MAX_MESSAGE).collect();
+            let code = code.map_or("none".into(), |c| c.to_string());
+            Err(InjectError::Failed(format!("The overlay injector failed (exit {code}): {clean}")))
         }
-        let mut code = 0u32;
-        let got = GetExitCodeThread(thread.0, &mut code);
-        free();
-        match got {
-            Ok(()) if code != 0 => Ok(()),
-            // the exit code is only the low 32 bits of the module handle, which can
-            // legitimately be 0 for a 4 GB-aligned base: confirm by looking for the module
-            Ok(()) if dll.file_name().and_then(|n| n.to_str()).is_some_and(|n| module_loaded(pid, n)) => Ok(()),
-            Ok(()) => Err(fail("LoadLibrary returned 0 (the overlay DLL failed to load)")),
-            Err(e) => Err(InjectError::Failed(format!("GetExitCodeThread failed: {e}"))),
-        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn outcomes() {
+        assert!(outcome(Some(0), "").is_ok());
+        assert!(matches!(outcome(Some(4), "TIMEOUT: CreateRemoteThread did not finish"), Err(InjectError::Timeout)));
+        let msg = |r: Result<(), InjectError>| match r { Err(InjectError::Failed(m)) => m, other => panic!("{other:?}") };
+        assert!(msg(outcome(Some(0x8000_8096u32 as i32), "")).contains(".NET 8"));
+        assert!(msg(outcome(Some(1), "You must install or update .NET to run this application.")).contains(".NET 8"));
+        let m = msg(outcome(Some(4), "\nOpenProcess failed (try Administrator): 5\r\nmore"));
+        assert_eq!(m, "The overlay injector failed (exit 4): OpenProcess failed (try Administrator): 5");
+        assert!(msg(outcome(None, "")).contains("exit none"));
+    }
+
+    #[test]
+    fn finds_own_process_by_pid() {
+        let (name, count) = name_and_count(std::process::id()).unwrap();
+        assert!(name.to_ascii_lowercase().ends_with(".exe"));
+        assert!(count >= 1);
+        assert!(name_and_count(u32::MAX).is_none());
     }
 }
