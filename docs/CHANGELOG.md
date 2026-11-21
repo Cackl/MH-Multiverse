@@ -14,6 +14,7 @@
 - Trust now also covers `MhInject.exe` and the files it runs from.
 - The injector needs the .NET 8 Runtime, which the Overlay's own launcher also uses.
 - Injection is refused while a second game client with the same name is running, since the injector picks the game by name.
+- A failed Inject on Launch turns the Overlay chip beside Launch amber until the game closes, with the reason in its tooltip. Inject now results show only on the Overlay card.
 
 <br>
 

@@ -219,7 +219,7 @@ Six listeners are registered:
 | `server-started` | Emitted after successful spawn | Sets `serverRunning`, starts uptime timer |
 | `server-stopped` | Emitted on process exit (normal or crash) | Clears `serverRunning`/`apacheRunning`, stops uptime, logs exit code |
 | `player-event` | Emitted by `server.rs` on player login/logout/clear | Consumed by `ServerPanel` to update the online player list |
-| `overlay-inject` | Emitted by `overlay/mod.rs` when an injection (post-launch or Inject now) finishes | Sets the `overlayInject` store (shown in Settings → Integrations) |
+| `overlay-inject` | Emitted by `overlay/mod.rs` when an injection (post-launch or Inject now) finishes | Sets the `overlayInject` store (shown in Settings → Integrations). A failed Inject on Launch (`on_launch`) also turns the Launch page's Overlay chip amber, with the reason in its tooltip, until the game closes |
 | `overlay-pipe` | Emitted by `overlay/pipe.rs` per read of the overlay's status pipe | Appended to the `overlayLog` store (capped at 500 rows) |
 
 `server-started` and `server-stopped` use a logTimestamp() function to mirror the formatting used for MHServerEmu entries
@@ -538,7 +538,7 @@ Imports server profiles from uploaded JSON files, detected by shape: Bifrost `Bi
 | `eventTimezoneOffset` | `writable<number>` | Offset in whole hours between server time and client UTC, derived from `schedulerNow`; used by EventsPanel to evaluate schedule rule active states |
 | `logFilterThreshold` | `writeable<boolean>` | When true, log filter shows selected level and all more severe levels. When false, exact level match only. Persisted to local storage. |
 | `overlayStatus` | `writable<OverlayStatus \| null>` | Latest overlay status seen by the UI; set by the Integrations card and refreshed by the Launch page (only while inject-on-launch is on) |
-| `overlayInject` | `writable<{ ok, message } \| null>` | Outcome of the latest overlay injection attempt |
+| `overlayInject` | `writable<{ ok, message, on_launch } \| null>` | Outcome of the latest overlay injection attempt |
 | `overlayLog` | `writable<OverlayLine[]>` | Overlay status-pipe lines (capped at 500); `appendOverlayLog` adds to it |
 | `LOG_LEVEL_SEVERITY` | `Record<LogLevel, number>` | Severity order map used by threshold filtering; trace(0) through fatal(6), all(-1) |
 | `serverLogFilter` | `writable<LogLevel>` | Server console level filter, persisted to local storage |

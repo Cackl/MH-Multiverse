@@ -260,6 +260,8 @@ pub fn overlay_set_omega_gear(app: tauri::AppHandle, enabled: bool) -> Result<Ov
 struct InjectPayload {
     ok: bool,
     message: String,
+    /// Set off by Launch (Inject on Launch), not Inject now. Only these show on the Launch page.
+    on_launch: bool,
 }
 
 /// Called right after the game is spawned. When injection is enabled, a background
@@ -316,9 +318,9 @@ fn run_inject(app: &tauri::AppHandle, cfg: OverlayConfig, sips: Vec<PathBuf>, ga
         let payload = match result {
             Ok(()) => {
                 pipe::spawn(app.clone(), PathBuf::from(&cfg.dir), sips, alive);
-                InjectPayload { ok: true, message: "Overlay injected.".into() }
+                InjectPayload { ok: true, message: "Overlay injected.".into(), on_launch: fresh_launch }
             }
-            Err(m) => InjectPayload { ok: false, message: m },
+            Err(m) => InjectPayload { ok: false, message: m, on_launch: fresh_launch },
         };
         let _ = app.emit("overlay-inject", payload);
     });
