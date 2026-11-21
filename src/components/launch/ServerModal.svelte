@@ -4,6 +4,7 @@
   import { appConfig, activeTab as appTab, serverRunning, upsertServer, jsonPersistence, refreshPersistence, type Server } from '../../lib/store'
   import { syncAccount, validateEmail, validatePassword, validatePlayerName } from '../../lib/accountCommands'
   import { tip } from '../../lib/tooltip'
+  import Dropdown from '../Dropdown.svelte'
 
   export let server: Server | null = null
   export let initialTab: 'remote' | 'local' | null = null
@@ -22,6 +23,13 @@
   // A new profile starts on Local once there is a server to run it on, otherwise on Remote.
   let isLocal  = server?.is_local  ?? (initialTab ? initialTab === 'local' : !!$appConfig.server_exe)
   let useHttps = server?.use_https ?? false
+  // A new profile plays on the version that is active while it's made. Empty follows the active version.
+  let linkedId = server?.linked_id ?? $appConfig.active_linked_id
+  let startServer = server?.start_server ?? true
+  $: activeId = $appConfig.active_linked_id
+  $: versionOptions = [{ value: '', label: 'Active version' }, ...$appConfig.linked.map(l => ({ value: l.id, label: l.name }))]
+  // Account checks, commands and backups go to the active version's server.
+  $: pairedName = (linkedId && linkedId !== activeId && $appConfig.linked.find(l => l.id === linkedId)?.name) || ''
 
   // `account`: 'sync' makes the server account match first (Local, Account.db servers only),
   // 'overwrite' also sets the password on an existing account, 'skip' saves the profile as is.
@@ -35,7 +43,7 @@
     if (!name) { error = 'Name is required.'; return }
     if (!isLocal && !host) { error = 'Host is required for remote servers.'; return }
     if (!isEdit && !password) { error = 'Password is required for a new server.'; return }
-    const dup = sameAccountAs(email, isLocal, host, $appConfig.servers)
+    const dup = sameAccountAs(email, isLocal, host, linkedId, $appConfig.servers)
     if (dup) { error = sameAccountText(dup); return }
 
     saving = true
@@ -71,6 +79,8 @@
         email,
         is_local: isLocal,
         use_https: useHttps,
+        linked_id: linkedId,
+        start_server: isLocal && startServer,
       }
       await upsertServer(entry, password)
       if (acctWarning) { acctMsg = ''; return }
@@ -114,16 +124,17 @@
     activeTab = 'manual'
   }
 
-  // Another Multiverse profile that logs into the same account: the same email on the local
-  // server (every local profile uses the one linked MHServerEmu), or on the same remote host.
+  // Another Multiverse profile that logs into the same account: the same email on the same
+  // version's local server, or on the same remote host.
   // A profile edited without changing its account is let through, so duplicates saved before
   // this check existed can still be renamed or edited.
   const lower = (s: string) => s.trim().toLowerCase()
-  const sameAccount = (s: Server, e: string, local: boolean, h: string) =>
-    s.is_local === local && (local || lower(s.host) === lower(h)) && lower(s.email) === lower(e)
-  const sameAccountAs = (e: string, local: boolean, h: string, servers: Server[]) =>
-    !e.trim() || (server && sameAccount(server, e, local, h)) ? null :
-    servers.find(s => s.id !== server?.id && sameAccount(s, e, local, h)) ?? null
+  const onVersion = (id: string | undefined) => id || $appConfig.active_linked_id
+  const sameAccount = (s: Server, e: string, local: boolean, h: string, l: string) =>
+    s.is_local === local && (local ? onVersion(s.linked_id) === onVersion(l) : lower(s.host) === lower(h)) && lower(s.email) === lower(e)
+  const sameAccountAs = (e: string, local: boolean, h: string, l: string, servers: Server[]) =>
+    !e.trim() || (server && sameAccount(server, e, local, h, l)) ? null :
+    servers.find(s => s.id !== server?.id && sameAccount(s, e, local, h, l)) ?? null
   const sameAccountText = (s: Server) =>
     `Your profile "${s.name}" already signs in with this email ${s.is_local ? 'on the local server' : 'on this host'}.`
 
@@ -245,7 +256,7 @@
       ? `Backup restored. The previous save was copied to Data/${copy}.`
       : 'Backup restored. There was no previous save to copy.'
     if (profileName) {
-      const entry: Server = { id: crypto.randomUUID(), name: profileName, host: '', email: JSON_ACCOUNT_EMAIL, is_local: true, use_https: false }
+      const entry: Server = { id: crypto.randomUUID(), name: profileName, host: '', email: JSON_ACCOUNT_EMAIL, is_local: true, use_https: false, linked_id: activeId, start_server: true }
       await upsertServer(entry, JSON_PLACEHOLDER_PASSWORD)
     }
   }
@@ -368,6 +379,8 @@
         email: finalEmail,
         is_local: true,
         use_https: false,
+        linked_id: activeId,
+        start_server: true,
       }
       // The account is in by now, so a retry would only hit EMAIL_CONFLICT.
       try {
@@ -461,7 +474,7 @@
   let acctMismatch = false
   let acctTimedOut = false
   let acctWarning = ''
-  $: canManageAccount = isLocal && hasServerExe && !$jsonPersistence
+  $: canManageAccount = isLocal && hasServerExe && !$jsonPersistence && !pairedName
   $: if (canManageAccount) loadExistingAccounts()
   // Empty until the server's first start creates Account.db, so a fresh install asks for a player name.
   // The email is checked after a pause in typing, on leaving the field and on save, not per
@@ -476,7 +489,7 @@
     clearTimeout(emailTimer)
     emailTimer = setTimeout(checkEmail, 600)
   }
-  $: sameAccountProfile = sameAccountAs(checkedEmail, isLocal, host, $appConfig.servers)
+  $: sameAccountProfile = sameAccountAs(checkedEmail, isLocal, host, linkedId, $appConfig.servers)
   $: knownAccount = existingAccounts.find(a => a.email.toLowerCase() === checkedEmail.toLowerCase()) ?? null
   $: newAccount = canManageAccount && !!checkedEmail && !knownAccount && (!isEdit || !!password.trim())
   // Editing a profile's own password changes it on the server; pointing a profile at some
@@ -561,7 +574,7 @@
         >
           From Backup
         </button>
-      {:else if server?.is_local}
+      {:else if server?.is_local && !pairedName}
         <button
           type="button"
           class="tab-btn"
@@ -613,6 +626,36 @@
               tabindex="-1"
             >?</button>
           </label>
+        {/if}
+
+        {#if $appConfig.linked.length > 1}
+          <div class="form-group">
+            <div class="label-row">
+              <label class="field-label" for="modal-version">Version</label>
+              <button
+                class="info-btn"
+                type="button"
+                use:tip={'Launch switches to this version first. Active version follows the title bar.'}
+                tabindex="-1"
+              >?</button>
+            </div>
+            <Dropdown id="modal-version" label="Version" value={linkedId} options={versionOptions} onChange={v => linkedId = v} --dd-width="100%" />
+          </div>
+        {/if}
+        {#if isLocal && hasServerExe}
+          <label class="check-row">
+            <input type="checkbox" bind:checked={startServer}>
+            <span class="check-label">Start the server on Launch</span>
+            <button
+              class="info-btn"
+              type="button"
+              use:tip={"When the server isn't running, Launch starts it and waits until it is ready before opening the game."}
+              tabindex="-1"
+            >?</button>
+          </label>
+        {/if}
+        {#if isLocal && pairedName}
+          <div class="hint-block">Switch to {pairedName} to check this account on its server.</div>
         {/if}
 
         {#if !isEdit && isLocal && $jsonPersistence}
