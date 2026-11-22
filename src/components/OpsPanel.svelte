@@ -79,6 +79,7 @@
   let backupSuccess = ''
   let creatingBackup = false
   let confirmingRestore: string | null = null
+  let confirmingRollBack = false
   let confirmingDelete: string | null = null
 
   // ── Derived ────────────────────────────────────────────────────────────────
@@ -175,20 +176,23 @@
     }
   }
 
-  async function restoreBackup(id: string) {
-    if (confirmingRestore !== id) {
+  // A roll back also copies back the server files the backup's update replaced.
+  async function restoreBackup(id: string, rollBack = false) {
+    if (confirmingRestore !== id || confirmingRollBack !== rollBack) {
       confirmingRestore = id
+      confirmingRollBack = rollBack
       confirmingDelete = null
       return
     }
     confirmingRestore = null
     backupError = ''
     try {
-      const moved = await invoke<string[]>('restore_backup', { serverExe: $appConfig.server_exe, backupId: id })
-      backupSuccess = moved.length
-        ? `Backup restored. Copies switched the other way saved as ${moved.join(', ')}`
-        : 'Backup restored.'
+      const moved = await invoke<string[]>('restore_backup', { serverExe: $appConfig.server_exe, backupId: id, rollBack })
+      const done = rollBack ? 'Server rolled back.' : 'Backup restored.'
+      backupSuccess = moved.length ? `${done} Copies switched the other way saved as ${moved.join(', ')}` : done
       setTimeout(() => backupSuccess = '', moved.length ? 8000 : 3000)
+      // The installed build changed.
+      if (rollBack) checkForUpdate()
     } catch (e) {
       backupError = String(e)
     }
@@ -578,6 +582,7 @@
           {:else}
             <div class="backup-list">
               {#each backups as backup (backup.id)}
+                {@const rollBackTo = backup.replaced?.length ? backup.update?.from : null}
                 <div class="backup-row" class:confirming={confirmingRestore === backup.id || confirmingDelete === backup.id}>
                   <div class="backup-meta">
                     <span class="backup-date">{formatDate(backup.created_at)}</span>
@@ -590,13 +595,19 @@
                     <div class="backup-targets-line">Server {serverVer(backup.update.from)} → {serverVer(backup.update.to)}</div>
                   {/if}
                   <div class="backup-targets-line">
-                    {[...backup.targets.map(targetLabel), ...(backup.replaced?.length ? [`${backup.replaced.length} files the update replaced`] : [])].join(', ') || 'No files'}
+                    {[...backup.targets.map(targetLabel), ...(backup.replaced?.length ? [`${backup.replaced.length} ${backup.label === 'pre-update' ? 'files the update replaced' : 'server files'}`] : [])].join(', ') || 'No files'}
                   </div>
 
-                  {#if confirmingRestore === backup.id}
+                  {#if confirmingRestore === backup.id && confirmingRollBack && rollBackTo}
+                    <div class="confirm-row">
+                      <span class="confirm-text">Puts the server back to {serverVer(rollBackTo)}. Current files are backed up first.</span>
+                      <button class="btn btn-sm btn-accent" on:click={() => restoreBackup(backup.id, true)} disabled={$serverRunning || updating}>Confirm Roll Back</button>
+                      <button class="btn btn-sm btn-outline" on:click={cancelConfirm}>Cancel</button>
+                    </div>
+                  {:else if confirmingRestore === backup.id}
                     <div class="confirm-row">
                       <span class="confirm-text">Current files are backed up first, then overwritten.</span>
-                      <button class="btn btn-sm btn-accent" on:click={() => restoreBackup(backup.id)} disabled={$serverRunning}>Confirm Restore</button>
+                      <button class="btn btn-sm btn-accent" on:click={() => restoreBackup(backup.id)} disabled={$serverRunning || updating}>Confirm Restore</button>
                       <button class="btn btn-sm btn-outline" on:click={cancelConfirm}>Cancel</button>
                     </div>
                   {:else if confirmingDelete === backup.id}
@@ -607,7 +618,12 @@
                     </div>
                   {:else}
                     <div class="backup-row-actions">
-                      <button class="btn btn-sm btn-outline" on:click={() => restoreBackup(backup.id)} disabled={$serverRunning}>Restore</button>
+                      {#if rollBackTo}
+                        <button class="btn btn-sm btn-outline" on:click={() => restoreBackup(backup.id, true)} disabled={$serverRunning || updating}>
+                          {backup.label === 'pre-update' ? 'Roll Back Update' : 'Undo Roll Back'}
+                        </button>
+                      {/if}
+                      <button class="btn btn-sm btn-outline" on:click={() => restoreBackup(backup.id)} disabled={$serverRunning || updating}>{rollBackTo ? 'Restore Files' : 'Restore'}</button>
                       <button class="btn btn-sm btn-red" on:click={() => deleteBackup(backup.id)}>Delete</button>
                     </div>
                   {/if}

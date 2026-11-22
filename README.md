@@ -35,7 +35,7 @@ The app is currently Windows-only and communicates with the server via stdin/std
 - Automatic `.bak` snapshots before every write
 
 ### Updates and Backups
-- One-click MHServerEmu nightly updates with backup and restore, and in-app updates for MH Multiverse
+- One-click MHServerEmu nightly updates with backup, restore and roll back, and in-app updates for MH Multiverse
 - On-demand manual backups of the server's config and data
 
 ### Settings and Integrations

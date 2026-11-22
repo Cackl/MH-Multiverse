@@ -827,16 +827,27 @@ pub fn list_backups(server_exe: String) -> Result<Vec<BackupManifest>, String> {
     Ok(manifests)
 }
 
+/// `roll_back` also copies back the server files an update replaced, putting the old build back.
 #[tauri::command]
-pub async fn restore_backup(app: AppHandle, server_exe: String, backup_id: String) -> Result<Vec<String>, String> {
+pub async fn restore_backup(app: AppHandle, server_exe: String, backup_id: String, roll_back: Option<bool>) -> Result<Vec<String>, String> {
     // A running server writes its players back over the restored files.
     ensure_server_stopped(&app, &server_exe)?;
-    off_main(move || restore(&server_exe, &backup_id)).await
+    if update_running() {
+        return Err("Wait for the update to finish first".into());
+    }
+    off_main(move || restore_from(&server_exe, &backup_id, roll_back.unwrap_or(false))).await
 }
 
-/// Copies the backup's targets back, after backing up what they replace. Returns the names that
-/// copies switched the other way were moved aside to.
+#[cfg(test)]
 fn restore(server_exe: &str, backup_id: &str) -> Result<Vec<String>, String> {
+    restore_from(server_exe, backup_id, false)
+}
+
+/// Copies the backup's targets back, and with `roll_back` the files its update replaced, after
+/// backing up what they replace. Returns the names that copies switched the other way were moved
+/// aside to.
+/// ponytail: a roll back leaves files new in the newer build in place, as a failed install does.
+fn restore_from(server_exe: &str, backup_id: &str, roll_back: bool) -> Result<Vec<String>, String> {
     let server_dir = server_dir_from_exe(server_exe)?;
     let backup_dir = server_dir.join("Backups").join(&backup_id);
 
@@ -845,13 +856,23 @@ fn restore(server_exe: &str, backup_id: &str) -> Result<Vec<String>, String> {
     }
 
     let manifest = read_manifest(&backup_dir)?;
+    if roll_back && manifest.replaced.is_empty() {
+        return Err("This backup has no server files to roll back to".into());
+    }
+    let replaced = if roll_back { manifest.replaced.clone() } else { vec![] };
+    // A roll back's own backup holds the newer server files and versions, so it can be undone the same way.
+    let update = roll_back.then(|| UpdateVersions {
+        linked_name: manifest.update.as_ref().and_then(|u| u.linked_name.clone()),
+        from: product_version(Path::new(server_exe)),
+        to: manifest.update.as_ref().and_then(|u| u.from.clone()),
+    });
 
     // So a restore can be undone, a partial one included.
-    let before = create_backup_inner(&server_dir, manifest.targets.clone(), vec![], None, "pre-restore")?;
+    let before = create_backup_inner(&server_dir, manifest.targets.clone(), replaced.clone(), update, "pre-restore")?;
     let failed = |e: String| format!("{e}. The files from before the restore are in backup {}.", before.id);
 
-    for target in &manifest.targets {
-        copy_path(&backup_dir.join(target), &server_dir.join(target)).map_err(failed)?;
+    for rel in manifest.targets.iter().chain(&replaced) {
+        copy_path(&backup_dir.join(rel), &server_dir.join(rel)).map_err(failed)?;
     }
 
     // Copying merges, so a file switched the other way since the backup would now be in both
