@@ -522,7 +522,6 @@ Imports server profiles from uploaded JSON files, detected by shape: Bifrost `Bi
 | `startingServer` / `startingApache` | `writable<boolean>` | A start is in progress |
 | `serverStartError` / `apacheStartError` | `writable<string>` | Last start failure, shown on the Rail dots; '' when none |
 | `jsonPersistence` | `writable<boolean>` | The linked server stores its one account in a JSON file; set by `refreshPersistence` |
-| `launchOptionsReviewed` | `writable<boolean>` | Session only: Get Started ticks "Launch options" once they have been opened |
 | `unsavedSources` | `writable<Record<string, string>>` | Editors holding unsaved edits, keyed by source; checked by `confirmLeave` |
 | `confirmRequest` | `writable<ConfirmRequest \| null>` | The open `askConfirm` question, rendered by `ConfirmDialog` |
 | `gameRunning` | `writable<boolean>` | Game process state (matched by `game_exe`'s file name) |

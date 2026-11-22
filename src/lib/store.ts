@@ -100,8 +100,6 @@ serverRunning.subscribe(running => { if (!running) serverReady.set(false) })
 export const gameRunning = writable<boolean>(false)
 export const apacheRunning = writable<boolean>(false)
 export const uptimeSec = writable<number>(0)
-// Session only: the Get Started checklist ticks "Launch options" once the user has opened them.
-export const launchOptionsReviewed = writable<boolean>(false)
 
 // True when the linked server keeps one built-in account in a JSON file instead of Account.db.
 export const jsonPersistence = writable<boolean>(false)

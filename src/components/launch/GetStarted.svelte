@@ -1,7 +1,7 @@
 <script lang="ts">
   import {
     appConfig, serverRunning, apacheRunning, startingServer, startingApache,
-    startServer, startApache, activeTab, settingsSection, launchOptionsReviewed,
+    startServer, startApache, activeTab, settingsSection,
     jsonPersistence, refreshPersistence, gameDataCopying,
   } from '../../lib/store'
   import { invoke } from '@tauri-apps/api/core'
@@ -16,7 +16,6 @@
   $: hasServerExe = !!$appConfig.server_exe
   $: refreshPersistence($appConfig.server_exe)
   $: hasLocalProfile = $appConfig.servers.some(s => s.is_local)
-  $: launchOptionsDone = $launchOptionsReviewed || !$appConfig.launch_options.auto_login
 
   let clientVersion: string | null = null
   let serverVersion: string | null = null
@@ -57,7 +56,6 @@
   }
 
   function openLaunchOptions() {
-    launchOptionsReviewed.set(true)
     settingsSection.set('client')
     activeTab.set('settings')
   }
@@ -77,11 +75,11 @@
   </div>
 
   <div class="gs-row">
-    <span class="mark" class:done={launchOptionsDone}></span>
+    <span class="mark done"></span>
     <div class="gs-text">
       <div class="gs-title">Launch options</div>
-      {#if !launchOptionsDone}
-        <div class="gs-detail warn">Auto Login is on. Note the game client writes your password in plain text to its Launch.log</div>
+      {#if $appConfig.launch_options.auto_login}
+        <div class="gs-detail">Auto Login is on. Your password is passed as a launch argument</div>
       {/if}
     </div>
     <button class="btn btn-sm btn-outline" on:click={openLaunchOptions}>Set Up</button>
