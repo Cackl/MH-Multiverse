@@ -252,9 +252,10 @@
   // ── Lifecycle ──────────────────────────────────────────────────────────────
 
   onMount(async () => {
+    // Backups are local and quick, the update check waits on GitHub, so neither waits for the other.
     if (hasServerExe) {
-      await checkForUpdate()
-      await loadBackups()
+      loadBackups()
+      checkForUpdate()
     }
   })
 </script>
