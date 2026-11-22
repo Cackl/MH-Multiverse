@@ -416,14 +416,11 @@
           {#if outcome.edited.length}
             <div class="kept-files">Replaced your edits to {outcome.edited.join(', ')}. Your copies are in the Pre-update backup.</div>
           {/if}
-          {#each [true, false] as on}
-            {@const group = outcome.kept.filter(k => k.enabled === on)}
-            {#if group.length}
-              <div class="kept-files" use:tip={'The update shipped these switched the other way'}>
-                {on ? 'Kept on' : 'Kept off'}: {group.map(k => k.file).join(', ')}
-              </div>
-              <div class="kept-files">Replaced copies saved as {group.map(k => k.kept_as).join(', ')}</div>
-            {/if}
+          {#each outcome.kept as k}
+            <div class="kept-files" use:tip={`The update shipped this switched ${k.enabled ? 'off' : 'on'}`}>
+              Switched {k.enabled ? 'on' : 'off'} as before: {k.file}
+            </div>
+            <div class="kept-files">{k.restored ? "The update's copy" : 'Your previous copy'}: {k.kept_as}</div>
           {/each}
         {/if}
         {#if outcome?.error}

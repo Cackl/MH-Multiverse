@@ -1,7 +1,15 @@
 use super::*;
 use crate::test_helpers::empty_server;
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
+
+/// Every file under `dir`.
+fn walk(dir: &Path) -> Vec<PathBuf> {
+    fs::read_dir(dir).unwrap().flatten().flat_map(|e| {
+        let p = e.path();
+        if p.is_dir() { walk(&p) } else { vec![p] }
+    }).collect()
+}
 
 #[test]
 fn create_backup_copies_targets() {
@@ -482,6 +490,11 @@ fn update_keeps_switched_stock_files_as_the_user_had_them() {
         let got_pairs: Vec<(String, bool)> = got.iter().map(|k| (k.file.clone(), k.enabled)).collect();
         let want: Vec<(String, bool)> = kept.into_iter().map(|(file, enabled)| (file.into(), enabled)).collect();
         assert_eq!(got_pairs, want, "{case}: kept");
+        // Ships hold "new", so the moved-aside copy is the update's exactly when it was restored over.
+        for k in &got {
+            let bak = walk(server.path()).into_iter().find(|p| crate::store::file_name_of(p) == k.kept_as).unwrap();
+            assert_eq!(fs::read_to_string(bak).unwrap() == "new", k.restored, "{case}: {} restored", k.file);
+        }
         // `X.json.bak` in a case stands for the timestamped copy `move_aside` made of X.json.
         for (rel, text) in after {
             let path = match rel.strip_suffix(".bak") {

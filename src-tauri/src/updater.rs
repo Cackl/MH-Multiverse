@@ -307,6 +307,8 @@ pub struct KeptFile {
     pub enabled: bool,
     /// The name the replaced copy was moved to, in the same folder.
     pub kept_as: String,
+    /// A backup target put the user's copy back, so `kept_as` is the update's copy, not the user's.
+    pub restored: bool,
 }
 
 /// Each `.json` file the update ships where the app can switch it: its name, where it ships, where
@@ -352,14 +354,15 @@ fn keep_switched_files(server_dir: &Path, source: &Path, restored: &[String]) ->
         if !shipped_path.is_file() || !other_path.is_file() {
             continue;
         }
-        let bak = if is_restored(&other) {
+        let restored = is_restored(&other);
+        let bak = if restored {
             crate::store::move_aside(&shipped_path)?
         } else {
             let bak = crate::store::move_aside(&other_path)?;
             rename(&shipped_path, &other_path)?;
             bak
         };
-        kept.push(KeptFile { file: name, enabled: other_on, kept_as: crate::store::file_name_of(&bak) });
+        kept.push(KeptFile { file: name, enabled: other_on, kept_as: crate::store::file_name_of(&bak), restored });
     }
     Ok(kept)
 }
