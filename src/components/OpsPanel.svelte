@@ -6,6 +6,7 @@
     appConfig, serverRunning, setBackupTargets, setKeepAutoBackups, updateRunning, updateProgress, updateOutcome, runServerUpdate,
   } from '../lib/store'
   import PanelSidebar from './PanelSidebar.svelte'
+  import IntegrationCard from './settings/integrations/IntegrationCard.svelte'
   import { tip } from '../lib/tooltip'
 
   // ── Types ──────────────────────────────────────────────────────────────────
@@ -80,6 +81,13 @@
   let confirmingRestore: string | null = null
   let confirmingRollBack = false
   let confirmingDelete: string | null = null
+  // Targets unticked in each backup's restore picker. Everything else is restored.
+  let unticked: Record<string, string[]> = {}
+
+  function toggleRestoreTarget(id: string, target: string) {
+    const off = unticked[id] ?? []
+    unticked[id] = off.includes(target) ? off.filter(t => t !== target) : [...off, target]
+  }
 
   // ── Derived ────────────────────────────────────────────────────────────────
 
@@ -160,13 +168,18 @@
     backupError = ''
     backupSuccess = ''
     try {
-      await invoke('create_backup', {
+      const made = await invoke<BackupManifest>('create_backup', {
         serverExe: $appConfig.server_exe,
         targets: [...selectedTargets],
         label: 'manual',
       })
-      backupSuccess = 'Backup created.'
-      setTimeout(() => backupSuccess = '', 3000)
+      // Targets with no files on disk are left out of the backup.
+      const missing = [...selectedTargets].filter(t =>
+        t === 'Players' ? !made.targets.some(m => /\.(db|json)$/.test(m)) : !made.targets.includes(t))
+      backupSuccess = missing.length
+        ? `Backup created. Not found, so not saved: ${missing.map(targetLabel).join(', ')}`
+        : 'Backup created.'
+      setTimeout(() => backupSuccess = '', missing.length ? 8000 : 3000)
       await loadBackups()
     } catch (e) {
       backupError = String(e)
@@ -175,18 +188,24 @@
     }
   }
 
-  // A roll back also copies back the server files the backup's update replaced.
-  async function restoreBackup(id: string, rollBack = false) {
+  // A roll back also copies back the server files the backup's update replaced. Both restore only
+  // the targets left ticked.
+  async function restoreBackup(backup: BackupManifest, rollBack = false) {
+    const id = backup.id
     if (confirmingRestore !== id || confirmingRollBack !== rollBack) {
       confirmingRestore = id
       confirmingRollBack = rollBack
       confirmingDelete = null
+      // Each restore starts with everything ticked.
+      unticked[id] = []
       return
     }
     confirmingRestore = null
     backupError = ''
     try {
-      const moved = await invoke<string[]>('restore_backup', { serverExe: $appConfig.server_exe, backupId: id, rollBack })
+      const off = unticked[id] ?? []
+      const only = off.length ? backup.targets.filter(t => !off.includes(t)) : null
+      const moved = await invoke<string[]>('restore_backup', { serverExe: $appConfig.server_exe, backupId: id, rollBack, only })
       const done = rollBack ? 'Server rolled back.' : 'Backup restored.'
       backupSuccess = moved.length ? `${done} Copies switched the other way saved as ${moved.join(', ')}` : done
       setTimeout(() => backupSuccess = '', moved.length ? 8000 : 3000)
@@ -253,6 +272,20 @@
       // A backup records Players as the account files it found.
       (/\.(db|json)$/.test(id) ? `Player Accounts (${id.split('/').pop()})` : id)
     )
+  }
+
+  function targetDesc(id: string): string {
+    // A backup records Players as the account files it found.
+    const key = /\.(db|json)$/.test(id) ? 'Players' : id
+    return [...TOP_TARGETS, FULL_DATA_TARGET, ...DATA_TARGETS].find(t => t.id === key)?.description ?? ''
+  }
+
+  // What the backup was made before. Manual backups list their targets.
+  function backupSubtitle(b: BackupManifest): string {
+    const to = b.update?.to
+    if (b.label === 'pre-update' && to) return `Before updating to ${serverVer(to)}`
+    if (b.label === 'pre-restore') return b.replaced?.length && to ? `Before rolling back to ${serverVer(to)}` : 'Before restoring files'
+    return b.targets.map(targetLabel).join(', ') || 'No files'
   }
 
   function cancelConfirm() {
@@ -437,25 +470,37 @@
 
         {#if outcome && !outcome.error}
           <div class="feedback-ok">Update complete.</div>
-          {#if outcome.edited.length && editsPutBackFor === outcome.backup_id}
-            <div class="feedback-ok">Your edits to {outcome.edited.join(', ')} are back</div>
-          {:else if outcome.edited.length}
-            <div class="edited-row">
-              <span class="kept-files">Replaced your edits to {outcome.edited.join(', ')}. Your copies are in the Pre-update backup.</span>
-              <button
-                class="btn btn-sm btn-outline"
-                on:click={putBackEdits}
-                disabled={puttingBack || $serverRunning}
-                use:tip={"Copies your versions back over the update's. The update's copies go to a Pre-restore backup"}
-              >Restore My Edits</button>
+          {@const keptOff = outcome.kept.filter(k => !k.enabled).map(k => k.file)}
+          {@const keptOn = outcome.kept.filter(k => k.enabled).map(k => k.file)}
+          {#if keptOff.length || keptOn.length || outcome.edited.length}
+            <div class="outcome-fields">
+              {#if keptOff.length}
+                <span class="field-label">Kept Off</span>
+                <span class="kept-files" use:tip={'The update shipped these switched on'}>{keptOff.join(', ')}</span>
+                <span></span>
+              {/if}
+              {#if keptOn.length}
+                <span class="field-label">Kept On</span>
+                <span class="kept-files" use:tip={'The update shipped these switched off'}>{keptOn.join(', ')}</span>
+                <span></span>
+              {/if}
+              {#if outcome.edited.length && editsPutBackFor === outcome.backup_id}
+                <span class="field-label">Your Edits</span>
+                <span class="feedback-ok">Back in {outcome.edited.join(', ')}</span>
+                <span></span>
+              {:else if outcome.edited.length}
+                <span class="field-label">Replaced Edits</span>
+                <span class="kept-files">{outcome.edited.join(', ')}. Your copies are in the Pre-update backup</span>
+                <button
+                  class="btn btn-sm btn-outline"
+                  on:click={putBackEdits}
+                  disabled={puttingBack || $serverRunning}
+                  use:tip={"Copies your versions back over the update's. The update's copies go to a Pre-restore backup"}
+                >Use My Copies</button>
+              {/if}
             </div>
             {#if putBackError}<div class="feedback-error">{putBackError}</div>{/if}
           {/if}
-          {#each outcome.kept as k}
-            <div class="kept-files" use:tip={`The update shipped this switched ${k.enabled ? 'off' : 'on'}`}>
-              Switched {k.enabled ? 'on' : 'off'} as before: {k.file}
-            </div>
-          {/each}
         {/if}
         {#if outcome?.error}
           <div class="feedback-error">{outcome.error}</div>
@@ -597,51 +642,96 @@
             <div class="backup-list">
               {#each backups as backup (backup.id)}
                 {@const rollBackTo = backup.replaced?.length ? backup.update?.from : null}
-                <div class="backup-row" class:confirming={confirmingRestore === backup.id || confirmingDelete === backup.id}>
-                  <div class="backup-meta">
-                    <span class="backup-date">{formatDate(backup.created_at)}</span>
-                    <span class="backup-label-badge" class:pre-update={backup.label === 'pre-update'}>
-                      {backup.label === 'pre-update' ? 'Pre-update' : backup.label === 'pre-restore' ? 'Pre-restore' : 'Manual'}
-                    </span>
+                {@const off = unticked[backup.id] ?? []}
+                <IntegrationCard
+                  id={`backup-${backup.id}`}
+                  title={formatDate(backup.created_at)}
+                  subtitle={backupSubtitle(backup)}
+                >
+                  <svelte:fragment slot="actions">
+                    <span class="tag">{backup.label === 'pre-update' ? 'Pre-update' : backup.label === 'pre-restore' ? 'Pre-restore' : 'Manual'}</span>
                     <span class="backup-size">{formatBytes(backup.size_bytes)}</span>
-                  </div>
-                  {#if backup.update?.from || backup.update?.to}
-                    <div class="backup-targets-line">Server {serverVer(backup.update.from)} → {serverVer(backup.update.to)}</div>
-                  {/if}
-                  <div class="backup-targets-line">
-                    {[...backup.targets.map(targetLabel), ...(backup.replaced?.length ? [`${backup.replaced.length} ${backup.label === 'pre-update' ? 'files the update replaced' : 'server files'}`] : [])].join(', ') || 'No files'}
-                  </div>
+                  </svelte:fragment>
 
-                  {#if confirmingRestore === backup.id && confirmingRollBack && rollBackTo}
-                    <div class="confirm-row">
-                      <span class="confirm-text">Puts the server back to {serverVer(rollBackTo)}. Current files are backed up first.</span>
-                      <button class="btn btn-sm btn-accent" on:click={() => restoreBackup(backup.id, true)} disabled={$serverRunning || updating}>Confirm Roll Back</button>
+                  {#if confirmingRestore === backup.id}
+                    {@const rolling = confirmingRollBack && !!rollBackTo}
+                    {#if backup.targets.length}
+                      <div class="backup-fields">
+                        <span class="field-label">Restore</span>
+                        <div class="restore-picks">
+                          {#each backup.targets as t}
+                            <label class="restore-pick" use:tip={targetDesc(t)}>
+                              <input type="checkbox" checked={!off.includes(t)} on:change={() => toggleRestoreTarget(backup.id, t)}>
+                              {targetLabel(t)}
+                            </label>
+                          {/each}
+                        </div>
+                      </div>
+                    {/if}
+                    <span class="confirm-text">
+                      {#if rolling}
+                        Puts the server back to <strong>{serverVer(rollBackTo)}</strong> with the ticked files.
+                        {#if off.some(t => /\.(db|json)$/.test(t))}The older server loads your current player accounts.{/if}
+                      {:else}
+                        Copies the ticked files back. The server build stays the same.
+                      {/if}
+                      Current files are backed up first.
+                    </span>
+                    <div class="backup-row-actions">
                       <button class="btn btn-sm btn-outline" on:click={cancelConfirm}>Cancel</button>
-                    </div>
-                  {:else if confirmingRestore === backup.id}
-                    <div class="confirm-row">
-                      <span class="confirm-text">Current files are backed up first, then overwritten.</span>
-                      <button class="btn btn-sm btn-accent" on:click={() => restoreBackup(backup.id)} disabled={$serverRunning || updating}>Confirm Restore</button>
-                      <button class="btn btn-sm btn-outline" on:click={cancelConfirm}>Cancel</button>
-                    </div>
-                  {:else if confirmingDelete === backup.id}
-                    <div class="confirm-row">
-                      <span class="confirm-text">Delete this backup permanently?</span>
-                      <button class="btn btn-sm btn-red" on:click={() => deleteBackup(backup.id)}>Delete</button>
-                      <button class="btn btn-sm btn-outline" on:click={cancelConfirm}>Cancel</button>
+                      <button
+                        class="btn btn-sm btn-accent"
+                        on:click={() => restoreBackup(backup, rolling)}
+                        disabled={$serverRunning || updating || (!rolling && off.length === backup.targets.length)}
+                      >{rolling ? 'Confirm Roll Back' : 'Confirm Restore'}</button>
                     </div>
                   {:else}
-                    <div class="backup-row-actions">
+                    <div class="backup-fields">
+                      <span class="label-with-info">
+                        <span class="field-label">Your Files</span>
+                        <button class="info-btn" aria-label="About Your Files" use:tip={'The Targets saved in this backup. Restore Files copies back the ones you tick'}>?</button>
+                      </span>
+                      <span class="backup-note">{backup.targets.map(targetLabel).join(', ') || 'None'}</span>
                       {#if rollBackTo}
-                        <button class="btn btn-sm btn-outline" on:click={() => restoreBackup(backup.id, true)} disabled={$serverRunning || updating}>
-                          {backup.label === 'pre-update' ? 'Roll Back Update' : 'Undo Roll Back'}
-                        </button>
+                        <span class="label-with-info">
+                          <span class="field-label">Replaced Files</span>
+                          <button class="info-btn" aria-label="About Replaced Files" use:tip={`Every file the ${backup.label === 'pre-update' ? 'update' : 'roll back'} replaced, as it was before. Some can be in Your Files too. Roll Back copies all of them back`}>?</button>
+                        </span>
+                        <span class="backup-note">{backup.replaced?.length} files, the server's exe and DLLs and its stock data files</span>
+                        <span class="field-label">Server</span>
+                        <span class="backup-note">{serverVer(rollBackTo)}</span>
                       {/if}
-                      <button class="btn btn-sm btn-outline" on:click={() => restoreBackup(backup.id)} disabled={$serverRunning || updating}>{rollBackTo ? 'Restore Files' : 'Restore'}</button>
-                      <button class="btn btn-sm btn-red" on:click={() => deleteBackup(backup.id)}>Delete</button>
                     </div>
+
+                    {#if confirmingDelete === backup.id}
+                      <div class="confirm-row">
+                        <span class="confirm-text">Delete this backup permanently?</span>
+                        <button class="btn btn-sm btn-red" on:click={() => deleteBackup(backup.id)}>Delete</button>
+                        <button class="btn btn-sm btn-outline" on:click={cancelConfirm}>Cancel</button>
+                      </div>
+                    {:else}
+                      <div class="backup-row-actions">
+                        {#if rollBackTo}
+                          <button
+                            class="btn btn-sm btn-outline"
+                            on:click={() => restoreBackup(backup, true)}
+                            disabled={$serverRunning || updating}
+                            use:tip={`Puts back the server's files from ${serverVer(rollBackTo)}`}
+                          >{backup.label === 'pre-update' ? 'Roll Back Update' : 'Undo Roll Back'}</button>
+                        {/if}
+                        {#if backup.targets.length}
+                          <button
+                            class="btn btn-sm btn-outline"
+                            on:click={() => restoreBackup(backup)}
+                            disabled={$serverRunning || updating}
+                            use:tip={'Copies your files back. The server build stays the same'}
+                          >Restore Files</button>
+                        {/if}
+                        <button class="btn btn-sm btn-red" on:click={() => deleteBackup(backup.id)}>Delete</button>
+                      </div>
+                    {/if}
                   {/if}
-                </div>
+                </IntegrationCard>
               {/each}
             </div>
           {/if}
@@ -950,58 +1040,45 @@
     gap: 8px;
   }
 
-  .backup-row {
-    background: var(--bg-2);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-md);
-    padding: 12px 14px;
+  .backup-size {
+    min-width: 56px;
+    text-align: right;
+    font-size: 11px;
+    font-variant-numeric: tabular-nums;
+    color: var(--text-3);
+  }
+
+  .backup-fields {
+    display: grid;
+    grid-template-columns: 136px minmax(0, 1fr);
+    gap: 10px 12px;
+    align-items: center;
+  }
+  .backup-fields .field-label { margin-bottom: 0; }
+  .label-with-info { display: flex; align-items: center; gap: 6px; white-space: nowrap; }
+  .confirm-text strong { color: var(--text-1); font-weight: 600; }
+  /* The column gap already spaces the title from its rows. */
+  .backups-left .subsection-title { margin-bottom: 0; }
+
+  .restore-picks {
     display: flex;
     flex-direction: column;
-    gap: 8px;
-    transition: border-color 0.1s;
+    gap: 6px;
   }
-  .backup-row.confirming { border-color: var(--border-lit); }
 
-  .backup-meta {
+  .restore-pick {
     display: flex;
     align-items: center;
-    gap: 10px;
-  }
-
-  .backup-date {
-    font-size: 11px;
-    font-variant-numeric: tabular-nums;
+    gap: 6px;
+    font-size: 12px;
     color: var(--text-1);
+    cursor: pointer;
   }
+  .restore-pick input { accent-color: var(--accent); cursor: pointer; }
 
-  .backup-label-badge {
-    font-family: var(--font-head);
-    font-size: var(--fs-min);
-    font-weight: 600;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    padding: 1px 6px;
-    border-radius: 2px;
-    border: 1px solid var(--border-mid);
-    color: var(--text-3);
-    background: var(--bg-3);
-  }
-  .backup-label-badge.pre-update {
-    color: var(--amber-bright);
-    border-color: color-mix(in srgb, var(--amber) 30%, transparent);
-    background: var(--amber-dim);
-  }
-
-  .backup-size {
+  .backup-note {
     font-size: 11px;
-    font-variant-numeric: tabular-nums;
-    color: var(--text-3);
-    margin-left: auto;
-  }
-
-  .backup-targets-line {
-    font-size: 11px;
-    color: var(--text-3);
+    color: var(--text-2);
   }
 
   .backup-row-actions {
@@ -1025,12 +1102,13 @@
   }
 
 
-  .edited-row {
-    display: flex;
+  .outcome-fields {
+    display: grid;
+    grid-template-columns: 110px minmax(0, 1fr) auto;
+    gap: 8px 12px;
     align-items: center;
-    gap: 8px;
-    flex-wrap: wrap;
   }
+  .outcome-fields .field-label { margin-bottom: 0; }
 
   .keep-field {
     display: flex;
