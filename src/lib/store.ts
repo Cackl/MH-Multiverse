@@ -632,7 +632,7 @@ export interface UpdateOutcome {
   serverExe: string
   error: string
   /** Stock files the update shipped switched the other way, kept as the user had them. */
-  kept: { file: string; enabled: boolean; kept_as: string }[]
+  kept: { file: string; enabled: boolean }[]
   /** Files saved in the app that the update replaced. Their edited copies are in the backup. */
   edited: string[]
   /** The pre-update backup, for `put_back_edits`. Empty after an error. */

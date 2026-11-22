@@ -307,8 +307,6 @@ fn detect_source_dir(staging: &Path) -> Result<PathBuf, String> {
 pub struct KeptFile {
     pub file: String,
     pub enabled: bool,
-    /// The name the user's previous copy was moved to, in the same folder.
-    pub kept_as: String,
 }
 
 /// Each `.json` file the update ships where the app can switch it: its name, where it ships, where
@@ -338,23 +336,31 @@ fn switchable_files(source: &Path) -> Vec<(String, String, String, bool)> {
     out
 }
 
+/// The user's copies of stock files switched the other way from how the update ships them, as
+/// paths relative to the server folder. `keep_switched_files` replaces them after the install, so
+/// the pre-update backup saves them with the files the install replaces.
+fn switched_copies(source: &Path, server_dir: &Path) -> Vec<String> {
+    switchable_files(source)
+        .into_iter()
+        .filter(|(_, _, other, _)| server_dir.join(other).is_file())
+        .map(|(_, _, other, _)| other)
+        .collect()
+}
+
 /// Puts back the user's on/off choice for stock files the update shipped in the other state.
 /// Only a switch moves a stock file out of the place it ships in, so when both copies exist, the
-/// other one is the user's choice. The update's copy replaces it and the replaced copy is moved
-/// aside to `<name>.<timestamp>.bak`.
+/// other one is the user's choice. The update's copy replaces it. The user's copy is in the
+/// pre-update backup (`switched_copies`).
 fn keep_switched_files(server_dir: &Path, source: &Path) -> Result<Vec<KeptFile>, String> {
-    let rename = |from: &Path, to: &Path| {
-        std::fs::rename(from, to).map_err(|e| format!("Cannot move {}: {e}", from.display()))
-    };
     let mut kept = Vec::new();
     for (name, shipped, other, other_on) in switchable_files(source) {
         let (shipped_path, other_path) = (server_dir.join(&shipped), server_dir.join(&other));
         if !shipped_path.is_file() || !other_path.is_file() {
             continue;
         }
-        let bak = crate::store::move_aside(&other_path)?;
-        rename(&shipped_path, &other_path)?;
-        kept.push(KeptFile { file: name, enabled: other_on, kept_as: crate::store::file_name_of(&bak) });
+        std::fs::rename(&shipped_path, &other_path)
+            .map_err(|e| format!("Cannot move {}: {e}", shipped_path.display()))?;
+        kept.push(KeptFile { file: name, enabled: other_on });
     }
     Ok(kept)
 }
@@ -584,7 +590,10 @@ async fn run_update_inner(
         let (dir, staging, exe) = (server_dir.to_path_buf(), staging_dir.to_path_buf(), PathBuf::from(server_exe));
         tokio::task::spawn_blocking(move || {
             let source = detect_source_dir(&staging)?;
-            let replaced = changed_files(&source, &dir)?;
+            let mut replaced = changed_files(&source, &dir)?;
+            replaced.extend(switched_copies(&source, &dir));
+            replaced.sort();
+            replaced.dedup();
             let update = UpdateVersions {
                 linked_name,
                 from: product_version(&exe),

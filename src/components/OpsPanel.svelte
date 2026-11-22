@@ -450,7 +450,6 @@
             <div class="kept-files" use:tip={`The update shipped this switched ${k.enabled ? 'off' : 'on'}`}>
               Switched {k.enabled ? 'on' : 'off'} as before: {k.file}
             </div>
-            <div class="kept-files">Your previous copy: {k.kept_as}</div>
           {/each}
         {/if}
         {#if outcome?.error}

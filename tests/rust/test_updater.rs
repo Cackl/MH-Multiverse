@@ -366,7 +366,7 @@ fn update_keeps_switched_stock_files_as_the_user_had_them() {
             vec![
                 (format!("{P}/PatchDataBugFixes.json"), None),
                 (format!("{P}/Off/PatchDataBugFixes.json"), Some("new")),
-                (format!("{P}/Off/PatchDataBugFixes.json.bak"), Some("mine")),
+                (format!("{P}/Off/PatchDataBugFixes.json.bak"), None),
             ],
         ),
         (
@@ -376,7 +376,7 @@ fn update_keeps_switched_stock_files_as_the_user_had_them() {
             vec![("PatchDataCarnival.json", true)],
             vec![
                 (format!("{P}/PatchDataCarnival.json"), Some("new")),
-                (format!("{P}/PatchDataCarnival.json.bak"), Some("mine")),
+                (format!("{P}/PatchDataCarnival.json.bak"), None),
                 (format!("{P}/Off/PatchDataCarnival.json"), None),
             ],
         ),
@@ -388,7 +388,7 @@ fn update_keeps_switched_stock_files_as_the_user_had_them() {
             vec![
                 (format!("{LT}/LiveTuningDataPvP.json"), None),
                 (format!("{LT}/OFF_LiveTuningDataPvP.json"), Some("new")),
-                (format!("{LT}/OFF_LiveTuningDataPvP.json.bak"), Some("mine")),
+                (format!("{LT}/OFF_LiveTuningDataPvP.json.bak"), None),
             ],
         ),
         (
@@ -444,22 +444,20 @@ fn update_keeps_switched_stock_files_as_the_user_had_them() {
         ships.iter().for_each(|rel| write(source.path(), rel, "new"));
         server_files.iter().for_each(|(rel, text)| write(server.path(), rel, text));
 
+        // The user's copies the update will replace, which the pre-update backup saves.
+        let copies = switched_copies(source.path(), server.path());
         let got = keep_switched_files(server.path(), source.path()).unwrap();
+        assert_eq!(copies.len(), got.len(), "{case}: {copies:?} backed up");
 
         let got_pairs: Vec<(String, bool)> = got.iter().map(|k| (k.file.clone(), k.enabled)).collect();
         let want: Vec<(String, bool)> = kept.into_iter().map(|(file, enabled)| (file.into(), enabled)).collect();
         assert_eq!(got_pairs, want, "{case}: kept");
-        // `X.json.bak` in a case stands for the timestamped copy `move_aside` made of X.json.
+        // `X.json.bak` in a case stands for a timestamped copy `move_aside` would make of X.json.
         for (rel, text) in after {
             let path = match rel.strip_suffix(".bak") {
                 Some(orig) => crate::test_helpers::moved_aside(&server.path().join(orig)),
                 None => Some(server.path().join(&rel)),
             };
-            if let (Some(p), Some(_)) = (&path, text) {
-                if rel.ends_with(".bak") {
-                    assert!(got.iter().any(|k| k.kept_as == crate::store::file_name_of(p)), "{case}: kept_as names {rel}");
-                }
-            }
             assert_eq!(path.and_then(|p| fs::read_to_string(p).ok()).as_deref(), text, "{case}: {rel}");
         }
     }
