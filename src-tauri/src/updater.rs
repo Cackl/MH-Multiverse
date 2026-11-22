@@ -399,6 +399,29 @@ fn under_target(rel: &str, targets: &[String]) -> bool {
     targets.iter().any(|t| rel == t || rel.starts_with(&format!("{t}/")))
 }
 
+/// The target for player data, which follows the persistence mode: it stands for the SQLite
+/// database and the JSON save named in the config, whichever exist.
+pub(crate) const PLAYERS_TARGET: &str = "Players";
+
+/// The targets with `PLAYERS_TARGET` swapped for the account files' paths, so a manifest only
+/// holds real paths and restoring needs nothing else.
+fn resolve_targets(server_exe: &str, targets: Vec<String>) -> Result<Vec<String>, String> {
+    let server_dir = server_dir_from_exe(server_exe)?;
+    let mut out = Vec::new();
+    for target in targets {
+        if target != PLAYERS_TARGET {
+            out.push(target);
+            continue;
+        }
+        for path in [crate::accounts::db_path(server_exe)?, crate::accounts::json_save_path(server_exe)?] {
+            let rel = path.strip_prefix(&server_dir).map_err(|e| e.to_string())?;
+            out.push(rel.to_string_lossy().replace('\\', "/"));
+        }
+    }
+    out.dedup();
+    Ok(out)
+}
+
 fn create_backup_inner(
     server_dir: &Path,
     targets: Vec<String>,
@@ -599,7 +622,7 @@ async fn run_update_inner(
                 from: product_version(&exe),
                 to: exe.file_name().and_then(|name| product_version(&source.join(name))),
             };
-            create_backup_inner(&dir, backup_targets, replaced, Some(update), "pre-update")
+            create_backup_inner(&dir, resolve_targets(&exe.to_string_lossy(), backup_targets)?, replaced, Some(update), "pre-update")
         })
         .await
         .map_err(|e| format!("Backup task failed: {e}"))??
@@ -787,7 +810,7 @@ pub async fn create_backup(
 }
 
 fn backup(server_exe: &str, targets: Vec<String>, label: &str) -> Result<BackupManifest, String> {
-    create_backup_inner(&server_dir_from_exe(server_exe)?, targets, vec![], None, label)
+    create_backup_inner(&server_dir_from_exe(server_exe)?, resolve_targets(server_exe, targets)?, vec![], None, label)
 }
 
 #[tauri::command]

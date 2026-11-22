@@ -501,3 +501,20 @@ fn missing_or_unversioned_exe_has_no_build_date() {
     assert_eq!(installed_build_date(&server_exe), None);
     assert_eq!(installed_build_date("C:/definitely/not/here/MHServerEmu.exe"), None);
 }
+
+#[test]
+fn players_target_backs_up_the_account_files_the_config_names() {
+    let (_tmp, server_exe) = empty_server();
+    let dir = crate::paths::server_dir(&server_exe).unwrap();
+    let targets = || vec!["Config.ini".to_string(), PLAYERS_TARGET.to_string()];
+    assert_eq!(resolve_targets(&server_exe, targets()).unwrap(), ["Config.ini", "Data/Account.db", "Data/DefaultAccount.json"]);
+
+    fs::write(dir.join("ConfigOverride.ini"), "[SQLiteDBManager]\nFileName=Saves/Mine.db\n[JsonDBManager]\nFileName=Solo.json\n").unwrap();
+    assert_eq!(resolve_targets(&server_exe, targets()).unwrap(), ["Config.ini", "Data/Saves/Mine.db", "Data/Solo.json"]);
+
+    // Only the save that exists is backed up, under its real path.
+    fs::create_dir_all(dir.join("Data")).unwrap();
+    fs::write(dir.join("Data/Solo.json"), "{}").unwrap();
+    let manifest = backup(&server_exe, vec![PLAYERS_TARGET.to_string()], "manual").unwrap();
+    assert_eq!(manifest.targets, ["Data/Solo.json"]);
+}

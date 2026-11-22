@@ -466,7 +466,7 @@ pub fn restore_json_account(
     restore_json_save(&server_exe, &json_path)
 }
 
-fn json_save_path(server_exe: &str) -> Result<PathBuf, String> {
+pub(crate) fn json_save_path(server_exe: &str) -> Result<PathBuf, String> {
     let name = crate::ini::read_merged_value(server_exe, "JsonDBManager", "FileName", "DefaultAccount.json");
     // A single plain name: the copies made below are looked up next to it in Data/.
     let mut parts = Path::new(&name).components();

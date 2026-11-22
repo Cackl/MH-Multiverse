@@ -475,7 +475,7 @@ export const appConfig = writable<AppConfig>({
   launch_options: defaultLaunchOptions,
   shutdown: defaultShutdownConfig,
   console_presets: ["!commands","!account userlevel","!server status","!server broadcast","!server shutdown","!server reloadcatalog","!server reloadlivetuning"],
-  backup_targets: ['Config.ini', 'ConfigOverride.ini', 'Data/Game/LiveTuning', 'Data/Account.db'],
+  backup_targets: ['ConfigOverride.ini', 'Players', 'Data/Game/LiveTuning'],
   // Until the real config loads, show the existing editors rather than flash Simple.
   advanced_data: true,
   apache_auto_start: true,

@@ -43,23 +43,22 @@
     done:        'Complete',
   }
 
-  // Backup targets: id is the relative path passed to the backend.
-  // TOP_LEVEL targets are shown ungrouped at the top.
-  // DATA_TARGETS are children of "Full Data" — disabled when fullData is selected.
+  // Backup targets: id is the relative path passed to the backend, except Players, which the
+  // backend swaps for the account database and JSON save named in the config.
+  // DATA_TARGETS are inside the Data folder, so Full Data covers them.
   const TOP_TARGETS = [
-    { id: 'Config.ini',           label: 'Config.ini',         description: 'Server configuration' },
-    { id: 'ConfigOverride.ini',   label: 'ConfigOverride.ini', description: 'Local configuration overrides' },
+    { id: 'ConfigOverride.ini',   label: 'ConfigOverride.ini', description: 'Settings changed in Multiverse' },
+    { id: 'Config.ini',           label: 'Config.ini',         description: 'Stock settings file. Updates replace it' },
   ]
 
-  const FULL_DATA_TARGET = { id: 'Data', label: 'Full Data Folder', description: 'Entire Data directory, includes everything below' }
+  const FULL_DATA_TARGET = { id: 'Data', label: 'Full Data Folder', description: 'Whole Data folder, everything below included' }
 
   const DATA_TARGETS = [
-    { id: 'Data/Game/LiveTuning', label: 'Live Tuning',    description: 'LiveTuning JSON files' },
-    { id: 'Data/Account.db',      label: 'Account Store',  description: 'Player account database (Account.db)' },
-    { id: 'Data/Game/MTXStore',   label: 'MTX Store',      description: 'In-game store catalogue files' },
-    { id: 'Data/Game/Achievements', label: 'Achievements', description: 'Achievement definition files' },
-    { id: 'Data/Game/Patches',    label: 'Patches',        description: 'Bug fix and content patch files' },
-    { id: 'Data/Web',             label: 'Web',            description: 'Dashboard and store static web pages' },
+    { id: 'Players',              label: 'Player Accounts', description: 'Account database and JSON save' },
+    { id: 'Data/Game/LiveTuning', label: 'Live Tuning',     description: 'Server rates, events and tuning files' },
+    { id: 'Data/Game/Patches',    label: 'Patches',         description: 'All Data Patching files' },
+    { id: 'Data/Game/MTXStore',   label: 'Store',           description: 'Catalogs and your store edits' },
+    { id: 'Data/Web',             label: 'Web',             description: 'Dashboard, web API keys and copies of bundle pages' },
   ]
 
   // ── State ──────────────────────────────────────────────────────────────────
@@ -250,7 +249,9 @@
     return (
       TOP_TARGETS.find(t => t.id === id)?.label ??
       DATA_TARGETS.find(t => t.id === id)?.label ??
-      (id === 'Data' ? FULL_DATA_TARGET.label : id)
+      (id === 'Data' ? FULL_DATA_TARGET.label : null) ??
+      // A backup records Players as the account files it found.
+      (/\.(db|json)$/.test(id) ? `Player Accounts (${id.split('/').pop()})` : id)
     )
   }
 

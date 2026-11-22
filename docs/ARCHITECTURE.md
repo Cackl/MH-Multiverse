@@ -337,7 +337,7 @@ The stdout reader additionally calls `parse_player_log_event` on every line (reg
 | `missing_game_data` | `server_exe: String` | `Vec<String>` | Which of `Calligraphy.sip` and `mu_cdata.sip` the server's `Data/Game` lacks (`game_data.rs`) |
 | `copy_game_data` | `game_exe, server_exe` | `Vec<String>` | Copies the missing ones from the client's `Data/Game` (searched up from the game exe) through a `.part` file, never replacing one that is there. Returns the files copied |
 | `set_shutdown_config` | `shutdown: ShutdownConfig` | `()` | Set shutdown delay and broadcast message |
-| `set_backup_targets` | `targets: Vec<String>` | `()` | Set backup target paths |
+| `set_backup_targets` | `targets: Vec<String>` | `()` | Set backup target paths. `Players` stands for the account database and JSON save, resolved when a backup is made |
 | `set_console_presets` | `presets: Vec<String>` | `()` | Set command shortcut preset list |
 | `set_text_size` | `size: f64` | `()` | Set the Display text size (0.5 to 2.0, applied as webview zoom) |
 | `set_advanced_data` | `advanced: bool` | `()` | Set the Data tab's Simple / Advanced mode |
@@ -809,13 +809,13 @@ run_update
   → download zip with streaming progress events
   → extract to {server_dir}/_update_staging/
   → detect wrapper directory (if zip contains single subdirectory)
-  → pre-update backup to {server_dir}/Backups/{timestamp}/: the selected targets plus
-    every file the install will replace (manifest `replaced`, and `update` with the
-    linked version name and the server version before and after)
+  → pre-update backup to {server_dir}/Backups/{timestamp}/: the selected targets (Players
+    resolved to the account database and JSON save the config names) plus every file the
+    install will replace and the user's switched copies (manifest `replaced`, and `update`
+    with the linked version name and the server version before and after)
   → copy staged files over server directory, on a failure roll back from the backup
-  → restore the targets (a targeted file keeps the user's copy)
   → keep_switched_files: a stock file the user had switched off stays off
-  → return the files kept on or off and the edited files the update replaced
+  → return the files kept on or off, the edited files the update replaced and the backup id
   → clean up temp files (_update.zip, _update_staging/)
 ```
 
