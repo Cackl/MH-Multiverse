@@ -26,7 +26,12 @@
     targets: string[]
     size_bytes: number
     replaced?: string[]
+    update?: { linked_name?: string | null; from?: string | null; to?: string | null }
   }
+
+  // "1.0.3+build20261027131155" → "1.0.3 build 2026-10-27"
+  const serverVer = (v?: string | null) =>
+    v ? v.replace(/\+build(\d{4})(\d{2})(\d{2})\d*/, ' build $1-$2-$3') : 'unknown'
 
   // ── Constants ──────────────────────────────────────────────────────────────
 
@@ -554,6 +559,9 @@
                     </span>
                     <span class="backup-size">{formatBytes(backup.size_bytes)}</span>
                   </div>
+                  {#if backup.update?.from || backup.update?.to}
+                    <div class="backup-targets-line">Server {serverVer(backup.update.from)} → {serverVer(backup.update.to)}</div>
+                  {/if}
                   <div class="backup-targets-line">
                     {[...backup.targets.map(targetLabel), ...(backup.replaced?.length ? [`${backup.replaced.length} files the update replaced`] : [])].join(', ') || 'No files'}
                   </div>

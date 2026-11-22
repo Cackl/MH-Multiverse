@@ -40,7 +40,7 @@ pub struct BackupManifest {
     /// putting them back would put the old server back.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub replaced: Vec<String>,
-    /// A pre-update backup's versions. Not shown in the app yet.
+    /// A pre-update backup's versions, shown on its row in Ops > History.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub update: Option<UpdateVersions>,
 }
