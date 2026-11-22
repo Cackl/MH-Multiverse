@@ -124,19 +124,19 @@ fn roll_back_puts_the_server_files_back_and_can_be_undone() {
     assert_eq!((read("MHServerEmu.dll"), read("Config.ini")), ("new build".into(), "mine".into()));
 
     fs::write(dir.join("Config.ini"), "changed").unwrap();
-    restore_from(&server_exe, &pre_update.id, true).unwrap();
+    restore_from(&server_exe, &pre_update.id, true, None).unwrap();
     assert_eq!((read("MHServerEmu.dll"), read("Config.ini")), ("old build".into(), "mine".into()));
 
     // Its own backup holds the newer files and versions, so rolling that back undoes it.
     let undo = list_backups(server_exe.clone()).unwrap().into_iter()
         .find(|b| b.label == "pre-restore" && !b.replaced.is_empty()).unwrap();
     assert_eq!(undo.update.as_ref().unwrap().to.as_deref(), Some("1.1.0+build20261120"));
-    restore_from(&server_exe, &undo.id, true).unwrap();
+    restore_from(&server_exe, &undo.id, true, None).unwrap();
     assert_eq!((read("MHServerEmu.dll"), read("Config.ini")), ("new build".into(), "changed".into()));
 
     // A backup without server files can't be rolled back to.
     let manual = backup(&server_exe, vec!["Config.ini".into()], "manual").unwrap();
-    assert!(restore_from(&server_exe, &manual.id, true).is_err());
+    assert!(restore_from(&server_exe, &manual.id, true, None).is_err());
 }
 
 #[test]
@@ -517,4 +517,27 @@ fn players_target_backs_up_the_account_files_the_config_names() {
     fs::write(dir.join("Data/Solo.json"), "{}").unwrap();
     let manifest = backup(&server_exe, vec![PLAYERS_TARGET.to_string()], "manual").unwrap();
     assert_eq!(manifest.targets, ["Data/Solo.json"]);
+}
+
+#[test]
+fn restore_can_put_back_just_some_targets() {
+    let (_tmp, server_exe) = empty_server();
+    let dir = crate::paths::server_dir(&server_exe).unwrap();
+    let patches = dir.join("Data/Game/Patches");
+    fs::create_dir_all(patches.join("Off")).unwrap();
+    fs::write(dir.join("Config.ini"), "backed up").unwrap();
+    fs::write(patches.join("A.json"), "backed up").unwrap();
+    let manifest = backup(&server_exe, vec!["Config.ini".into(), "Data/Game/Patches".into()], "manual").unwrap();
+    fs::write(dir.join("Config.ini"), "changed").unwrap();
+    // Switched off since, in a target that isn't restored: left alone.
+    fs::rename(patches.join("A.json"), patches.join("Off/A.json")).unwrap();
+
+    let only = ["Config.ini".to_string()];
+    assert!(restore_from(&server_exe, &manifest.id, false, Some(&only)).unwrap().is_empty());
+    assert_eq!(fs::read_to_string(dir.join("Config.ini")).unwrap(), "backed up");
+    assert!(patches.join("Off/A.json").exists() && !patches.join("A.json").exists());
+    let before = list_backups(server_exe.clone()).unwrap().into_iter().find(|b| b.label == "pre-restore").unwrap();
+    assert_eq!(before.targets, ["Config.ini"]);
+
+    assert!(restore_from(&server_exe, &manifest.id, false, Some(&["Data/Account.db".to_string()])).is_err());
 }

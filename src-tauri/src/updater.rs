@@ -851,26 +851,33 @@ pub fn list_backups(server_exe: String) -> Result<Vec<BackupManifest>, String> {
 }
 
 /// `roll_back` also copies back the server files an update replaced, putting the old build back.
+/// `only` restores just those of the backup's targets, all of them when left out.
 #[tauri::command]
-pub async fn restore_backup(app: AppHandle, server_exe: String, backup_id: String, roll_back: Option<bool>) -> Result<Vec<String>, String> {
+pub async fn restore_backup(
+    app: AppHandle,
+    server_exe: String,
+    backup_id: String,
+    roll_back: Option<bool>,
+    only: Option<Vec<String>>,
+) -> Result<Vec<String>, String> {
     // A running server writes its players back over the restored files.
     ensure_server_stopped(&app, &server_exe)?;
     if update_running() {
         return Err("Wait for the update to finish first".into());
     }
-    off_main(move || restore_from(&server_exe, &backup_id, roll_back.unwrap_or(false))).await
+    off_main(move || restore_from(&server_exe, &backup_id, roll_back.unwrap_or(false), only.as_deref())).await
 }
 
 #[cfg(test)]
 fn restore(server_exe: &str, backup_id: &str) -> Result<Vec<String>, String> {
-    restore_from(server_exe, backup_id, false)
+    restore_from(server_exe, backup_id, false, None)
 }
 
-/// Copies the backup's targets back, and with `roll_back` the files its update replaced, after
-/// backing up what they replace. Returns the names that copies switched the other way were moved
-/// aside to.
+/// Copies the backup's targets back (or just `only` of them), and with `roll_back` the files its
+/// update replaced, after backing up what they replace. Returns the names that copies switched the
+/// other way were moved aside to.
 /// ponytail: a roll back leaves files new in the newer build in place, as a failed install does.
-fn restore_from(server_exe: &str, backup_id: &str, roll_back: bool) -> Result<Vec<String>, String> {
+fn restore_from(server_exe: &str, backup_id: &str, roll_back: bool, only: Option<&[String]>) -> Result<Vec<String>, String> {
     let server_dir = server_dir_from_exe(server_exe)?;
     let backup_dir = server_dir.join("Backups").join(&backup_id);
 
@@ -882,6 +889,15 @@ fn restore_from(server_exe: &str, backup_id: &str, roll_back: bool) -> Result<Ve
     if roll_back && manifest.replaced.is_empty() {
         return Err("This backup has no server files to roll back to".into());
     }
+    let targets = match only {
+        None => manifest.targets.clone(),
+        Some(only) => {
+            if let Some(t) = only.iter().find(|t| !manifest.targets.contains(t)) {
+                return Err(format!("This backup has no '{t}'"));
+            }
+            manifest.targets.iter().filter(|t| only.contains(t)).cloned().collect()
+        }
+    };
     let replaced = if roll_back { manifest.replaced.clone() } else { vec![] };
     // A roll back's own backup holds the newer server files and versions, so it can be undone the same way.
     let update = roll_back.then(|| UpdateVersions {
@@ -891,19 +907,20 @@ fn restore_from(server_exe: &str, backup_id: &str, roll_back: bool) -> Result<Ve
     });
 
     // So a restore can be undone, a partial one included.
-    let before = create_backup_inner(&server_dir, manifest.targets.clone(), replaced.clone(), update, "pre-restore")?;
+    let before = create_backup_inner(&server_dir, targets.clone(), replaced.clone(), update, "pre-restore")?;
     let failed = |e: String| format!("{e}. The files from before the restore are in backup {}.", before.id);
 
-    for rel in manifest.targets.iter().chain(&replaced) {
+    let copied: Vec<String> = targets.into_iter().chain(replaced).collect();
+    for rel in &copied {
         copy_path(&backup_dir.join(rel), &server_dir.join(rel)).map_err(failed)?;
     }
 
     // Copying merges, so a file switched the other way since the backup would now be in both
     // places, and the next update would take that copy as the user's choice. Move it aside.
     let mut moved = Vec::new();
-    for (_, _, other, _) in switchable_files(&backup_dir) {
+    for (_, shipped, other, _) in switchable_files(&backup_dir) {
         let other_path = server_dir.join(&other);
-        if !backup_dir.join(&other).is_file() && other_path.is_file() {
+        if under_target(&shipped, &copied) && !backup_dir.join(&other).is_file() && other_path.is_file() {
             let bak = crate::store::move_aside(&other_path).map_err(failed)?;
             moved.push(crate::store::file_name_of(&bak));
         }

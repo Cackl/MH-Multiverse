@@ -455,7 +455,7 @@ The stdout reader additionally calls `parse_player_log_event` on every line (reg
 | `cancel_update` | - | `()` | Stop the running update at its next check. The install itself can't be cancelled |
 | `create_backup` | `server_exe: String, targets: Vec<String>, label: String` | `BackupManifest` | Create a named backup (off the main thread, refused while the server runs) |
 | `list_backups` | `server_exe: String` | `Vec<BackupManifest>` | List backups (newest first) |
-| `restore_backup` | `server_exe: String, backup_id: String, roll_back: Option<bool>` | `Vec<String>` | Back up what the restore replaces, then copy the backup's targets back, and with `roll_back` the server files its update replaced. Returns where copies switched the other way were moved aside |
+| `restore_backup` | `server_exe: String, backup_id: String, roll_back: Option<bool>, only: Option<Vec<String>>` | `Vec<String>` | Back up what the restore replaces, then copy the backup's targets back (just `only` of them when given), and with `roll_back` the server files its update replaced. Returns where copies switched the other way were moved aside |
 | `put_back_edits` | `server_exe: String, backup_id: String` | `()` | Back up the update's copies of the edited files a pre-update backup's update replaced, then copy the user's back |
 | `delete_backup` | `server_exe: String, backup_id: String` | `()` | Delete backup directory |
 | `get_backups_dir` | `server_exe: String` | `String` | Return Backups directory path |
