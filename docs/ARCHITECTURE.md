@@ -300,9 +300,7 @@ The stdout reader additionally calls `parse_player_log_event` on every line (reg
 
 **`calligraphy.rs`** - Reads MHServerEmu's `Calligraphy.sip` pak file (LZ4-compressed entries with a `KAPG` signature). Parses the `Blueprint.directory` and `Prototype.directory` files within the pak to build a `PrototypeCatalogue` with indices by runtime ID, path, and GUID. The catalogue is cached per sip file path and rebuilt automatically if the server executable changes. Prototype search supports multi-prefix category filtering and case-insensitive matching against both path and display name.
 
-**`updater.rs`** - Downloads nightly builds from `nightly.link/Crypto137/MHServerEmu/...` (the `windows-v48`, `-v52` or `-v53` workflow, matching the server's own game version), extracts them, and overlays onto the server directory. The update flow: check availability (HTTP range probe) → download with progress events → extract to staging dir → pre-update backup of the selected targets and every file the install will replace → copy to server dir (a failure rolls back from that backup) → restore the targets. `cancel_update` stops it at the next check before the install, which can't be cancelled. Backups are stored in `{server_dir}/Backups/{timestamp}/` with a `manifest.json` (an id taken in the same second gets a `-1`, `-2` suffix). The manifest's `replaced` lists the files an update overwrote: a later Restore leaves them out, so it can't put the old server back. A Restore first makes a "pre-restore" backup of the files it will replace. Pre-update backups are never pruned. `Calligraphy.sip` and `mu_cdata.sip` are blacklisted from backups.
-
-Because the targets are restored after the install, a targeted file always keeps the user's copy, and upstream fixes to it never land.
+**`updater.rs`** - Downloads nightly builds from `nightly.link/Crypto137/MHServerEmu/...` (the `windows-v48`, `-v52` or `-v53` workflow, matching the server's own game version), extracts them, and overlays onto the server directory. The update flow: check availability (HTTP range probe) → download with progress events → extract to staging dir → pre-update backup of the selected targets, every file the install will replace and the user's copies of stock files switched the other way → copy to server dir (a failure rolls back from that backup) → keep the user's on/off choice for switched stock files. The targets are not copied back, so upstream fixes always land. Files the app had edited (a `.json.bak` beside them) that the install replaced are reported, and `put_back_edits` copies them back from the pre-update backup after backing up the update's copies as a pre-restore backup. `cancel_update` stops it at the next check before the install, which can't be cancelled. Backups are stored in `{server_dir}/Backups/{timestamp}/` with a `manifest.json` (an id taken in the same second gets a `-1`, `-2` suffix). The manifest's `replaced` lists the files an update overwrote. A plain Restore leaves them out, so it can't put the old server back. Roll Back Update (`restore_backup` with `roll_back`) copies them back too, which puts the old build back. Files new in the newer build stay. A Restore first makes a "pre-restore" backup of the files it will replace. A roll back's pre-restore backup also holds the newer server files and the versions, so its Undo Roll Back is the same roll back in reverse. After each update, restore or Restore My Edits, the oldest automatic (pre-update and pre-restore) backups beyond `keep_auto_backups` (default 10, 0 keeps all) are deleted, never the one just restored from. Manual backups are never deleted. `Calligraphy.sip` and `mu_cdata.sip` are blacklisted from backups.
 
 **`app_update.rs`** - Self-update for MH Multiverse itself. Checks `api.github.com/repos/Cackl/MH-Multiverse/releases`, picks the highest published `vX.Y.Z` (skipping drafts and prereleases), and returns notes for every newer release, flagging any whose body contains a `## Breaking Changes` heading. Installs re-fetch the release by tag and refuse to touch the running exe unless the download carries a valid minisign signature from the embedded `PUBKEY`, names the expected file in its trusted comment, and (exe) reports the expected version in its version resource. See [Releasing](#releasing-signed-updates).
 
@@ -339,7 +337,8 @@ Because the targets are restored after the install, a targeted file always keeps
 | `missing_game_data` | `server_exe: String` | `Vec<String>` | Which of `Calligraphy.sip` and `mu_cdata.sip` the server's `Data/Game` lacks (`game_data.rs`) |
 | `copy_game_data` | `game_exe, server_exe` | `Vec<String>` | Copies the missing ones from the client's `Data/Game` (searched up from the game exe) through a `.part` file, never replacing one that is there. Returns the files copied |
 | `set_shutdown_config` | `shutdown: ShutdownConfig` | `()` | Set shutdown delay and broadcast message |
-| `set_backup_targets` | `targets: Vec<String>` | `()` | Set backup target paths |
+| `set_keep_auto_backups` | `keep: u32` | `()` | How many automatic backups to keep, 0 keeps all |
+| `set_backup_targets` | `targets: Vec<String>` | `()` | Set backup target paths. `Players` stands for the account database and JSON save, resolved when a backup is made |
 | `set_console_presets` | `presets: Vec<String>` | `()` | Set command shortcut preset list |
 | `set_text_size` | `size: f64` | `()` | Set the Display text size (0.5 to 2.0, applied as webview zoom) |
 | `set_advanced_data` | `advanced: bool` | `()` | Set the Data tab's Simple / Advanced mode |
@@ -453,11 +452,12 @@ Because the targets are restored after the install, a targeted file always keeps
 | Command | Parameters | Returns | Description |
 |---|---|---|---|
 | `check_update_available` | `server_exe: Option<String>` | `UpdateInfo` | Probe nightly build URL availability and compare it with the installed build |
-| `run_update` | `server_exe: String, backup_targets: Vec<String>` | `UpdateResult` | Full update flow: download → extract → backup → install → restore. Returns the switched files kept on or off and the edited files the update replaced |
+| `run_update` | `server_exe: String, backup_targets: Vec<String>` | `UpdateResult` | Full update flow: download → extract → backup → install → keep switched files. Returns the switched files kept on or off, the edited files the update replaced and the pre-update backup's id |
 | `cancel_update` | - | `()` | Stop the running update at its next check. The install itself can't be cancelled |
 | `create_backup` | `server_exe: String, targets: Vec<String>, label: String` | `BackupManifest` | Create a named backup (off the main thread, refused while the server runs) |
 | `list_backups` | `server_exe: String` | `Vec<BackupManifest>` | List backups (newest first) |
-| `restore_backup` | `server_exe: String, backup_id: String` | `Vec<String>` | Back up what the restore replaces, then copy the backup's targets back. Returns where copies switched the other way were moved aside |
+| `restore_backup` | `server_exe: String, backup_id: String, roll_back: Option<bool>, only: Option<Vec<String>>` | `Vec<String>` | Back up what the restore replaces, then copy the backup's targets back (just `only` of them when given), and with `roll_back` the server files its update replaced. Returns where copies switched the other way were moved aside |
+| `put_back_edits` | `server_exe: String, backup_id: String` | `()` | Back up the update's copies of the edited files a pre-update backup's update replaced, then copy the user's back |
 | `delete_backup` | `server_exe: String, backup_id: String` | `()` | Delete backup directory |
 | `get_backups_dir` | `server_exe: String` | `String` | Return Backups directory path |
 
@@ -522,7 +522,6 @@ Imports server profiles from uploaded JSON files, detected by shape: Bifrost `Bi
 | `startingServer` / `startingApache` | `writable<boolean>` | A start is in progress |
 | `serverStartError` / `apacheStartError` | `writable<string>` | Last start failure, shown on the Rail dots; '' when none |
 | `jsonPersistence` | `writable<boolean>` | The linked server stores its one account in a JSON file; set by `refreshPersistence` |
-| `launchOptionsReviewed` | `writable<boolean>` | Session only: Get Started ticks "Launch options" once they have been opened |
 | `unsavedSources` | `writable<Record<string, string>>` | Editors holding unsaved edits, keyed by source; checked by `confirmLeave` |
 | `confirmRequest` | `writable<ConfirmRequest \| null>` | The open `askConfirm` question, rendered by `ConfirmDialog` |
 | `gameRunning` | `writable<boolean>` | Game process state (matched by `game_exe`'s file name) |
@@ -610,7 +609,7 @@ Imports server profiles from uploaded JSON files, detected by shape: Bifrost `Bi
 | `player-event` | `PlayerEventPayload` | `server.rs` stdout reader | Player login, logout, or full session clear on server stop |
 | `apache-stopped` | `()` | `server.rs` Apache poll thread | Apache exited on its own (also logged to the console) |
 | `close-requested` | `u64` | `lib.rs` | The window's close button was pressed, answered with `close_ack` and `exit_app` |
-| `update-progress` | `UpdateProgressPayload` | `updater.rs` | Update stage + percentage (downloading, extracting, backing_up, installing, restoring) |
+| `update-progress` | `UpdateProgressPayload` | `updater.rs` | Update stage + percentage (downloading, extracting, backing_up, installing) |
 | `app-update-progress` | `{ stage, pct }` | `app_update.rs` | App self-update stage (downloading, verifying, installing) |
 | `overlay-inject` | `{ ok: bool, message: string }` | `overlay/mod.rs` injection thread | Result of an overlay injection (post-launch or Inject now) |
 | `overlay-pipe` | `{ event: string, text: string, fields: string[], hits: OverlayHit[] }[]` | `overlay/pipe.rs` reader thread | Display rows from the overlay status pipe; `event` is `loot_hidden` (`fields` = time, category, item, code, rarity, reason), `region_entered` (time, terminal, tier), `tier_resolved`/`mission_state` (text only), `player_death` (`fields` = time, heading, detail; `hits` = damage rows) or `_status` (connection notes, no fields) |
@@ -811,13 +810,13 @@ run_update
   → download zip with streaming progress events
   → extract to {server_dir}/_update_staging/
   → detect wrapper directory (if zip contains single subdirectory)
-  → pre-update backup to {server_dir}/Backups/{timestamp}/: the selected targets plus
-    every file the install will replace (manifest `replaced`, and `update` with the
-    linked version name and the server version before and after)
+  → pre-update backup to {server_dir}/Backups/{timestamp}/: the selected targets (Players
+    resolved to the account database and JSON save the config names) plus every file the
+    install will replace and the user's switched copies (manifest `replaced`, and `update`
+    with the linked version name and the server version before and after)
   → copy staged files over server directory, on a failure roll back from the backup
-  → restore the targets (a targeted file keeps the user's copy)
   → keep_switched_files: a stock file the user had switched off stays off
-  → return the files kept on or off and the edited files the update replaced
+  → return the files kept on or off, the edited files the update replaced and the backup id
   → clean up temp files (_update.zip, _update_staging/)
 ```
 

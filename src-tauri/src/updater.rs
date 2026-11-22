@@ -40,7 +40,7 @@ pub struct BackupManifest {
     /// putting them back would put the old server back.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub replaced: Vec<String>,
-    /// A pre-update backup's versions. Not shown in the app yet.
+    /// A pre-update backup's versions, shown on its row in Ops > History.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub update: Option<UpdateVersions>,
 }
@@ -60,6 +60,8 @@ pub struct UpdateResult {
     pub kept: Vec<KeptFile>,
     /// Files the app had edited that the update replaced. The edited copies are in the backup.
     pub edited: Vec<String>,
+    /// The pre-update backup, for putting those edits back.
+    pub backup_id: String,
 }
 
 #[derive(Clone, Serialize)]
@@ -305,8 +307,6 @@ fn detect_source_dir(staging: &Path) -> Result<PathBuf, String> {
 pub struct KeptFile {
     pub file: String,
     pub enabled: bool,
-    /// The name the replaced copy was moved to, in the same folder.
-    pub kept_as: String,
 }
 
 /// Each `.json` file the update ships where the app can switch it: its name, where it ships, where
@@ -336,30 +336,31 @@ fn switchable_files(source: &Path) -> Vec<(String, String, String, bool)> {
     out
 }
 
+/// The user's copies of stock files switched the other way from how the update ships them, as
+/// paths relative to the server folder. `keep_switched_files` replaces them after the install, so
+/// the pre-update backup saves them with the files the install replaces.
+fn switched_copies(source: &Path, server_dir: &Path) -> Vec<String> {
+    switchable_files(source)
+        .into_iter()
+        .filter(|(_, _, other, _)| server_dir.join(other).is_file())
+        .map(|(_, _, other, _)| other)
+        .collect()
+}
+
 /// Puts back the user's on/off choice for stock files the update shipped in the other state.
 /// Only a switch moves a stock file out of the place it ships in, so when both copies exist, the
-/// other one is the user's choice. The update's copy replaces it and the replaced copy is moved
-/// aside to `<name>.<timestamp>.bak`. Where the backup was just restored, the restored copy stays
-/// and the update's copy is the one moved aside.
-fn keep_switched_files(server_dir: &Path, source: &Path, restored: &[String]) -> Result<Vec<KeptFile>, String> {
-    let is_restored = |rel: &str| under_target(rel, restored);
-    let rename = |from: &Path, to: &Path| {
-        std::fs::rename(from, to).map_err(|e| format!("Cannot move {}: {e}", from.display()))
-    };
+/// other one is the user's choice. The update's copy replaces it. The user's copy is in the
+/// pre-update backup (`switched_copies`).
+fn keep_switched_files(server_dir: &Path, source: &Path) -> Result<Vec<KeptFile>, String> {
     let mut kept = Vec::new();
     for (name, shipped, other, other_on) in switchable_files(source) {
         let (shipped_path, other_path) = (server_dir.join(&shipped), server_dir.join(&other));
         if !shipped_path.is_file() || !other_path.is_file() {
             continue;
         }
-        let bak = if is_restored(&other) {
-            crate::store::move_aside(&shipped_path)?
-        } else {
-            let bak = crate::store::move_aside(&other_path)?;
-            rename(&shipped_path, &other_path)?;
-            bak
-        };
-        kept.push(KeptFile { file: name, enabled: other_on, kept_as: crate::store::file_name_of(&bak) });
+        std::fs::rename(&shipped_path, &other_path)
+            .map_err(|e| format!("Cannot move {}: {e}", shipped_path.display()))?;
+        kept.push(KeptFile { file: name, enabled: other_on });
     }
     Ok(kept)
 }
@@ -396,6 +397,29 @@ fn changed_files(source: &Path, server_dir: &Path) -> Result<Vec<String>, String
 /// `rel` is one of `targets` or inside one.
 fn under_target(rel: &str, targets: &[String]) -> bool {
     targets.iter().any(|t| rel == t || rel.starts_with(&format!("{t}/")))
+}
+
+/// The target for player data: it stands for both the SQLite database and the JSON save named
+/// in the config, whatever the persistence mode. A backup saves whichever exist.
+pub(crate) const PLAYERS_TARGET: &str = "Players";
+
+/// The targets with `PLAYERS_TARGET` swapped for the account files' paths, so a manifest only
+/// holds real paths and restoring needs nothing else.
+fn resolve_targets(server_exe: &str, targets: Vec<String>) -> Result<Vec<String>, String> {
+    let server_dir = server_dir_from_exe(server_exe)?;
+    let mut out = Vec::new();
+    for target in targets {
+        if target != PLAYERS_TARGET {
+            out.push(target);
+            continue;
+        }
+        for path in [crate::accounts::db_path(server_exe)?, crate::accounts::json_save_path(server_exe)?] {
+            let rel = path.strip_prefix(&server_dir).map_err(|e| e.to_string())?;
+            out.push(rel.to_string_lossy().replace('\\', "/"));
+        }
+    }
+    out.dedup();
+    Ok(out)
 }
 
 fn create_backup_inner(
@@ -589,13 +613,16 @@ async fn run_update_inner(
         let (dir, staging, exe) = (server_dir.to_path_buf(), staging_dir.to_path_buf(), PathBuf::from(server_exe));
         tokio::task::spawn_blocking(move || {
             let source = detect_source_dir(&staging)?;
-            let replaced = changed_files(&source, &dir)?;
+            let mut replaced = changed_files(&source, &dir)?;
+            replaced.extend(switched_copies(&source, &dir));
+            replaced.sort();
+            replaced.dedup();
             let update = UpdateVersions {
                 linked_name,
                 from: product_version(&exe),
                 to: exe.file_name().and_then(|name| product_version(&source.join(name))),
             };
-            create_backup_inner(&dir, backup_targets, replaced, Some(update), "pre-update")
+            create_backup_inner(&dir, resolve_targets(&exe.to_string_lossy(), backup_targets)?, replaced, Some(update), "pre-update")
         })
         .await
         .map_err(|e| format!("Backup task failed: {e}"))??
@@ -619,24 +646,16 @@ async fn run_update_inner(
         .map_err(|e| format!("Install task failed: {e}"))??;
     }
 
-    // Restore user files that the update overwrote
-    emit_progress(app, "restoring", 0.0, None);
-    let backup_dir = server_dir.join("Backups").join(&manifest.id);
-    for (i, target) in manifest.targets.iter().enumerate() {
-        copy_path(&backup_dir.join(target), &server_dir.join(target))
-            .map_err(|e| format!("{e}. Restore the Pre-update backup {} to put your files back.", manifest.id))?;
-        emit_progress(
-            app,
-            "restoring",
-            (i + 1) as f32 / manifest.targets.len() as f32 * 100.0,
-            Some(target.clone()),
-        );
-    }
-
-    Ok(UpdateResult {
-        edited: edited_files(server_dir, &manifest),
-        kept: keep_switched_files(server_dir, &detect_source_dir(staging_dir)?, &manifest.targets)?,
-    })
+    // The targets aren't copied back, so upstream fixes to them always land. Edits the update
+    // replaced are reported and can be put back from the backup with `put_back_edits`.
+    let result = UpdateResult {
+        edited: edited_files(server_dir, &manifest).iter().map(|rel| crate::store::file_name_of(Path::new(rel))).collect(),
+        kept: keep_switched_files(server_dir, &detect_source_dir(staging_dir)?)?,
+        backup_id: manifest.id,
+    };
+    let (dir, keep) = (server_dir.to_path_buf(), crate::config::load_config(app).keep_auto_backups);
+    let _ = tokio::task::spawn_blocking(move || prune_auto_backups(&dir, keep, &[])).await;
+    Ok(result)
 }
 
 /// After a failed install, copies the replaced files and then the targets back from the pre-update
@@ -658,17 +677,13 @@ fn roll_back(server_dir: &Path, manifest: &BackupManifest, error: String) -> Str
 }
 
 /// Replaced files the app had saved over (`write_with_backup` leaves a `.json.bak` beside them),
-/// except the ones a backup target put back.
+/// as paths relative to the server folder.
 fn edited_files(server_dir: &Path, manifest: &BackupManifest) -> Vec<String> {
     manifest
         .replaced
         .iter()
-        .filter(|rel| {
-            rel.ends_with(".json")
-                && !under_target(rel, &manifest.targets)
-                && server_dir.join(rel).with_extension("json.bak").is_file()
-        })
-        .map(|rel| crate::store::file_name_of(Path::new(rel)))
+        .filter(|rel| rel.ends_with(".json") && server_dir.join(rel).with_extension("json.bak").is_file())
+        .cloned()
         .collect()
 }
 
@@ -798,12 +813,31 @@ pub async fn create_backup(
 }
 
 fn backup(server_exe: &str, targets: Vec<String>, label: &str) -> Result<BackupManifest, String> {
-    create_backup_inner(&server_dir_from_exe(server_exe)?, targets, vec![], None, label)
+    create_backup_inner(&server_dir_from_exe(server_exe)?, resolve_targets(server_exe, targets)?, vec![], None, label)
 }
 
 #[tauri::command]
 pub fn list_backups(server_exe: String) -> Result<Vec<BackupManifest>, String> {
-    let server_dir = server_dir_from_exe(&server_exe)?;
+    list_manifests(&server_dir_from_exe(&server_exe)?)
+}
+
+/// Deletes the oldest automatic (pre-update and pre-restore) backups beyond the newest `keep`,
+/// except `spare`. 0 keeps all. Manual backups are never deleted.
+/// ponytail: best effort, a backup that can't be deleted is left for the next run.
+fn prune_auto_backups(server_dir: &Path, keep: u32, spare: &[&str]) {
+    if keep == 0 {
+        return;
+    }
+    let Ok(all) = list_manifests(server_dir) else { return };
+    for m in all.iter().filter(|m| m.label != "manual").skip(keep as usize) {
+        if !spare.contains(&m.id.as_str()) {
+            let _ = std::fs::remove_dir_all(server_dir.join("Backups").join(&m.id));
+        }
+    }
+}
+
+/// The backups in the server's Backups folder, newest first.
+fn list_manifests(server_dir: &Path) -> Result<Vec<BackupManifest>, String> {
     let backups_dir = server_dir.join("Backups");
 
     if !backups_dir.exists() {
@@ -838,16 +872,40 @@ pub fn list_backups(server_exe: String) -> Result<Vec<BackupManifest>, String> {
     Ok(manifests)
 }
 
+/// `roll_back` also copies back the server files an update replaced, putting the old build back.
+/// `only` restores just those of the backup's targets, all of them when left out.
 #[tauri::command]
-pub async fn restore_backup(app: AppHandle, server_exe: String, backup_id: String) -> Result<Vec<String>, String> {
+pub async fn restore_backup(
+    app: AppHandle,
+    server_exe: String,
+    backup_id: String,
+    roll_back: Option<bool>,
+    only: Option<Vec<String>>,
+) -> Result<Vec<String>, String> {
     // A running server writes its players back over the restored files.
     ensure_server_stopped(&app, &server_exe)?;
-    off_main(move || restore(&server_exe, &backup_id)).await
+    if update_running() {
+        return Err("Wait for the update to finish first".into());
+    }
+    let keep = crate::config::load_config(&app).keep_auto_backups;
+    off_main(move || {
+        let moved = restore_from(&server_exe, &backup_id, roll_back.unwrap_or(false), only.as_deref())?;
+        prune_auto_backups(&server_dir_from_exe(&server_exe)?, keep, &[&backup_id]);
+        Ok(moved)
+    })
+    .await
 }
 
-/// Copies the backup's targets back, after backing up what they replace. Returns the names that
-/// copies switched the other way were moved aside to.
+#[cfg(test)]
 fn restore(server_exe: &str, backup_id: &str) -> Result<Vec<String>, String> {
+    restore_from(server_exe, backup_id, false, None)
+}
+
+/// Copies the backup's targets back (or just `only` of them), and with `roll_back` the files its
+/// update replaced, after backing up what they replace. Returns the names that copies switched the
+/// other way were moved aside to.
+/// ponytail: a roll back leaves files new in the newer build in place, as a failed install does.
+fn restore_from(server_exe: &str, backup_id: &str, roll_back: bool, only: Option<&[String]>) -> Result<Vec<String>, String> {
     let server_dir = server_dir_from_exe(server_exe)?;
     let backup_dir = server_dir.join("Backups").join(&backup_id);
 
@@ -855,30 +913,82 @@ fn restore(server_exe: &str, backup_id: &str) -> Result<Vec<String>, String> {
         return Err(format!("Backup '{backup_id}' not found"));
     }
 
-    let contents = std::fs::read_to_string(backup_dir.join("manifest.json"))
-        .map_err(|e| format!("Cannot read backup manifest: {e}"))?;
-    let manifest: BackupManifest = serde_json::from_str(&contents)
-        .map_err(|e| format!("Cannot parse backup manifest: {e}"))?;
+    let manifest = read_manifest(&backup_dir)?;
+    if roll_back && manifest.replaced.is_empty() {
+        return Err("This backup has no server files to roll back to".into());
+    }
+    let targets = match only {
+        None => manifest.targets.clone(),
+        Some(only) => {
+            if let Some(t) = only.iter().find(|t| !manifest.targets.contains(t)) {
+                return Err(format!("This backup has no '{t}'"));
+            }
+            manifest.targets.iter().filter(|t| only.contains(t)).cloned().collect()
+        }
+    };
+    let replaced = if roll_back { manifest.replaced.clone() } else { vec![] };
+    // A roll back's own backup holds the newer server files and versions, so it can be undone the same way.
+    let update = roll_back.then(|| UpdateVersions {
+        linked_name: manifest.update.as_ref().and_then(|u| u.linked_name.clone()),
+        from: product_version(Path::new(server_exe)),
+        to: manifest.update.as_ref().and_then(|u| u.from.clone()),
+    });
 
     // So a restore can be undone, a partial one included.
-    let before = create_backup_inner(&server_dir, manifest.targets.clone(), vec![], None, "pre-restore")?;
+    let before = create_backup_inner(&server_dir, targets.clone(), replaced.clone(), update, "pre-restore")?;
     let failed = |e: String| format!("{e}. The files from before the restore are in backup {}.", before.id);
 
-    for target in &manifest.targets {
-        copy_path(&backup_dir.join(target), &server_dir.join(target)).map_err(failed)?;
+    let copied: Vec<String> = targets.into_iter().chain(replaced).collect();
+    for rel in &copied {
+        copy_path(&backup_dir.join(rel), &server_dir.join(rel)).map_err(failed)?;
     }
 
     // Copying merges, so a file switched the other way since the backup would now be in both
     // places, and the next update would take that copy as the user's choice. Move it aside.
     let mut moved = Vec::new();
-    for (_, _, other, _) in switchable_files(&backup_dir) {
+    for (_, shipped, other, _) in switchable_files(&backup_dir) {
         let other_path = server_dir.join(&other);
-        if !backup_dir.join(&other).is_file() && other_path.is_file() {
+        if under_target(&shipped, &copied) && !backup_dir.join(&other).is_file() && other_path.is_file() {
             let bak = crate::store::move_aside(&other_path).map_err(failed)?;
             moved.push(crate::store::file_name_of(&bak));
         }
     }
     Ok(moved)
+}
+
+fn read_manifest(backup_dir: &Path) -> Result<BackupManifest, String> {
+    let contents = std::fs::read_to_string(backup_dir.join("manifest.json"))
+        .map_err(|e| format!("Cannot read backup manifest: {e}"))?;
+    serde_json::from_str(&contents).map_err(|e| format!("Cannot parse backup manifest: {e}"))
+}
+
+#[tauri::command]
+pub async fn put_back_edits(app: AppHandle, server_exe: String, backup_id: String) -> Result<(), String> {
+    ensure_server_stopped(&app, &server_exe)?;
+    let keep = crate::config::load_config(&app).keep_auto_backups;
+    off_main(move || {
+        restore_edits(&server_exe, &backup_id)?;
+        prune_auto_backups(&server_dir_from_exe(&server_exe)?, keep, &[&backup_id]);
+        Ok(())
+    })
+    .await
+}
+
+/// Copies the edited files a pre-update backup's update replaced back over the update's copies,
+/// after backing those copies up.
+fn restore_edits(server_exe: &str, backup_id: &str) -> Result<(), String> {
+    let server_dir = server_dir_from_exe(server_exe)?;
+    let backup_dir = server_dir.join("Backups").join(backup_id);
+    let files = edited_files(&server_dir, &read_manifest(&backup_dir)?);
+    if files.is_empty() {
+        return Ok(());
+    }
+    let before = create_backup_inner(&server_dir, files.clone(), vec![], None, "pre-restore")?;
+    for rel in &files {
+        copy_path(&backup_dir.join(rel), &server_dir.join(rel))
+            .map_err(|e| format!("{e}. The update's copies are in backup {}.", before.id))?;
+    }
+    Ok(())
 }
 
 #[tauri::command]

@@ -100,8 +100,6 @@ serverRunning.subscribe(running => { if (!running) serverReady.set(false) })
 export const gameRunning = writable<boolean>(false)
 export const apacheRunning = writable<boolean>(false)
 export const uptimeSec = writable<number>(0)
-// Session only: the Get Started checklist ticks "Launch options" once the user has opened them.
-export const launchOptionsReviewed = writable<boolean>(false)
 
 // True when the linked server keeps one built-in account in a JSON file instead of Account.db.
 export const jsonPersistence = writable<boolean>(false)
@@ -418,6 +416,8 @@ export interface AppConfig {
   console_presets: string[]
   overlay?: { dir: string; auto_inject?: boolean }
   backup_targets: string[]
+  /** Automatic (pre-update and pre-restore) backups to keep. 0 keeps all. */
+  keep_auto_backups: number
   /** Data tab view: true = Advanced, false = Simple (fresh installs start in Simple). */
   advanced_data: boolean
   apache_auto_start: boolean
@@ -477,7 +477,8 @@ export const appConfig = writable<AppConfig>({
   launch_options: defaultLaunchOptions,
   shutdown: defaultShutdownConfig,
   console_presets: ["!commands","!account userlevel","!server status","!server broadcast","!server shutdown","!server reloadcatalog","!server reloadlivetuning"],
-  backup_targets: ['Config.ini', 'ConfigOverride.ini', 'Data/Game/LiveTuning', 'Data/Account.db'],
+  backup_targets: ['ConfigOverride.ini', 'Players', 'Data/Game/LiveTuning'],
+  keep_auto_backups: 10,
   // Until the real config loads, show the existing editors rather than flash Simple.
   advanced_data: true,
   apache_auto_start: true,
@@ -624,7 +625,7 @@ export function setServerExe(path: string): Promise<string> {
 // -- Nightly update (kept here so leaving the Ops tab doesn't lose it) --
 
 export interface UpdateProgress {
-  stage: 'backing_up' | 'downloading' | 'extracting' | 'installing' | 'restoring' | 'done'
+  stage: 'backing_up' | 'downloading' | 'extracting' | 'installing' | 'done'
   pct: number
   message?: string
 }
@@ -634,9 +635,11 @@ export interface UpdateOutcome {
   serverExe: string
   error: string
   /** Stock files the update shipped switched the other way, kept as the user had them. */
-  kept: { file: string; enabled: boolean; kept_as: string }[]
+  kept: { file: string; enabled: boolean }[]
   /** Files saved in the app that the update replaced. Their edited copies are in the backup. */
   edited: string[]
+  /** The pre-update backup, for `put_back_edits`. Empty after an error. */
+  backup_id: string
 }
 
 export const updateRunning = writable<boolean>(false)
@@ -651,10 +654,10 @@ export async function runServerUpdate(serverExe: string, backupTargets: string[]
   updateProgress.set(null)
   const unlisten = await listen<UpdateProgress>('update-progress', e => updateProgress.set(e.payload))
   try {
-    const result = await invoke<{ kept: UpdateOutcome['kept']; edited: string[] }>('run_update', { serverExe, backupTargets })
+    const result = await invoke<Pick<UpdateOutcome, 'kept' | 'edited' | 'backup_id'>>('run_update', { serverExe, backupTargets })
     updateOutcome.set({ serverExe, error: '', ...result })
   } catch (e) {
-    updateOutcome.set({ serverExe, error: String(e), kept: [], edited: [] })
+    updateOutcome.set({ serverExe, error: String(e), kept: [], edited: [], backup_id: '' })
   } finally {
     unlisten()
     updateProgress.set(null)
@@ -754,6 +757,10 @@ export function setShutdownConfig(shutdown: ShutdownConfig): Promise<string> {
 
 export function setBackupTargets(targets: string[]): Promise<string> {
   return updateConfigOptimistic(c => ({ ...c, backup_targets: targets }), 'set_backup_targets', { targets })
+}
+
+export function setKeepAutoBackups(keep: number): Promise<string> {
+  return updateConfigOptimistic(c => ({ ...c, keep_auto_backups: keep }), 'set_keep_auto_backups', { keep })
 }
 
 export function setConsolePresets(presets: string[]): Promise<string> {

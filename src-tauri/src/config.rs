@@ -27,10 +27,12 @@ fn default_backup_targets() -> Vec<String> {
     vec![
         "Config.ini".to_string(),
         "ConfigOverride.ini".to_string(),
+        crate::updater::PLAYERS_TARGET.to_string(),
         "Data/Game/LiveTuning".to_string(),
-        "Data/Account.db".to_string(),
     ]
 }
+
+fn default_keep_auto_backups() -> u32 { 10 }
 
 fn default_console_presets() -> Vec<String> {
     vec![
@@ -177,6 +179,9 @@ pub struct AppConfig {
     /// Backup target paths selected in the Ops panel
     #[serde(default = "default_backup_targets")]
     pub backup_targets: Vec<String>,
+    /// How many automatic (pre-update and pre-restore) backups to keep. 0 keeps all.
+    #[serde(default = "default_keep_auto_backups")]
+    pub keep_auto_backups: u32,
     #[serde(default = "default_console_presets")]
     pub console_presets: Vec<String>,
     #[serde(default)]
@@ -210,6 +215,7 @@ impl Default for AppConfig {
             shutdown: ShutdownConfig::default(),
             console_presets: default_console_presets(),
             backup_targets: default_backup_targets(),
+            keep_auto_backups: default_keep_auto_backups(),
             overlay: OverlayConfig::default(),
             advanced_data: false,
             apache_auto_start: true,
@@ -318,7 +324,7 @@ pub fn load_config(app: &tauri::AppHandle) -> AppConfig {
         // Stamped so the next load doesn't back these defaults up as another version's file.
         return AppConfig { app_version: APP_VERSION.into(), ..AppConfig::default() };
     };
-    let migrated = migrate_linked(&mut config, detect_version);
+    let migrated = migrate_linked(&mut config, detect_version) | migrate_backup_targets(&mut config.backup_targets);
     let stamped = config.app_version != APP_VERSION;
     config.app_version = APP_VERSION.into();
     if migrated || stamped {
@@ -398,6 +404,19 @@ fn detect_version(game_exe: &str, server_exe: &str) -> String {
 
 /// A config from before linked installs becomes one entry, so the user's setup is kept.
 /// Returns true when it changed the config.
+/// Before 1.8.0 the account target was the fixed `Data/Account.db`, which missed a renamed or JSON
+/// save, and Achievements had its own target though nothing edits it.
+fn migrate_backup_targets(targets: &mut Vec<String>) -> bool {
+    let before = targets.clone();
+    for t in targets.iter_mut().filter(|t| *t == "Data/Account.db") {
+        *t = crate::updater::PLAYERS_TARGET.to_string();
+    }
+    targets.retain(|t| t != "Data/Game/Achievements");
+    let mut seen = std::collections::HashSet::new();
+    targets.retain(|t| seen.insert(t.clone()));
+    *targets != before
+}
+
 fn migrate_linked(config: &mut AppConfig, detect: impl Fn(&str, &str) -> String) -> bool {
     if !config.linked.is_empty() || (config.game_exe.is_empty() && config.server_exe.is_empty()) {
         return false;
@@ -671,6 +690,13 @@ pub fn set_shutdown_config(app: tauri::AppHandle, shutdown: ShutdownConfig) -> R
 pub fn set_backup_targets(app: tauri::AppHandle, targets: Vec<String>) -> Result<(), String> {
     let mut config = load_config(&app);
     config.backup_targets = targets;
+    save_config(&app, &config)
+}
+
+#[tauri::command]
+pub fn set_keep_auto_backups(app: tauri::AppHandle, keep: u32) -> Result<(), String> {
+    let mut config = load_config(&app);
+    config.keep_auto_backups = keep;
     save_config(&app, &config)
 }
 

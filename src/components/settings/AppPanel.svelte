@@ -83,7 +83,7 @@
   // Ordered by how often / how much they matter. `invert`: toggle shows the opposite of the stored flag.
   const launchToggles: { key: BoolKey; name: string; desc: string; invert?: boolean }[] = [
     { key: 'auto_login', name: 'Auto Login',
-      desc: 'Passes your password as a launch argument. Note that the client writes it in plain text to its Launch.log' },
+      desc: 'Passes your password as a launch argument. MH Multiverse masks it in the game\'s Launch.log at startup and when the game closes' },
     { key: 'no_steam', invert: true, name: 'Steam Mode',
       desc: 'Enable to launch via Steam, if your copy of the game is from there. Disable to use Robocopy' },
     { key: 'force_32bit', name: 'Force 32-bit Client', desc: 'Runs the Win32 executable instead of Win64, if both are installed' },
@@ -92,7 +92,7 @@
     { key: 'no_sound', name: 'No Sound', desc: 'Disables all game audio on launch' },
     { key: 'custom_resolution', name: 'Custom Resolution', desc: 'Forces a resolution not available in-game options' },
     { key: 'enable_client_log', name: 'Enable Client Log',
-      desc: 'Opens a verbose log window alongside the game. Logs can contain your launch command, including your password' },
+      desc: 'Opens a verbose log window alongside the game. With Auto Login on, the window shows your password' },
     { key: 'patched_client', name: 'Patched Client',
       desc: 'Enable if using Crypto137\'s port 8080 client patch. Changes the SiteConfig URL path for local servers' },
   ]

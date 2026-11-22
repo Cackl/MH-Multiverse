@@ -622,7 +622,7 @@
             <button
               class="info-btn"
               type="button"
-              use:tip={'Use HTTPS for the dashboard URL and SiteConfig requests. Requires SSL to be configured on the remote server.'}
+              use:tip={'Use HTTPS for the dashboard link. Requires SSL on the remote server.'}
               tabindex="-1"
             >?</button>
           </label>

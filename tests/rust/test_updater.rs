@@ -108,6 +108,38 @@ fn restore_backs_up_first_and_keeps_one_state_per_file() {
 }
 
 #[test]
+fn roll_back_puts_the_server_files_back_and_can_be_undone() {
+    let (_tmp, server_exe) = empty_server();
+    let dir = crate::paths::server_dir(&server_exe).unwrap();
+    let read = |rel: &str| fs::read_to_string(dir.join(rel)).unwrap();
+    fs::write(dir.join("MHServerEmu.dll"), "old build").unwrap();
+    fs::write(dir.join("Config.ini"), "mine").unwrap();
+    let update = UpdateVersions { linked_name: Some("1.52".into()), from: Some("1.1.0+build20261120".into()), to: None };
+    let pre_update = create_backup_inner(&dir, vec!["Config.ini".into()], vec!["MHServerEmu.dll".into()], Some(update), "pre-update").unwrap();
+    fs::write(dir.join("MHServerEmu.dll"), "new build").unwrap();
+    fs::write(dir.join("Config.ini"), "changed").unwrap();
+
+    // A plain restore leaves the server files alone.
+    restore(&server_exe, &pre_update.id).unwrap();
+    assert_eq!((read("MHServerEmu.dll"), read("Config.ini")), ("new build".into(), "mine".into()));
+
+    fs::write(dir.join("Config.ini"), "changed").unwrap();
+    restore_from(&server_exe, &pre_update.id, true, None).unwrap();
+    assert_eq!((read("MHServerEmu.dll"), read("Config.ini")), ("old build".into(), "mine".into()));
+
+    // Its own backup holds the newer files and versions, so rolling that back undoes it.
+    let undo = list_backups(server_exe.clone()).unwrap().into_iter()
+        .find(|b| b.label == "pre-restore" && !b.replaced.is_empty()).unwrap();
+    assert_eq!(undo.update.as_ref().unwrap().to.as_deref(), Some("1.1.0+build20261120"));
+    restore_from(&server_exe, &undo.id, true, None).unwrap();
+    assert_eq!((read("MHServerEmu.dll"), read("Config.ini")), ("new build".into(), "changed".into()));
+
+    // A backup without server files can't be rolled back to.
+    let manual = backup(&server_exe, vec!["Config.ini".into()], "manual").unwrap();
+    assert!(restore_from(&server_exe, &manual.id, true, None).is_err());
+}
+
+#[test]
 fn restore_backup_missing_errors() {
     let (_tmp, server_exe) = empty_server();
     let err = restore(&server_exe, "nonexistent").unwrap_err();
@@ -304,12 +336,22 @@ fn update_backs_up_the_files_it_replaces() {
     let replaced = changed_files(source.path(), &server).unwrap();
     assert_eq!(replaced, ["Config.ini", EDITED, "MHServerEmu.Core.dll"]);
 
-    let manifest = create_backup_inner(&server, vec!["Config.ini".into()], replaced, None, "pre-update").unwrap();
+    let targets = vec!["Config.ini".into(), "Data/Game/Patches".into()];
+    let manifest = create_backup_inner(&server, targets, replaced, None, "pre-update").unwrap();
     let backup_dir = server.join("Backups").join(&manifest.id);
     assert_eq!(fs::read_to_string(backup_dir.join(EDITED)).unwrap(), "mine");
     assert_eq!(fs::read_to_string(backup_dir.join("MHServerEmu.Core.dll")).unwrap(), "old");
-    // Config.ini is a target, so the update puts it back and it isn't reported.
-    assert_eq!(edited_files(&server, &manifest), ["PatchDataBugFixes.json"]);
+    // Targets aren't put back after an install, so an edited file under one is reported too.
+    // Config.ini has no `.bak`, so the app never saved over it.
+    assert_eq!(edited_files(&server, &manifest), [EDITED]);
+
+    // Putting the edits back backs up the update's copy, then copies the user's over it.
+    write(&server, EDITED, "new");
+    restore_edits(&server_exe, &manifest.id).unwrap();
+    assert_eq!(fs::read_to_string(server.join(EDITED)).unwrap(), "mine");
+    let before = list_backups(server_exe.clone()).unwrap().into_iter().find(|b| b.label == "pre-restore").unwrap();
+    assert_eq!(before.targets, [EDITED]);
+    assert_eq!(fs::read_to_string(server.join("Backups").join(&before.id).join(EDITED)).unwrap(), "new");
 
     // A failed install puts the replaced files and the targets back, and names the backup.
     write(&server, "MHServerEmu.Core.dll", "half-installed");
@@ -344,43 +386,29 @@ fn update_keeps_switched_stock_files_as_the_user_had_them() {
         (format!("{P}/PatchDataCarnival.json"), "mine"),
         (format!("{P}/Off/PatchDataCarnival.json"), "new"),
     ];
-    // (case, files the update ships, server files after install and restore, restored targets,
-    //  files kept, server files afterwards where None means gone)
-    type Case = (&'static str, Vec<String>, Vec<(String, &'static str)>, Vec<&'static str>, Vec<(&'static str, bool)>, Vec<(String, Option<&'static str>)>);
+    // (case, files the update ships, server files after install, files kept,
+    // server files afterwards where None means gone)
+    type Case = (&'static str, Vec<String>, Vec<(String, &'static str)>, Vec<(&'static str, bool)>, Vec<(String, Option<&'static str>)>);
     let cases: Vec<Case> = vec![
         (
             "switched off, the update adds an on copy",
             vec![format!("{P}/PatchDataBugFixes.json")],
             bug_off_pair(),
-            vec![],
             vec![("PatchDataBugFixes.json", false)],
             vec![
                 (format!("{P}/PatchDataBugFixes.json"), None),
                 (format!("{P}/Off/PatchDataBugFixes.json"), Some("new")),
-                (format!("{P}/Off/PatchDataBugFixes.json.bak"), Some("mine")),
-            ],
-        ),
-        (
-            "a restore of another folder changes nothing",
-            vec![format!("{P}/PatchDataBugFixes.json")],
-            bug_off_pair(),
-            vec![MTX, LT],
-            vec![("PatchDataBugFixes.json", false)],
-            vec![
-                (format!("{P}/PatchDataBugFixes.json"), None),
-                (format!("{P}/Off/PatchDataBugFixes.json"), Some("new")),
-                (format!("{P}/Off/PatchDataBugFixes.json.bak"), Some("mine")),
+                (format!("{P}/Off/PatchDataBugFixes.json.bak"), None),
             ],
         ),
         (
             "switched a stock-off pack on, the update adds an off copy",
             vec![format!("{P}/Off/PatchDataCarnival.json")],
             carnival_on_pair(),
-            vec![],
             vec![("PatchDataCarnival.json", true)],
             vec![
                 (format!("{P}/PatchDataCarnival.json"), Some("new")),
-                (format!("{P}/PatchDataCarnival.json.bak"), Some("mine")),
+                (format!("{P}/PatchDataCarnival.json.bak"), None),
                 (format!("{P}/Off/PatchDataCarnival.json"), None),
             ],
         ),
@@ -388,37 +416,11 @@ fn update_keeps_switched_stock_files_as_the_user_had_them() {
             "Live Tuning keeps its OFF_ copy",
             vec![format!("{LT}/LiveTuningDataPvP.json")],
             vec![(format!("{LT}/LiveTuningDataPvP.json"), "new"), (format!("{LT}/OFF_LiveTuningDataPvP.json"), "mine")],
-            vec![],
             vec![("LiveTuningDataPvP.json", false)],
             vec![
                 (format!("{LT}/LiveTuningDataPvP.json"), None),
                 (format!("{LT}/OFF_LiveTuningDataPvP.json"), Some("new")),
-                (format!("{LT}/OFF_LiveTuningDataPvP.json.bak"), Some("mine")),
-            ],
-        ),
-        (
-            "a restored folder keeps the restored copy",
-            vec![format!("{P}/PatchDataBugFixes.json")],
-            bug_off_pair(),
-            vec![P],
-            vec![("PatchDataBugFixes.json", false)],
-            vec![
-                (format!("{P}/PatchDataBugFixes.json"), None),
-                (format!("{P}/PatchDataBugFixes.json.bak"), Some("new")),
-                (format!("{P}/Off/PatchDataBugFixes.json"), Some("mine")),
-                (format!("{P}/Off/PatchDataBugFixes.json.bak"), None),
-            ],
-        ),
-        (
-            "a full Data restore counts as restored",
-            vec![format!("{P}/Off/PatchDataCarnival.json")],
-            carnival_on_pair(),
-            vec!["Data"],
-            vec![("PatchDataCarnival.json", true)],
-            vec![
-                (format!("{P}/PatchDataCarnival.json"), Some("mine")),
-                (format!("{P}/Off/PatchDataCarnival.json"), None),
-                (format!("{P}/Off/PatchDataCarnival.json.bak"), Some("new")),
+                (format!("{LT}/OFF_LiveTuningDataPvP.json.bak"), None),
             ],
         ),
         (
@@ -429,7 +431,6 @@ fn update_keeps_switched_stock_files_as_the_user_had_them() {
                 (format!("{MTX}/Off/CatalogBundles.json"), "mine"),
                 (format!("{MTX}/Off/CatalogBundlesMODIFIED.json"), "edits"),
             ],
-            vec![],
             vec![("CatalogBundles.json", false)],
             vec![
                 (format!("{MTX}/CatalogBundles.json"), None),
@@ -454,7 +455,6 @@ fn update_keeps_switched_stock_files_as_the_user_had_them() {
                 (format!("{LT}/OFF_Events.json"), "mine"),
             ],
             vec![],
-            vec![],
             vec![
                 (format!("{P}/PatchDataMissions.json"), Some("new")),
                 (format!("{P}/PatchDataMine.json"), Some("mine")),
@@ -471,28 +471,25 @@ fn update_keeps_switched_stock_files_as_the_user_had_them() {
         fs::create_dir_all(path.parent().unwrap()).unwrap();
         fs::write(path, text).unwrap();
     };
-    for (case, ships, server_files, restored, kept, after) in cases {
+    for (case, ships, server_files, kept, after) in cases {
         let (source, server) = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
         ships.iter().for_each(|rel| write(source.path(), rel, "new"));
         server_files.iter().for_each(|(rel, text)| write(server.path(), rel, text));
-        let restored: Vec<String> = restored.into_iter().map(String::from).collect();
 
-        let got = keep_switched_files(server.path(), source.path(), &restored).unwrap();
+        // The user's copies the update will replace, which the pre-update backup saves.
+        let copies = switched_copies(source.path(), server.path());
+        let got = keep_switched_files(server.path(), source.path()).unwrap();
+        assert_eq!(copies.len(), got.len(), "{case}: {copies:?} backed up");
 
         let got_pairs: Vec<(String, bool)> = got.iter().map(|k| (k.file.clone(), k.enabled)).collect();
         let want: Vec<(String, bool)> = kept.into_iter().map(|(file, enabled)| (file.into(), enabled)).collect();
         assert_eq!(got_pairs, want, "{case}: kept");
-        // `X.json.bak` in a case stands for the timestamped copy `move_aside` made of X.json.
+        // `X.json.bak` in a case stands for a timestamped copy `move_aside` would make of X.json.
         for (rel, text) in after {
             let path = match rel.strip_suffix(".bak") {
                 Some(orig) => crate::test_helpers::moved_aside(&server.path().join(orig)),
                 None => Some(server.path().join(&rel)),
             };
-            if let (Some(p), Some(_)) = (&path, text) {
-                if rel.ends_with(".bak") {
-                    assert!(got.iter().any(|k| k.kept_as == crate::store::file_name_of(p)), "{case}: kept_as names {rel}");
-                }
-            }
             assert_eq!(path.and_then(|p| fs::read_to_string(p).ok()).as_deref(), text, "{case}: {rel}");
         }
     }
@@ -503,4 +500,67 @@ fn missing_or_unversioned_exe_has_no_build_date() {
     let (_tmp, server_exe) = empty_server();
     assert_eq!(installed_build_date(&server_exe), None);
     assert_eq!(installed_build_date("C:/definitely/not/here/MHServerEmu.exe"), None);
+}
+
+#[test]
+fn players_target_backs_up_the_account_files_the_config_names() {
+    let (_tmp, server_exe) = empty_server();
+    let dir = crate::paths::server_dir(&server_exe).unwrap();
+    let targets = || vec!["Config.ini".to_string(), PLAYERS_TARGET.to_string()];
+    assert_eq!(resolve_targets(&server_exe, targets()).unwrap(), ["Config.ini", "Data/Account.db", "Data/DefaultAccount.json"]);
+
+    fs::write(dir.join("ConfigOverride.ini"), "[SQLiteDBManager]\nFileName=Saves/Mine.db\n[JsonDBManager]\nFileName=Solo.json\n").unwrap();
+    assert_eq!(resolve_targets(&server_exe, targets()).unwrap(), ["Config.ini", "Data/Saves/Mine.db", "Data/Solo.json"]);
+
+    // Only the save that exists is backed up, under its real path.
+    fs::create_dir_all(dir.join("Data")).unwrap();
+    fs::write(dir.join("Data/Solo.json"), "{}").unwrap();
+    let manifest = backup(&server_exe, vec![PLAYERS_TARGET.to_string()], "manual").unwrap();
+    assert_eq!(manifest.targets, ["Data/Solo.json"]);
+}
+
+#[test]
+fn restore_can_put_back_just_some_targets() {
+    let (_tmp, server_exe) = empty_server();
+    let dir = crate::paths::server_dir(&server_exe).unwrap();
+    let patches = dir.join("Data/Game/Patches");
+    fs::create_dir_all(patches.join("Off")).unwrap();
+    fs::write(dir.join("Config.ini"), "backed up").unwrap();
+    fs::write(patches.join("A.json"), "backed up").unwrap();
+    let manifest = backup(&server_exe, vec!["Config.ini".into(), "Data/Game/Patches".into()], "manual").unwrap();
+    fs::write(dir.join("Config.ini"), "changed").unwrap();
+    // Switched off since, in a target that isn't restored: left alone.
+    fs::rename(patches.join("A.json"), patches.join("Off/A.json")).unwrap();
+
+    let only = ["Config.ini".to_string()];
+    assert!(restore_from(&server_exe, &manifest.id, false, Some(&only)).unwrap().is_empty());
+    assert_eq!(fs::read_to_string(dir.join("Config.ini")).unwrap(), "backed up");
+    assert!(patches.join("Off/A.json").exists() && !patches.join("A.json").exists());
+    let before = list_backups(server_exe.clone()).unwrap().into_iter().find(|b| b.label == "pre-restore").unwrap();
+    assert_eq!(before.targets, ["Config.ini"]);
+
+    assert!(restore_from(&server_exe, &manifest.id, false, Some(&["Data/Account.db".to_string()])).is_err());
+}
+
+#[test]
+fn pruning_keeps_the_newest_automatic_backups_and_every_manual_one() {
+    let (_tmp, server_exe) = empty_server();
+    let dir = crate::paths::server_dir(&server_exe).unwrap();
+    fs::write(dir.join("Config.ini"), "x").unwrap();
+    let make = |label: &str| create_backup_inner(&dir, vec!["Config.ini".into()], vec![], None, label).unwrap().id;
+    let manual = make("manual");
+    let oldest = make("pre-update");
+    let _older = make("pre-restore");
+    let newer = make("pre-update");
+    let newest = make("pre-restore");
+    let ids = || list_manifests(&dir).unwrap().into_iter().map(|m| m.id).collect::<Vec<_>>();
+
+    prune_auto_backups(&dir, 0, &[]);
+    assert_eq!(ids().len(), 5, "0 keeps all");
+
+    prune_auto_backups(&dir, 2, &[&oldest]);
+    assert_eq!(ids(), [newest.clone(), newer.clone(), oldest, manual.clone()]);
+
+    prune_auto_backups(&dir, 1, &[]);
+    assert_eq!(ids(), [newest, manual]);
 }

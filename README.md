@@ -35,7 +35,7 @@ The app is currently Windows-only and communicates with the server via stdin/std
 - Automatic `.bak` snapshots before every write
 
 ### Updates and Backups
-- One-click MHServerEmu nightly updates with backup and restore, and in-app updates for MH Multiverse
+- One-click MHServerEmu nightly updates with backup, restore and roll back, and in-app updates for MH Multiverse
 - On-demand manual backups of the server's config and data
 
 ### Settings and Integrations
@@ -105,10 +105,10 @@ Neither method removes your settings (like server lists). To fully clean up, als
 ---
 
 ## Good to Know
-- While MH Multiverse encrypts has OS-keychain-backed encryption of passwords, with auto-login on the game client still writes your password in plain text to its own Launch.log
+- MH Multiverse stores passwords with OS-keychain-backed encryption. With Auto Login on, the game client writes your password to its Launch.log, and MH Multiverse masks it at startup and when the game closes.
 - 1.48 and 1.53 clients always launch standalone, and MH Multiverse only injects the Overlay to 1.52 clients
 - Custom server builds don't get nightly updates
-- A backup target always wins over the nightly's copy, so upstream fixes to those files don't arrive until you remove the target
+- Nightly updates always install their own copy of each file. Your on/off choices are kept, and edits the update replaced can be put back from the Update page
 
 ---
 

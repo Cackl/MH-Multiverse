@@ -270,3 +270,11 @@ fn text_size_accepts_usable_zooms_only() {
         assert!(!valid_text_size(bad), "{bad}");
     }
 }
+
+#[test]
+fn backup_targets_move_to_the_players_target_and_drop_achievements() {
+    let mut targets: Vec<String> = ["Config.ini", "Data/Account.db", "Data/Game/Achievements", "Players"].map(String::from).into();
+    assert!(migrate_backup_targets(&mut targets));
+    assert_eq!(targets, ["Config.ini", "Players"]);
+    assert!(!migrate_backup_targets(&mut targets));
+}
