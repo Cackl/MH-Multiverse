@@ -10,7 +10,8 @@
 ## What's Changed
 
 ### Overlay
-- The Overlay is now loaded by its own injector, `MhInject.exe`, instead of by MH Multiverse. This stops Windows Defender from flagging MH Multiverse when it injects (1.7.1 was quarantined as `Behavior:Win32/DefenseEvasion.A!ml`).
+- The Overlay is now loaded by its own injector, `MhInject.exe`, instead of by MH Multiverse.
+  - This stops Windows Defender from falsely flagging *MH Multiverse* when it injects (1.7.1 was quarantined). It also takes the memory-writing code out of MH Multiverse and uses the same loading path as the Overlay's own launcher.
 - Trust now also covers `MhInject.exe` and the files it runs from.
 - The injector needs the .NET 8 Runtime, which the Overlay's own launcher also uses.
 - Injection is refused while a second game client with the same name is running, since the injector picks the game by name.
