@@ -399,8 +399,8 @@ fn under_target(rel: &str, targets: &[String]) -> bool {
     targets.iter().any(|t| rel == t || rel.starts_with(&format!("{t}/")))
 }
 
-/// The target for player data, which follows the persistence mode: it stands for the SQLite
-/// database and the JSON save named in the config, whichever exist.
+/// The target for player data: it stands for both the SQLite database and the JSON save named
+/// in the config, whatever the persistence mode. A backup saves whichever exist.
 pub(crate) const PLAYERS_TARGET: &str = "Players";
 
 /// The targets with `PLAYERS_TARGET` swapped for the account files' paths, so a manifest only
