@@ -518,6 +518,9 @@
       <div class="page-head">
         <h3 class="page-title">Backups</h3>
         <div class="page-acts">
+          {#if backupSuccess}<span class="feedback-ok">{backupSuccess}</span>{/if}
+          {#if backupError}<span class="feedback-error">{backupError}</span>{/if}
+          {#if openDirError}<span class="feedback-error">{openDirError}</span>{/if}
           <button
             class="btn btn-sm btn-outline"
             on:click={createBackup}
@@ -583,34 +586,23 @@
             </div>
             {#if targetsError}<div class="feedback-error">{targetsError}</div>{/if}
           </div>
-
-          <div class="subsection-title">Automatic Backups</div>
-          <label class="keep-field">
-            <span class="target-label">Keep</span>
-            <input
-              type="number"
-              class="keep-input"
-              min="0"
-              value={$appConfig.keep_auto_backups}
-              on:change={async (e) => targetsError = await setKeepAutoBackups(Math.max(0, parseInt(e.currentTarget.value) || 0))}
-            >
-          </label>
-          <span class="target-desc">Older pre-update and pre-restore backups are deleted. 0 keeps all. Manual backups are always kept</span>
         </div>
 
         <!-- Right: history -->
         <div class="backups-right">
           <div class="backups-right-head">
             <span class="subsection-title" style="margin:0; flex:1;">History</span>
-            {#if backupSuccess}
-              <span class="feedback-ok">{backupSuccess}</span>
-            {/if}
-            {#if backupError}
-              <span class="feedback-error">{backupError}</span>
-            {/if}
-            {#if openDirError}
-              <span class="feedback-error">{openDirError}</span>
-            {/if}
+            <label class="keep-field">
+              <span class="target-label">Keep Automatic</span>
+              <button class="info-btn" aria-label="About Keep Automatic" use:tip={'Older pre-update and pre-restore backups are deleted. 0 keeps all. Manual backups are always kept'}>?</button>
+              <input
+                type="number"
+                class="keep-input"
+                min="0"
+                value={$appConfig.keep_auto_backups}
+                on:change={async (e) => backupError = await setKeepAutoBackups(Math.max(0, parseInt(e.currentTarget.value) || 0))}
+              >
+            </label>
             <button
               class="btn-icon"
               on:click={openBackupsDir}
@@ -986,7 +978,7 @@
   }
   .target-children.muted { opacity: var(--dimmed-opacity); }
 
-  .target-row.child { padding: 6px 10px; }
+  .target-row.child { padding: 5px 9px; }
   .target-row.disabled { cursor: default; pointer-events: none; }
 
   /* ── Backup targets ── */
@@ -1000,12 +992,13 @@
     display: flex;
     align-items: flex-start;
     gap: 10px;
-    padding: 8px 10px;
+    padding: 7px 9px;
+    border: 1px solid transparent;
     border-radius: var(--radius-sm);
     cursor: pointer;
     transition: background 0.1s;
   }
-  .target-row:hover { background: var(--bg-3); }
+  .target-row:hover { background: var(--bg-3); border-color: var(--border-mid); }
 
   .target-row input[type="checkbox"] {
     width: 14px;
@@ -1113,8 +1106,7 @@
   .keep-field {
     display: flex;
     align-items: center;
-    gap: 10px;
-    padding: 0 10px;
+    gap: 8px;
   }
 
   .keep-input {
