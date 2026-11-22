@@ -172,6 +172,7 @@ pub fn run() {
             updater::list_backups,
             updater::restore_backup,
             updater::delete_backup,
+            updater::put_back_edits,
             updater::get_backups_dir,
             app_update::check_app_update,
             app_update::check_overlay_update,

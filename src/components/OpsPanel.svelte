@@ -40,7 +40,6 @@
     downloading: 'Downloading...',
     extracting:  'Extracting archive...',
     installing:  'Installing files...',
-    restoring:   'Restoring user files...',
     done:        'Complete',
   }
 
@@ -119,6 +118,26 @@
       if (outcome && !outcome.error) checkForUpdate()
     }
     wasUpdating = updating
+  }
+
+  // Edits the update replaced, put back from its pre-update backup.
+  let puttingBack = false
+  let putBackError = ''
+  let editsPutBackFor = ''
+  async function putBackEdits() {
+    if (!outcome?.backup_id || puttingBack) return
+    puttingBack = true
+    putBackError = ''
+    try {
+      await invoke('put_back_edits', { serverExe: $appConfig.server_exe, backupId: outcome.backup_id })
+      editsPutBackFor = outcome.backup_id
+    } catch (e) {
+      putBackError = String(e)
+    } finally {
+      puttingBack = false
+    }
+    // It backs up the update's copies first.
+    loadBackups()
   }
 
   // ── Backups ────────────────────────────────────────────────────────────────
@@ -413,14 +432,25 @@
 
         {#if outcome && !outcome.error}
           <div class="feedback-ok">Update complete.</div>
-          {#if outcome.edited.length}
-            <div class="kept-files">Replaced your edits to {outcome.edited.join(', ')}. Your copies are in the Pre-update backup.</div>
+          {#if outcome.edited.length && editsPutBackFor === outcome.backup_id}
+            <div class="feedback-ok">Your edits to {outcome.edited.join(', ')} are back</div>
+          {:else if outcome.edited.length}
+            <div class="edited-row">
+              <span class="kept-files">Replaced your edits to {outcome.edited.join(', ')}. Your copies are in the Pre-update backup.</span>
+              <button
+                class="btn btn-sm btn-outline"
+                on:click={putBackEdits}
+                disabled={puttingBack || $serverRunning}
+                use:tip={"Copies your versions back over the update's. The update's copies go to a Pre-restore backup"}
+              >Restore My Edits</button>
+            </div>
+            {#if putBackError}<div class="feedback-error">{putBackError}</div>{/if}
           {/if}
           {#each outcome.kept as k}
             <div class="kept-files" use:tip={`The update shipped this switched ${k.enabled ? 'off' : 'on'}`}>
               Switched {k.enabled ? 'on' : 'off'} as before: {k.file}
             </div>
-            <div class="kept-files">{k.restored ? "The update's copy" : 'Your previous copy'}: {k.kept_as}</div>
+            <div class="kept-files">Your previous copy: {k.kept_as}</div>
           {/each}
         {/if}
         {#if outcome?.error}
@@ -428,7 +458,7 @@
         {/if}
 
         <div class="restart-notice">
-          <span>Before installing, a backup is made of the Targets selected on the Backups page and of every file the update replaces. The Targets are put back afterwards</span>
+          <span>Before installing, a backup is made of the Targets selected on the Backups page and of every file the update replaces</span>
           <span>Multiverse doesn't check the server's system requirements. If the server stops working after an update, see MHServerEmu's GitHub or Discord</span>
         </div>
 
@@ -965,6 +995,13 @@
     min-width: 160px;
   }
 
+
+  .edited-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
 
   .kept-files {
     font-size: 11px;

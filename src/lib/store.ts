@@ -622,7 +622,7 @@ export function setServerExe(path: string): Promise<string> {
 // -- Nightly update (kept here so leaving the Ops tab doesn't lose it) --
 
 export interface UpdateProgress {
-  stage: 'backing_up' | 'downloading' | 'extracting' | 'installing' | 'restoring' | 'done'
+  stage: 'backing_up' | 'downloading' | 'extracting' | 'installing' | 'done'
   pct: number
   message?: string
 }
@@ -632,9 +632,11 @@ export interface UpdateOutcome {
   serverExe: string
   error: string
   /** Stock files the update shipped switched the other way, kept as the user had them. */
-  kept: { file: string; enabled: boolean; kept_as: string; restored: boolean }[]
+  kept: { file: string; enabled: boolean; kept_as: string }[]
   /** Files saved in the app that the update replaced. Their edited copies are in the backup. */
   edited: string[]
+  /** The pre-update backup, for `put_back_edits`. Empty after an error. */
+  backup_id: string
 }
 
 export const updateRunning = writable<boolean>(false)
@@ -649,10 +651,10 @@ export async function runServerUpdate(serverExe: string, backupTargets: string[]
   updateProgress.set(null)
   const unlisten = await listen<UpdateProgress>('update-progress', e => updateProgress.set(e.payload))
   try {
-    const result = await invoke<{ kept: UpdateOutcome['kept']; edited: string[] }>('run_update', { serverExe, backupTargets })
+    const result = await invoke<Pick<UpdateOutcome, 'kept' | 'edited' | 'backup_id'>>('run_update', { serverExe, backupTargets })
     updateOutcome.set({ serverExe, error: '', ...result })
   } catch (e) {
-    updateOutcome.set({ serverExe, error: String(e), kept: [], edited: [] })
+    updateOutcome.set({ serverExe, error: String(e), kept: [], edited: [], backup_id: '' })
   } finally {
     unlisten()
     updateProgress.set(null)
