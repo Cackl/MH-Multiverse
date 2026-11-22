@@ -648,11 +648,14 @@ async fn run_update_inner(
 
     // The targets aren't copied back, so upstream fixes to them always land. Edits the update
     // replaced are reported and can be put back from the backup with `put_back_edits`.
-    Ok(UpdateResult {
+    let result = UpdateResult {
         edited: edited_files(server_dir, &manifest).iter().map(|rel| crate::store::file_name_of(Path::new(rel))).collect(),
         kept: keep_switched_files(server_dir, &detect_source_dir(staging_dir)?)?,
         backup_id: manifest.id,
-    })
+    };
+    let (dir, keep) = (server_dir.to_path_buf(), crate::config::load_config(app).keep_auto_backups);
+    let _ = tokio::task::spawn_blocking(move || prune_auto_backups(&dir, keep, &[])).await;
+    Ok(result)
 }
 
 /// After a failed install, copies the replaced files and then the targets back from the pre-update
@@ -815,7 +818,26 @@ fn backup(server_exe: &str, targets: Vec<String>, label: &str) -> Result<BackupM
 
 #[tauri::command]
 pub fn list_backups(server_exe: String) -> Result<Vec<BackupManifest>, String> {
-    let server_dir = server_dir_from_exe(&server_exe)?;
+    list_manifests(&server_dir_from_exe(&server_exe)?)
+}
+
+/// Deletes the oldest automatic (pre-update and pre-restore) backups beyond the newest `keep`,
+/// except `spare`. 0 keeps all. Manual backups are never deleted.
+/// ponytail: best effort, a backup that can't be deleted is left for the next run.
+fn prune_auto_backups(server_dir: &Path, keep: u32, spare: &[&str]) {
+    if keep == 0 {
+        return;
+    }
+    let Ok(all) = list_manifests(server_dir) else { return };
+    for m in all.iter().filter(|m| m.label != "manual").skip(keep as usize) {
+        if !spare.contains(&m.id.as_str()) {
+            let _ = std::fs::remove_dir_all(server_dir.join("Backups").join(&m.id));
+        }
+    }
+}
+
+/// The backups in the server's Backups folder, newest first.
+fn list_manifests(server_dir: &Path) -> Result<Vec<BackupManifest>, String> {
     let backups_dir = server_dir.join("Backups");
 
     if !backups_dir.exists() {
@@ -865,7 +887,13 @@ pub async fn restore_backup(
     if update_running() {
         return Err("Wait for the update to finish first".into());
     }
-    off_main(move || restore_from(&server_exe, &backup_id, roll_back.unwrap_or(false), only.as_deref())).await
+    let keep = crate::config::load_config(&app).keep_auto_backups;
+    off_main(move || {
+        let moved = restore_from(&server_exe, &backup_id, roll_back.unwrap_or(false), only.as_deref())?;
+        prune_auto_backups(&server_dir_from_exe(&server_exe)?, keep, &[&backup_id]);
+        Ok(moved)
+    })
+    .await
 }
 
 #[cfg(test)]
@@ -937,7 +965,13 @@ fn read_manifest(backup_dir: &Path) -> Result<BackupManifest, String> {
 #[tauri::command]
 pub async fn put_back_edits(app: AppHandle, server_exe: String, backup_id: String) -> Result<(), String> {
     ensure_server_stopped(&app, &server_exe)?;
-    off_main(move || restore_edits(&server_exe, &backup_id)).await
+    let keep = crate::config::load_config(&app).keep_auto_backups;
+    off_main(move || {
+        restore_edits(&server_exe, &backup_id)?;
+        prune_auto_backups(&server_dir_from_exe(&server_exe)?, keep, &[&backup_id]);
+        Ok(())
+    })
+    .await
 }
 
 /// Copies the edited files a pre-update backup's update replaced back over the update's copies,

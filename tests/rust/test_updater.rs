@@ -541,3 +541,26 @@ fn restore_can_put_back_just_some_targets() {
 
     assert!(restore_from(&server_exe, &manifest.id, false, Some(&["Data/Account.db".to_string()])).is_err());
 }
+
+#[test]
+fn pruning_keeps_the_newest_automatic_backups_and_every_manual_one() {
+    let (_tmp, server_exe) = empty_server();
+    let dir = crate::paths::server_dir(&server_exe).unwrap();
+    fs::write(dir.join("Config.ini"), "x").unwrap();
+    let make = |label: &str| create_backup_inner(&dir, vec!["Config.ini".into()], vec![], None, label).unwrap().id;
+    let manual = make("manual");
+    let oldest = make("pre-update");
+    let _older = make("pre-restore");
+    let newer = make("pre-update");
+    let newest = make("pre-restore");
+    let ids = || list_manifests(&dir).unwrap().into_iter().map(|m| m.id).collect::<Vec<_>>();
+
+    prune_auto_backups(&dir, 0, &[]);
+    assert_eq!(ids().len(), 5, "0 keeps all");
+
+    prune_auto_backups(&dir, 2, &[&oldest]);
+    assert_eq!(ids(), [newest.clone(), newer.clone(), oldest, manual.clone()]);
+
+    prune_auto_backups(&dir, 1, &[]);
+    assert_eq!(ids(), [newest, manual]);
+}

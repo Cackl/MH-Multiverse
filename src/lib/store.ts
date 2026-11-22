@@ -416,6 +416,8 @@ export interface AppConfig {
   console_presets: string[]
   overlay?: { dir: string; auto_inject?: boolean }
   backup_targets: string[]
+  /** Automatic (pre-update and pre-restore) backups to keep. 0 keeps all. */
+  keep_auto_backups: number
   /** Data tab view: true = Advanced, false = Simple (fresh installs start in Simple). */
   advanced_data: boolean
   apache_auto_start: boolean
@@ -476,6 +478,7 @@ export const appConfig = writable<AppConfig>({
   shutdown: defaultShutdownConfig,
   console_presets: ["!commands","!account userlevel","!server status","!server broadcast","!server shutdown","!server reloadcatalog","!server reloadlivetuning"],
   backup_targets: ['ConfigOverride.ini', 'Players', 'Data/Game/LiveTuning'],
+  keep_auto_backups: 10,
   // Until the real config loads, show the existing editors rather than flash Simple.
   advanced_data: true,
   apache_auto_start: true,
@@ -754,6 +757,10 @@ export function setShutdownConfig(shutdown: ShutdownConfig): Promise<string> {
 
 export function setBackupTargets(targets: string[]): Promise<string> {
   return updateConfigOptimistic(c => ({ ...c, backup_targets: targets }), 'set_backup_targets', { targets })
+}
+
+export function setKeepAutoBackups(keep: number): Promise<string> {
+  return updateConfigOptimistic(c => ({ ...c, keep_auto_backups: keep }), 'set_keep_auto_backups', { keep })
 }
 
 export function setConsolePresets(presets: string[]): Promise<string> {

@@ -3,7 +3,7 @@
   import { invoke } from '@tauri-apps/api/core'
   import { openPath, openUrl } from '@tauri-apps/plugin-opener'
   import {
-    appConfig, serverRunning, setBackupTargets, updateRunning, updateProgress, updateOutcome, runServerUpdate,
+    appConfig, serverRunning, setBackupTargets, setKeepAutoBackups, updateRunning, updateProgress, updateOutcome, runServerUpdate,
   } from '../lib/store'
   import PanelSidebar from './PanelSidebar.svelte'
   import { tip } from '../lib/tooltip'
@@ -538,6 +538,19 @@
             </div>
             {#if targetsError}<div class="feedback-error">{targetsError}</div>{/if}
           </div>
+
+          <div class="subsection-title">Automatic Backups</div>
+          <label class="keep-field">
+            <span class="target-label">Keep</span>
+            <input
+              type="number"
+              class="keep-input"
+              min="0"
+              value={$appConfig.keep_auto_backups}
+              on:change={async (e) => targetsError = await setKeepAutoBackups(Math.max(0, parseInt(e.currentTarget.value) || 0))}
+            >
+          </label>
+          <span class="target-desc">Older pre-update and pre-restore backups are deleted. 0 keeps all. Manual backups are always kept</span>
         </div>
 
         <!-- Right: history -->
@@ -1018,6 +1031,27 @@
     gap: 8px;
     flex-wrap: wrap;
   }
+
+  .keep-field {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 0 10px;
+  }
+
+  .keep-input {
+    width: 72px;
+    background: var(--bg-0);
+    border: 1px solid var(--border-mid);
+    color: var(--text-0);
+    font-family: var(--font-body);
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+    padding: 5px 8px;
+    outline: none;
+    border-radius: var(--radius-sm);
+  }
+  .keep-input:focus { border-color: var(--accent-dim); }
 
   .kept-files {
     font-size: 11px;

@@ -134,6 +134,7 @@ pub fn run() {
             config::set_launch_options,
             config::set_shutdown_config,
             config::set_backup_targets,
+            config::set_keep_auto_backups,
             config::activate_linked,
             config::upsert_linked,
             config::delete_linked,

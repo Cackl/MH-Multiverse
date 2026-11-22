@@ -32,6 +32,8 @@ fn default_backup_targets() -> Vec<String> {
     ]
 }
 
+fn default_keep_auto_backups() -> u32 { 10 }
+
 fn default_console_presets() -> Vec<String> {
     vec![
         "!commands".to_string(),
@@ -177,6 +179,9 @@ pub struct AppConfig {
     /// Backup target paths selected in the Ops panel
     #[serde(default = "default_backup_targets")]
     pub backup_targets: Vec<String>,
+    /// How many automatic (pre-update and pre-restore) backups to keep. 0 keeps all.
+    #[serde(default = "default_keep_auto_backups")]
+    pub keep_auto_backups: u32,
     #[serde(default = "default_console_presets")]
     pub console_presets: Vec<String>,
     #[serde(default)]
@@ -210,6 +215,7 @@ impl Default for AppConfig {
             shutdown: ShutdownConfig::default(),
             console_presets: default_console_presets(),
             backup_targets: default_backup_targets(),
+            keep_auto_backups: default_keep_auto_backups(),
             overlay: OverlayConfig::default(),
             advanced_data: false,
             apache_auto_start: true,
@@ -684,6 +690,13 @@ pub fn set_shutdown_config(app: tauri::AppHandle, shutdown: ShutdownConfig) -> R
 pub fn set_backup_targets(app: tauri::AppHandle, targets: Vec<String>) -> Result<(), String> {
     let mut config = load_config(&app);
     config.backup_targets = targets;
+    save_config(&app, &config)
+}
+
+#[tauri::command]
+pub fn set_keep_auto_backups(app: tauri::AppHandle, keep: u32) -> Result<(), String> {
+    let mut config = load_config(&app);
+    config.keep_auto_backups = keep;
     save_config(&app, &config)
 }
 
