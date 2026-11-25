@@ -1,7 +1,7 @@
 <script lang="ts">
   import { invoke } from '@tauri-apps/api/core'
   import { open } from '@tauri-apps/plugin-dialog'
-  import { appConfig, activeTab as appTab, serverRunning, upsertServer, jsonPersistence, refreshPersistence, type Server } from '../../lib/store'
+  import { appConfig, activeTab as appTab, serverRunning, serverStopping, stopServerNow, upsertServer, jsonPersistence, refreshPersistence, type Server } from '../../lib/store'
   import { syncAccount, validateEmail, validatePassword, validatePlayerName } from '../../lib/accountCommands'
   import { tip } from '../../lib/tooltip'
   import Dropdown from '../Dropdown.svelte'
@@ -262,6 +262,9 @@
   }
 
   $: if (activeTab === 'restore' && !isLocal) activeTab = 'manual'
+
+  // A first start creates Account.db, so look again once the server stops.
+  $: if (downloadsLoaded && !$serverRunning) loadExistingAccounts()
 
   // ── Tab switching ────────────────────────────────────────────────────────
 
@@ -855,7 +858,10 @@
           {/if}
 
           {#if $serverRunning}
-            <div class="warning-notice">Stop the server before importing.</div>
+            <div class="warning-notice">
+              Stop the server before importing.
+              <button type="button" class="link-btn" on:click={stopServerNow} disabled={$serverStopping}>{$serverStopping ? 'Stopping...' : 'Stop Server'}</button>
+            </div>
           {/if}
 
           {#if importError}
@@ -940,7 +946,10 @@
             {/if}
 
             {#if $serverRunning}
-              <div class="warning-notice">Stop the server before restoring.</div>
+              <div class="warning-notice">
+                Stop the server before restoring.
+                <button type="button" class="link-btn" on:click={stopServerNow} disabled={$serverStopping}>{$serverStopping ? 'Stopping...' : 'Stop Server'}</button>
+              </div>
             {/if}
 
             {#if restoreError}
