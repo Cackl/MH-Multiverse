@@ -971,7 +971,7 @@
     font-size: 11px;
     color: var(--text-3);
     line-height: 1.5;
-    margin: -8px 0 14px;
+    margin: 6px 0 14px;
     font-family: var(--font-body);
   }
 

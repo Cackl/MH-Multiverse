@@ -480,7 +480,6 @@
     display: flex;
     align-items: center;
     gap: 14px;
-    margin-bottom: 22px;
   }
   .seg {
     display: inline-flex;
