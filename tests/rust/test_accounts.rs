@@ -29,7 +29,7 @@ fn sample_data() -> ImportJson {
 #[test]
 fn parse_import_json_summary() {
     let path = fixture_path("import/sample_account_export.json").to_string_lossy().to_string();
-    let summary = parse_import_json(path).unwrap();
+    let summary = parse_import_json(path.clone(), String::new()).unwrap();
     assert_eq!(summary.player_name, "ImportedPlayer");
     assert_eq!(summary.email, "imported@test.local");
     assert_eq!(summary.avatar_count, 1);
@@ -38,6 +38,13 @@ fn parse_import_json_summary() {
     assert_eq!(summary.controlled_entity_count, 1);
     assert_eq!(summary.user_level, 0);
     assert_eq!(summary.flags, 0);
+
+    // A server of another version refuses the file as soon as it's picked.
+    let (tmp, server_exe) = empty_server();
+    let dll: Vec<u8> = "1.48.0.1712".encode_utf16().flat_map(u16::to_le_bytes).collect();
+    fs::write(tmp.path().join("MHServerEmu.dll"), dll).unwrap();
+    let err = parse_import_json(path, server_exe).err().expect("an export from another version must be refused");
+    assert!(err.contains("version"), "{err}");
 }
 
 #[test]
@@ -320,6 +327,31 @@ fn import_replace_cascade_with_fk_off() {
         )
         .unwrap();
     assert_eq!(orphan_items, 0);
+}
+
+#[test]
+fn copy_account_db_keeps_the_old_progress_and_prunes_like_the_json_copy() {
+    let (tmp, server_exe, conn) = seeded_db();
+    let data = tmp.path().join("Data");
+    for i in 0..3 {
+        fs::write(data.join(format!("Account.db.multiverse-20200101-00000{i}.bak")), "").unwrap();
+    }
+    fs::write(tmp.path().join("ConfigOverride.ini"), "[SQLiteDBManager]\nMaxBackupNumber=1\n").unwrap();
+
+    let copy = copy_account_db(&server_exe, &conn).unwrap();
+    do_replace(&conn, 1, &sample_data()).unwrap();
+
+    let old = Connection::open(data.join(&copy)).unwrap();
+    let old_avatar: i64 = old.query_row("SELECT COUNT(*) FROM Avatar WHERE DbGuid = 101", [], |r| r.get(0)).unwrap();
+    assert_eq!(old_avatar, 1, "the copy must hold the progress from before the restore");
+    let mut copies: Vec<String> = fs::read_dir(&data)
+        .unwrap()
+        .flatten()
+        .map(|e| e.file_name().to_string_lossy().to_string())
+        .filter(|n| n.starts_with("Account.db.multiverse-"))
+        .collect();
+    copies.sort();
+    assert_eq!(copies, ["Account.db.multiverse-20200101-000000.bak".to_string(), copy]);
 }
 
 #[test]

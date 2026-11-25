@@ -1,7 +1,7 @@
 <script lang="ts">
   import { invoke } from '@tauri-apps/api/core'
   import { open } from '@tauri-apps/plugin-dialog'
-  import { appConfig, activeTab as appTab, serverRunning, upsertServer, jsonPersistence, refreshPersistence, type Server } from '../../lib/store'
+  import { appConfig, activeTab as appTab, serverRunning, serverStopping, stopServerNow, upsertServer, jsonPersistence, refreshPersistence, type Server } from '../../lib/store'
   import { syncAccount, validateEmail, validatePassword, validatePlayerName } from '../../lib/accountCommands'
   import { tip } from '../../lib/tooltip'
   import Dropdown from '../Dropdown.svelte'
@@ -208,7 +208,10 @@
     const checkEmail = (importEmail.trim() || importSummary.email).toLowerCase()
     const checkName = (importPlayerName.trim() || importSummary.player_name).toLowerCase()
     if (existingAccounts.some(a => a.email.toLowerCase() === checkEmail)) {
-      return `Email '${checkEmail}' is already registered.`
+      const profile = $appConfig.servers.find(s => s.is_local && onVersion(s.linked_id) === activeId && lower(s.email) === checkEmail)
+      return profile
+        ? `Email '${checkEmail}' is already on this server. To restore into it, edit your profile "${profile.name}" and use From Backup there.`
+        : `Email '${checkEmail}' is already on this server. Change the email to add the backup as a new account.`
     }
     if (existingAccounts.some(a => a.player_name.toLowerCase() === checkName)) {
       return `Player name '${checkName}' is already in use.`
@@ -216,13 +219,13 @@
     return ''
   })()
 
+  // A blank Server Name uses the player name, as its placeholder shows.
+  $: importDefaultName = importSummary ? ($jsonPersistence ? importSummary.player_name : importPlayerName.trim() || importSummary.player_name) : ''
   $: canImport =
     !!importSummary &&
     !$serverRunning &&
     hasServerExe &&
-    ($jsonPersistence
-      ? !!localProfile || !!importServerName.trim()
-      : !!importPassword.trim() && !!importServerName.trim() && !importConflictMsg)
+    ($jsonPersistence || (!!importPassword.trim() && !importConflictMsg && !accountsError))
 
   $: restoreTargetAccount = existingAccounts.find(
     a => a.email.toLowerCase() === (server?.email ?? '').toLowerCase()
@@ -233,26 +236,28 @@
     const sameEmail = restoreSummary.email.toLowerCase() === restoreTargetAccount.email.toLowerCase()
     const sameName = restoreSummary.player_name.toLowerCase() === restoreTargetAccount.player_name.toLowerCase()
     if (sameEmail && sameName) return ''
-    return `This backup is for ${restoreSummary.player_name} (${restoreSummary.email}), but this profile is for ${restoreTargetAccount.player_name} (${restoreTargetAccount.email}).`
+    return `This backup is for ${restoreSummary.player_name} (${restoreSummary.email}) and this profile is for ${restoreTargetAccount.player_name} (${restoreTargetAccount.email}). Restoring keeps ${restoreTargetAccount.player_name}'s name, email and password.`
   })()
 
   $: canRestore =
     !!restoreSummary &&
     !$serverRunning &&
     hasServerExe &&
-    ($jsonPersistence || (!!restoreTargetAccount && !restoreMismatchMsg))
+    ($jsonPersistence || !!restoreTargetAccount)
 
   // ── From Backup on JSON-storage servers ──────────────────────────────────
-  // restore_json_account replaces the server's one save. Every local profile signs in to that
-  // single account, so adding from a backup only creates a profile when there is no local one.
+  // restore_json_account replaces the server's one save. Every local profile on this version signs
+  // in to that single account, so Add only offers From Backup when there is no such profile yet.
+  // With one, restoring is done from that profile's Edit.
 
   const JSON_RESTORE_WARNING = "Restoring replaces all of this server's saved progress with the backup and makes it an admin account. A copy of the current save is kept in the server's Data folder."
-  $: localProfile = $appConfig.servers.find(s => s.is_local) ?? null
-  let jsonRestoreDone = ''
+  $: localProfile = $appConfig.servers.find(s => s.is_local && onVersion(s.linked_id) === activeId) ?? null
+  $: if (activeTab === 'import' && $jsonPersistence && localProfile) activeTab = 'manual'
+  let restoreDone = ''
 
   async function runJsonRestore(path: string, profileName: string | null) {
     const copy = await invoke<string | null>('restore_json_account', { serverExe: $appConfig.server_exe, jsonPath: path })
-    jsonRestoreDone = copy
+    restoreDone = copy
       ? `Backup restored. The previous save was copied to Data/${copy}.`
       : 'Backup restored. There was no previous save to copy.'
     if (profileName) {
@@ -262,6 +267,9 @@
   }
 
   $: if (activeTab === 'restore' && !isLocal) activeTab = 'manual'
+
+  // A first start creates Account.db, so look again once the server stops.
+  $: if (downloadsLoaded && !$serverRunning) loadExistingAccounts()
 
   // ── Tab switching ────────────────────────────────────────────────────────
 
@@ -293,14 +301,19 @@
     }
   }
 
+  // Shown on From Backup for Account.db servers, such as before the server's first start.
+  let accountsError = ''
+
   async function loadExistingAccounts() {
     if (!hasServerExe) { existingAccounts = []; return }
     try {
       existingAccounts = await invoke<AccountEntry[]>('list_accounts_for_import', {
         serverExe: $appConfig.server_exe,
       })
-    } catch {
+      accountsError = ''
+    } catch (e) {
       existingAccounts = []
+      accountsError = String(e)
     }
   }
 
@@ -320,7 +333,7 @@
     importNameError = ''
     importError = ''
     try {
-      const result = await invoke<ImportSummary>('parse_import_json', { jsonPath: path })
+      const result = await invoke<ImportSummary>('parse_import_json', { jsonPath: path, serverExe: $appConfig.server_exe })
       importFilePath = path
       importSummary = result
       importServerName = ''
@@ -347,7 +360,7 @@
 
     try {
       if ($jsonPersistence) {
-        await runJsonRestore(importFilePath, localProfile ? null : importServerName.trim())
+        await runJsonRestore(importFilePath, importServerName.trim() || importDefaultName)
         return
       }
       // The server's own rules for a new account, as console create checks them.
@@ -374,7 +387,7 @@
 
       const entry: Server = {
         id: crypto.randomUUID(),
-        name: importServerName.trim(),
+        name: importServerName.trim() || importDefaultName,
         host: '',
         email: finalEmail,
         is_local: true,
@@ -418,7 +431,7 @@
     restoreParseError = ''
     restoreError = ''
     try {
-      const result = await invoke<ImportSummary>('parse_import_json', { jsonPath: path })
+      const result = await invoke<ImportSummary>('parse_import_json', { jsonPath: path, serverExe: $appConfig.server_exe })
       restoreFilePath = path
       restoreSummary = result
     } catch (e) {
@@ -439,14 +452,14 @@
         return
       }
       if (!restoreTargetAccount) return
-      await invoke('import_account', {
+      const copy = await invoke<string>('import_account', {
         serverExe: $appConfig.server_exe,
         jsonPath: restoreFilePath,
         mode: 'replace',
         targetId: restoreTargetAccount.id,
         overrides: null,
       })
-      onClose()
+      restoreDone = `Backup restored. The previous account database was copied to Data/${copy}.`
     } catch (e) {
       restoreError = String(e)
     } finally {
@@ -512,7 +525,7 @@
   }
 
   function submit() {
-    if (jsonRestoreDone) {
+    if (restoreDone) {
       onClose()
     } else if (activeTab === 'manual') {
       if (acctWarning) onClose()
@@ -565,7 +578,7 @@
       >
         Local
       </button>
-      {#if !isEdit}
+      {#if !isEdit && !($jsonPersistence && localProfile)}
         <button
           type="button"
           class="tab-btn"
@@ -588,10 +601,10 @@
 
     <div class="modal-body">
 
-      {#if jsonRestoreDone}
+      {#if restoreDone}
         <div class="import-note" role="status">
           <i class="note-icon">i</i>
-          {jsonRestoreDone}
+          {restoreDone}
         </div>
         {#if importError}
           <div class="error">The backup was restored, but the profile could not be saved: {importError}</div>
@@ -662,6 +675,7 @@
           <div class="import-note">
             <i class="note-icon">i</i>
             This server stores data in a JSON file with one built-in account, and any email and password logs in. Set the player name in the Config tab.
+            {#if localProfile && !sameAccountProfile}To restore a backup, edit your profile "{localProfile.name}".{/if}
           </div>
         {/if}
 
@@ -730,8 +744,6 @@
           <i class="note-icon">i</i>
           {#if !$jsonPersistence}
             Creates a local server profile from an account export file.
-          {:else if localProfile}
-            Restores into the server's built-in account, which your profile "{localProfile.name}" signs in to.
           {:else}
             Restores into the server's built-in account and adds a local profile for it.
           {/if}
@@ -742,6 +754,8 @@
             <i class="note-icon">!</i>
             {JSON_RESTORE_WARNING}
           </div>
+        {:else if accountsError}
+          <div class="warning-notice">{accountsError}</div>
         {/if}
 
         <div class="form-group">
@@ -798,17 +812,15 @@
             <div class="summary-row">
               <span class="summary-label">Contents</span>
               <span class="summary-value">
-                {importSummary.avatar_count} avatars, {importSummary.team_up_count} team-ups, {importSummary.item_count} items
+                {importSummary.avatar_count} heroes, {importSummary.team_up_count} team-ups, {importSummary.item_count} items
               </span>
             </div>
           </div>
 
-          {#if !$jsonPersistence || !localProfile}
           <div class="form-group">
             <label class="field-label" for="modal-import-server-name">Server Name</label>
-            <input id="modal-import-server-name" type="text" bind:value={importServerName} placeholder={importSummary.player_name}>
+            <input id="modal-import-server-name" type="text" bind:value={importServerName} placeholder={importDefaultName}>
           </div>
-          {/if}
 
           {#if $jsonPersistence}
           <div class="hint-block">The player name becomes {importSummary.player_name} ([JsonDBManager] PlayerName in Config).</div>
@@ -848,7 +860,10 @@
           {/if}
 
           {#if $serverRunning}
-            <div class="warning-notice">Stop the server before importing.</div>
+            <div class="warning-notice">
+              Stop the server before importing.
+              <button type="button" class="link-btn" on:click={stopServerNow} disabled={$serverStopping}>{$serverStopping ? 'Stopping...' : 'Stop Server'}</button>
+            </div>
           {/if}
 
           {#if importError}
@@ -861,11 +876,11 @@
 
         <div class="import-note note-warning">
           <i class="note-icon">!</i>
-          {$jsonPersistence ? JSON_RESTORE_WARNING : "Restoring overwrites this account's current avatars, items, and progress. This cannot be undone."}
+          {$jsonPersistence ? JSON_RESTORE_WARNING : "Restoring overwrites this account's current heroes, items and progress. A copy of the account database is kept in the server's Data folder."}
         </div>
 
         {#if !restoreTargetAccount && !$jsonPersistence}
-          <div class="hint-block">No account in Account.db matches {server?.email ?? 'this profile\'s email'}.</div>
+          <div class="hint-block">{accountsError || `No account in Account.db matches ${server?.email ?? "this profile's email"}.`}</div>
         {:else}
           <div class="form-group">
             <span class="field-label">From Download folder</span>
@@ -919,7 +934,7 @@
               <div class="summary-row">
                 <span class="summary-label">Contents</span>
                 <span class="summary-value">
-                  {restoreSummary.avatar_count} avatars, {restoreSummary.team_up_count} team-ups, {restoreSummary.item_count} items
+                  {restoreSummary.avatar_count} heroes, {restoreSummary.team_up_count} team-ups, {restoreSummary.item_count} items
                 </span>
               </div>
             </div>
@@ -929,11 +944,14 @@
             {/if}
 
             {#if restoreMismatchMsg}
-              <div class="error">{restoreMismatchMsg}</div>
+              <div class="warning-notice">{restoreMismatchMsg}</div>
             {/if}
 
             {#if $serverRunning}
-              <div class="warning-notice">Stop the server before restoring.</div>
+              <div class="warning-notice">
+                Stop the server before restoring.
+                <button type="button" class="link-btn" on:click={stopServerNow} disabled={$serverStopping}>{$serverStopping ? 'Stopping...' : 'Stop Server'}</button>
+              </div>
             {/if}
 
             {#if restoreError}
@@ -951,7 +969,7 @@
         on:click={onClose}
         disabled={busy}
       >Cancel</button>
-      {#if jsonRestoreDone}
+      {#if restoreDone}
         <button type="button" class="btn btn-accent" on:click={submit}>Done</button>
       {:else if activeTab === 'manual'}
         <button type="button" class="btn btn-accent" on:click={submit} disabled={saving}>
@@ -963,7 +981,7 @@
         </button>
       {:else if activeTab === 'restore'}
         <button type="button" class="btn btn-accent" on:click={submit} disabled={!canRestore || restoreSaving}>
-          {restoreSaving ? 'Restoring...' : 'Restore Backup'}
+          {restoreSaving ? 'Restoring...' : restoreMismatchMsg ? 'Restore Anyway' : 'Restore Backup'}
         </button>
       {/if}
     </div>
