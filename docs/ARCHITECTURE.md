@@ -248,7 +248,7 @@ Every prototype field uses `PrototypePicker` (search by name through `search_pro
 
 **`PlayerCard.svelte`** is a self-contained card rendered per online player in `PlayersBlade.svelte` (accessed via a button in `ServerPanel`). It issues moderation commands (`!client kick`, `!account ban/unban`, `!account whitelist/unwhitelist`, `!client info`) and admin commands (`!account userlevel`) directly via `invoke('send_command', { cmd })`. Actions requiring an email address check `player.email` before proceeding and display inline feedback. Destructive actions (kick, ban) require a two-step confirmation UI within the card.
 
-**`ServerModal.svelte`** is tabbed rather than a single form: Remote, Local and From Backup. Add mode's From Backup creates a new local account from a `!account download` export, then its server profile in the same step. Edit mode shows From Backup only for profiles saved as local, and there it restores the profile's own account from a newer export (no identity fields, resolved from the profile's `email`). With JSON persistence From Backup writes the server's single save instead (`restore_json_account`).
+**`ServerModal.svelte`** is tabbed rather than a single form: Remote, Local and From Backup. Add mode's From Backup creates a new local account from a `!account download` export, then its server profile in the same step. Edit mode shows From Backup only for profiles saved as local, and there it restores into the profile's own account (no identity fields, resolved from the profile's `email`). A backup for another email or player name shows a warning and the button reads Restore Anyway. With JSON persistence From Backup writes the server's single save instead (`restore_json_account`), and Add hides From Backup once a local profile exists for the active version, since restoring is then done from that profile's Edit. Picking a file already refuses an export from another game version, and a missing Account.db shows before any fields are filled in. While the server runs, both tabs offer Stop Server.
 
 ---
 
@@ -497,10 +497,10 @@ Imports server profiles from uploaded JSON files, detected by shape: Bifrost `Bi
 
 | Command | Parameters | Returns | Description |
 |---|---|---|---|
-| `parse_import_json` | `json_path: String` | `ImportSummary` | Parse an export file and summarise it; no database access |
+| `parse_import_json` | `json_path: String, server_exe: String` | `ImportSummary` | Parse an export file and summarise it, refusing one from another game version than the server's; no database access |
 | `scan_download_backups` | `game_exe: String` | `Vec<BackupFileEntry>` | List candidate files in `<game_exe_dir>/Download/` by filename pattern only |
 | `list_accounts_for_import` | `server_exe: String` | `Vec<AccountEntry>` | All accounts (id, player name, email) — used for Add conflict pre-checks and Restore target resolution |
-| `import_account` | `server_exe: String, json_path: String, mode: String, target_id: Option<String>, overrides: Option<ImportOverrides>` | `()` | `mode: "add"` creates a new account (`overrides` applies); `mode: "replace"` overwrites `target_id`'s game data only (`overrides` ignored). `target_id` is a decimal string (see u64 Precision) |
+| `import_account` | `server_exe: String, json_path: String, mode: String, target_id: Option<String>, overrides: Option<ImportOverrides>` | `Option<String>` | `mode: "add"` creates a new account (`overrides` applies); `mode: "replace"` first copies Account.db to `Account.db.multiverse-<timestamp>.bak` (returned, pruned like the JSON save copies by `[SQLiteDBManager] MaxBackupNumber`), then overwrites `target_id`'s game data only (`overrides` ignored). `target_id` is a decimal string (see u64 Precision) |
 | `restore_json_account` | `server_exe: String, json_path: String` | `Option<String>` | JSON storage only: write the export as the server's save (see Account Import and Restore below); returns the file name of the copy made of the previous save |
 | `account_exists` | `server_exe: String, email: String` | `bool` | Read-only check that an account with this email is in Account.db; errors while the file is missing or locked |
 | `account_password_matches` | `server_exe: String, email: String, password: String` | `bool` | Read-only: recompute the PBKDF2 hash with the stored salt to confirm a console `!account create` / `password` landed |
@@ -881,8 +881,9 @@ scan_download_backups(game_exe)
   → non-matching files skipped, not errored
   → return [{ path, player_name, modified }, ...] sorted newest first
 
-parse_import_json(json_path)
-  → deserialise the export, return a summary only (no DB access)
+parse_import_json(json_path, server_exe)
+  → deserialise the export, refuse one from another game version than the server's
+  → return a summary only (no DB access)
 
 import_account(mode: "add", overrides)
   → resolve final email/player_name/password (overrides win, else export values)
@@ -892,6 +893,7 @@ import_account(mode: "add", overrides)
     references through that map, insert Player/Avatar/TeamUp/Item/ControlledEntity
 
 import_account(mode: "replace", target_id)
+  → VACUUM INTO a copy of Account.db next to it (takes in the WAL), prune old copies
   → verify target_id exists — no other checks against the target
   → DELETE Item, ControlledEntity, Avatar, TeamUp, then Player rows in that
     order (foreign keys are off, so ON DELETE CASCADE never fires)
