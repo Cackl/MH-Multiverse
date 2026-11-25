@@ -26,7 +26,26 @@ fn game_process_matches_the_linked_exe_name() {
         ("MarvelHeroes2016.exe", omega, false),
         ("MarvelHeroesOmega.exe", "", false),
     ] {
-        assert_eq!(is_game_process(process.as_ref(), game_exe), want, "{process} vs {game_exe:?}");
+        assert_eq!(is_game_process(process.as_ref(), None, game_exe), want, "{process} vs {game_exe:?}");
+    }
+}
+
+#[test]
+fn game_process_must_run_from_the_linked_install() {
+    let v153 = r"D:\Games\MHO-1.53\UnrealEngine3\Binaries\Win64\MarvelHeroesOmega.exe";
+    let name = "MarvelHeroesOmega.exe";
+    for (exe, want) in [
+        (v153, true),
+        (r"d:/games/mho-1.53/unrealengine3/binaries/win64/marvelheroesomega.EXE", true),
+        (r"D:\Games\MHO-1.53\UnrealEngine3\Binaries\Win32\MarvelHeroesOmega.exe", true),
+        // The 1.52 Steam client ships the same exe name.
+        (r"D:\Steam\Marvel Heroes\UnrealEngine3\Binaries\Win64\MarvelHeroesOmega.exe", false),
+        (r"D:\Steam\Marvel Heroes\UnrealEngine3\Binaries\Win32\MarvelHeroesOmega.exe", false),
+        (r"D:\Games\MHO-1.53\UnrealEngine3\Binaries\Other\MarvelHeroesOmega.exe", false),
+        // Unreadable path (sysinfo reports it empty): fall back to the name.
+        ("", true),
+    ] {
+        assert_eq!(is_game_process(name.as_ref(), Some(exe.as_ref()), v153), want, "{exe}");
     }
 }
 
