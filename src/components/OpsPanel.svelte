@@ -591,10 +591,10 @@
         <!-- Right: history -->
         <div class="backups-right">
           <div class="backups-right-head">
-            <span class="subsection-title" style="margin:0; flex:1;">History</span>
+            <span class="subsection-title" style="flex:1;">History</span>
             <label class="keep-field">
-              <span class="target-label">Keep Automatic</span>
-              <button class="info-btn" aria-label="About Keep Automatic" use:tip={'Older pre-update and pre-restore backups are deleted. 0 keeps all. Manual backups are always kept'}>?</button>
+              <span class="target-label">Keep automatic</span>
+              <button class="info-btn" aria-label="About Keep automatic" use:tip={'Older pre-update and pre-restore backups are deleted. 0 keeps all. Manual backups are always kept'}>?</button>
               <input
                 type="number"
                 class="keep-input"
@@ -1050,8 +1050,6 @@
   .backup-fields .field-label { margin-bottom: 0; }
   .label-with-info { display: flex; align-items: center; gap: 6px; white-space: nowrap; }
   .confirm-text strong { color: var(--text-1); font-weight: 600; }
-  /* The column gap already spaces the title from its rows. */
-  .backups-left .subsection-title { margin-bottom: 0; }
 
   .restore-picks {
     display: flex;

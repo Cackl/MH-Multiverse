@@ -79,7 +79,7 @@
     <div class="gs-text">
       <div class="gs-title">Launch options</div>
       {#if $appConfig.launch_options.auto_login}
-        <div class="gs-detail">Auto Login is on. Your password is passed as a launch argument</div>
+        <div class="gs-detail">Auto login is on. Your password is passed as a launch argument</div>
       {/if}
     </div>
     <button class="btn btn-sm btn-outline" on:click={openLaunchOptions}>Set Up</button>

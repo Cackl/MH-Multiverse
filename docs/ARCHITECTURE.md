@@ -54,7 +54,7 @@ mh-multiverse/
 │   │   ├── gameTweaks.ts         Game Tweaks recipes written into PatchDataZMultiverseTweaks.json
 │   │   ├── patchEntryEdit.ts     Advanced patch entry editor helpers: Start from list, JSON view, checks
 │   │   ├── linkedVersions.ts     Version follow-up when a linked entry's exes change
-│   │   └── versionCaps.ts        What the app offers per linked version (overlay, Steam Mode,
+│   │   └── versionCaps.ts        What the app offers per linked version (overlay, Steam mode,
 │   │                             Infinity XP, stock patch labels, nightly updates)
 │   └── components/
 │       ├── TitleBar.svelte        Custom window chrome (drag region, active version select, min/max/close)
@@ -106,7 +106,7 @@ mh-multiverse/
 │           └── integrations/      Integrations page building blocks
 │               ├── IntegrationCard.svelte     Collapsible card shell (title, subtitle, optional head actions); one per integration and per linked version; openCard(id) pre-opens one for deep links
 │               ├── OverlayIntegration.svelte  MarvelHeroesOmega Overlay card: folder/trust, inject toggle and Inject now, flags, loot log
-│               └── ProfileImport.svelte       Import Server Profiles card (Bifrost, overlay launcher): detect/browse, preview, import
+│               └── ProfileImport.svelte       Import server profiles card (Bifrost, overlay launcher): detect/browse, preview, import
 │
 ├── src-tauri/
 │   ├── src/
@@ -219,7 +219,7 @@ Six listeners are registered:
 | `server-started` | Emitted after successful spawn | Sets `serverRunning`, starts uptime timer |
 | `server-stopped` | Emitted on process exit (normal or crash) | Clears `serverRunning`/`apacheRunning`, stops uptime, logs exit code |
 | `player-event` | Emitted by `server.rs` on player login/logout/clear | Consumed by `ServerPanel` to update the online player list |
-| `overlay-inject` | Emitted by `overlay/mod.rs` when an injection (post-launch or Inject now) finishes | Sets the `overlayInject` store (shown in Settings → Integrations). A failed Inject on Launch (`on_launch`) also turns the Launch page's Overlay chip amber, with the reason in its tooltip, until the game closes |
+| `overlay-inject` | Emitted by `overlay/mod.rs` when an injection (post-launch or Inject now) finishes | Sets the `overlayInject` store (shown in Settings → Integrations). A failed Inject on launch (`on_launch`) also turns the Launch page's Overlay chip amber, with the reason in its tooltip, until the game closes |
 | `overlay-pipe` | Emitted by `overlay/pipe.rs` per read of the overlay's status pipe | Appended to the `overlayLog` store (capped at 500 rows) |
 
 `server-started` and `server-stopped` use a logTimestamp() function to mirror the formatting used for MHServerEmu entries
@@ -485,7 +485,7 @@ The stdout reader additionally calls `parse_player_log_event` on every line (reg
 
 ### Profile import (`profile_import/mod.rs`)
 
-Imports server profiles from uploaded JSON files, detected by shape: Bifrost `Bifrost.ServerList.json` (array) plus optional `Bifrost.LaunchConfig.json` (global login, attached to its selected server only if auto-login is on), or the MHO Overlay launcher's `launcher-settings.json` (`servers[]`, per-server logins). Imports always create remote (`is_local: false`) profiles; profiles already present are skipped, matched case-insensitively under a user-chosen strategy (`host + email` default, `host`, `host + name`, or none; under host + email an entry with no email matches any profile on that host). Passwords stay in the backend: the preview only reports whether a login exists, and `import_profiles` re-reads the files. Surfaced as the "Import Server Profiles" card in Settings → Integrations.
+Imports server profiles from uploaded JSON files, detected by shape: Bifrost `Bifrost.ServerList.json` (array) plus optional `Bifrost.LaunchConfig.json` (global login, attached to its selected server only if auto-login is on), or the MHO Overlay launcher's `launcher-settings.json` (`servers[]`, per-server logins). Imports always create remote (`is_local: false`) profiles; profiles already present are skipped, matched case-insensitively under a user-chosen strategy (`host + email` default, `host`, `host + name`, or none; under host + email an entry with no email matches any profile on that host). Passwords stay in the backend: the preview only reports whether a login exists, and `import_profiles` re-reads the files. Surfaced as the "Import server profiles" card in Settings → Integrations.
 
 | Command | Parameters | Returns | Description |
 |---|---|---|---|

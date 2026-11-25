@@ -1347,7 +1347,6 @@ button.side-item.active:hover, .side-item[role="button"].active:hover { color: v
   color: var(--accent);
   padding: 12px 0 8px;
   border-bottom: 1px solid var(--border);
-  margin-bottom: 14px;
 }
 .subsection-title:first-child { padding-top: 0; }
 

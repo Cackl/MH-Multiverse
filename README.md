@@ -105,7 +105,7 @@ Neither method removes your settings (like server lists). To fully clean up, als
 ---
 
 ## Good to Know
-- MH Multiverse stores passwords with OS-keychain-backed encryption. With Auto Login on, the game client writes your password to its Launch.log, and MH Multiverse masks it at startup and when the game closes.
+- MH Multiverse stores passwords with OS-keychain-backed encryption. With Auto login on, the game client writes your password to its Launch.log, and MH Multiverse masks it at startup and when the game closes.
 - 1.48 and 1.53 clients always launch standalone, and MH Multiverse only injects the Overlay to 1.52 clients
 - Custom server builds don't get nightly updates
 - Nightly updates always install their own copy of each file. Your on/off choices are kept, and edits the update replaced can be put back from the Update page

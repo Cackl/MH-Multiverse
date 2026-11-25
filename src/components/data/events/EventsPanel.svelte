@@ -648,6 +648,9 @@
   .dash-section {
     border-bottom: 1px solid var(--border);
     padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
   }
   .dash-section:last-child { border-bottom: none; }
 
