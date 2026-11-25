@@ -246,11 +246,13 @@
     ($jsonPersistence || !!restoreTargetAccount)
 
   // ── From Backup on JSON-storage servers ──────────────────────────────────
-  // restore_json_account replaces the server's one save. Every local profile signs in to that
-  // single account, so adding from a backup only creates a profile when there is no local one.
+  // restore_json_account replaces the server's one save. Every local profile on this version signs
+  // in to that single account, so Add only offers From Backup when there is no such profile yet.
+  // With one, restoring is done from that profile's Edit.
 
   const JSON_RESTORE_WARNING = "Restoring replaces all of this server's saved progress with the backup and makes it an admin account. A copy of the current save is kept in the server's Data folder."
-  $: localProfile = $appConfig.servers.find(s => s.is_local) ?? null
+  $: localProfile = $appConfig.servers.find(s => s.is_local && onVersion(s.linked_id) === activeId) ?? null
+  $: if (activeTab === 'import' && $jsonPersistence && localProfile) activeTab = 'manual'
   let restoreDone = ''
 
   async function runJsonRestore(path: string, profileName: string | null) {
@@ -358,7 +360,7 @@
 
     try {
       if ($jsonPersistence) {
-        await runJsonRestore(importFilePath, localProfile ? null : importServerName.trim() || importDefaultName)
+        await runJsonRestore(importFilePath, importServerName.trim() || importDefaultName)
         return
       }
       // The server's own rules for a new account, as console create checks them.
@@ -576,7 +578,7 @@
       >
         Local
       </button>
-      {#if !isEdit}
+      {#if !isEdit && !($jsonPersistence && localProfile)}
         <button
           type="button"
           class="tab-btn"
@@ -673,6 +675,7 @@
           <div class="import-note">
             <i class="note-icon">i</i>
             This server stores data in a JSON file with one built-in account, and any email and password logs in. Set the player name in the Config tab.
+            {#if localProfile}To restore a backup, edit your profile "{localProfile.name}".{/if}
           </div>
         {/if}
 
@@ -741,8 +744,6 @@
           <i class="note-icon">i</i>
           {#if !$jsonPersistence}
             Creates a local server profile from an account export file.
-          {:else if localProfile}
-            Restores into the server's built-in account, which your profile "{localProfile.name}" signs in to.
           {:else}
             Restores into the server's built-in account and adds a local profile for it.
           {/if}
@@ -816,12 +817,10 @@
             </div>
           </div>
 
-          {#if !$jsonPersistence || !localProfile}
           <div class="form-group">
             <label class="field-label" for="modal-import-server-name">Server Name</label>
             <input id="modal-import-server-name" type="text" bind:value={importServerName} placeholder={importDefaultName}>
           </div>
-          {/if}
 
           {#if $jsonPersistence}
           <div class="hint-block">The player name becomes {importSummary.player_name} ([JsonDBManager] PlayerName in Config).</div>
