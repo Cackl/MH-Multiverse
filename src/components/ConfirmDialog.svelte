@@ -30,7 +30,7 @@
           {$confirmRequest.cancelLabel}
         </button>
         {#if $confirmRequest.okLabel}
-          <button class="btn btn-sm btn-red" on:click={() => answer(true)}>
+          <button class="btn btn-sm {$confirmRequest.okClass ?? 'btn-red'}" on:click={() => answer(true)}>
             {$confirmRequest.okLabel}
           </button>
         {/if}
