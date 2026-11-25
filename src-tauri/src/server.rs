@@ -137,15 +137,27 @@ impl ServerProcess {
         }
     }
 
-    /// Kill Apache (if running) and release its Job Object.
-    pub fn kill_apache(&mut self) {
-        if let Some(mut apache) = self.apache_child.take() {
+    /// Kill Apache (if running) and release its Job Object. Returns whether it was running.
+    pub fn kill_apache(&mut self) -> bool {
+        let was_running = if let Some(mut apache) = self.apache_child.take() {
             let _ = apache.kill();
             let _ = apache.wait();
-        }
+            true
+        } else {
+            false
+        };
         #[cfg(target_os = "windows")]
         { self._apache_job = None; }
+        was_running
     }
+}
+
+fn emit_apache_stopped(app: &AppHandle) {
+    let _ = app.emit("server-log", vec![LogLinePayload {
+        time: log_timestamp(),
+        level: "ok".into(),
+        msg: "[MH Multiverse] Apache stopped".into(),
+    }]);
 }
 
 impl Drop for ServerProcess {
@@ -748,7 +760,7 @@ pub async fn start_server(
                                 proc.child = None;
 
                                 // Clean up Apache
-                                proc.kill_apache();
+                                let apache_was_running = proc.kill_apache();
 
                                 // Release job object
                                 #[cfg(target_os = "windows")]
@@ -756,6 +768,10 @@ pub async fn start_server(
 
                                 // Drop the lock before emitting
                                 drop(proc);
+
+                                if apache_was_running {
+                                    emit_apache_stopped(&app_clone);
+                                }
 
                                 clear_player_state(&app_clone, &player_state_for_watcher);
 
@@ -861,7 +877,7 @@ fn stop_gracefully(app: &AppHandle) -> Result<(), String> {
             }
             proc.child = None;
 
-            proc.kill_apache();
+            let apache_was_running = proc.kill_apache();
 
             #[cfg(target_os = "windows")]
             { proc._job = None; }
@@ -871,6 +887,10 @@ fn stop_gracefully(app: &AppHandle) -> Result<(), String> {
             drop(proc);
 
             clear_player_state(&app_clone, &player_state);
+
+            if apache_was_running {
+                emit_apache_stopped(&app_clone);
+            }
 
             let _ = app_clone.emit("server-log", vec![LogLinePayload {
                 time: log_timestamp(),
@@ -1003,7 +1023,7 @@ pub async fn start_apache(app: AppHandle, server_exe: String) -> Result<(), Stri
     let _ = app.emit("server-log", vec![LogLinePayload {
         time: log_timestamp(),
         level: "ok".into(),
-        msg: "Apache started".into(),
+        msg: "[MH Multiverse] Apache started".into(),
     }]);
 
     Ok(())
@@ -1014,17 +1034,11 @@ pub async fn stop_apache(app: AppHandle) -> Result<(), String> {
     let state = app.state::<ServerState>();
     let mut proc = state.0.lock().map_err(|e| e.to_string())?;
 
-    if proc.apache_child.is_some() {
-        proc.kill_apache();
-
-        let _ = app.emit("server-log", vec![LogLinePayload {
-            time: log_timestamp(),
-            level: "info".into(),
-            msg: "Apache stopped".into(),
-        }]);
-    } else {
+    if !proc.kill_apache() {
         return Err("Apache is not running.".into());
     }
+    drop(proc);
+    emit_apache_stopped(&app);
 
     Ok(())
 }

@@ -205,7 +205,7 @@ export async function initServerEventBridge(): Promise<void> {
       appendLog({ time: logTimestamp(), level: 'err', msg: '[MH Multiverse] Server stopped after a fatal error' })
     } else {
       clearServerError()
-      appendLog({ time: logTimestamp(), level: 'info', msg: '[MH Multiverse] Server stopped' })
+      appendLog({ time: logTimestamp(), level: 'ok', msg: '[MH Multiverse] Server stopped' })
     }
   })
 }
