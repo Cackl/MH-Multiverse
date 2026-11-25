@@ -593,8 +593,8 @@
           <div class="backups-right-head">
             <span class="subsection-title" style="flex:1;">History</span>
             <label class="keep-field">
-              <span class="target-label">Keep Automatic</span>
-              <button class="info-btn" aria-label="About Keep Automatic" use:tip={'Older pre-update and pre-restore backups are deleted. 0 keeps all. Manual backups are always kept'}>?</button>
+              <span class="target-label">Keep automatic</span>
+              <button class="info-btn" aria-label="About Keep automatic" use:tip={'Older pre-update and pre-restore backups are deleted. 0 keeps all. Manual backups are always kept'}>?</button>
               <input
                 type="number"
                 class="keep-input"

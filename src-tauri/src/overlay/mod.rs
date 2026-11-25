@@ -260,7 +260,7 @@ pub fn overlay_set_omega_gear(app: tauri::AppHandle, enabled: bool) -> Result<Ov
 struct InjectPayload {
     ok: bool,
     message: String,
-    /// Set off by Launch (Inject on Launch), not Inject now. Only these show on the Launch page.
+    /// Set off by Launch (Inject on launch), not Inject now. Only these show on the Launch page.
     on_launch: bool,
 }
 
@@ -280,7 +280,7 @@ pub(crate) fn supported(config: &crate::config::AppConfig) -> bool {
     !config.client_is_1_48_or_1_53()
 }
 
-/// Injects into the game this app launched, for when "Inject on Launch" is off. Same trust
+/// Injects into the game this app launched, for when "Inject on launch" is off. Same trust
 /// checks as a launch; the outcome arrives as `overlay-inject`.
 #[tauri::command]
 pub fn overlay_inject_now(app: tauri::AppHandle) -> Result<(), String> {

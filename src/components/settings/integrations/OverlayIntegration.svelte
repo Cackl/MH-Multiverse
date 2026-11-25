@@ -31,9 +31,9 @@
   $: trustHelp = `${STATE_HELP[state]}\n\n${HOW_TRUST_WORKS}`
 
   const FLAGS: { key: string; name: string; desc: string }[] = [
-    { key: 'terminals', name: 'Terminals Tracker', desc: 'Shows terminal tracker when opening the Waypoint' },
-    { key: 'dps', name: 'DPS Meter', desc: 'Shows the damage meter' },
-    { key: 'detector_log', name: 'Debug Logging', desc: 'Writes overlay log files, separate to the Overlay Log' },
+    { key: 'terminals', name: 'Terminals tracker', desc: 'Shows terminal tracker when opening the Waypoint' },
+    { key: 'dps', name: 'DPS meter', desc: 'Shows the damage meter' },
+    { key: 'detector_log', name: 'Debug logging', desc: 'Writes overlay log files, separate to the Overlay log' },
   ]
 
   async function injectNow() {
@@ -141,7 +141,7 @@
   {#if overlay}
     <div class="opt-row" class:dim={!canInject}>
       <div class="opt-label">
-        <span class="opt-name">Inject on Launch</span>
+        <span class="opt-name">Inject on launch</span>
         <span class="opt-desc">Loads the overlay into the game after Launch. Requires a trusted overlay</span>
       </div>
       <div class="log-actions">
@@ -184,7 +184,7 @@
       {/each}
       <div class="opt-row" class:dim={state !== 'trusted'}>
         <div class="opt-label" use:tip={'Only changes the loot filter panel layout. Applies immediately, and again on each launch while it is on. Needs the overlay to have run once so its settings file exists.'}>
-          <span class="opt-name">Omega Gear</span>
+          <span class="opt-name">Omega gear</span>
           <span class="opt-desc">Shows the Omega column and Omega Slot 1–5 in the loot filter panel</span>
         </div>
         <div
@@ -208,7 +208,7 @@
   <div class="section-divider"><span>Log</span></div>
   <div class="opt-row">
     <div class="opt-label">
-      <span class="opt-name">Overlay Log</span>
+      <span class="opt-name">Overlay log</span>
       <span class="opt-desc">{eventCount} event{eventCount === 1 ? '' : 's'} this session</span>
     </div>
     <div class="log-actions">
