@@ -222,7 +222,7 @@
     hasServerExe &&
     ($jsonPersistence
       ? !!localProfile || !!importServerName.trim()
-      : !!importPassword.trim() && !!importServerName.trim() && !importConflictMsg)
+      : !!importPassword.trim() && !!importServerName.trim() && !importConflictMsg && !accountsError)
 
   $: restoreTargetAccount = existingAccounts.find(
     a => a.email.toLowerCase() === (server?.email ?? '').toLowerCase()
@@ -293,14 +293,19 @@
     }
   }
 
+  // Shown on From Backup for Account.db servers, such as before the server's first start.
+  let accountsError = ''
+
   async function loadExistingAccounts() {
     if (!hasServerExe) { existingAccounts = []; return }
     try {
       existingAccounts = await invoke<AccountEntry[]>('list_accounts_for_import', {
         serverExe: $appConfig.server_exe,
       })
-    } catch {
+      accountsError = ''
+    } catch (e) {
       existingAccounts = []
+      accountsError = String(e)
     }
   }
 
@@ -320,7 +325,7 @@
     importNameError = ''
     importError = ''
     try {
-      const result = await invoke<ImportSummary>('parse_import_json', { jsonPath: path })
+      const result = await invoke<ImportSummary>('parse_import_json', { jsonPath: path, serverExe: $appConfig.server_exe })
       importFilePath = path
       importSummary = result
       importServerName = ''
@@ -418,7 +423,7 @@
     restoreParseError = ''
     restoreError = ''
     try {
-      const result = await invoke<ImportSummary>('parse_import_json', { jsonPath: path })
+      const result = await invoke<ImportSummary>('parse_import_json', { jsonPath: path, serverExe: $appConfig.server_exe })
       restoreFilePath = path
       restoreSummary = result
     } catch (e) {
@@ -742,6 +747,8 @@
             <i class="note-icon">!</i>
             {JSON_RESTORE_WARNING}
           </div>
+        {:else if accountsError}
+          <div class="warning-notice">{accountsError}</div>
         {/if}
 
         <div class="form-group">
@@ -865,7 +872,7 @@
         </div>
 
         {#if !restoreTargetAccount && !$jsonPersistence}
-          <div class="hint-block">No account in Account.db matches {server?.email ?? 'this profile\'s email'}.</div>
+          <div class="hint-block">{accountsError || `No account in Account.db matches ${server?.email ?? "this profile's email"}.`}</div>
         {:else}
           <div class="form-group">
             <span class="field-label">From Download folder</span>

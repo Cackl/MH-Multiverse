@@ -250,9 +250,12 @@ fn max_existing_id(conn: &Connection) -> Result<i64, rusqlite::Error> {
 // ── Tauri commands ─────────────────────────────────────────────────────────
 
 /// Parse the import file and return a summary. Does not touch the database.
+/// Refuses an export from another game version than `server_exe`'s, as the import
+/// would, so the modal says so before any fields are filled in.
 #[tauri::command]
-pub fn parse_import_json(json_path: String) -> Result<ImportSummary, String> {
+pub fn parse_import_json(json_path: String, server_exe: String) -> Result<ImportSummary, String> {
     let data = read_and_parse(&json_path)?;
+    check_export_build(&data, crate::versions::server_version(&server_exe))?;
     Ok(ImportSummary {
         player_name: data.player_name,
         email: data.email,
