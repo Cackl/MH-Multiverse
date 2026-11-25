@@ -216,13 +216,13 @@
     return ''
   })()
 
+  // A blank Server Name uses the player name, as its placeholder shows.
+  $: importDefaultName = importSummary ? ($jsonPersistence ? importSummary.player_name : importPlayerName.trim() || importSummary.player_name) : ''
   $: canImport =
     !!importSummary &&
     !$serverRunning &&
     hasServerExe &&
-    ($jsonPersistence
-      ? !!localProfile || !!importServerName.trim()
-      : !!importPassword.trim() && !!importServerName.trim() && !importConflictMsg && !accountsError)
+    ($jsonPersistence || (!!importPassword.trim() && !importConflictMsg && !accountsError))
 
   $: restoreTargetAccount = existingAccounts.find(
     a => a.email.toLowerCase() === (server?.email ?? '').toLowerCase()
@@ -355,7 +355,7 @@
 
     try {
       if ($jsonPersistence) {
-        await runJsonRestore(importFilePath, localProfile ? null : importServerName.trim())
+        await runJsonRestore(importFilePath, localProfile ? null : importServerName.trim() || importDefaultName)
         return
       }
       // The server's own rules for a new account, as console create checks them.
@@ -382,7 +382,7 @@
 
       const entry: Server = {
         id: crypto.randomUUID(),
-        name: importServerName.trim(),
+        name: importServerName.trim() || importDefaultName,
         host: '',
         email: finalEmail,
         is_local: true,
@@ -816,7 +816,7 @@
           {#if !$jsonPersistence || !localProfile}
           <div class="form-group">
             <label class="field-label" for="modal-import-server-name">Server Name</label>
-            <input id="modal-import-server-name" type="text" bind:value={importServerName} placeholder={importSummary.player_name}>
+            <input id="modal-import-server-name" type="text" bind:value={importServerName} placeholder={importDefaultName}>
           </div>
           {/if}
 
