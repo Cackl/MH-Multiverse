@@ -34,7 +34,7 @@
     ? $appConfig.linked.find(l => l.id === activeServer!.linked_id) ?? null
     : null
   $: launchExe = switchTo ? switchTo.game_exe : $appConfig.game_exe
-  // A failed Inject on Launch, shown on the Overlay chip until the game closes. Inject now results stay on the Overlay card.
+  // A failed Inject on launch, shown on the Overlay chip until the game closes. Inject now results stay on the Overlay card.
   $: launchInjectError = $gameRunning && $overlayInject?.on_launch && !$overlayInject.ok ? $overlayInject.message : ''
 
   // The guide shows on its own with no servers; the sidebar button brings it back afterwards.

@@ -6,7 +6,7 @@
   import {
     appConfig, type SettingsSection, activeTheme, setTheme, setTextSize, setLaunchOptions, type LaunchOptions,
     appUpdate, appUpdateError, appUpdateCheckedAt, checkAppUpdate, showUpdateBadge,
-    updateRemindLater, dismissedUpdate, serverRunning, settingsSection, activeCaps,
+    updateRemindLater, dismissedUpdate, serverRunning, settingsSection, activeCaps, askConfirm,
   } from '../../lib/store'
   import { parseReleaseNotes } from '../../lib/releaseNotes'
   import { tip } from '../../lib/tooltip'
@@ -36,8 +36,19 @@
     checking = false
   }
 
+  function confirmBreaking(versions: string[]): Promise<boolean> {
+    return askConfirm({
+      title: 'Update with breaking changes?',
+      message: `v${versions.join(', v')} ${versions.length > 1 ? 'have' : 'has'} breaking changes. Read the notes before updating.`,
+      okLabel: 'Update now',
+      cancelLabel: 'Cancel',
+      okClass: 'btn-accent',
+    })
+  }
+
   async function installUpdate() {
     if (!$appUpdate || installing) return
+    if (breakingVersions.length && !(await confirmBreaking(breakingVersions))) return
     installing = true
     installError = ''
     progress = { stage: 'downloading', pct: 0 }
@@ -82,18 +93,18 @@
   type BoolKey = { [K in keyof LaunchOptions]: LaunchOptions[K] extends boolean ? K : never }[keyof LaunchOptions]
   // Ordered by how often / how much they matter. `invert`: toggle shows the opposite of the stored flag.
   const launchToggles: { key: BoolKey; name: string; desc: string; invert?: boolean }[] = [
-    { key: 'auto_login', name: 'Auto Login',
-      desc: 'Passes your password as a launch argument. Note that the client writes it in plain text to its Launch.log' },
-    { key: 'no_steam', invert: true, name: 'Steam Mode',
+    { key: 'auto_login', name: 'Auto login',
+      desc: 'Passes your password as a launch argument. MH Multiverse masks it in the game\'s Launch.log at startup and when the game closes' },
+    { key: 'no_steam', invert: true, name: 'Steam mode',
       desc: 'Enable to launch via Steam, if your copy of the game is from there. Disable to use Robocopy' },
-    { key: 'force_32bit', name: 'Force 32-bit Client', desc: 'Runs the Win32 executable instead of Win64, if both are installed' },
-    { key: 'skip_startup_movies', name: 'Skip Startup Movies', desc: 'Disables logo movies on launch' },
-    { key: 'skip_motion_comics', name: 'Skip Motion Comics', desc: 'Disables in-game motion comic cutscenes' },
-    { key: 'no_sound', name: 'No Sound', desc: 'Disables all game audio on launch' },
-    { key: 'custom_resolution', name: 'Custom Resolution', desc: 'Forces a resolution not available in-game options' },
-    { key: 'enable_client_log', name: 'Enable Client Log',
-      desc: 'Opens a verbose log window alongside the game. Logs can contain your launch command, including your password' },
-    { key: 'patched_client', name: 'Patched Client',
+    { key: 'force_32bit', name: 'Force 32-bit client', desc: 'Runs the Win32 executable instead of Win64, if both are installed' },
+    { key: 'skip_startup_movies', name: 'Skip startup movies', desc: 'Disables logo movies on launch' },
+    { key: 'skip_motion_comics', name: 'Skip motion comics', desc: 'Disables in-game motion comic cutscenes' },
+    { key: 'no_sound', name: 'No sound', desc: 'Disables all game audio on launch' },
+    { key: 'custom_resolution', name: 'Custom resolution', desc: 'Forces a resolution not available in-game options' },
+    { key: 'enable_client_log', name: 'Enable client log',
+      desc: 'Opens a verbose log window alongside the game. With Auto login on, the window shows your password' },
+    { key: 'patched_client', name: 'Patched client',
       desc: 'Enable if using Crypto137\'s port 8080 client patch. Changes the SiteConfig URL path for local servers' },
   ]
 
@@ -469,7 +480,6 @@
     display: flex;
     align-items: center;
     gap: 14px;
-    margin-bottom: 22px;
   }
   .seg {
     display: inline-flex;

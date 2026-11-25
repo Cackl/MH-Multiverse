@@ -2,6 +2,49 @@
 ---
 <br>
 
+# Version 1.8.0 Release
+
+## Breaking Changes
+- Nightly updates now replace hand edits to stock files such as `Config.ini`. Your copy is saved in a pre-update backup. Settings changed in Multiverse are in `ConfigOverride.ini`, which updates never touch.
+
+## What's Changed
+
+### Auto-login
+- The auto-login password is masked in the game's launch logs, at startup and when the game closes.
+- The Use HTTPS tooltip now says it only affects the dashboard link.
+
+### Nightly updates and backups
+- Updates keep the nightly's own files. Your Targets go into the pre-update backup instead of being copied back over the new install, so upstream fixes reach every file.
+  - Edited files the update replaced are listed afterwards, with `Use My Copies` to put them back.
+  - Files you switched on or off stay that way, listed as Kept Off and Kept On.
+- Roll Back Update puts the previous build back from the pre-update backup.
+- Restore Files lets you pick which of a backup's files to restore. Each restore first saves what it overwrites.
+- Player Accounts replaces Account Store and saves the account database and the JSON save, whichever exist. Existing selections switch over. Achievements is no longer a target.
+- New installs back up ConfigOverride.ini, Player Accounts and Live Tuning by default.
+- Keep automatic (default 10, 0 keeps all) deletes the oldest pre-update and pre-restore backups, but manual backups are always kept.
+
+### Restoring from a backup
+- Restoring into a local profile on an Account.db server first copies the account database to the server's Data folder, so the restore can be undone.
+- A backup with a different email or player name shows a warning and Restore Anyway instead of blocking. The account keeps its own name, email and password.
+- Picking a backup from another game version, or for a server with no account database yet, is flagged straight away.
+- Stop Server in the From Backup tab stops a running server without leaving the dialog.
+- Server Name is optional and defaults to the player name.
+- If the backup's email is already on the server, the message names the profile to restore from.
+- On JSON-storage servers, From Backup shows in Add Server only when that version has no local profile yet. Otherwise restore from the profile's Edit.
+
+### Other Changes
+- Updates with breaking changes now ask before installing, starting with the update after 1.8.0.
+- The game counts as running only when it's the linked install, so a 1.52 client started from Steam no longer shows as running with 1.53 linked, and the reverse.
+- Stopping the server now logs Apache stopped. Apache start and stop lines carry the `[MH Multiverse]` prefix.
+- `Server stopped` and `Apache stopped` messages show in green like `Server started`.
+- `Config > Multiverse` now looks like the other Config pages.
+
+### Note
+- (Edge Case) If you swap back to an older version of Multiverse after taking this update, Player Accounts will be skipped in backups without a message. Ticking Account Store again will get it to back up `Account.db`.
+
+<br>
+
+---
 # Version 1.7.2 Release
 
 ## Breaking Changes
@@ -10,7 +53,8 @@
 ## What's Changed
 
 ### Overlay
-- The Overlay is now loaded by its own injector, `MhInject.exe`, instead of by MH Multiverse. This stops Windows Defender from flagging MH Multiverse when it injects (1.7.1 was quarantined as `Behavior:Win32/DefenseEvasion.A!ml`).
+- The Overlay is now loaded by its own injector, `MhInject.exe`, instead of by MH Multiverse.
+  - This stops Windows Defender from falsely flagging *MH Multiverse* when it injects (1.7.1 was quarantined). It also takes the memory-writing code out of MH Multiverse and uses the same loading path as the Overlay's own launcher.
 - Trust now also covers `MhInject.exe` and the files it runs from.
 - The injector needs the .NET 8 Runtime, which the Overlay's own launcher also uses.
 - Injection is refused while a second game client with the same name is running, since the injector picks the game by name.

@@ -54,7 +54,7 @@ mh-multiverse/
 │   │   ├── gameTweaks.ts         Game Tweaks recipes written into PatchDataZMultiverseTweaks.json
 │   │   ├── patchEntryEdit.ts     Advanced patch entry editor helpers: Start from list, JSON view, checks
 │   │   ├── linkedVersions.ts     Version follow-up when a linked entry's exes change
-│   │   └── versionCaps.ts        What the app offers per linked version (overlay, Steam Mode,
+│   │   └── versionCaps.ts        What the app offers per linked version (overlay, Steam mode,
 │   │                             Infinity XP, stock patch labels, nightly updates)
 │   └── components/
 │       ├── TitleBar.svelte        Custom window chrome (drag region, active version select, min/max/close)
@@ -106,7 +106,7 @@ mh-multiverse/
 │           └── integrations/      Integrations page building blocks
 │               ├── IntegrationCard.svelte     Collapsible card shell (title, subtitle, optional head actions); one per integration and per linked version; openCard(id) pre-opens one for deep links
 │               ├── OverlayIntegration.svelte  MarvelHeroesOmega Overlay card: folder/trust, inject toggle and Inject now, flags, loot log
-│               └── ProfileImport.svelte       Import Server Profiles card (Bifrost, overlay launcher): detect/browse, preview, import
+│               └── ProfileImport.svelte       Import server profiles card (Bifrost, overlay launcher): detect/browse, preview, import
 │
 ├── src-tauri/
 │   ├── src/
@@ -219,7 +219,7 @@ Six listeners are registered:
 | `server-started` | Emitted after successful spawn | Sets `serverRunning`, starts uptime timer |
 | `server-stopped` | Emitted on process exit (normal or crash) | Clears `serverRunning`/`apacheRunning`, stops uptime, logs exit code |
 | `player-event` | Emitted by `server.rs` on player login/logout/clear | Consumed by `ServerPanel` to update the online player list |
-| `overlay-inject` | Emitted by `overlay/mod.rs` when an injection (post-launch or Inject now) finishes | Sets the `overlayInject` store (shown in Settings → Integrations). A failed Inject on Launch (`on_launch`) also turns the Launch page's Overlay chip amber, with the reason in its tooltip, until the game closes |
+| `overlay-inject` | Emitted by `overlay/mod.rs` when an injection (post-launch or Inject now) finishes | Sets the `overlayInject` store (shown in Settings → Integrations). A failed Inject on launch (`on_launch`) also turns the Launch page's Overlay chip amber, with the reason in its tooltip, until the game closes |
 | `overlay-pipe` | Emitted by `overlay/pipe.rs` per read of the overlay's status pipe | Appended to the `overlayLog` store (capped at 500 rows) |
 
 `server-started` and `server-stopped` use a logTimestamp() function to mirror the formatting used for MHServerEmu entries
@@ -248,7 +248,7 @@ Every prototype field uses `PrototypePicker` (search by name through `search_pro
 
 **`PlayerCard.svelte`** is a self-contained card rendered per online player in `PlayersBlade.svelte` (accessed via a button in `ServerPanel`). It issues moderation commands (`!client kick`, `!account ban/unban`, `!account whitelist/unwhitelist`, `!client info`) and admin commands (`!account userlevel`) directly via `invoke('send_command', { cmd })`. Actions requiring an email address check `player.email` before proceeding and display inline feedback. Destructive actions (kick, ban) require a two-step confirmation UI within the card.
 
-**`ServerModal.svelte`** is tabbed rather than a single form: Remote, Local and From Backup. Add mode's From Backup creates a new local account from a `!account download` export, then its server profile in the same step. Edit mode shows From Backup only for profiles saved as local, and there it restores the profile's own account from a newer export (no identity fields, resolved from the profile's `email`). With JSON persistence From Backup writes the server's single save instead (`restore_json_account`).
+**`ServerModal.svelte`** is tabbed rather than a single form: Remote, Local and From Backup. Add mode's From Backup creates a new local account from a `!account download` export, then its server profile in the same step. Edit mode shows From Backup only for profiles saved as local, and there it restores into the profile's own account (no identity fields, resolved from the profile's `email`). A backup for another email or player name shows a warning and the button reads Restore Anyway. With JSON persistence From Backup writes the server's single save instead (`restore_json_account`), and Add hides From Backup once a local profile exists for the active version, since restoring is then done from that profile's Edit. Picking a file already refuses an export from another game version, and a missing Account.db shows before any fields are filled in. While the server runs, both tabs offer Stop Server.
 
 ---
 
@@ -278,7 +278,7 @@ The stdout reader additionally calls `parse_player_log_event` on every line (reg
 
 **`events.rs`** - File I/O for `Events.json` / `EventsOverride.json` and `EventSchedule.json` / `EventScheduleOverride.json` in `Data/Game/LiveTuning/`. Both file pairs follow the same override pattern: the override file takes precedence if it exists, otherwise the default file is read. `Events.json` is a JSON object keyed by event ID; `EventSchedule.json` is a JSON array. Read functions deserialise into `EventDefinition` and `ScheduleRule` structs respectively. Write functions always target the override file. `reset_*_override` copies the default file over the override; `merge_*_override` adds any entries present in the default but missing from the override (by ID for events, by name for rules), without overwriting existing override entries. For the Simple view, `load_stock_events` reads the stock files whether or not overrides exist, and `save_event_bundle` saves custom events in one go: their tuning files in `LiveTuning/Events/Multiverse/LiveTuningData<slug>.json`, then both override files together (a schedule naming an id missing from the events list loses that rule), then deleted events' files moved aside to `<name>.<timestamp>.bak`. Custom event ids start with `zzMultiverse_`.
 
-**`launcher.rs`** - Spawns the game client as a detached process with command-line arguments derived from the active server profile and launch options. Credentials are decrypted from the config at launch time. For local servers, the siteconfigurl host is derived at launch time from WebFrontend.Port in Config.ini via ini::read_merged_value. For remote servers, normalize_host strips any scheme and path from the stored host before building the URL; use_https determines the scheme. game_is_running uses sysinfo to check for a process with the linked game exe's file name (MarvelHeroesOmega.exe on 1.52, MarvelHeroes2016.exe on 1.48). After a successful spawn, `launch_game` stores the game as a `Game` (PID plus the `Child`) in `LaunchedGame`, then hands it and a copy of the overlay config to `overlay::on_game_spawned`, which returns immediately unless overlay injection is enabled and trusted. `game_is_running` finds the game by name and so also sees clients started elsewhere; `LaunchedGame` knows only our own launch.
+**`launcher.rs`** - Spawns the game client as a detached process with command-line arguments derived from the active server profile and launch options. Credentials are decrypted from the config at launch time. For local servers, the siteconfigurl host is derived at launch time from WebFrontend.Port in Config.ini via ini::read_merged_value. For remote servers, normalize_host strips any scheme and path from the stored host before building the URL; use_https determines the scheme. game_is_running uses sysinfo to check for a process running the linked game exe or its `Binaries\Win32`/`Win64` sibling. It compares full paths because 1.52 and 1.53 both ship MarvelHeroesOmega.exe (1.48 has MarvelHeroes2016.exe), and falls back to the file name when a process's path can't be read. After a successful spawn, `launch_game` stores the game as a `Game` (PID plus the `Child`) in `LaunchedGame`, then hands it and a copy of the overlay config to `overlay::on_game_spawned`, which returns immediately unless overlay injection is enabled and trusted. `game_is_running` finds the linked install's game and so also sees it when started elsewhere; `LaunchedGame` knows only our own launch.
 
 **`overlay/`** - Integrates the third-party MarvelHeroesOmega Overlay (closed source, not part of this project; none of its files are bundled or redistributed). Multiverse never runs any overlay executable: the overlay is a native DLL (`MhClientHook.dll`) that runs inside the game process, so it lives and dies with the game.
 - *Trust (TOFU)*: the user links the overlay folder (`overlay_set_dir`, canonicalised, must contain `MhClientHook.dll`) and presses Trust. `scan_set` hashes (SHA-256) a fixed allowlist: the DLL, `terminals.bin`, `enum-names.bin`, the loot-filter default JSON, the injector (`MhInject.exe`, `MhInject.dll`, its `deps.json` and `runtimeconfig.json`, `MarvelHeroes.Injection.Core.dll`), and the portraits/icons/fonts/textures folders. Flags, panel layout JSON, the overlay's launcher, legacy exes and its updater are never hashed. The per-file hashes and a combined set hash are stored in `multiverse.json`. A symlink or subfolder inside an asset folder cannot be hashed: Trust refuses it, and one appearing later shows as `added`. Status is derived live: `not_linked`, `missing`, `untrusted`, `trusted`, or `changed` (with `changed:`/`missing:`/`added:` lines). There is no known-hash list in the repo. Changing folder or untrusting also switches injection off.
@@ -300,9 +300,7 @@ The stdout reader additionally calls `parse_player_log_event` on every line (reg
 
 **`calligraphy.rs`** - Reads MHServerEmu's `Calligraphy.sip` pak file (LZ4-compressed entries with a `KAPG` signature). Parses the `Blueprint.directory` and `Prototype.directory` files within the pak to build a `PrototypeCatalogue` with indices by runtime ID, path, and GUID. The catalogue is cached per sip file path and rebuilt automatically if the server executable changes. Prototype search supports multi-prefix category filtering and case-insensitive matching against both path and display name.
 
-**`updater.rs`** - Downloads nightly builds from `nightly.link/Crypto137/MHServerEmu/...` (the `windows-v48`, `-v52` or `-v53` workflow, matching the server's own game version), extracts them, and overlays onto the server directory. The update flow: check availability (HTTP range probe) → download with progress events → extract to staging dir → pre-update backup of the selected targets and every file the install will replace → copy to server dir (a failure rolls back from that backup) → restore the targets. `cancel_update` stops it at the next check before the install, which can't be cancelled. Backups are stored in `{server_dir}/Backups/{timestamp}/` with a `manifest.json` (an id taken in the same second gets a `-1`, `-2` suffix). The manifest's `replaced` lists the files an update overwrote: a later Restore leaves them out, so it can't put the old server back. A Restore first makes a "pre-restore" backup of the files it will replace. Pre-update backups are never pruned. `Calligraphy.sip` and `mu_cdata.sip` are blacklisted from backups.
-
-Because the targets are restored after the install, a targeted file always keeps the user's copy, and upstream fixes to it never land.
+**`updater.rs`** - Downloads nightly builds from `nightly.link/Crypto137/MHServerEmu/...` (the `windows-v48`, `-v52` or `-v53` workflow, matching the server's own game version), extracts them, and overlays onto the server directory. The update flow: check availability (HTTP range probe) → download with progress events → extract to staging dir → pre-update backup of the selected targets, every file the install will replace and the user's copies of stock files switched the other way → copy to server dir (a failure rolls back from that backup) → keep the user's on/off choice for switched stock files. The targets are not copied back, so upstream fixes always land. Files the app had edited (a `.json.bak` beside them) that the install replaced are reported, and `put_back_edits` copies them back from the pre-update backup after backing up the update's copies as a pre-restore backup. `cancel_update` stops it at the next check before the install, which can't be cancelled. Backups are stored in `{server_dir}/Backups/{timestamp}/` with a `manifest.json` (an id taken in the same second gets a `-1`, `-2` suffix). The manifest's `replaced` lists the files an update overwrote. A plain Restore leaves them out, so it can't put the old server back. Roll Back Update (`restore_backup` with `roll_back`) copies them back too, which puts the old build back. Files new in the newer build stay. A Restore first makes a "pre-restore" backup of the files it will replace. A roll back's pre-restore backup also holds the newer server files and the versions, so its Undo Roll Back is the same roll back in reverse. After each update, restore or Restore My Edits, the oldest automatic (pre-update and pre-restore) backups beyond `keep_auto_backups` (default 10, 0 keeps all) are deleted, never the one just restored from. Manual backups are never deleted. `Calligraphy.sip` and `mu_cdata.sip` are blacklisted from backups.
 
 **`app_update.rs`** - Self-update for MH Multiverse itself. Checks `api.github.com/repos/Cackl/MH-Multiverse/releases`, picks the highest published `vX.Y.Z` (skipping drafts and prereleases), and returns notes for every newer release, flagging any whose body contains a `## Breaking Changes` heading. Installs re-fetch the release by tag and refuse to touch the running exe unless the download carries a valid minisign signature from the embedded `PUBKEY`, names the expected file in its trusted comment, and (exe) reports the expected version in its version resource. See [Releasing](#releasing-signed-updates).
 
@@ -339,7 +337,8 @@ Because the targets are restored after the install, a targeted file always keeps
 | `missing_game_data` | `server_exe: String` | `Vec<String>` | Which of `Calligraphy.sip` and `mu_cdata.sip` the server's `Data/Game` lacks (`game_data.rs`) |
 | `copy_game_data` | `game_exe, server_exe` | `Vec<String>` | Copies the missing ones from the client's `Data/Game` (searched up from the game exe) through a `.part` file, never replacing one that is there. Returns the files copied |
 | `set_shutdown_config` | `shutdown: ShutdownConfig` | `()` | Set shutdown delay and broadcast message |
-| `set_backup_targets` | `targets: Vec<String>` | `()` | Set backup target paths |
+| `set_keep_auto_backups` | `keep: u32` | `()` | How many automatic backups to keep, 0 keeps all |
+| `set_backup_targets` | `targets: Vec<String>` | `()` | Set backup target paths. `Players` stands for the account database and JSON save, resolved when a backup is made |
 | `set_console_presets` | `presets: Vec<String>` | `()` | Set command shortcut preset list |
 | `set_text_size` | `size: f64` | `()` | Set the Display text size (0.5 to 2.0, applied as webview zoom) |
 | `set_advanced_data` | `advanced: bool` | `()` | Set the Data tab's Simple / Advanced mode |
@@ -357,7 +356,7 @@ Because the targets are restored after the install, a targeted file always keeps
 | Command | Parameters | Returns | Description |
 |---|---|---|---|
 | `launch_game` | `server_id: String` | `()` | Spawn game client with server args and launch options. siteconfigurl uses /Dashboard/SiteConfig.xml for patched local clients, /SiteConfig.xml for unpatched, normalize_host + use_https for remote |
-| `game_is_running` | - | `bool` | Poll a reused `sysinfo::System` (managed state) for a process named like `game_exe` |
+| `game_is_running` | - | `bool` | Poll a reused `sysinfo::System` (managed state) for a process running `game_exe` or its Win32/Win64 sibling (by name when the path can't be read) |
 | `normalize_host` | `raw: String` | `String` | Strip scheme/path from a host string; also used internally by `launch_game`. Exposed so the frontend derives dashboard/home URLs from the same logic instead of a separate TS copy |
 
 ### Server (`server.rs`)
@@ -453,11 +452,12 @@ Because the targets are restored after the install, a targeted file always keeps
 | Command | Parameters | Returns | Description |
 |---|---|---|---|
 | `check_update_available` | `server_exe: Option<String>` | `UpdateInfo` | Probe nightly build URL availability and compare it with the installed build |
-| `run_update` | `server_exe: String, backup_targets: Vec<String>` | `UpdateResult` | Full update flow: download → extract → backup → install → restore. Returns the switched files kept on or off and the edited files the update replaced |
+| `run_update` | `server_exe: String, backup_targets: Vec<String>` | `UpdateResult` | Full update flow: download → extract → backup → install → keep switched files. Returns the switched files kept on or off, the edited files the update replaced and the pre-update backup's id |
 | `cancel_update` | - | `()` | Stop the running update at its next check. The install itself can't be cancelled |
 | `create_backup` | `server_exe: String, targets: Vec<String>, label: String` | `BackupManifest` | Create a named backup (off the main thread, refused while the server runs) |
 | `list_backups` | `server_exe: String` | `Vec<BackupManifest>` | List backups (newest first) |
-| `restore_backup` | `server_exe: String, backup_id: String` | `Vec<String>` | Back up what the restore replaces, then copy the backup's targets back. Returns where copies switched the other way were moved aside |
+| `restore_backup` | `server_exe: String, backup_id: String, roll_back: Option<bool>, only: Option<Vec<String>>` | `Vec<String>` | Back up what the restore replaces, then copy the backup's targets back (just `only` of them when given), and with `roll_back` the server files its update replaced. Returns where copies switched the other way were moved aside |
+| `put_back_edits` | `server_exe: String, backup_id: String` | `()` | Back up the update's copies of the edited files a pre-update backup's update replaced, then copy the user's back |
 | `delete_backup` | `server_exe: String, backup_id: String` | `()` | Delete backup directory |
 | `get_backups_dir` | `server_exe: String` | `String` | Return Backups directory path |
 
@@ -485,7 +485,7 @@ Because the targets are restored after the install, a targeted file always keeps
 
 ### Profile import (`profile_import/mod.rs`)
 
-Imports server profiles from uploaded JSON files, detected by shape: Bifrost `Bifrost.ServerList.json` (array) plus optional `Bifrost.LaunchConfig.json` (global login, attached to its selected server only if auto-login is on), or the MHO Overlay launcher's `launcher-settings.json` (`servers[]`, per-server logins). Imports always create remote (`is_local: false`) profiles; profiles already present are skipped, matched case-insensitively under a user-chosen strategy (`host + email` default, `host`, `host + name`, or none; under host + email an entry with no email matches any profile on that host). Passwords stay in the backend: the preview only reports whether a login exists, and `import_profiles` re-reads the files. Surfaced as the "Import Server Profiles" card in Settings → Integrations.
+Imports server profiles from uploaded JSON files, detected by shape: Bifrost `Bifrost.ServerList.json` (array) plus optional `Bifrost.LaunchConfig.json` (global login, attached to its selected server only if auto-login is on), or the MHO Overlay launcher's `launcher-settings.json` (`servers[]`, per-server logins). Imports always create remote (`is_local: false`) profiles; profiles already present are skipped, matched case-insensitively under a user-chosen strategy (`host + email` default, `host`, `host + name`, or none; under host + email an entry with no email matches any profile on that host). Passwords stay in the backend: the preview only reports whether a login exists, and `import_profiles` re-reads the files. Surfaced as the "Import server profiles" card in Settings → Integrations.
 
 | Command | Parameters | Returns | Description |
 |---|---|---|---|
@@ -497,10 +497,10 @@ Imports server profiles from uploaded JSON files, detected by shape: Bifrost `Bi
 
 | Command | Parameters | Returns | Description |
 |---|---|---|---|
-| `parse_import_json` | `json_path: String` | `ImportSummary` | Parse an export file and summarise it; no database access |
+| `parse_import_json` | `json_path: String, server_exe: String` | `ImportSummary` | Parse an export file and summarise it, refusing one from another game version than the server's; no database access |
 | `scan_download_backups` | `game_exe: String` | `Vec<BackupFileEntry>` | List candidate files in `<game_exe_dir>/Download/` by filename pattern only |
 | `list_accounts_for_import` | `server_exe: String` | `Vec<AccountEntry>` | All accounts (id, player name, email) — used for Add conflict pre-checks and Restore target resolution |
-| `import_account` | `server_exe: String, json_path: String, mode: String, target_id: Option<String>, overrides: Option<ImportOverrides>` | `()` | `mode: "add"` creates a new account (`overrides` applies); `mode: "replace"` overwrites `target_id`'s game data only (`overrides` ignored). `target_id` is a decimal string (see u64 Precision) |
+| `import_account` | `server_exe: String, json_path: String, mode: String, target_id: Option<String>, overrides: Option<ImportOverrides>` | `Option<String>` | `mode: "add"` creates a new account (`overrides` applies); `mode: "replace"` first copies Account.db to `Account.db.multiverse-<timestamp>.bak` (returned, pruned like the JSON save copies by `[SQLiteDBManager] MaxBackupNumber`), then overwrites `target_id`'s game data only (`overrides` ignored). `target_id` is a decimal string (see u64 Precision) |
 | `restore_json_account` | `server_exe: String, json_path: String` | `Option<String>` | JSON storage only: write the export as the server's save (see Account Import and Restore below); returns the file name of the copy made of the previous save |
 | `account_exists` | `server_exe: String, email: String` | `bool` | Read-only check that an account with this email is in Account.db; errors while the file is missing or locked |
 | `account_password_matches` | `server_exe: String, email: String, password: String` | `bool` | Read-only: recompute the PBKDF2 hash with the stored salt to confirm a console `!account create` / `password` landed |
@@ -522,7 +522,6 @@ Imports server profiles from uploaded JSON files, detected by shape: Bifrost `Bi
 | `startingServer` / `startingApache` | `writable<boolean>` | A start is in progress |
 | `serverStartError` / `apacheStartError` | `writable<string>` | Last start failure, shown on the Rail dots; '' when none |
 | `jsonPersistence` | `writable<boolean>` | The linked server stores its one account in a JSON file; set by `refreshPersistence` |
-| `launchOptionsReviewed` | `writable<boolean>` | Session only: Get Started ticks "Launch options" once they have been opened |
 | `unsavedSources` | `writable<Record<string, string>>` | Editors holding unsaved edits, keyed by source; checked by `confirmLeave` |
 | `confirmRequest` | `writable<ConfirmRequest \| null>` | The open `askConfirm` question, rendered by `ConfirmDialog` |
 | `gameRunning` | `writable<boolean>` | Game process state (matched by `game_exe`'s file name) |
@@ -610,7 +609,7 @@ Imports server profiles from uploaded JSON files, detected by shape: Bifrost `Bi
 | `player-event` | `PlayerEventPayload` | `server.rs` stdout reader | Player login, logout, or full session clear on server stop |
 | `apache-stopped` | `()` | `server.rs` Apache poll thread | Apache exited on its own (also logged to the console) |
 | `close-requested` | `u64` | `lib.rs` | The window's close button was pressed, answered with `close_ack` and `exit_app` |
-| `update-progress` | `UpdateProgressPayload` | `updater.rs` | Update stage + percentage (downloading, extracting, backing_up, installing, restoring) |
+| `update-progress` | `UpdateProgressPayload` | `updater.rs` | Update stage + percentage (downloading, extracting, backing_up, installing) |
 | `app-update-progress` | `{ stage, pct }` | `app_update.rs` | App self-update stage (downloading, verifying, installing) |
 | `overlay-inject` | `{ ok: bool, message: string }` | `overlay/mod.rs` injection thread | Result of an overlay injection (post-launch or Inject now) |
 | `overlay-pipe` | `{ event: string, text: string, fields: string[], hits: OverlayHit[] }[]` | `overlay/pipe.rs` reader thread | Display rows from the overlay status pipe; `event` is `loot_hidden` (`fields` = time, category, item, code, rarity, reason), `region_entered` (time, terminal, tier), `tier_resolved`/`mission_state` (text only), `player_death` (`fields` = time, heading, detail; `hits` = damage rows) or `_status` (connection notes, no fields) |
@@ -811,13 +810,13 @@ run_update
   → download zip with streaming progress events
   → extract to {server_dir}/_update_staging/
   → detect wrapper directory (if zip contains single subdirectory)
-  → pre-update backup to {server_dir}/Backups/{timestamp}/: the selected targets plus
-    every file the install will replace (manifest `replaced`, and `update` with the
-    linked version name and the server version before and after)
+  → pre-update backup to {server_dir}/Backups/{timestamp}/: the selected targets (Players
+    resolved to the account database and JSON save the config names) plus every file the
+    install will replace and the user's switched copies (manifest `replaced`, and `update`
+    with the linked version name and the server version before and after)
   → copy staged files over server directory, on a failure roll back from the backup
-  → restore the targets (a targeted file keeps the user's copy)
   → keep_switched_files: a stock file the user had switched off stays off
-  → return the files kept on or off and the edited files the update replaced
+  → return the files kept on or off, the edited files the update replaced and the backup id
   → clean up temp files (_update.zip, _update_staging/)
 ```
 
@@ -882,8 +881,9 @@ scan_download_backups(game_exe)
   → non-matching files skipped, not errored
   → return [{ path, player_name, modified }, ...] sorted newest first
 
-parse_import_json(json_path)
-  → deserialise the export, return a summary only (no DB access)
+parse_import_json(json_path, server_exe)
+  → deserialise the export, refuse one from another game version than the server's
+  → return a summary only (no DB access)
 
 import_account(mode: "add", overrides)
   → resolve final email/player_name/password (overrides win, else export values)
@@ -893,6 +893,8 @@ import_account(mode: "add", overrides)
     references through that map, insert Player/Avatar/TeamUp/Item/ControlledEntity
 
 import_account(mode: "replace", target_id)
+  → VACUUM INTO a standalone copy of Account.db next to it (it holds committed changes
+    still in the -wal file), prune old copies
   → verify target_id exists — no other checks against the target
   → DELETE Item, ControlledEntity, Avatar, TeamUp, then Player rows in that
     order (foreign keys are off, so ON DELETE CASCADE never fires)

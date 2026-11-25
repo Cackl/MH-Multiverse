@@ -28,8 +28,8 @@ impl Game {
     }
 }
 
-/// The game this app last launched, if any. Unlike `GameProcessState`, which finds the game by
-/// name, this knows only our own launch, so it can't mistake another instance for it.
+/// The game this app last launched, if any. Unlike `GameProcessState`, which finds any running
+/// copy of the linked exe, this knows only our own launch, so it can't mistake another instance for it.
 #[derive(Default)]
 pub struct LaunchedGame(Mutex<Option<Game>>);
 
@@ -47,12 +47,59 @@ impl LaunchedGame {
     }
 }
 
-/// A process is the game when it has the linked exe's file name, whatever that is
-/// (`MarvelHeroesOmega.exe` for 1.52, `MarvelHeroes2016.exe` for 1.48, or a renamed copy).
-fn is_game_process(process_name: &std::ffi::OsStr, game_exe: &str) -> bool {
-    std::path::Path::new(game_exe)
-        .file_name()
-        .is_some_and(|name| name.eq_ignore_ascii_case(process_name))
+/// The client writes its launch arguments, auto-login password included, to `Launch.log` and keeps
+/// a `Launch-backup-*.log` per launch. Masks every `-password=` value in them. A file the game
+/// still holds open is skipped and caught at game exit or the next start.
+pub(crate) fn scrub_launch_logs(dir: &std::path::Path) {
+    // Bytes, not str: a log with non-UTF-8 text must come back unchanged apart from the mask.
+    // Masks to the end of the line, so a password with spaces or quotes is covered. The client logs
+    // the command line in one line and `launch_game` passes `-password=` last.
+    let re = regex::bytes::Regex::new(r"(?i)(-password=)[^\r\n]+").unwrap();
+    let Ok(entries) = std::fs::read_dir(dir) else { return };
+    for path in entries.flatten().map(|e| e.path()) {
+        let is_launch_log = path.file_name().and_then(|n| n.to_str())
+            .is_some_and(|n| n.starts_with("Launch") && n.ends_with(".log"));
+        if !is_launch_log { continue }
+        let Ok(bytes) = std::fs::read(&path) else { continue };
+        let scrubbed = re.replace_all(&bytes, &b"${1}***"[..]);
+        if *scrubbed != *bytes {
+            let _ = std::fs::write(&path, &scrubbed);
+        }
+    }
+}
+
+/// Run at startup and when `game_is_running` sees the game exit.
+pub(crate) fn scrub_launch_logs_for(app: &tauri::AppHandle) {
+    if let Ok(docs) = app.path().document_dir() {
+        scrub_launch_logs(&docs.join(r"My Games\Marvel Heroes\MarvelGame\Logs"));
+    }
+}
+
+/// Last `game_is_running` result, to spot the game exiting.
+static GAME_WAS_RUNNING: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// A process is the game when it has the linked exe's file name and runs from the linked
+/// install: the linked exe itself or its `Binaries\Win32`/`Win64` sibling (Force 32-bit).
+/// 1.52 and 1.53 both ship `MarvelHeroesOmega.exe` (1.48 has `MarvelHeroes2016.exe`), so the
+/// name alone can't tell installs apart. Falls back to the name when the path can't be read.
+fn is_game_process(process_name: &std::ffi::OsStr, process_exe: Option<&std::path::Path>, game_exe: &str) -> bool {
+    use std::path::Path;
+    let linked = Path::new(game_exe);
+    if !linked.file_name().is_some_and(|name| name.eq_ignore_ascii_case(process_name)) {
+        return false;
+    }
+    // sysinfo reports an empty path when it can't read one (a client run as administrator).
+    // ponytail: name match there, so the 1.52/1.53 mix-up returns for elevated clients only.
+    // QueryFullProcessImageNameW with PROCESS_QUERY_LIMITED_INFORMATION would read it.
+    let Some(exe) = process_exe.filter(|p| !p.as_os_str().is_empty()) else { return true };
+    let key = |p: &Path| p.to_string_lossy().replace('/', "\\").to_lowercase();
+    let binaries = |p: &Path| {
+        p.parent()
+            .filter(|d| d.file_name().is_some_and(|n| n.eq_ignore_ascii_case("Win64") || n.eq_ignore_ascii_case("Win32")))
+            .and_then(Path::parent)
+            .map(key)
+    };
+    key(exe) == key(linked) || binaries(exe).is_some_and(|b| Some(b) == binaries(linked))
 }
 
 #[tauri::command]
@@ -66,8 +113,17 @@ pub fn game_is_running(app: tauri::AppHandle, state: tauri::State<GameProcessSta
     // (see GameProcessState), so a process that has exited needs to be
     // pruned from its internal list each refresh, or the search
     // below keeps finding the stale entry forever.
-    sys.refresh_processes(sysinfo::ProcessesToUpdate::All, true);
-    let running = sys.processes().values().any(|p| is_game_process(p.name(), &game_exe));
+    sys.refresh_processes_specifics(
+        sysinfo::ProcessesToUpdate::All,
+        true,
+        sysinfo::ProcessRefreshKind::nothing().with_exe(sysinfo::UpdateKind::OnlyIfNotSet),
+    );
+    let running = sys.processes().values().any(|p| is_game_process(p.name(), p.exe(), &game_exe));
+    drop(sys);
+    // The frontend polls this every few seconds app-wide, so it doubles as the game-exit hook.
+    if GAME_WAS_RUNNING.swap(running, std::sync::atomic::Ordering::SeqCst) && !running {
+        scrub_launch_logs_for(&app);
+    }
     running
 }
 

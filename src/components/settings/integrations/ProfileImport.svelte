@@ -97,7 +97,7 @@
 
 <IntegrationCard
   id="profile-import"
-  title="Import Server Profiles"
+  title="Import server profiles"
   subtitle="From Bifrost or the MarvelHeroesOmega Overlay launcher."
 >
   <div class="opt-row">

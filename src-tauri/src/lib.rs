@@ -100,6 +100,8 @@ pub fn run() {
                 let _ = window.restore_state(WINDOW_STATE_FLAGS);
             }
             std::thread::spawn(app_update::cleanup_leftovers);
+            let handle = app.handle().clone();
+            std::thread::spawn(move || launcher::scrub_launch_logs_for(&handle));
             if cfg!(debug_assertions) {
                 app.handle().plugin(
                     tauri_plugin_log::Builder::default()
@@ -132,6 +134,7 @@ pub fn run() {
             config::set_launch_options,
             config::set_shutdown_config,
             config::set_backup_targets,
+            config::set_keep_auto_backups,
             config::activate_linked,
             config::upsert_linked,
             config::delete_linked,
@@ -170,6 +173,7 @@ pub fn run() {
             updater::list_backups,
             updater::restore_backup,
             updater::delete_backup,
+            updater::put_back_edits,
             updater::get_backups_dir,
             app_update::check_app_update,
             app_update::check_overlay_update,
