@@ -452,8 +452,9 @@ pub fn import_account(
     Ok(copy)
 }
 
-/// Copy Account.db next to itself, like the JSON save copy. VACUUM INTO also takes in
-/// the server's WAL file, which a plain file copy would miss, and can't run inside a transaction.
+/// Copy Account.db next to itself, like the JSON save copy. VACUUM INTO writes a standalone
+/// database holding every committed change, including ones still in the server's `-wal` file
+/// that a plain file copy of Account.db would miss. It can't run inside a transaction.
 fn copy_account_db(server_exe: &str, conn: &Connection) -> Result<String, String> {
     copy_save(server_exe, "SQLiteDBManager", &db_path(server_exe)?, |target| {
         conn.execute("VACUUM INTO ?1", [target.to_string_lossy()])

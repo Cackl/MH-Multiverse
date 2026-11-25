@@ -893,7 +893,8 @@ import_account(mode: "add", overrides)
     references through that map, insert Player/Avatar/TeamUp/Item/ControlledEntity
 
 import_account(mode: "replace", target_id)
-  → VACUUM INTO a copy of Account.db next to it (takes in the WAL), prune old copies
+  → VACUUM INTO a standalone copy of Account.db next to it (it holds committed changes
+    still in the -wal file), prune old copies
   → verify target_id exists — no other checks against the target
   → DELETE Item, ControlledEntity, Avatar, TeamUp, then Player rows in that
     order (foreign keys are off, so ON DELETE CASCADE never fires)

@@ -675,7 +675,7 @@
           <div class="import-note">
             <i class="note-icon">i</i>
             This server stores data in a JSON file with one built-in account, and any email and password logs in. Set the player name in the Config tab.
-            {#if localProfile}To restore a backup, edit your profile "{localProfile.name}".{/if}
+            {#if localProfile && !sameAccountProfile}To restore a backup, edit your profile "{localProfile.name}".{/if}
           </div>
         {/if}
 
