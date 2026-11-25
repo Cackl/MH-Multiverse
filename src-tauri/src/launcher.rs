@@ -78,12 +78,25 @@ pub(crate) fn scrub_launch_logs_for(app: &tauri::AppHandle) {
 /// Last `game_is_running` result, to spot the game exiting.
 static GAME_WAS_RUNNING: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
-/// A process is the game when it has the linked exe's file name, whatever that is
-/// (`MarvelHeroesOmega.exe` for 1.52, `MarvelHeroes2016.exe` for 1.48, or a renamed copy).
-fn is_game_process(process_name: &std::ffi::OsStr, game_exe: &str) -> bool {
-    std::path::Path::new(game_exe)
-        .file_name()
-        .is_some_and(|name| name.eq_ignore_ascii_case(process_name))
+/// A process is the game when it has the linked exe's file name and runs from the linked
+/// install: the linked exe itself or its `Binaries\Win32`/`Win64` sibling (Force 32-bit).
+/// 1.52 and 1.53 both ship `MarvelHeroesOmega.exe` (1.48 has `MarvelHeroes2016.exe`), so the
+/// name alone can't tell installs apart. Falls back to the name when the path can't be read.
+fn is_game_process(process_name: &std::ffi::OsStr, process_exe: Option<&std::path::Path>, game_exe: &str) -> bool {
+    use std::path::Path;
+    let linked = Path::new(game_exe);
+    if !linked.file_name().is_some_and(|name| name.eq_ignore_ascii_case(process_name)) {
+        return false;
+    }
+    let Some(exe) = process_exe else { return true };
+    let key = |p: &Path| p.to_string_lossy().replace('/', "\\").to_lowercase();
+    let binaries = |p: &Path| {
+        p.parent()
+            .filter(|d| d.file_name().is_some_and(|n| n.eq_ignore_ascii_case("Win64") || n.eq_ignore_ascii_case("Win32")))
+            .and_then(Path::parent)
+            .map(key)
+    };
+    key(exe) == key(linked) || binaries(exe).is_some_and(|b| Some(b) == binaries(linked))
 }
 
 #[tauri::command]
@@ -97,8 +110,12 @@ pub fn game_is_running(app: tauri::AppHandle, state: tauri::State<GameProcessSta
     // (see GameProcessState), so a process that has exited needs to be
     // pruned from its internal list each refresh, or the search
     // below keeps finding the stale entry forever.
-    sys.refresh_processes(sysinfo::ProcessesToUpdate::All, true);
-    let running = sys.processes().values().any(|p| is_game_process(p.name(), &game_exe));
+    sys.refresh_processes_specifics(
+        sysinfo::ProcessesToUpdate::All,
+        true,
+        sysinfo::ProcessRefreshKind::nothing().with_exe(sysinfo::UpdateKind::OnlyIfNotSet),
+    );
+    let running = sys.processes().values().any(|p| is_game_process(p.name(), p.exe(), &game_exe));
     drop(sys);
     // The frontend polls this every few seconds app-wide, so it doubles as the game-exit hook.
     if GAME_WAS_RUNNING.swap(running, std::sync::atomic::Ordering::SeqCst) && !running {
