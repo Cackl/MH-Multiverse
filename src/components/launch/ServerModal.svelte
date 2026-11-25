@@ -236,14 +236,14 @@
     const sameEmail = restoreSummary.email.toLowerCase() === restoreTargetAccount.email.toLowerCase()
     const sameName = restoreSummary.player_name.toLowerCase() === restoreTargetAccount.player_name.toLowerCase()
     if (sameEmail && sameName) return ''
-    return `This backup is for ${restoreSummary.player_name} (${restoreSummary.email}), but this profile is for ${restoreTargetAccount.player_name} (${restoreTargetAccount.email}).`
+    return `This backup is for ${restoreSummary.player_name} (${restoreSummary.email}) and this profile is for ${restoreTargetAccount.player_name} (${restoreTargetAccount.email}). Restoring keeps ${restoreTargetAccount.player_name}'s name, email and password.`
   })()
 
   $: canRestore =
     !!restoreSummary &&
     !$serverRunning &&
     hasServerExe &&
-    ($jsonPersistence || (!!restoreTargetAccount && !restoreMismatchMsg))
+    ($jsonPersistence || !!restoreTargetAccount)
 
   // ── From Backup on JSON-storage servers ──────────────────────────────────
   // restore_json_account replaces the server's one save. Every local profile signs in to that
@@ -945,7 +945,7 @@
             {/if}
 
             {#if restoreMismatchMsg}
-              <div class="error">{restoreMismatchMsg}</div>
+              <div class="warning-notice">{restoreMismatchMsg}</div>
             {/if}
 
             {#if $serverRunning}
@@ -982,7 +982,7 @@
         </button>
       {:else if activeTab === 'restore'}
         <button type="button" class="btn btn-accent" on:click={submit} disabled={!canRestore || restoreSaving}>
-          {restoreSaving ? 'Restoring...' : 'Restore Backup'}
+          {restoreSaving ? 'Restoring...' : restoreMismatchMsg ? 'Restore Anyway' : 'Restore Backup'}
         </button>
       {/if}
     </div>
