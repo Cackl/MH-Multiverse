@@ -6,7 +6,7 @@
   import {
     appConfig, type SettingsSection, activeTheme, setTheme, setTextSize, setLaunchOptions, type LaunchOptions,
     appUpdate, appUpdateError, appUpdateCheckedAt, checkAppUpdate, showUpdateBadge,
-    updateRemindLater, dismissedUpdate, serverRunning, settingsSection, activeCaps,
+    updateRemindLater, dismissedUpdate, serverRunning, settingsSection, activeCaps, askConfirm,
   } from '../../lib/store'
   import { parseReleaseNotes } from '../../lib/releaseNotes'
   import { tip } from '../../lib/tooltip'
@@ -36,8 +36,19 @@
     checking = false
   }
 
+  function confirmBreaking(versions: string[]): Promise<boolean> {
+    return askConfirm({
+      title: 'Update with breaking changes?',
+      message: `v${versions.join(', v')} ${versions.length > 1 ? 'have' : 'has'} breaking changes. Read the notes before updating.`,
+      okLabel: 'Update now',
+      cancelLabel: 'Cancel',
+      okClass: 'btn-accent',
+    })
+  }
+
   async function installUpdate() {
     if (!$appUpdate || installing) return
+    if (breakingVersions.length && !(await confirmBreaking(breakingVersions))) return
     installing = true
     installError = ''
     progress = { stage: 'downloading', pct: 0 }
