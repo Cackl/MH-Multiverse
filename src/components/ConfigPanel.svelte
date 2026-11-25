@@ -426,43 +426,42 @@
           <h3 class="page-title">Multiverse</h3>
         </header>
         <div class="config-body">
-          <div class="content-col">
-          <div class="multiverse-note">
-            These settings are stored in MH Multiverse, not in ConfigOverride.ini.
-          </div>
+          <div class="content-col hang">
+          <p class="mv-note">These settings are stored in MH Multiverse, not in ConfigOverride.ini.</p>
           {#if multiverseError}<div class="feedback-error">{multiverseError}</div>{/if}
 
           <div class="subsection-title">Server start</div>
-          <div class="config-grid">
-            <div class="config-field full">
-              <div class="toggle-row">
-                <div class="toggle-info">
-                  <span class="config-field-label">Start Apache with the server</span>
-                  <span class="config-tooltip">Starting the server also starts the bundled Apache, which a local login needs. Turn it off if you host the web side another way.</span>
-                </div>
-                <div
-                  class="toggle-switch"
-                  class:on={$appConfig.apache_auto_start}
-                  role="switch"
-                  aria-checked={$appConfig.apache_auto_start}
-                  aria-label="Start Apache with the server"
-                  tabindex="0"
-                  on:click={async () => multiverseError = await setApacheAutoStart(!$appConfig.apache_auto_start)}
-                  on:keydown={async (e) => { if (e.key === 'Enter') multiverseError = await setApacheAutoStart(!$appConfig.apache_auto_start) }}
-                ></div>
-              </div>
+          <div class="cfg-row">
+            <span class="cfg-name">
+              Start Apache with the server
+              <button class="info-btn" aria-label="About Start Apache with the server" use:tip={'Starting the server also starts the bundled Apache, which a local login needs. Turn it off if you host the web side another way.'}>?</button>
+            </span>
+            <div class="cfg-control">
+              <div
+                class="toggle-switch"
+                class:on={$appConfig.apache_auto_start}
+                role="switch"
+                aria-checked={$appConfig.apache_auto_start}
+                aria-label="Start Apache with the server"
+                tabindex="0"
+                on:click={async () => multiverseError = await setApacheAutoStart(!$appConfig.apache_auto_start)}
+                on:keydown={async (e) => { if (e.key === 'Enter') multiverseError = await setApacheAutoStart(!$appConfig.apache_auto_start) }}
+              ></div>
+              <span class="cfg-onoff">{$appConfig.apache_auto_start ? 'On' : 'Off'}</span>
             </div>
           </div>
 
           <div class="subsection-title">Shutdown</div>
-          <div class="config-grid">
-            <div class="config-field">
-              <div class="config-field-head">
-                <span class="config-field-label">Delay (min)</span>
-              </div>
+          <div class="cfg-row">
+            <span class="cfg-name">
+              Delay (min)
+              <button class="info-btn" aria-label="About Delay" use:tip={'0 stops the server at once with no broadcast'}>?</button>
+            </span>
+            <div class="cfg-control">
               <input
                 type="number"
-                class="config-input"
+                class="config-input num"
+                aria-label="Delay (min)"
                 min="0"
                 value={$appConfig.shutdown.delay_minutes}
                 on:change={async (e) => multiverseError = await setShutdownConfig({
@@ -470,15 +469,18 @@
                   delay_minutes: Math.max(0, parseInt(e.currentTarget.value) || 0)
                 })}
               >
-              <span class="config-field-hint">0 = stop immediately with no broadcast</span>
             </div>
-            <div class="config-field">
-              <div class="config-field-head">
-                <span class="config-field-label">Broadcast Message</span>
-              </div>
+          </div>
+          <div class="cfg-row">
+            <span class="cfg-name">
+              Broadcast message
+              <button class="info-btn" aria-label="About Broadcast message" use:tip={'{minutes} is replaced with the time left'}>?</button>
+            </span>
+            <div class="cfg-control">
               <input
                 type="text"
                 class="config-input"
+                aria-label="Broadcast message"
                 value={$appConfig.shutdown.broadcast_message}
                 placeholder="Server is shutting down in {'{minutes}'} minute(s)."
                 on:change={async (e) => multiverseError = await setShutdownConfig({
@@ -486,79 +488,36 @@
                   broadcast_message: e.currentTarget.value
                 })}
               >
-              <span class="config-field-hint">Use {'{minutes}'} as a placeholder for the remaining time.</span>
             </div>
-            <div class="config-field full">
-              <div class="toggle-row">
-                <div class="toggle-info">
-                  <span class="config-field-label">Ask before closing</span>
-                  <span class="config-tooltip">Closing MH Multiverse with the server running asks first. When off, it stops the server and closes.</span>
-                </div>
-                <div
-                  class="toggle-switch"
-                  class:on={$appConfig.shutdown.ask_before_close}
-                  role="switch"
-                  aria-checked={$appConfig.shutdown.ask_before_close}
-                  tabindex="0"
-                  on:click={async () => multiverseError = await setShutdownConfig({ ...$appConfig.shutdown, ask_before_close: !$appConfig.shutdown.ask_before_close })}
-                  on:keydown={async (e) => { if (e.key === 'Enter') multiverseError = await setShutdownConfig({ ...$appConfig.shutdown, ask_before_close: !$appConfig.shutdown.ask_before_close }) }}
-                ></div>
-              </div>
+          </div>
+          <div class="cfg-row">
+            <span class="cfg-name">
+              Ask before closing
+              <button class="info-btn" aria-label="About Ask before closing" use:tip={'Closing MH Multiverse with the server running asks first. When off, it stops the server and closes.'}>?</button>
+            </span>
+            <div class="cfg-control">
+              <div
+                class="toggle-switch"
+                class:on={$appConfig.shutdown.ask_before_close}
+                role="switch"
+                aria-checked={$appConfig.shutdown.ask_before_close}
+                aria-label="Ask before closing"
+                tabindex="0"
+                on:click={async () => multiverseError = await setShutdownConfig({ ...$appConfig.shutdown, ask_before_close: !$appConfig.shutdown.ask_before_close })}
+                on:keydown={async (e) => { if (e.key === 'Enter') multiverseError = await setShutdownConfig({ ...$appConfig.shutdown, ask_before_close: !$appConfig.shutdown.ask_before_close }) }}
+              ></div>
+              <span class="cfg-onoff">{$appConfig.shutdown.ask_before_close ? 'On' : 'Off'}</span>
             </div>
           </div>
 
           <div class="subsection-title">Console</div>
-          <p class="subsection-desc">
-            Saved commands shown as quick-access chips in the console.
-            Drag by the handle or use arrow keys on a focused chip to reorder. Delete or Backspace removes it.
-          </p>
-
-          {#if presets.length > 0}
-            <div class="preset-chips" role="list" aria-label="Console presets">
-              {#each presets as preset, i}
-                <div
-                  class="preset-chip"
-                  class:is-dragging={dragIndex === i}
-                  class:is-drag-over={dragOverIndex === i && dragIndex !== null && dragIndex !== i}
-                  data-chip-index={i}
-                  tabindex="0"
-                  role="button"
-                  aria-label="{preset}, position {i + 1} of {presets.length}. Arrow keys to reorder, Delete to remove."
-                  on:keydown={(e) => onChipKeydown(e, i)}
-                >
-                  <svg
-                    class="preset-chip-handle"
-                    viewBox="0 0 8 14"
-                    fill="currentColor"
-                    aria-hidden="true"
-                    on:pointerdown={(e) => onHandlePointerDown(e, i)}
-                  >
-                    <circle cx="2" cy="2"  r="1.2"/>
-                    <circle cx="6" cy="2"  r="1.2"/>
-                    <circle cx="2" cy="7"  r="1.2"/>
-                    <circle cx="6" cy="7"  r="1.2"/>
-                    <circle cx="2" cy="12" r="1.2"/>
-                    <circle cx="6" cy="12" r="1.2"/>
-                  </svg>
-                  <span class="preset-chip-text">{preset}</span>
-                  <button
-                    class="preset-chip-remove"
-                    tabindex="-1"
-                    aria-label="Remove {preset}"
-                    on:click|stopPropagation={() => removePreset(i)}
-                  >
-                    <svg viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
-                      <line x1="2" y1="2" x2="8" y2="8"/>
-                      <line x1="8" y1="2" x2="2" y2="8"/>
-                    </svg>
-                  </button>
-                </div>
-              {/each}
-            </div>
-          {:else}
-            <div class="preset-empty">No presets yet</div>
-          {/if}
-
+          <div class="cfg-row">
+            <span class="cfg-name">
+              Presets
+              <button class="info-btn" aria-label="About Presets" use:tip={'Commands shown as chips in the console. Drag by the handle or use the arrow keys on a focused chip to reorder. Delete or Backspace removes it.'}>?</button>
+            </span>
+            <div class="cfg-control">
+          <div class="preset-box">
           <div class="preset-add-wrap">
             {#if pacVisible && pacFocused}
               <div class="pac-panel" bind:this={pacPanelEl}>
@@ -615,24 +574,74 @@
             </div>
           </div>
 
-        <div class="config-field full">
-          <div class="toggle-row" style="margin-bottom: 8px;">
-              <div class="toggle-info">
-                <span class="config-field-label">Threshold Log Filter</span>
-                <span class="config-tooltip">When on, the log filter shows the selected level and all more severe levels. When off, only the exact selected level is shown.</span>
-              </div>
+          {#if presets.length > 0}
+            <div class="preset-chips" role="list" aria-label="Console presets">
+              {#each presets as preset, i}
+                <div
+                  class="preset-chip"
+                  class:is-dragging={dragIndex === i}
+                  class:is-drag-over={dragOverIndex === i && dragIndex !== null && dragIndex !== i}
+                  data-chip-index={i}
+                  tabindex="0"
+                  role="button"
+                  aria-label="{preset}, position {i + 1} of {presets.length}. Arrow keys to reorder, Delete to remove."
+                  on:keydown={(e) => onChipKeydown(e, i)}
+                >
+                  <svg
+                    class="preset-chip-handle"
+                    viewBox="0 0 8 14"
+                    fill="currentColor"
+                    aria-hidden="true"
+                    on:pointerdown={(e) => onHandlePointerDown(e, i)}
+                  >
+                    <circle cx="2" cy="2"  r="1.2"/>
+                    <circle cx="6" cy="2"  r="1.2"/>
+                    <circle cx="2" cy="7"  r="1.2"/>
+                    <circle cx="6" cy="7"  r="1.2"/>
+                    <circle cx="2" cy="12" r="1.2"/>
+                    <circle cx="6" cy="12" r="1.2"/>
+                  </svg>
+                  <span class="preset-chip-text">{preset}</span>
+                  <button
+                    class="preset-chip-remove"
+                    tabindex="-1"
+                    aria-label="Remove {preset}"
+                    on:click|stopPropagation={() => removePreset(i)}
+                  >
+                    <svg viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
+                      <line x1="2" y1="2" x2="8" y2="8"/>
+                      <line x1="8" y1="2" x2="2" y2="8"/>
+                    </svg>
+                  </button>
+                </div>
+              {/each}
+            </div>
+          {:else}
+            <div class="preset-empty">No presets yet</div>
+          {/if}
+
+          </div>
+            </div>
+          </div>
+          <div class="cfg-row">
+            <span class="cfg-name">
+              Threshold log filter
+              <button class="info-btn" aria-label="About Threshold log filter" use:tip={'When on, the log filter shows the selected level and all more severe levels. When off, only the exact selected level is shown.'}>?</button>
+            </span>
+            <div class="cfg-control">
               <div
                 class="toggle-switch"
                 class:on={$logFilterThreshold}
                 role="switch"
                 aria-checked={$logFilterThreshold}
+                aria-label="Threshold log filter"
                 tabindex="0"
                 on:click={() => logFilterThreshold.update(v => !v)}
                 on:keydown={(e) => e.key === 'Enter' && logFilterThreshold.update(v => !v)}
               ></div>
+              <span class="cfg-onoff">{$logFilterThreshold ? 'On' : 'Off'}</span>
             </div>
-        </div>
-
+          </div>
           </div>
         </div>
       </div>
@@ -801,34 +810,10 @@
     padding: 16px 20px;
   }
 
-  .config-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 14px;
-    margin-bottom: 20px;
-  }
+  /* Groups need more room than the rows inside them. */
+  .config-body .subsection-title:not(:first-child) { margin-top: 18px; }
 
-  .config-field {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-  }
-  .config-field.full { grid-column: 1 / -1; }
-
-  .config-field-head {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-  }
-
-  .config-field-label {
-    font-family: var(--font-head);
-    font-size: var(--fs-min);
-    font-weight: 600;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-    color: var(--text-1);
-  }
+  .mv-note { font-size: 11px; color: var(--text-3); margin: 0; }
 
   .config-input {
     background: var(--bg-0);
@@ -894,29 +879,6 @@
   .cfg-error { grid-column: 2; justify-self: end; font-size: var(--fs-min); color: var(--text-error); }
   .cfg-onoff { order: -1; font-size: 12px; color: var(--text-1); }
 
-  .config-tooltip {
-    font-size: 11px;
-    color: var(--text-3);
-    line-height: 1.4;
-  }
-
-  /* -- Toggle rows (booleans) -- */
-  .toggle-row {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 8px 0;
-    border-bottom: 1px solid var(--border);
-  }
-  .toggle-row:last-child { border-bottom: none; }
-
-  .toggle-info {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-  }
-
-
   /* -- Notices -- */
   .config-notice {
     flex: 1;
@@ -952,48 +914,34 @@
     flex-shrink: 0;
   }
 
-  .multiverse-note {
-    font-size: 11px;
-    color: var(--text-3);
-    margin-bottom: 14px;
-    font-family: var(--font-body);
-  }
-
-  .config-field-hint {
-    font-size: var(--fs-min);
-    color: var(--text-3);
-    font-family: var(--font-body);
-    margin-top: 2px;
-  }
-
-  /* -- Subsection description -- */
-  .subsection-desc {
-    font-size: 11px;
-    color: var(--text-3);
-    line-height: 1.5;
-    margin: 6px 0 14px;
-    font-family: var(--font-body);
-  }
-
   /* -- Preset chips -- */
+  /* Mirrors the Server tab command bar: input row, then the chip strip */
+  .preset-box {
+    flex: 1;
+    min-width: 0;
+    border: 1px solid var(--border-mid);
+    border-radius: var(--radius-sm);
+  }
   .preset-chips {
     display: flex;
     flex-wrap: wrap;
-    gap: 6px;
-    margin-bottom: 12px;
+    gap: 4px;
+    padding: 8px 10px;
+    background: var(--bg-0);
+    border-top: 1px solid var(--border);
   }
 
   .preset-chip {
     display: inline-flex;
     align-items: center;
     gap: 5px;
-    padding: 4px 6px 4px 5px;
+    padding: 3px 6px 3px 5px;
     background: var(--bg-3);
     border: 1px solid var(--border-mid);
-    border-radius: var(--radius-sm);
+    border-radius: 2px;
     font-family: var(--font-mono);
-    font-size: 11px;
-    color: var(--text-1);
+    font-size: var(--fs-min);
+    color: var(--text-2);
     user-select: none;
     transition: border-color 0.12s, background 0.12s, opacity 0.12s;
     outline: none;
@@ -1056,27 +1004,18 @@
     color: var(--text-3);
     font-family: var(--font-head);
     letter-spacing: 0.06em;
-    margin-bottom: 12px;
-    padding: 10px 0;
+    padding: 8px 10px;
+    background: var(--bg-0);
+    border-top: 1px solid var(--border);
   }
 
   /* -- Preset add row -- */
-  .preset-add-wrap {
-    position: relative;
-    margin-bottom: 10px;
-  }
+  .preset-add-wrap { position: relative; }
 
   .preset-add-row {
     display: flex;
     align-items: center;
-    border: 1px solid var(--border-mid);
-    border-radius: var(--radius-sm);
-    background: var(--bg-0);
-    overflow: hidden;
-    transition: border-color 0.15s;
-  }
-  .preset-add-wrap:focus-within .preset-add-row {
-    border-color: var(--accent-dim);
+    background: var(--console-cmd-bg);
   }
 
   .preset-add-prefix {
