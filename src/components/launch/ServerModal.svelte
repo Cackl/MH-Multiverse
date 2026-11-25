@@ -812,7 +812,7 @@
             <div class="summary-row">
               <span class="summary-label">Contents</span>
               <span class="summary-value">
-                {importSummary.avatar_count} avatars, {importSummary.team_up_count} team-ups, {importSummary.item_count} items
+                {importSummary.avatar_count} heroes, {importSummary.team_up_count} team-ups, {importSummary.item_count} items
               </span>
             </div>
           </div>
@@ -876,7 +876,7 @@
 
         <div class="import-note note-warning">
           <i class="note-icon">!</i>
-          {$jsonPersistence ? JSON_RESTORE_WARNING : "Restoring overwrites this account's current avatars, items and progress. A copy of the account database is kept in the server's Data folder."}
+          {$jsonPersistence ? JSON_RESTORE_WARNING : "Restoring overwrites this account's current heroes, items and progress. A copy of the account database is kept in the server's Data folder."}
         </div>
 
         {#if !restoreTargetAccount && !$jsonPersistence}
@@ -934,7 +934,7 @@
               <div class="summary-row">
                 <span class="summary-label">Contents</span>
                 <span class="summary-value">
-                  {restoreSummary.avatar_count} avatars, {restoreSummary.team_up_count} team-ups, {restoreSummary.item_count} items
+                  {restoreSummary.avatar_count} heroes, {restoreSummary.team_up_count} team-ups, {restoreSummary.item_count} items
                 </span>
               </div>
             </div>
