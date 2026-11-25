@@ -399,6 +399,7 @@ pub fn blocked_player_names(server_exe: String) -> Result<Vec<String>, String> {
 ///   `EMAIL_CONFLICT:...`
 ///   `NAME_CONFLICT:...`
 /// (Add only — Replace can't produce these since it never touches identity.)
+/// Replace first copies Account.db and returns the copy's file name.
 #[tauri::command]
 pub fn import_account(
     server_exe: String,
@@ -407,7 +408,7 @@ pub fn import_account(
     target_id: Option<String>,
     overrides: Option<ImportOverrides>,
     app: AppHandle,
-) -> Result<(), String> {
+) -> Result<Option<String>, String> {
     // A running server holds the account in memory and writes it back over the import.
     if crate::server::server_running(&app, &server_exe) {
         return Err("Stop the server before importing an account.".into());
@@ -417,6 +418,8 @@ pub fn import_account(
     check_export_build(&data, crate::versions::server_version(&server_exe))?;
 
     let mut conn = open_db(&server_exe)?;
+    // Replace overwrites an account's progress, so keep a copy to undo it with.
+    let copy = if mode == "replace" { Some(copy_account_db(&server_exe, &conn)?) } else { None };
     let tx = conn.transaction().map_err(|e| e.to_string())?;
 
     let result = match mode.as_str() {
@@ -440,11 +443,20 @@ pub fn import_account(
         other => Err(format!("Unknown import mode: {other}")),
     };
 
-    if result.is_ok() {
-        tx.commit().map_err(|e| e.to_string())?;
-    }
-    // On Err the transaction is dropped, triggering an automatic rollback.
-    result
+    result?;
+    // On Err above the transaction is dropped, triggering an automatic rollback.
+    tx.commit().map_err(|e| e.to_string())?;
+    Ok(copy)
+}
+
+/// Copy Account.db next to itself, like the JSON save copy. VACUUM INTO also takes in
+/// the server's WAL file, which a plain file copy would miss, and can't run inside a transaction.
+fn copy_account_db(server_exe: &str, conn: &Connection) -> Result<String, String> {
+    copy_save(server_exe, "SQLiteDBManager", &db_path(server_exe)?, |target| {
+        conn.execute("VACUUM INTO ?1", [target.to_string_lossy()])
+            .map(|_| ())
+            .map_err(|e| format!("Failed to copy the account database: {e}"))
+    })
 }
 
 /// Restore a `!account download` file as the save of a JSON-storage server
@@ -490,7 +502,14 @@ fn restore_json_save(server_exe: &str, json_path: &str) -> Result<Option<String>
     account["UserLevel"] = 2.into();
     let content = serde_json::to_string(&account).map_err(|e| e.to_string())?;
 
-    let copy = if save.exists() { Some(copy_json_save(server_exe, &save)?) } else { None };
+    let copy = if save.exists() {
+        let copy_to = |target: &Path| {
+            fs::copy(&save, target).map(|_| ()).map_err(|e| format!("Failed to copy the current save: {e}"))
+        };
+        Some(copy_save(server_exe, "JsonDBManager", &save, copy_to)?)
+    } else {
+        None
+    };
     let copy_note = copy.as_ref().map(|c| format!(" The previous save is in Data\\{c}.")).unwrap_or_default();
 
     // The ini first, so a failure there leaves the save untouched.
@@ -506,12 +525,17 @@ fn restore_json_save(server_exe: &str, json_path: &str) -> Result<Option<String>
     Ok(copy)
 }
 
-/// Copy the current save to `<FileName>.multiverse-<timestamp>.bak`, then keep
-/// the oldest copy and the newest [JsonDBManager] MaxBackupNumber (at least one).
+/// Copy the current save (via `copy_to`) to `<FileName>.multiverse-<timestamp>.bak`,
+/// then keep the oldest copy and the newest `[<section>] MaxBackupNumber` (at least one).
 /// The oldest is the save from before the first restore.
 /// Separate from the server's own rotating backups, which would push this copy
 /// out after a few saves.
-fn copy_json_save(server_exe: &str, save: &Path) -> Result<String, String> {
+fn copy_save(
+    server_exe: &str,
+    section: &str,
+    save: &Path,
+    copy_to: impl FnOnce(&Path) -> Result<(), String>,
+) -> Result<String, String> {
     let dir = save.parent().ok_or("Invalid save path")?;
     let prefix = format!("{}.multiverse-", save.file_name().unwrap_or_default().to_string_lossy());
     let name = format!("{prefix}{}.bak", chrono::Local::now().format("%Y%m%d-%H%M%S"));
@@ -519,9 +543,9 @@ fn copy_json_save(server_exe: &str, save: &Path) -> Result<String, String> {
     if target.exists() {
         return Err(format!("{name} already exists. Try again in a moment."));
     }
-    fs::copy(save, &target).map_err(|e| format!("Failed to copy the current save: {e}"))?;
+    copy_to(&target)?;
 
-    let keep = crate::ini::read_merged_value(server_exe, "JsonDBManager", "MaxBackupNumber", "5")
+    let keep = crate::ini::read_merged_value(server_exe, section, "MaxBackupNumber", "5")
         .trim()
         .parse::<usize>()
         .unwrap_or(5)

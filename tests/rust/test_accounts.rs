@@ -323,6 +323,31 @@ fn import_replace_cascade_with_fk_off() {
 }
 
 #[test]
+fn copy_account_db_keeps_the_old_progress_and_prunes_like_the_json_copy() {
+    let (tmp, server_exe, conn) = seeded_db();
+    let data = tmp.path().join("Data");
+    for i in 0..3 {
+        fs::write(data.join(format!("Account.db.multiverse-20200101-00000{i}.bak")), "").unwrap();
+    }
+    fs::write(tmp.path().join("ConfigOverride.ini"), "[SQLiteDBManager]\nMaxBackupNumber=1\n").unwrap();
+
+    let copy = copy_account_db(&server_exe, &conn).unwrap();
+    do_replace(&conn, 1, &sample_data()).unwrap();
+
+    let old = Connection::open(data.join(&copy)).unwrap();
+    let old_avatar: i64 = old.query_row("SELECT COUNT(*) FROM Avatar WHERE DbGuid = 101", [], |r| r.get(0)).unwrap();
+    assert_eq!(old_avatar, 1, "the copy must hold the progress from before the restore");
+    let mut copies: Vec<String> = fs::read_dir(&data)
+        .unwrap()
+        .flatten()
+        .map(|e| e.file_name().to_string_lossy().to_string())
+        .filter(|n| n.starts_with("Account.db.multiverse-"))
+        .collect();
+    copies.sort();
+    assert_eq!(copies, ["Account.db.multiverse-20200101-000000.bak".to_string(), copy]);
+}
+
+#[test]
 fn import_replace_target_not_found() {
     let (_tmp, _server_exe, conn) = seeded_db();
     let data = sample_data();

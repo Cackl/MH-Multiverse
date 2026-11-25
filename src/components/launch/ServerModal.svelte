@@ -248,11 +248,11 @@
 
   const JSON_RESTORE_WARNING = "Restoring replaces all of this server's saved progress with the backup and makes it an admin account. A copy of the current save is kept in the server's Data folder."
   $: localProfile = $appConfig.servers.find(s => s.is_local) ?? null
-  let jsonRestoreDone = ''
+  let restoreDone = ''
 
   async function runJsonRestore(path: string, profileName: string | null) {
     const copy = await invoke<string | null>('restore_json_account', { serverExe: $appConfig.server_exe, jsonPath: path })
-    jsonRestoreDone = copy
+    restoreDone = copy
       ? `Backup restored. The previous save was copied to Data/${copy}.`
       : 'Backup restored. There was no previous save to copy.'
     if (profileName) {
@@ -439,14 +439,14 @@
         return
       }
       if (!restoreTargetAccount) return
-      await invoke('import_account', {
+      const copy = await invoke<string>('import_account', {
         serverExe: $appConfig.server_exe,
         jsonPath: restoreFilePath,
         mode: 'replace',
         targetId: restoreTargetAccount.id,
         overrides: null,
       })
-      onClose()
+      restoreDone = `Backup restored. The previous account database was copied to Data/${copy}.`
     } catch (e) {
       restoreError = String(e)
     } finally {
@@ -512,7 +512,7 @@
   }
 
   function submit() {
-    if (jsonRestoreDone) {
+    if (restoreDone) {
       onClose()
     } else if (activeTab === 'manual') {
       if (acctWarning) onClose()
@@ -588,10 +588,10 @@
 
     <div class="modal-body">
 
-      {#if jsonRestoreDone}
+      {#if restoreDone}
         <div class="import-note" role="status">
           <i class="note-icon">i</i>
-          {jsonRestoreDone}
+          {restoreDone}
         </div>
         {#if importError}
           <div class="error">The backup was restored, but the profile could not be saved: {importError}</div>
@@ -861,7 +861,7 @@
 
         <div class="import-note note-warning">
           <i class="note-icon">!</i>
-          {$jsonPersistence ? JSON_RESTORE_WARNING : "Restoring overwrites this account's current avatars, items, and progress. This cannot be undone."}
+          {$jsonPersistence ? JSON_RESTORE_WARNING : "Restoring overwrites this account's current avatars, items and progress. A copy of the account database is kept in the server's Data folder."}
         </div>
 
         {#if !restoreTargetAccount && !$jsonPersistence}
@@ -951,7 +951,7 @@
         on:click={onClose}
         disabled={busy}
       >Cancel</button>
-      {#if jsonRestoreDone}
+      {#if restoreDone}
         <button type="button" class="btn btn-accent" on:click={submit}>Done</button>
       {:else if activeTab === 'manual'}
         <button type="button" class="btn btn-accent" on:click={submit} disabled={saving}>
