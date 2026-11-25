@@ -208,7 +208,10 @@
     const checkEmail = (importEmail.trim() || importSummary.email).toLowerCase()
     const checkName = (importPlayerName.trim() || importSummary.player_name).toLowerCase()
     if (existingAccounts.some(a => a.email.toLowerCase() === checkEmail)) {
-      return `Email '${checkEmail}' is already registered.`
+      const profile = $appConfig.servers.find(s => s.is_local && onVersion(s.linked_id) === activeId && lower(s.email) === checkEmail)
+      return profile
+        ? `Email '${checkEmail}' is already on this server. To restore into it, edit your profile "${profile.name}" and use From Backup there.`
+        : `Email '${checkEmail}' is already on this server. Change the email to add the backup as a new account.`
     }
     if (existingAccounts.some(a => a.player_name.toLowerCase() === checkName)) {
       return `Player name '${checkName}' is already in use.`
