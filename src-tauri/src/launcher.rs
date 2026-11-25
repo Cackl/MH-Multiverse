@@ -28,8 +28,8 @@ impl Game {
     }
 }
 
-/// The game this app last launched, if any. Unlike `GameProcessState`, which finds the game by
-/// name, this knows only our own launch, so it can't mistake another instance for it.
+/// The game this app last launched, if any. Unlike `GameProcessState`, which finds any running
+/// copy of the linked exe, this knows only our own launch, so it can't mistake another instance for it.
 #[derive(Default)]
 pub struct LaunchedGame(Mutex<Option<Game>>);
 
@@ -88,7 +88,10 @@ fn is_game_process(process_name: &std::ffi::OsStr, process_exe: Option<&std::pat
     if !linked.file_name().is_some_and(|name| name.eq_ignore_ascii_case(process_name)) {
         return false;
     }
-    let Some(exe) = process_exe else { return true };
+    // sysinfo reports an empty path when it can't read one (a client run as administrator).
+    // ponytail: name match there, so the 1.52/1.53 mix-up returns for elevated clients only.
+    // QueryFullProcessImageNameW with PROCESS_QUERY_LIMITED_INFORMATION would read it.
+    let Some(exe) = process_exe.filter(|p| !p.as_os_str().is_empty()) else { return true };
     let key = |p: &Path| p.to_string_lossy().replace('/', "\\").to_lowercase();
     let binaries = |p: &Path| {
         p.parent()

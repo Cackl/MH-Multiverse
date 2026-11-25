@@ -42,6 +42,8 @@ fn game_process_must_run_from_the_linked_install() {
         (r"D:\Steam\Marvel Heroes\UnrealEngine3\Binaries\Win64\MarvelHeroesOmega.exe", false),
         (r"D:\Steam\Marvel Heroes\UnrealEngine3\Binaries\Win32\MarvelHeroesOmega.exe", false),
         (r"D:\Games\MHO-1.53\UnrealEngine3\Binaries\Other\MarvelHeroesOmega.exe", false),
+        // Unreadable path (sysinfo reports it empty): fall back to the name.
+        ("", true),
     ] {
         assert_eq!(is_game_process(name.as_ref(), Some(exe.as_ref()), v153), want, "{exe}");
     }
