@@ -34,6 +34,7 @@ export type ConfirmRequest = {
   message: string
   okLabel: string
   cancelLabel: string
+  okClass?: string // defaults to btn-red
   resolve: (ok: boolean) => void
 }
 export const confirmRequest = writable<ConfirmRequest | null>(null)
